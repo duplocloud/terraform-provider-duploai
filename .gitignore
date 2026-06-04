@@ -1,0 +1,26 @@
+# Binaries
+terraform-provider-*
+bin/
+*.exe
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+
+# Go
+vendor/
+*.test
+
+# Docs
+RELEASE.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Claude Code — local session config, not for source control
+.mcp.json

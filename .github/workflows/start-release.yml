@@ -1,0 +1,49 @@
+name: Start Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Override version (leave blank to use Makefile VERSION)'
+        required: false
+        default: ''
+
+env:
+  git_user: duplo-bot
+  git_email: devops@duplocloud.net
+
+jobs:
+  start-release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Get release version
+        id: version
+        run: |
+          set -euo pipefail
+          if [ -z "${{{{ github.event.inputs.version }}}}" ]; then
+            echo "release=$(sed -ne 's/^VERSION=\([0-9\.]*\).*$/\1/p' <Makefile)" >>$GITHUB_OUTPUT
+          else
+            echo "release=${{{{ github.event.inputs.version }}}}" >>$GITHUB_OUTPUT
+          fi
+
+      - name: Initialize git config
+        run: |
+          git config --global user.name $git_user
+          git config --global user.email $git_email
+
+      - name: Start gitflow release
+        uses: duplocloud/ghactions-start-gitflow-release@master
+        with:
+          github_token: ${{{{ secrets.DUPLO_GITHUB_TOKEN }}}}
+          version: "${{{{ steps.version.outputs.release }}}}"
+          is_hotfix: false
+          precommit_run: |
+            set -euo pipefail
+            version="${{{{{ steps.version.outputs.release }}}}}"
+            sed -e 's/^\(VERSION=\)[0-9\.]*/\1'"$version"'/g' -i Makefile

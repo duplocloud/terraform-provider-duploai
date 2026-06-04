@@ -1,0 +1,32 @@
+name: Finish Release
+
+on:
+  pull_request:
+    branches: [master, main]
+    types: [closed]
+
+jobs:
+  finish-release:
+    if: github.event.pull_request.merged == true && startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-22.04
+    env:
+      git_user: duplo-bot
+      git_email: devops@duplocloud.net
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Initialize git config
+        run: |
+          git config --global user.name ${{{{ env.git_user }}}}
+          git config --global user.email ${{{{ env.git_email }}}}
+
+      - name: Finish gitflow release
+        uses: duplocloud/ghactions-start-gitflow-release@master
+        with:
+          github_token: ${{{{ secrets.DUPLO_GITHUB_TOKEN }}}}
+          is_hotfix: false
+          finish: true
