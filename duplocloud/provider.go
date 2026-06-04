@@ -4,53 +4,77 @@ import (
 	"context"
 
 	"github.com/duplocloud/terraform-provider-duplocloud-helpdesk/duplosdk"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// Provider returns the DuplocloudHelpdesk Terraform provider.
-func Provider() *schema.Provider {
-	return &schema.Provider{
-		Schema: map[string]*schema.Schema{
-			"duplo_host": {
-				Type:        schema.TypeString,
+var _ provider.Provider = &helpdeskProvider{}
+
+type helpdeskProvider struct{}
+
+// New returns a new instance of the DuploCloud Helpdesk provider.
+func New() provider.Provider {
+	return &helpdeskProvider{}
+}
+
+func (p *helpdeskProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "duplocloud"
+}
+
+func (p *helpdeskProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"duplo_host": schema.StringAttribute{
 				Required:    true,
-				DefaultFunc: schema.EnvDefaultFunc("DUPLO_HOST", nil),
 				Description: "Base URL of the DuploCloud AI Helpdesk API (e.g. http://localhost:60021).",
 			},
-			"duplo_token": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Sensitive:   true,
-				DefaultFunc: schema.EnvDefaultFunc("DUPLO_TOKEN", nil),
+			"duplo_token": schema.StringAttribute{
+				Required:  true,
+				Sensitive: true,
 				Description: "Bearer token for DuploCloud API authentication.",
 			},
-			"ssl_no_verify": {
-				Type:        schema.TypeBool,
+			"ssl_no_verify": schema.BoolAttribute{
 				Optional:    true,
-				Default:     false,
 				Description: "Disable TLS certificate verification (development only).",
 			},
 		},
-		ResourcesMap: map[string]*schema.Resource{
-			// Resources are registered here as they are implemented.
-			// Example: "duplocloud_workspace": resourceDuploucloudWorkspace(),
-		},
-		DataSourcesMap: map[string]*schema.Resource{
-			// Data sources are registered here.
-		},
-		ConfigureContextFunc: providerConfigure,
 	}
 }
 
-func providerConfigure(_ context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
-	host, _ := d.GetOk("duplo_host")
-	token, _ := d.GetOk("duplo_token")
-	sslNoVerify := d.Get("ssl_no_verify").(bool)
+type providerModel struct {
+	DuploHost   types.String `tfsdk:"duplo_host"`
+	DuploToken  types.String `tfsdk:"duplo_token"`
+	SSLNoVerify types.Bool   `tfsdk:"ssl_no_verify"`
+}
 
-	client, err := duplosdk.NewClient(host.(string), token.(string), sslNoVerify)
-	if err != nil {
-		return nil, diag.FromErr(err)
+func (p *helpdeskProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var config providerModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-	return client, nil
+
+	client, err := duplosdk.NewClient(
+		config.DuploHost.ValueString(),
+		config.DuploToken.ValueString(),
+		config.SSLNoVerify.ValueBool(),
+	)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to create client", err.Error())
+		return
+	}
+
+	resp.DataSourceData = client
+	resp.ResourceData = client
+}
+
+func (p *helpdeskProvider) Resources(_ context.Context) []func() resource.Resource {
+	return []func() resource.Resource{}
+}
+
+func (p *helpdeskProvider) DataSources(_ context.Context) []func() datasource.DataSource {
+	return []func() datasource.DataSource{}
 }

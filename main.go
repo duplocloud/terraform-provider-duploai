@@ -1,11 +1,12 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"log"
 
 	"github.com/duplocloud/terraform-provider-duplocloud-helpdesk/duplocloud"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/plugin"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
 
 //go:generate terraform fmt -recursive ./examples/
@@ -16,11 +17,11 @@ func main() {
 	flag.BoolVar(&debug, "debug", false, "enable debugger support (delve)")
 	flag.Parse()
 
-	plugin.Serve(&plugin.ServeOpts{
-		Debug:        debug,
-		ProviderAddr: "registry.terraform.io/duplocloud/duplocloud-helpdesk",
-		ProviderFunc: func() *schema.Provider {
-			return duplocloud.Provider()
-		},
+	err := providerserver.Serve(context.Background(), duplocloud.New, providerserver.ServeOpts{
+		Debug:   debug,
+		Address: "registry.terraform.io/duplocloud/duplocloud-helpdesk",
 	})
+	if err != nil {
+		log.Fatal(err)
+	}
 }

@@ -1,28 +1,38 @@
 package duplocloud
 
 import (
-	"fmt"
+	"context"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
-// validateNoWhitespace rejects strings that contain whitespace.
-func validateNoWhitespace(v interface{}, k string) (warns []string, errs []error) {
-	val, ok := v.(string)
-	if !ok {
-		errs = append(errs, fmt.Errorf("%q must be a string", k))
+type noWhitespaceValidator struct{}
+
+func (v noWhitespaceValidator) Description(_ context.Context) string {
+	return "Value must not contain whitespace."
+}
+
+func (v noWhitespaceValidator) MarkdownDescription(_ context.Context) string {
+	return "Value must not contain whitespace."
+}
+
+func (v noWhitespaceValidator) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return
 	}
-	for _, c := range val {
+	for _, c := range req.ConfigValue.ValueString() {
 		if c == ' ' || c == '\t' || c == '\n' {
-			errs = append(errs, fmt.Errorf("%q must not contain whitespace", k))
+			resp.Diagnostics.AddAttributeError(
+				req.Path,
+				"Whitespace not allowed",
+				"The value must not contain whitespace characters.",
+			)
 			return
 		}
 	}
-	return
 }
 
-// suppressEquivalentJSON suppresses diffs when two JSON strings are semantically equal.
-func suppressEquivalentJSON(_, old, new string, _ *schema.ResourceData) bool {
-	return old == new // extend with json.Unmarshal comparison if needed
+// NoWhitespace returns a validator that rejects strings containing whitespace.
+func NoWhitespace() validator.String {
+	return noWhitespaceValidator{}
 }
