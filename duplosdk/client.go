@@ -1,6 +1,7 @@
 package duplosdk
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -13,7 +14,7 @@ import (
 
 const defaultTimeout = 60 * time.Second
 
-// Client is the API client for the DuploCloud AI Helpdesk service.
+// Client is the API client for the DuploCloud AI service.
 type Client struct {
 	httpClient *http.Client
 	HostURL    string
@@ -106,7 +107,11 @@ func (c *Client) callAPI(method, path string, req, out interface{}) ClientError 
 		return err
 	}
 	if out != nil {
-		if jsonErr := json.Unmarshal(body, out); jsonErr != nil {
+		// UseNumber so JSON numbers decode as json.Number (not float64),
+		// preserving int64 precision beyond 2^53.
+		dec := json.NewDecoder(bytes.NewReader(body))
+		dec.UseNumber()
+		if jsonErr := dec.Decode(out); jsonErr != nil {
 			return newClientError(0, fmt.Errorf("unmarshalling response: %w", jsonErr))
 		}
 	}

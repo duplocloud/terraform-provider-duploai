@@ -55,6 +55,17 @@ empty path defaults to the field name.
 Not yet expressible in a spec (rare): tuples and collection-of-collection
 (`list(list(string))`).
 
+## Caveats
+
+- **Server-normalized inputs cause perpetual diffs.** Create/Update keep the
+  configured value in state (to avoid "inconsistent result" errors), but a later
+  Read refreshes it from the API. If the backend normalizes a value you send
+  (e.g. lowercases a name, reorders a list), the post-Read state won't match the
+  config and Terraform will show a permanent diff. Use a normalized value in
+  config, or model the field as Computed.
+- **Composite id separator.** Path-parameter values and the object id must not
+  contain `/` (the id is split on `/` by position).
+
 ## Field reference
 
 ### Spec (top level)

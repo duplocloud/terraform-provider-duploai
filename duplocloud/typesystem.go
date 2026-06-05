@@ -237,8 +237,7 @@ func tftypesToGo(v tftypes.Value) any {
 	case t.Is(tftypes.Number):
 		var f big.Float
 		_ = v.As(&f)
-		ff, _ := f.Float64()
-		return ff
+		return bigFloatToJSONNumber(&f)
 	}
 	switch t.(type) {
 	case tftypes.List, tftypes.Set, tftypes.Tuple:
@@ -435,3 +434,12 @@ func objectFromResponse(attrs []AttributeSpec, t tftypes.Type, data any) tftypes
 
 func toAnySlice(g any) []any        { s, _ := g.([]any); return s }
 func toAnyMap(g any) map[string]any { m, _ := g.(map[string]any); return m }
+
+// bigFloatToJSONNumber renders a number as a json.Number so it marshals into the
+// request body without float64 rounding — integers keep full precision.
+func bigFloatToJSONNumber(f *big.Float) json.Number {
+	if f.IsInt() {
+		return json.Number(f.Text('f', 0))
+	}
+	return json.Number(f.Text('g', -1))
+}

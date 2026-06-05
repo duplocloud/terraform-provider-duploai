@@ -23,7 +23,7 @@ func (e *clientError) Error() string    { return fmt.Sprintf("status %d: %v", e.
 func (e *clientError) Status() int      { return e.status }
 func (e *clientError) IsNotFound() bool { return e.status == 404 }
 
-// apiResponse is the generic envelope used by all helpdesk API responses.
+// apiResponse is the generic {message, data} envelope used by DuploCloud AI API responses.
 type apiResponse[T any] struct {
 	Message string `json:"message"`
 	Data    *T     `json:"data"`

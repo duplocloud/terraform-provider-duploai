@@ -268,6 +268,31 @@ func TestFooExampleIsValid(t *testing.T) {
 	}
 }
 
+func TestNumberPrecisionRoundTrip(t *testing.T) {
+	const huge = "9007199254740993" // 2^53 + 1, not representable as float64
+	bf, _, _ := big.ParseFloat(huge, 10, 200, big.ToNearestEven)
+
+	// Request side: tftypes.Number → json.Number (exact), not float64.
+	got := tftypesToGo(tftypes.NewValue(tftypes.Number, bf))
+	if got != json.Number(huge) {
+		t.Errorf("tftypesToGo number = %#v, want json.Number(%s)", got, huge)
+	}
+	b, _ := json.Marshal(map[string]any{"n": got})
+	if string(b) != `{"n":`+huge+`}` {
+		t.Errorf("marshalled = %s, want exact integer", b)
+	}
+
+	// Response side: json.Number (as decoded with UseNumber) → tftypes.Number.
+	back := goToTftypesValue(tftypes.Number, json.Number(huge))
+	var rt big.Float
+	if err := back.As(&rt); err != nil {
+		t.Fatal(err)
+	}
+	if rt.Text('f', 0) != huge {
+		t.Errorf("round-trip number = %s, want %s", rt.Text('f', 0), huge)
+	}
+}
+
 func TestParseType(t *testing.T) {
 	cases := map[string]typeInfo{
 		"string":       {coll: "", elem: "string"},
@@ -343,7 +368,7 @@ func TestObjectRoundTripNameRemap(t *testing.T) {
 		"name":     tftypes.NewValue(tftypes.String, "n"),
 	})
 	body := objectToRequest(a.Attributes, planVal)
-	if body["maxSize"] != float64(5) || body["name"] != "n" {
+	if body["maxSize"] != json.Number("5") || body["name"] != "n" {
 		t.Errorf("objectToRequest = %#v, want maxSize=5,name=n", body)
 	}
 	if _, leaked := body["max_size"]; leaked {

@@ -86,8 +86,8 @@ func (r *dynamicResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 // ── SDK binding ───────────────────────────────────────────────────────────────
 
 // api binds an SDK client to this resource's endpoint and resolved scope.
-func (r *dynamicResource) api(scope map[string]string) *duplosdk.WorkspaceResource[map[string]any] {
-	return duplosdk.NewWorkspaceResource[map[string]any](r.Client, r.endpoint, scope, r.waiter())
+func (r *dynamicResource) api(scope map[string]string) *duplosdk.RESTResource[map[string]any] {
+	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, r.waiter())
 }
 
 // scopeFromReader reads every path-parameter attribute (as declared by the
@@ -108,6 +108,11 @@ func (r *dynamicResource) scopeFromReader(ctx context.Context, reader attrReader
 
 // composeID joins the ordered scope values and the backend object id into the
 // composite resource id, e.g. "tenant/cluster/obj-123".
+//
+// Constraint: path-parameter values and the object id must not contain "/", as
+// parseID splits the id on "/" by position. DuploCloud ids are opaque tokens,
+// so this holds in practice; encode the segments if a future resource can carry
+// slashes.
 func composeID(scopeValues []string, objID string) string {
 	return strings.Join(append(append([]string{}, scopeValues...), objID), "/")
 }
@@ -159,7 +164,7 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	final := created
 	if r.spec.Waiter != nil {
 		timeout := r.timeout(ctx, req.Plan, "create", &resp.Diagnostics)
-		final, err = api.WaitUntilReady(objID, timeout)
+		final, err = api.WaitUntilReady(ctx, objID, timeout)
 		if err != nil {
 			resp.Diagnostics.AddError("Error waiting for "+r.spec.Name, err.Error())
 			return
@@ -221,7 +226,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	final := updated
 	if r.spec.Waiter != nil {
 		timeout := r.timeout(ctx, req.Plan, "update", &resp.Diagnostics)
-		final, clientErr = api.WaitUntilReady(objID, timeout)
+		final, clientErr = api.WaitUntilReady(ctx, objID, timeout)
 		if clientErr != nil {
 			resp.Diagnostics.AddError("Error waiting for "+r.spec.Name+" update", clientErr.Error())
 			return
@@ -486,7 +491,13 @@ func (r *dynamicResource) stateFromResponse(_ context.Context, baseRaw tftypes.V
 			continue
 		}
 		computedOnly := a.Computed && !a.Required && !a.Optional
-		if !computedOnly && !refreshInputs {
+		// On create/update we normally keep the configured plan value to avoid
+		// "provider produced inconsistent result" errors. But we must take the
+		// value from the response when it is computed-only, OR when the plan
+		// value is still unknown (an Optional+Computed field the user left unset
+		// and that has no static default) — leaving it unknown would error.
+		planUnknown := !next[a.Name].IsKnown()
+		if !computedOnly && !refreshInputs && !planUnknown {
 			continue // keep configured value from the plan
 		}
 		attrType, hasType := objType.AttributeTypes[a.Name]
@@ -507,8 +518,12 @@ func toBigFloat(v any) *big.Float {
 	case float64:
 		return big.NewFloat(n)
 	case json.Number:
-		f, _ := n.Float64()
-		return big.NewFloat(f)
+		// Parse the literal at high precision so large integers survive
+		// (n.Float64() would round beyond 2^53).
+		if bf, _, err := big.ParseFloat(n.String(), 10, 200, big.ToNearestEven); err == nil {
+			return bf
+		}
+		return big.NewFloat(0)
 	case int:
 		return new(big.Float).SetInt64(int64(n))
 	case int64:

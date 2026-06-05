@@ -1,6 +1,7 @@
 package duplosdk
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
@@ -21,8 +22,8 @@ type Waiter[T any] struct {
 }
 
 // Wait polls fetchFn until the resource reaches SuccessState, a FailureState,
-// or timeout elapses. name is used only for log messages.
-func (w *Waiter[T]) Wait(name string, timeout time.Duration, fetchFn func() (*T, ClientError)) (*T, ClientError) {
+// timeout elapses, or ctx is cancelled. name is used only for log messages.
+func (w *Waiter[T]) Wait(ctx context.Context, name string, timeout time.Duration, fetchFn func() (*T, ClientError)) (*T, ClientError) {
 	log.Printf("[TRACE] waiter(%s): start (timeout=%s)", name, timeout)
 	deadline := time.Now().Add(timeout)
 	for {
@@ -48,6 +49,13 @@ func (w *Waiter[T]) Wait(name string, timeout time.Duration, fetchFn func() (*T,
 		if time.Now().After(deadline) {
 			return nil, newClientError(0, fmt.Errorf("timed out waiting for %s (last status: %q)", name, status))
 		}
-		time.Sleep(w.PollInterval)
+
+		// Sleep between polls, but wake immediately if the operation is
+		// cancelled (e.g. the user interrupts terraform apply).
+		select {
+		case <-ctx.Done():
+			return nil, newClientError(0, fmt.Errorf("waiting for %s cancelled: %w", name, ctx.Err()))
+		case <-time.After(w.PollInterval):
+		}
 	}
 }

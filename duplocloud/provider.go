@@ -13,25 +13,25 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-var _ provider.Provider = &helpdeskProvider{}
+var _ provider.Provider = &duploaiProvider{}
 
-type helpdeskProvider struct{}
+type duploaiProvider struct{}
 
-// New returns a new instance of the DuploCloud Helpdesk provider.
+// New returns a new instance of the DuploCloud AI provider.
 func New() provider.Provider {
-	return &helpdeskProvider{}
+	return &duploaiProvider{}
 }
 
-func (p *helpdeskProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
+func (p *duploaiProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "duploai"
 }
 
-func (p *helpdeskProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *duploaiProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"duplo_host": schema.StringAttribute{
 				Required:    true,
-				Description: "Base URL of the DuploCloud AI Helpdesk API (e.g. http://localhost:60021).",
+				Description: "Base URL of the DuploCloud AI API (e.g. http://localhost:60021).",
 			},
 			"duplo_token": schema.StringAttribute{
 				Required:    true,
@@ -57,7 +57,7 @@ type providerModel struct {
 	HTTPTimeout types.Int64  `tfsdk:"http_timeout"`
 }
 
-func (p *helpdeskProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+func (p *duploaiProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var config providerModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
@@ -84,7 +84,7 @@ func (p *helpdeskProvider) Configure(ctx context.Context, req provider.Configure
 	resp.ResourceData = client
 }
 
-func (p *helpdeskProvider) Resources(_ context.Context) []func() resource.Resource {
+func (p *duploaiProvider) Resources(_ context.Context) []func() resource.Resource {
 	specs, err := loadResourceSpecs()
 	if err != nil {
 		// Embedded specs are compiled in; a failure here is a developer error
@@ -106,6 +106,6 @@ func (p *helpdeskProvider) Resources(_ context.Context) []func() resource.Resour
 	return factories
 }
 
-func (p *helpdeskProvider) DataSources(_ context.Context) []func() datasource.DataSource {
+func (p *duploaiProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{}
 }

@@ -97,4 +97,3 @@ func TestEndpointRegistry(t *testing.T) {
 		t.Error("expected miss for unregistered resource")
 	}
 }
-

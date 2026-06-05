@@ -6,32 +6,8 @@ import (
 	"strings"
 
 	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 )
-
-// listToStrings extracts plain string values from a types.List of strings.
-func listToStrings(l types.List) []string {
-	elems := l.Elements()
-	out := make([]string, 0, len(elems))
-	for _, e := range elems {
-		if s, ok := e.(types.String); ok {
-			out = append(out, s.ValueString())
-		}
-	}
-	return out
-}
-
-// stringsToList converts a []string into a types.List of strings.
-func stringsToList(ss []string) types.List {
-	elems := make([]attr.Value, 0, len(ss))
-	for _, s := range ss {
-		elems = append(elems, types.StringValue(s))
-	}
-	list, _ := types.ListValue(types.StringType, elems)
-	return list
-}
 
 // baseResource holds the shared client and satisfies resource.ResourceWithConfigure.
 // Embed this in every resource struct instead of repeating Configure each time.
@@ -61,12 +37,3 @@ func splitID(id string, minParts int) ([]string, error) {
 	}
 	return parts[:minParts], nil
 }
-
-// strPtr returns a pointer to s. Use for optional SDK string fields.
-func strPtr(s string) *string { return &s }
-
-// boolPtr returns a pointer to b. Use for optional SDK bool fields.
-func boolPtr(b bool) *bool { return &b }
-
-// intPtr returns a pointer to i. Use for optional SDK int fields.
-func intPtr(i int) *int { return &i }

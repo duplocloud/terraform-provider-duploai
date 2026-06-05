@@ -73,8 +73,15 @@ type AttributeSpec struct {
 
 	// APIPath is the default dot-path in the API body this attribute maps to,
 	// e.g. "spec.region". Array element extraction is supported for read-back
-	// via "result.subnets[].subnetId". Empty for non-API attributes such as
-	// workspace_id. Used for both directions unless overridden below.
+	// via "result.subnets[].subnetId". Used for both directions unless
+	// overridden below.
+	//
+	// Defaulting differs by level on purpose: a TOP-LEVEL attribute with an
+	// empty path is treated as non-API (not sent, not read back) — this is how
+	// path-parameter attributes like workspace_id are excluded from the body. A
+	// NESTED field with an empty path defaults to its own name. So a top-level
+	// body field must declare its apiPath explicitly (even apiPath:"name"),
+	// while an identical nested field does not.
 	APIPath string `json:"apiPath,omitempty"`
 
 	// RequestPath / ResponsePath override APIPath when the request and response
