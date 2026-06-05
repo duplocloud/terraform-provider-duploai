@@ -16,9 +16,10 @@ description: |-
 
 ### Required
 
-- `duplo_host` (String) Base URL of the DuploCloud AI Helpdesk API (e.g. http://localhost:60021).
+- `duplo_host` (String) Base URL of the DuploCloud AI API (e.g. http://localhost:60021).
 - `duplo_token` (String, Sensitive) Bearer token for DuploCloud API authentication.
 
 ### Optional
 
+- `http_timeout` (Number) HTTP client timeout in seconds for DuploCloud API calls (default 60).
 - `ssl_no_verify` (Boolean) Disable TLS certificate verification (development only).
