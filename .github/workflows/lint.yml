@@ -25,4 +25,8 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+          # Build golangci-lint from source with the toolchain set up above, so
+          # its build Go is >= the version targeted in go.mod (the prebuilt
+          # binaries lag and error out against a newer go directive).
+          install-mode: goinstall
           args: --timeout=5m
