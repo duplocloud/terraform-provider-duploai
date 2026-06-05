@@ -1,0 +1,186 @@
+{
+  "name": "network_baseline",
+  "description": "Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways).",
+  "idPath": "id",
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this network baseline."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the network baseline."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "region",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.region",
+      "description": "AWS region (e.g. us-east-1)."
+    },
+    {
+      "name": "cidr",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.cidr",
+      "description": "VPC CIDR block (e.g. 10.0.0.0/16)."
+    },
+    {
+      "name": "az_count",
+      "type": "int",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.azCount",
+      "description": "Number of availability zones (1-4)."
+    },
+    {
+      "name": "subnet_prefix",
+      "type": "int",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.subnetPrefix",
+      "description": "Subnet prefix length (e.g. 24)."
+    },
+    {
+      "name": "nat_mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "None",
+      "oneOf": ["None", "SingleAz", "MultiAz"],
+      "apiPath": "spec.natMode",
+      "description": "NAT gateway mode: None, SingleAz, or MultiAz."
+    },
+    {
+      "name": "enable_dns",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.enableDns",
+      "description": "Enable DNS support in the VPC."
+    },
+    {
+      "name": "enable_flow_logs",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.enableFlowLogs",
+      "description": "Enable VPC flow logs."
+    },
+    {
+      "name": "flow_logs_retention_days",
+      "type": "int",
+      "optional": true,
+      "apiPath": "spec.flowLogsRetentionDays",
+      "description": "Flow logs retention in days. Required when enable_flow_logs is true."
+    },
+    {
+      "name": "env_tag",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "dev",
+      "forceNew": true,
+      "apiPath": "spec.envTag",
+      "description": "Environment tag applied to provisioned resources."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this network to a cloud provider account."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Cli",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    },
+    {
+      "name": "vpc_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.id",
+      "description": "Provisioned VPC ID."
+    },
+    {
+      "name": "subnet_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "result.subnets[].subnetId",
+      "description": "Provisioned subnet IDs."
+    },
+    {
+      "name": "nat_gateway_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "result.natGateways[].natGatewayId",
+      "description": "Provisioned NAT gateway IDs."
+    }
+  ],
+  "requiredIf": [
+    {
+      "attribute": "flow_logs_retention_days",
+      "whenAttribute": "enable_flow_logs",
+      "whenEquals": "true"
+    }
+  ],
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "failureStates": {
+      "Failed": "provisioning failed",
+      "Blocked": "provisioning is blocked",
+      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+      "DeprovisionFailed": "deprovisioning failed"
+    },
+    "failureDetailPath": "blockedReason",
+    "pollIntervalSeconds": 10,
+    "createTimeoutMinutes": 30,
+    "updateTimeoutMinutes": 30,
+    "deleteTimeoutMinutes": 15
+  }
+}
