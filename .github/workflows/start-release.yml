@@ -26,10 +26,10 @@ jobs:
         id: version
         run: |
           set -euo pipefail
-          if [ -z "${{{{ github.event.inputs.version }}}}" ]; then
+          if [ -z "${{ github.event.inputs.version }}" ]; then
             echo "release=$(sed -ne 's/^VERSION=\([0-9\.]*\).*$/\1/p' <Makefile)" >>$GITHUB_OUTPUT
           else
-            echo "release=${{{{ github.event.inputs.version }}}}" >>$GITHUB_OUTPUT
+            echo "release=${{ github.event.inputs.version }}" >>$GITHUB_OUTPUT
           fi
 
       - name: Initialize git config
@@ -40,10 +40,10 @@ jobs:
       - name: Start gitflow release
         uses: duplocloud/ghactions-start-gitflow-release@master
         with:
-          github_token: ${{{{ secrets.DUPLO_GITHUB_TOKEN }}}}
-          version: "${{{{ steps.version.outputs.release }}}}"
+          github_token: ${{ secrets.DUPLO_GITHUB_TOKEN }}
+          version: "${{ steps.version.outputs.release }}"
           is_hotfix: false
           precommit_run: |
             set -euo pipefail
-            version="${{{{{ steps.version.outputs.release }}}}}"
+            version="${{{ steps.version.outputs.release }}}"
             sed -e 's/^\(VERSION=\)[0-9\.]*/\1'"$version"'/g' -i Makefile

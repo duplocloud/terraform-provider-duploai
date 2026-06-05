@@ -1,10 +1,11 @@
 name: CI
 
+# Run on every PR regardless of base branch so stacked / feature-targeted PRs
+# are never left without checks, plus on pushes to long-lived branches.
 on:
   pull_request:
-    branches: [develop, master, main]
   push:
-    branches: [develop]
+    branches: [develop, main, master]
 
 jobs:
   build-and-test:

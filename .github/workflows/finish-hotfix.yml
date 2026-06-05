@@ -21,12 +21,12 @@ jobs:
 
       - name: Initialize git config
         run: |
-          git config --global user.name ${{{{ env.git_user }}}}
-          git config --global user.email ${{{{ env.git_email }}}}
+          git config --global user.name ${{ env.git_user }}
+          git config --global user.email ${{ env.git_email }}
 
       - name: Finish gitflow hotfix
         uses: duplocloud/ghactions-start-gitflow-release@master
         with:
-          github_token: ${{{{ secrets.DUPLO_GITHUB_TOKEN }}}}
+          github_token: ${{ secrets.DUPLO_GITHUB_TOKEN }}
           is_hotfix: true
           finish: true

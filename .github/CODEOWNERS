@@ -1,0 +1,9 @@
+# Default owners for everything in the repo. A CODEOWNER review is required to
+# merge (enforce via branch protection on develop/main).
+*     @duplocloud/duplo-reviewers
+
+# Guard the release + CI machinery and the engine core.
+/.github/         @duplocloud/duplo-reviewers
+/.goreleaser.yaml @duplocloud/duplo-reviewers
+/duplocloud/      @duplocloud/duplo-reviewers
+/duplosdk/        @duplocloud/duplo-reviewers

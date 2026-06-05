@@ -1,0 +1,28 @@
+name: Lint
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  golangci:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l duplocloud duplosdk)
+          if [ -n "$unformatted" ]; then echo "Unformatted files:"; echo "$unformatted"; exit 1; fi
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m

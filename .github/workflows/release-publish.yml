@@ -26,8 +26,8 @@ jobs:
         uses: crazy-max/ghaction-import-gpg@v6
         id: import_gpg
         with:
-          gpg_private_key: ${{{{ secrets.GPG_PRIVATE_KEY }}}}
-          passphrase: ${{{{ secrets.PASSPHRASE }}}}
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
 
       - name: Run tests before publish
         run: go test ./... -timeout 90s
@@ -39,5 +39,5 @@ jobs:
           version: latest
           args: release --clean
         env:
-          GITHUB_TOKEN: ${{{{ secrets.GITHUB_TOKEN }}}}
-          GPG_FINGERPRINT: ${{{{ steps.import_gpg.outputs.fingerprint }}}}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
