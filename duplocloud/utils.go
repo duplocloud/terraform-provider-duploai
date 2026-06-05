@@ -1,9 +1,32 @@
 package duplocloud
 
 import (
+	"context"
 	"fmt"
 	"strings"
+
+	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
+
+// baseResource holds the shared client and satisfies resource.ResourceWithConfigure.
+// Embed this in every resource struct instead of repeating Configure each time.
+type baseResource struct {
+	*duplosdk.Client
+}
+
+func (r *baseResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+	client, ok := req.ProviderData.(*duplosdk.Client)
+	if !ok {
+		resp.Diagnostics.AddError("Unexpected provider data type",
+			fmt.Sprintf("expected *duplosdk.Client, got %T", req.ProviderData))
+		return
+	}
+	r.Client = client
+}
 
 // splitID splits a composite Terraform resource ID of the form "part1/part2[/...]"
 // into its constituent parts. Returns an error if fewer than minParts are found.
@@ -14,12 +37,3 @@ func splitID(id string, minParts int) ([]string, error) {
 	}
 	return parts[:minParts], nil
 }
-
-// strPtr returns a pointer to s. Use for optional SDK string fields.
-func strPtr(s string) *string { return &s }
-
-// boolPtr returns a pointer to b. Use for optional SDK bool fields.
-func boolPtr(b bool) *bool { return &b }
-
-// intPtr returns a pointer to i. Use for optional SDK int fields.
-func intPtr(i int) *int { return &i }

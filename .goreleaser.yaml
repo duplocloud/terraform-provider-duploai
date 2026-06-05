@@ -12,7 +12,7 @@ builds:
     ignore:
       - goos: darwin
         goarch: '386'
-    binary: terraform-provider-duplocloud-helpdesk_{{{{.Version}}}}
+    binary: terraform-provider-duploai_{{{{.Version}}}}
 archives:
   - format: zip
     name_template: "{{{{.ProjectName}}}}_{{{{.Version}}}}_{{{{.Os}}}}_{{{{.Arch}}}}"

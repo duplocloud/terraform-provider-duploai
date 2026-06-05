@@ -3,8 +3,13 @@ terraform-provider-*
 bin/
 *.exe
 
+# Local dev testing
+local-test/
+main.tf
+
 # Terraform
 .terraform/
+.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
 *.tfvars

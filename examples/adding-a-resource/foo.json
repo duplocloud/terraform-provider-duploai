@@ -1,0 +1,191 @@
+{
+  "name": "foo",
+  "description": "Type catalog: one attribute per supported type. Each attribute's description documents the type. Copy/trim into duplocloud/specs/<name>.json for a real resource. (Reference only — not embedded.)",
+  "idPath": "id",
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "Path parameter (matches {workspace_id} in the endpoint UriBase). No apiPath — goes into the URL, not the body."
+    },
+
+    {
+      "name": "a_string",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "hello",
+      "apiPath": "spec.aString",
+      "description": "string. Supports default, oneOf, sensitive, forceNew."
+    },
+    {
+      "name": "a_bool",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": true,
+      "apiPath": "spec.aBool",
+      "description": "bool."
+    },
+    {
+      "name": "an_int",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 1,
+      "apiPath": "spec.anInt",
+      "description": "int (int64)."
+    },
+    {
+      "name": "a_number",
+      "type": "number",
+      "optional": true,
+      "computed": true,
+      "default": 1.5,
+      "apiPath": "spec.aNumber",
+      "description": "number (float64)."
+    },
+    {
+      "name": "an_enum",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "small",
+      "oneOf": ["small", "medium", "large"],
+      "apiPath": "spec.size",
+      "description": "string with an enum constraint via oneOf."
+    },
+    {
+      "name": "a_secret",
+      "type": "string",
+      "optional": true,
+      "sensitive": true,
+      "apiPath": "spec.secret",
+      "description": "sensitive string (hidden in plan/CLI output)."
+    },
+
+    {
+      "name": "tags",
+      "type": "list(string)",
+      "optional": true,
+      "apiPath": "spec.tags",
+      "description": "list(string). Element type may be string|bool|int|number."
+    },
+    {
+      "name": "ports",
+      "type": "list(int)",
+      "optional": true,
+      "apiPath": "spec.ports",
+      "description": "list(int)."
+    },
+    {
+      "name": "zones",
+      "type": "set(string)",
+      "optional": true,
+      "apiPath": "spec.zones",
+      "description": "set(string). Unordered, de-duplicated."
+    },
+    {
+      "name": "weights",
+      "type": "set(number)",
+      "optional": true,
+      "apiPath": "spec.weights",
+      "description": "set(number)."
+    },
+    {
+      "name": "labels",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.labels",
+      "description": "map(string). Keys are strings; element type may be string|bool|int|number."
+    },
+    {
+      "name": "flags",
+      "type": "map(bool)",
+      "optional": true,
+      "apiPath": "spec.flags",
+      "description": "map(bool)."
+    },
+
+    {
+      "name": "settings",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.settings",
+      "description": "Single nested object. Nested fields are full attributes with their own paths.",
+      "attributes": [
+        { "name": "timeout_ms", "type": "int", "optional": true, "apiPath": "timeoutMs",
+          "description": "Nested field renamed to camelCase via a relative apiPath." },
+        { "name": "verbose", "type": "bool", "optional": true,
+          "description": "Nested field with no apiPath defaults to its own name." },
+        { "name": "limits", "type": "map(int)", "optional": true, "apiPath": "limits",
+          "description": "Objects can contain collections." }
+      ]
+    },
+    {
+      "name": "ingress",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.ingress",
+      "description": "list(object). Each element is the nested object below.",
+      "attributes": [
+        { "name": "host", "type": "string", "required": true },
+        { "name": "port", "type": "int", "optional": true, "apiPath": "listenPort" },
+        { "name": "headers", "type": "map(string)", "optional": true }
+      ]
+    },
+    {
+      "name": "rules",
+      "type": "set(object)",
+      "optional": true,
+      "apiPath": "spec.rules",
+      "description": "set(object).",
+      "attributes": [
+        { "name": "action", "type": "string", "required": true, "oneOf": ["allow", "deny"] },
+        { "name": "cidr", "type": "string", "required": true }
+      ]
+    },
+    {
+      "name": "backends",
+      "type": "map(object)",
+      "optional": true,
+      "apiPath": "spec.backends",
+      "description": "map(object): string keys, object values. Objects nest recursively.",
+      "attributes": [
+        { "name": "url", "type": "string", "required": true },
+        { "name": "health", "type": "object", "optional": true, "apiPath": "healthCheck",
+          "attributes": [
+            { "name": "path", "type": "string", "optional": true },
+            { "name": "interval_s", "type": "int", "optional": true, "apiPath": "intervalSeconds" }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status.phase",
+      "description": "Computed-only: read from the response, never sent."
+    },
+    {
+      "name": "node_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "status.nodes[].id",
+      "description": "Computed list built by mapping over a response array (the [] operator)."
+    }
+  ],
+  "waiter": {
+    "statusPath": "status.phase",
+    "successState": "Ready",
+    "failureStates": { "Failed": "provisioning failed" },
+    "pollIntervalSeconds": 5,
+    "createTimeoutMinutes": 20,
+    "updateTimeoutMinutes": 20,
+    "deleteTimeoutMinutes": 10
+  }
+}
