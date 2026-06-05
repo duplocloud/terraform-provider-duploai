@@ -268,6 +268,104 @@ func TestFooExampleIsValid(t *testing.T) {
 	}
 }
 
+// #2 — on create, an Optional+Computed attribute the user left unset (unknown in
+// the plan, no static default) is filled from the response; a configured input
+// is kept from the plan (not overwritten by the server value).
+func TestStateFromResponse_RefreshesUnknownKeepsInput(t *testing.T) {
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"id":   tftypes.String,
+		"size": tftypes.String,
+		"name": tftypes.String,
+	}}
+	base := tftypes.NewValue(objType, map[string]tftypes.Value{
+		"id":   tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+		"size": tftypes.NewValue(tftypes.String, tftypes.UnknownValue), // optional+computed, unset
+		"name": tftypes.NewValue(tftypes.String, "myname"),             // configured input
+	})
+	r := &dynamicResource{spec: ResourceSpec{Attributes: []AttributeSpec{
+		{Name: "size", Type: "string", Optional: true, Computed: true, APIPath: "spec.size"},
+		{Name: "name", Type: "string", Required: true, APIPath: "name"},
+	}}}
+
+	var diags diag.Diagnostics
+	out := r.stateFromResponse(context.Background(), base,
+		map[string]any{"spec": map[string]any{"size": "large"}, "name": "server-name"},
+		map[string]string{}, "obj-1", false, &diags)
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+
+	m := map[string]tftypes.Value{}
+	if err := out.As(&m); err != nil {
+		t.Fatal(err)
+	}
+	var id, size, name string
+	_ = m["id"].As(&id)
+	if id != "obj-1" {
+		t.Errorf("id = %q, want obj-1", id)
+	}
+	if !m["size"].IsKnown() {
+		t.Fatal("size still unknown — should have been refreshed from the response")
+	}
+	_ = m["size"].As(&size)
+	if size != "large" {
+		t.Errorf("size = %q, want large", size)
+	}
+	_ = m["name"].As(&name)
+	if name != "myname" {
+		t.Errorf("name = %q, want myname (configured value must be kept on create)", name)
+	}
+}
+
+// #3 — a top-level attribute with no apiPath (e.g. a path parameter) is not sent
+// in the request body, while a mapped sibling is.
+func TestBodyFromRaw_SkipsTopLevelEmptyPath(t *testing.T) {
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"id":           tftypes.String,
+		"workspace_id": tftypes.String,
+		"name":         tftypes.String,
+	}}
+	raw := tftypes.NewValue(objType, map[string]tftypes.Value{
+		"id":           tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+		"workspace_id": tftypes.NewValue(tftypes.String, "ws-1"),
+		"name":         tftypes.NewValue(tftypes.String, "n"),
+	})
+	r := &dynamicResource{spec: ResourceSpec{Attributes: []AttributeSpec{
+		{Name: "workspace_id", Type: "string", Required: true}, // no apiPath → path param, not sent
+		{Name: "name", Type: "string", Required: true, APIPath: "name"},
+	}}}
+
+	var diags diag.Diagnostics
+	body := r.bodyFromRaw(raw, &diags)
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+	if _, present := body["workspace_id"]; present {
+		t.Error("workspace_id (empty apiPath) must not appear in the request body")
+	}
+	if body["name"] != "n" {
+		t.Errorf("name = %v, want n", body["name"])
+	}
+}
+
+// #4 — composite id is "/"-joined and split back by position.
+func TestComposeAndSplitID_RoundTrip(t *testing.T) {
+	id := composeID([]string{"tenant", "cluster"}, "obj-9")
+	if id != "tenant/cluster/obj-9" {
+		t.Fatalf("composeID = %q", id)
+	}
+	parts, err := splitID(id, 3)
+	if err != nil {
+		t.Fatalf("splitID: %v", err)
+	}
+	if !reflect.DeepEqual(parts, []string{"tenant", "cluster", "obj-9"}) {
+		t.Errorf("splitID = %v", parts)
+	}
+	if _, err := splitID("only-two/parts", 3); err == nil {
+		t.Error("expected error when id has fewer parts than required")
+	}
+}
+
 func TestNumberPrecisionRoundTrip(t *testing.T) {
 	const huge = "9007199254740993" // 2^53 + 1, not representable as float64
 	bf, _, _ := big.ParseFloat(huge, 10, 200, big.ToNearestEven)

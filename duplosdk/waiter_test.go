@@ -1,0 +1,84 @@
+package duplosdk
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+)
+
+func statusWaiter() *Waiter[map[string]any] {
+	return &Waiter[map[string]any]{
+		PollInterval:    time.Millisecond,
+		SuccessState:    "Ready",
+		FailureStates:   map[string]string{"Failed": "provisioning failed"},
+		StatusFn:        func(m *map[string]any) string { s, _ := (*m)["s"].(string); return s },
+		FailureDetailFn: func(m *map[string]any) string { d, _ := (*m)["detail"].(string); return d },
+	}
+}
+
+func TestWaiter_SucceedsAfterPolling(t *testing.T) {
+	n := 0
+	obj, err := statusWaiter().Wait(context.Background(), "x", time.Second, func() (*map[string]any, ClientError) {
+		n++
+		s := "Pending"
+		if n >= 3 {
+			s = "Ready"
+		}
+		return &map[string]any{"s": s}, nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if (*obj)["s"] != "Ready" || n < 3 {
+		t.Errorf("obj=%v calls=%d", *obj, n)
+	}
+}
+
+func TestWaiter_FailureState(t *testing.T) {
+	_, err := statusWaiter().Wait(context.Background(), "x", time.Second, func() (*map[string]any, ClientError) {
+		return &map[string]any{"s": "Failed", "detail": "quota exceeded"}, nil
+	})
+	if err == nil {
+		t.Fatal("expected failure-state error")
+	}
+	if !strings.Contains(err.Error(), "provisioning failed") || !strings.Contains(err.Error(), "quota exceeded") {
+		t.Errorf("error missing reason/detail: %v", err)
+	}
+}
+
+func TestWaiter_Timeout(t *testing.T) {
+	_, err := statusWaiter().Wait(context.Background(), "x", time.Nanosecond, func() (*map[string]any, ClientError) {
+		return &map[string]any{"s": "Pending"}, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("expected timeout error, got %v", err)
+	}
+}
+
+// #5 — a cancelled context aborts the poll loop promptly, even with a long
+// PollInterval, instead of sleeping until the next tick.
+func TestWaiter_ContextCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled before the first inter-poll sleep
+
+	w := statusWaiter()
+	w.PollInterval = time.Hour // would hang for an hour if ctx were ignored
+
+	done := make(chan ClientError, 1)
+	go func() {
+		_, err := w.Wait(ctx, "x", time.Hour, func() (*map[string]any, ClientError) {
+			return &map[string]any{"s": "Pending"}, nil
+		})
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "cancelled") {
+			t.Errorf("expected cancellation error, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Wait did not return after context cancellation")
+	}
+}
