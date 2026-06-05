@@ -19,14 +19,16 @@ jobs:
           cache: true
       - name: gofmt
         run: |
-          unformatted=$(gofmt -l duplocloud duplosdk)
+          unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then echo "Unformatted files:"; echo "$unformatted"; exit 1; fi
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
-          # Build golangci-lint from source with the toolchain set up above, so
-          # its build Go is >= the version targeted in go.mod (the prebuilt
-          # binaries lag and error out against a newer go directive).
+          # Pinned for reproducible CI. v1.64.8 matches the v1-schema .golangci.yml
+          # and the @v6 action. install-mode: goinstall builds it from source with
+          # the toolchain set up above, so its build Go is >= the version targeted
+          # in go.mod (the prebuilt binaries lag and error out against a newer go
+          # directive). The v1 module path keeps this on the latest v1.x, not v2.
+          version: v1.64.8
           install-mode: goinstall
           args: --timeout=5m

@@ -7,6 +7,10 @@ updates:
     open-pull-requests-limit: 10
     commit-message:
       prefix: "deps"
+    # Batch module bumps into a single PR to cut review noise.
+    groups:
+      go-modules:
+        patterns: ["*"]
 
   - package-ecosystem: github-actions
     directory: "/"

@@ -45,5 +45,5 @@ jobs:
           is_hotfix: false
           precommit_run: |
             set -euo pipefail
-            version="${{{ steps.version.outputs.release }}}"
+            version="${{ steps.version.outputs.release }}"
             sed -e 's/^\(VERSION=\)[0-9\.]*/\1'"$version"'/g' -i Makefile
