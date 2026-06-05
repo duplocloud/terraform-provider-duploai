@@ -59,3 +59,42 @@ func (w *Waiter[T]) Wait(ctx context.Context, name string, timeout time.Duration
 		}
 	}
 }
+
+// WaitGone polls fetchFn until it reports the resource is gone (a NotFound
+// error), a FailureState is reached (e.g. DeprovisionFailed), timeout elapses,
+// or ctx is cancelled. Use it after issuing an asynchronous delete to confirm
+// deprovisioning actually completed.
+func (w *Waiter[T]) WaitGone(ctx context.Context, name string, timeout time.Duration, fetchFn func() (*T, ClientError)) ClientError {
+	log.Printf("[TRACE] waiter(%s): waiting for deletion (timeout=%s)", name, timeout)
+	deadline := time.Now().Add(timeout)
+	for {
+		obj, err := fetchFn()
+		if err != nil {
+			if err.IsNotFound() {
+				return nil // gone
+			}
+			return err
+		}
+		status := w.StatusFn(obj)
+		log.Printf("[TRACE] waiter(%s): still present, status=%s", name, status)
+
+		if reason, bad := w.FailureStates[status]; bad {
+			msg := fmt.Sprintf("%s (status: %q)", reason, status)
+			if w.FailureDetailFn != nil {
+				if detail := w.FailureDetailFn(obj); detail != "" {
+					msg += ": " + detail
+				}
+			}
+			return newClientError(0, fmt.Errorf("%s", msg))
+		}
+		if time.Now().After(deadline) {
+			return newClientError(0, fmt.Errorf("timed out waiting for %s to be deleted (last status: %q)", name, status))
+		}
+
+		select {
+		case <-ctx.Done():
+			return newClientError(0, fmt.Errorf("waiting for %s deletion cancelled: %w", name, ctx.Err()))
+		case <-time.After(w.PollInterval):
+		}
+	}
+}

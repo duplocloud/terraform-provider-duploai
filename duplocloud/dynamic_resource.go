@@ -247,9 +247,23 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 	log.Printf("[TRACE] dynamic %s Delete(%s): start", r.spec.Name, id)
-	if clientErr := r.api(scope).Delete(objID); clientErr != nil {
+	api := r.api(scope)
+	if clientErr := api.Delete(objID); clientErr != nil {
 		resp.Diagnostics.AddError("Error deleting "+r.spec.Name, clientErr.Error())
 		return
+	}
+
+	// For asynchronously-provisioned resources, the delete call only starts
+	// deprovisioning — poll until the object is actually gone.
+	if r.spec.Waiter != nil {
+		timeout := r.timeout(ctx, req.State, "delete", &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if clientErr := api.WaitUntilGone(ctx, objID, timeout); clientErr != nil {
+			resp.Diagnostics.AddError("Error waiting for "+r.spec.Name+" deletion", clientErr.Error())
+			return
+		}
 	}
 	log.Printf("[TRACE] dynamic %s Delete(%s): end", r.spec.Name, id)
 }

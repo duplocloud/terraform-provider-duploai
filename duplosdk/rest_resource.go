@@ -70,6 +70,15 @@ func (r *RESTResource[T]) WaitUntilReady(ctx context.Context, id string, timeout
 	})
 }
 
+// WaitUntilGone polls Get until the object no longer exists (a NotFound
+// response) or a terminal failure state is reached. Use after an asynchronous
+// Delete to confirm deprovisioning completed.
+func (r *RESTResource[T]) WaitUntilGone(ctx context.Context, id string, timeout time.Duration) ClientError {
+	return r.waiter.WaitGone(ctx, r.scopeLabel()+"/"+id, timeout, func() (*T, ClientError) {
+		return r.Get(id)
+	})
+}
+
 // scopeLabel joins the scope values in path-parameter order for log/wait names.
 func (r *RESTResource[T]) scopeLabel() string {
 	params := r.endpoint.PathParams()

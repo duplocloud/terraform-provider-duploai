@@ -2,10 +2,13 @@ package duplosdk
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 )
+
+var errNotFound = fmt.Errorf("not found")
 
 func statusWaiter() *Waiter[map[string]any] {
 	return &Waiter[map[string]any]{
@@ -53,6 +56,65 @@ func TestWaiter_Timeout(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "timed out") {
 		t.Errorf("expected timeout error, got %v", err)
+	}
+}
+
+func TestWaiterGone_GoneAfterPolling(t *testing.T) {
+	n := 0
+	err := statusWaiter().WaitGone(context.Background(), "x", time.Second, func() (*map[string]any, ClientError) {
+		n++
+		if n < 3 {
+			return &map[string]any{"s": "Deprovisioning"}, nil
+		}
+		return nil, newClientError(404, errNotFound) // gone
+	})
+	if err != nil {
+		t.Fatalf("expected nil once gone, got %v", err)
+	}
+	if n < 3 {
+		t.Errorf("polled %d times, expected to wait for deletion", n)
+	}
+}
+
+func TestWaiterGone_ImmediateNotFound(t *testing.T) {
+	err := statusWaiter().WaitGone(context.Background(), "x", time.Second, func() (*map[string]any, ClientError) {
+		return nil, newClientError(404, errNotFound)
+	})
+	if err != nil {
+		t.Errorf("already-gone should return nil, got %v", err)
+	}
+}
+
+func TestWaiterGone_FailureState(t *testing.T) {
+	w := statusWaiter()
+	w.FailureStates = map[string]string{"DeprovisionFailed": "deprovisioning failed"}
+	err := w.WaitGone(context.Background(), "x", time.Second, func() (*map[string]any, ClientError) {
+		return &map[string]any{"s": "DeprovisionFailed"}, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "deprovisioning failed") {
+		t.Errorf("expected deprovision failure, got %v", err)
+	}
+}
+
+func TestWaiterGone_Timeout(t *testing.T) {
+	err := statusWaiter().WaitGone(context.Background(), "x", time.Nanosecond, func() (*map[string]any, ClientError) {
+		return &map[string]any{"s": "Deprovisioning"}, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("expected timeout, got %v", err)
+	}
+}
+
+func TestWaiterGone_ContextCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	w := statusWaiter()
+	w.PollInterval = time.Hour
+	err := w.WaitGone(ctx, "x", time.Hour, func() (*map[string]any, ClientError) {
+		return &map[string]any{"s": "Deprovisioning"}, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "cancelled") {
+		t.Errorf("expected cancellation error, got %v", err)
 	}
 }
 
