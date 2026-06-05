@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+
+	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
 )
 
 // baseResource holds the shared client and satisfies resource.ResourceWithConfigure.

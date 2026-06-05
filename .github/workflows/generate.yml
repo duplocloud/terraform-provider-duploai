@@ -1,0 +1,33 @@
+name: Generate Check
+
+# Fails if generated docs or formatted examples are out of date — the Terraform
+# Registry serves docs/ verbatim, so drift here ships broken docs to users.
+on:
+  pull_request:
+  push:
+    branches: [develop, main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: go generate
+        run: go generate ./...
+      - name: Check for drift
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Generated files are out of date. Run 'make doc' (go generate) and commit the result."
+            git --no-pager diff
+            exit 1
+          fi

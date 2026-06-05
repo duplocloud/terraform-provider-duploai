@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -20,6 +19,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
+	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
 )
 
 const (

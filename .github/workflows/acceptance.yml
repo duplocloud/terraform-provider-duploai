@@ -1,0 +1,46 @@
+name: Acceptance Tests
+
+# Runs the provider's acceptance tests (TF_ACC=1) against a matrix of Terraform
+# versions — this is the only layer that exercises real plan/apply/refresh/import
+# through the provider. Because that creates and destroys real cloud resources
+# against a live backend, it is OPT-IN, never automatic: trigger it manually, or
+# add the "run-acceptance" label to a PR. The fork guard keeps secrets off PRs
+# from outside the repo.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-22.04
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       contains(github.event.pull_request.labels.*.name, 'run-acceptance'))
+    strategy:
+      fail-fast: false
+      matrix:
+        terraform:
+          - "1.0.*"
+          - "1.5.*"
+          - "1.9.*"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+      - name: Acceptance tests
+        env:
+          TF_ACC: "1"
+          DUPLO_HOST: ${{ secrets.DUPLO_TEST_HOST }}
+          DUPLO_TOKEN: ${{ secrets.DUPLO_TEST_TOKEN }}
+        run: go test ./... -v -timeout 120m

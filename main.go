@@ -5,8 +5,9 @@ import (
 	"flag"
 	"log"
 
-	"github.com/duplocloud/terraform-provider-duploai/duplocloud"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+
+	"github.com/duplocloud/terraform-provider-duploai/duplocloud"
 )
 
 //go:generate terraform fmt -recursive ./examples/
