@@ -1,0 +1,371 @@
+package duplocloud
+
+import (
+	"context"
+	"encoding/json"
+	"math/big"
+	"os"
+	"reflect"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
+)
+
+func jsonRaw(s string) json.RawMessage { return json.RawMessage(s) }
+
+func TestLoadResourceSpecs(t *testing.T) {
+	// The framework branch ships no resource specs; the loader must succeed and
+	// return an empty set (and must validate every spec that is present).
+	specs, err := loadResourceSpecs()
+	if err != nil {
+		t.Fatalf("loadResourceSpecs: %v", err)
+	}
+	for _, s := range specs {
+		if err := s.validate(); err != nil {
+			t.Errorf("embedded spec %q invalid: %v", s.Name, err)
+		}
+	}
+}
+
+func TestSpecValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		spec    ResourceSpec
+		wantErr bool
+	}{
+		{
+			name: "valid",
+			spec: ResourceSpec{
+				Name: "x", IDPath: "id",
+				Attributes: []AttributeSpec{{Name: "name", Type: "string", Required: true}},
+			},
+		},
+		{name: "missing name", spec: ResourceSpec{IDPath: "id"}, wantErr: true},
+		{name: "missing idPath", spec: ResourceSpec{Name: "x"}, wantErr: true},
+		{
+			name: "bad type",
+			spec: ResourceSpec{
+				Name: "x", IDPath: "id",
+				Attributes: []AttributeSpec{{Name: "y", Type: "float", Optional: true}},
+			},
+			wantErr: true,
+		},
+		{
+			name: "reserved id",
+			spec: ResourceSpec{
+				Name: "x", IDPath: "id",
+				Attributes: []AttributeSpec{{Name: "id", Type: "string", Computed: true}},
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.spec.validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validate() err = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestExtractPath(t *testing.T) {
+	resp := map[string]any{
+		"id":     "net-1",
+		"status": "Complete",
+		"result": map[string]any{
+			"id": "vpc-123",
+			"subnets": []any{
+				map[string]any{"subnetId": "sn-a", "type": "public"},
+				map[string]any{"subnetId": "sn-b", "type": "private"},
+			},
+		},
+	}
+	tests := []struct {
+		path string
+		want any
+	}{
+		{"status", "Complete"},
+		{"result.id", "vpc-123"},
+		{"result.subnets[].subnetId", []any{"sn-a", "sn-b"}},
+		{"result.missing", nil},
+		{"result.subnets[].nope", []any{}},
+	}
+	for _, tt := range tests {
+		got := extractPath(resp, splitDot(tt.path))
+		if !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("extractPath(%q) = %#v, want %#v", tt.path, got, tt.want)
+		}
+	}
+}
+
+func TestComposeID(t *testing.T) {
+	if got := composeID([]string{"ws-1"}, "net-2"); got != "ws-1/net-2" {
+		t.Errorf("single-scope composeID = %q", got)
+	}
+	if got := composeID([]string{"t-1", "c-9"}, "np-3"); got != "t-1/c-9/np-3" {
+		t.Errorf("multi-scope composeID = %q", got)
+	}
+	if got := composeID(nil, "obj-7"); got != "obj-7" {
+		t.Errorf("no-scope composeID = %q", got)
+	}
+}
+
+func TestCheckPathParams(t *testing.T) {
+	spec := ResourceSpec{
+		Name:   "nodepool",
+		IDPath: "id",
+		Attributes: []AttributeSpec{
+			{Name: "tenant_id", Type: "string", Required: true, ForceNew: true},
+			{Name: "cluster_id", Type: "string", Required: true, ForceNew: true},
+			{Name: "az_count", Type: "int", Optional: true},
+		},
+	}
+	if err := spec.checkPathParams([]string{"tenant_id", "cluster_id"}); err != nil {
+		t.Errorf("valid path params rejected: %v", err)
+	}
+	if err := spec.checkPathParams([]string{"missing"}); err == nil {
+		t.Error("expected error for unknown path parameter")
+	}
+	if err := spec.checkPathParams([]string{"az_count"}); err == nil {
+		t.Error("expected error for non-string path parameter")
+	}
+}
+
+func TestSetPath(t *testing.T) {
+	body := map[string]any{}
+	setPath(body, []string{"name"}, "net")
+	setPath(body, []string{"spec", "region"}, "us-east-1")
+	setPath(body, []string{"spec", "cidr"}, "10.0.0.0/16")
+	setPath(body, []string{"spec", "provisioner", "type"}, "Cli")
+
+	want := map[string]any{
+		"name": "net",
+		"spec": map[string]any{
+			"region": "us-east-1",
+			"cidr":   "10.0.0.0/16",
+			"provisioner": map[string]any{
+				"type": "Cli",
+			},
+		},
+	}
+	if !reflect.DeepEqual(body, want) {
+		t.Errorf("setPath built %#v, want %#v", body, want)
+	}
+}
+
+func TestRequestResponsePaths(t *testing.T) {
+	// Same value, different paths in request vs response.
+	a := AttributeSpec{APIPath: "spec.region", RequestPath: "spec.region", ResponsePath: "configuration.region"}
+	if a.requestPath() != "spec.region" {
+		t.Errorf("requestPath = %q", a.requestPath())
+	}
+	if a.responsePath() != "configuration.region" {
+		t.Errorf("responsePath = %q", a.responsePath())
+	}
+	// Both fall back to APIPath when unset.
+	b := AttributeSpec{APIPath: "name"}
+	if b.requestPath() != "name" || b.responsePath() != "name" {
+		t.Errorf("fallback failed: req=%q resp=%q", b.requestPath(), b.responsePath())
+	}
+}
+
+func TestApplyConstants(t *testing.T) {
+	body := map[string]any{"name": "net"}
+	constants := []ConstantField{
+		{Path: "kind", Value: jsonRaw(`"Network"`)},
+		{Path: "spec.apiVersion", Value: jsonRaw(`2`)},
+		{Path: "spec.enabled", Value: jsonRaw(`true`)},
+	}
+	var diags diag.Diagnostics
+	applyConstants(body, constants, &diags)
+	if diags.HasError() {
+		t.Fatalf("unexpected diags: %v", diags)
+	}
+	want := map[string]any{
+		"name": "net",
+		"kind": "Network",
+		"spec": map[string]any{
+			"apiVersion": float64(2),
+			"enabled":    true,
+		},
+	}
+	if !reflect.DeepEqual(body, want) {
+		t.Errorf("applyConstants = %#v, want %#v", body, want)
+	}
+}
+
+func TestToStringValue(t *testing.T) {
+	tests := []struct {
+		in   any
+		want string
+	}{
+		{nil, ""},
+		{"hi", "hi"},
+		{true, "true"},
+		{float64(24), "24"},
+	}
+	for _, tt := range tests {
+		if got := toStringValue(tt.in); got != tt.want {
+			t.Errorf("toStringValue(%v) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestGoToTftypesValue(t *testing.T) {
+	listType := tftypes.List{ElementType: tftypes.String}
+
+	got := goToTftypesValue(listType, []any{"a", "b"})
+	want := tftypes.NewValue(listType, []tftypes.Value{
+		tftypes.NewValue(tftypes.String, "a"),
+		tftypes.NewValue(tftypes.String, "b"),
+	})
+	if !got.Equal(want) {
+		t.Errorf("list = %v, want %v", got, want)
+	}
+
+	if null := goToTftypesValue(tftypes.String, nil); !null.IsNull() {
+		t.Errorf("nil should produce null value, got %v", null)
+	}
+
+	num := goToTftypesValue(tftypes.Number, float64(24))
+	if !num.Equal(tftypes.NewValue(tftypes.Number, bigFloatOf(24))) {
+		t.Errorf("number = %v", num)
+	}
+
+	// Map of numbers.
+	mapType := tftypes.Map{ElementType: tftypes.Number}
+	gotMap := goToTftypesValue(mapType, map[string]any{"x": float64(1)})
+	wantMap := tftypes.NewValue(mapType, map[string]tftypes.Value{
+		"x": tftypes.NewValue(tftypes.Number, bigFloatOf(1)),
+	})
+	if !gotMap.Equal(wantMap) {
+		t.Errorf("map = %v, want %v", gotMap, wantMap)
+	}
+}
+
+func TestFooExampleIsValid(t *testing.T) {
+	data, err := os.ReadFile("../examples/adding-a-resource/foo.json")
+	if err != nil {
+		t.Fatalf("reading foo.json: %v", err)
+	}
+	var spec ResourceSpec
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatalf("parsing foo.json: %v", err)
+	}
+	if err := spec.validate(); err != nil {
+		t.Fatalf("foo.json invalid: %v", err)
+	}
+	// Schema must build for every type in the catalog without panicking.
+	r := &dynamicResource{spec: spec}
+	var resp resource.SchemaResponse
+	r.Schema(context.Background(), resource.SchemaRequest{}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("foo.json schema diagnostics: %v", resp.Diagnostics)
+	}
+}
+
+func TestParseType(t *testing.T) {
+	cases := map[string]typeInfo{
+		"string":       {coll: "", elem: "string"},
+		"number":       {coll: "", elem: "number"},
+		"list(string)": {coll: "list", elem: "string"},
+		"set(int)":     {coll: "set", elem: "int"},
+		"map(bool)":    {coll: "map", elem: "bool"},
+		"object":       {coll: "", elem: "object"},
+		"list(object)": {coll: "list", elem: "object"},
+		"map(object)":  {coll: "map", elem: "object"},
+	}
+	for in, want := range cases {
+		got, err := parseType(in)
+		if err != nil || got != want {
+			t.Errorf("parseType(%q) = %+v, %v; want %+v", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"float", "list(float)", "list()", "tuple(string)"} {
+		if _, err := parseType(bad); err == nil {
+			t.Errorf("parseType(%q) should error", bad)
+		}
+	}
+}
+
+func TestNestedObjectSchemaBuilds(t *testing.T) {
+	a := AttributeSpec{
+		Name: "endpoints", Type: "list(object)", Optional: true,
+		Attributes: []AttributeSpec{
+			{Name: "host", Type: "string", Required: true},
+			{Name: "port", Type: "int", Optional: true},
+			{Name: "opts", Type: "map(string)", Optional: true},
+			{Name: "meta", Type: "object", Optional: true, Attributes: []AttributeSpec{
+				{Name: "weight", Type: "number", Optional: true},
+			}},
+		},
+	}
+	if _, ok := attrSchema(a).(schema.ListNestedAttribute); !ok {
+		t.Fatalf("expected ListNestedAttribute, got %T", attrSchema(a))
+	}
+	// Pure schema construction shouldn't panic on deep nesting.
+}
+
+func TestObjectRoundTripNameRemap(t *testing.T) {
+	// Schema: an object attribute whose nested field is renamed via apiPath.
+	a := AttributeSpec{
+		Name: "config", Type: "object", Optional: true,
+		Attributes: []AttributeSpec{
+			{Name: "max_size", Type: "int", Optional: true, APIPath: "maxSize"},
+			{Name: "name", Type: "string", Optional: true},
+		},
+	}
+	objTFType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"max_size": tftypes.Number,
+		"name":     tftypes.String,
+	}}
+
+	// apiToState: API uses camelCase "maxSize" → schema "max_size".
+	apiData := map[string]any{"maxSize": float64(5), "name": "n"}
+	state := objectFromResponse(a.Attributes, objTFType, apiData)
+	var got map[string]tftypes.Value
+	if err := state.As(&got); err != nil {
+		t.Fatal(err)
+	}
+	var ms big.Float
+	_ = got["max_size"].As(&ms)
+	if f, _ := ms.Float64(); f != 5 {
+		t.Errorf("max_size = %v, want 5", f)
+	}
+
+	// stateToAPI: schema "max_size" → API "maxSize".
+	planVal := tftypes.NewValue(objTFType, map[string]tftypes.Value{
+		"max_size": tftypes.NewValue(tftypes.Number, bigFloatOf(5)),
+		"name":     tftypes.NewValue(tftypes.String, "n"),
+	})
+	body := objectToRequest(a.Attributes, planVal)
+	if body["maxSize"] != float64(5) || body["name"] != "n" {
+		t.Errorf("objectToRequest = %#v, want maxSize=5,name=n", body)
+	}
+	if _, leaked := body["max_size"]; leaked {
+		t.Error("schema name leaked into request body")
+	}
+}
+
+// helpers
+func splitDot(s string) []string { return splitOn(s, '.') }
+
+func splitOn(s string, sep rune) []string {
+	out := []string{}
+	cur := ""
+	for _, c := range s {
+		if c == sep {
+			out = append(out, cur)
+			cur = ""
+			continue
+		}
+		cur += string(c)
+	}
+	return append(out, cur)
+}
+
+func bigFloatOf(i int64) any { return toBigFloat(float64(i)) }

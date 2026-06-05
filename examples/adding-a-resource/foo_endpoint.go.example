@@ -1,0 +1,38 @@
+// REFERENCE ONLY — not compiled.
+//
+// To add a real resource, copy this into duplosdk/<name>.go (rename the file to
+// end in .go and drop this banner). One file per resource; this is the single
+// source of truth for the resource's URIs and verbs.
+
+package duplosdk
+
+import "net/http"
+
+// Registered under the SAME name as the JSON spec's "name" field ("foo"). The
+// provider links the two by that name at startup and panics if either side is
+// missing or a {placeholder} has no matching string attribute.
+func init() {
+	const base = "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/foos"
+
+	RegisterEndpoint("foo", Endpoint{
+		UriBase: base,
+		Create:  Operation{Verb: http.MethodPost, Path: ""},        // POST   {base}
+		Read:    Operation{Verb: http.MethodGet, Path: "/{id}"},    // GET    {base}/{id}
+		Update:  Operation{Verb: http.MethodPut, Path: "/{id}"},    // PUT    {base}/{id}
+		Delete:  Operation{Verb: http.MethodDelete, Path: "/{id}"}, // DELETE {base}/{id}
+	})
+}
+
+// ── Alternative: an action-style API ────────────────────────────────────────
+//
+// When the API is not plain REST — each operation has its own path and even its
+// own verb — spell each one out. UriBase stays the shared prefix and the source
+// of the {placeholder} scope; every operation's full URL is UriBase + Path.
+//
+//	RegisterEndpoint("foo", Endpoint{
+//		UriBase: "/svc/{workspace_id}",
+//		Create:  Operation{Verb: http.MethodPost, Path: "/CreateFoo"},
+//		Read:    Operation{Verb: http.MethodGet, Path: "/GetFoo/{id}"},
+//		Update:  Operation{Verb: http.MethodPost, Path: "/UpdateFoo/{id}"},
+//		Delete:  Operation{Verb: http.MethodPost, Path: "/DeleteFoo/{id}"},
+//	})

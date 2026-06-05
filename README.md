@@ -1,11 +1,11 @@
-# terraform-provider-duplocloud-helpdesk
+# terraform-provider-duploai
 
 Terraform provider for the DuploCloud AI Helpdesk platform.
 
 ## Requirements
 
 - Terraform >= 1.0
-- Go >= 1.21 (to build from source)
+- Go >= 1.25 (to build from source)
 
 ## Build & Install (local development)
 
@@ -21,15 +21,15 @@ make doc           # regenerate docs
 ```hcl
 terraform {
   required_providers {
-    duplocloud = {
-      source  = "registry.terraform.io/duplocloud/duplocloud-helpdesk"
-      version = "~> 0.1"
+    duploai = {
+      source  = "registry.terraform.io/duplocloud/duploai"
+      version = "~> 0.0"
     }
   }
 }
 
-provider "duplocloud" {
-  duplo_host  = "http://localhost:60021"
+provider "duploai" {
+  duplo_host  = "https://<helpdesk-host>"
   duplo_token = var.duplo_token
 }
 ```
@@ -40,6 +40,12 @@ provider "duplocloud" {
 |---|---|
 | `DUPLO_HOST` | DuploCloud AI Helpdesk base URL |
 | `DUPLO_TOKEN` | API bearer token |
+
+## Resources
+
+| Resource | Description |
+|---|---|
+| [`duploai_network_baseline`](docs/resources/network_baseline.md) | Manages a network baseline (VPC + subnets) |
 
 ## Release Process
 

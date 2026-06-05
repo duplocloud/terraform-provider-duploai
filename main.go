@@ -5,12 +5,12 @@ import (
 	"flag"
 	"log"
 
-	"github.com/duplocloud/terraform-provider-duplocloud-helpdesk/duplocloud"
+	"github.com/duplocloud/terraform-provider-duploai/duplocloud"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
 
 //go:generate terraform fmt -recursive ./examples/
-//go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs
+//go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name duploai
 
 func main() {
 	var debug bool
@@ -19,7 +19,7 @@ func main() {
 
 	err := providerserver.Serve(context.Background(), duplocloud.New, providerserver.ServeOpts{
 		Debug:   debug,
-		Address: "registry.terraform.io/duplocloud/duplocloud-helpdesk",
+		Address: "registry.terraform.io/duplocloud/duploai",
 	})
 	if err != nil {
 		log.Fatal(err)

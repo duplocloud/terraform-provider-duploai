@@ -1,7 +1,7 @@
 TEST      ?=$$(go list ./duplocloud/... ./duplosdk/...)
 HOSTNAME  = registry.terraform.io
 NAMESPACE = duplocloud
-NAME      = duplocloud-helpdesk
+NAME      = duploai
 BINARY    = terraform-provider-${NAME}
 VERSION   = 0.0.1
 OS_ARCH  := $$(go env GOOS)_$$(go env GOARCH)
