@@ -28,17 +28,6 @@
       "description": "Optional description."
     },
     {
-      "name": "mode",
-      "type": "string",
-      "optional": true,
-      "computed": true,
-      "default": "Create",
-      "forceNew": true,
-      "oneOf": ["Create", "Import"],
-      "apiPath": "spec.mode",
-      "description": "Provisioning mode: Create a new cluster or Import an existing one."
-    },
-    {
       "name": "scope_ids",
       "type": "list(string)",
       "computed": true,
@@ -92,10 +81,9 @@
     {
       "name": "eks_version",
       "type": "string",
-      "optional": true,
-      "computed": true,
+      "required": true,
       "apiPath": "spec.eksVersion",
-      "description": "Kubernetes version for the EKS cluster (e.g. \"1.34\"). Required when mode is Create."
+      "description": "Kubernetes version for the EKS cluster (e.g. \"1.34\")."
     },
     {
       "name": "api_server_visibility",
@@ -252,11 +240,10 @@
       "description": "Provisioned infrastructure stack ID."
     }
   ],
-  "requiredIf": [
+  "requestConstants": [
     {
-      "attribute": "eks_version",
-      "whenAttribute": "mode",
-      "whenEquals": "Create"
+      "path": "spec.mode",
+      "value": "Create"
     }
   ],
   "waiter": {

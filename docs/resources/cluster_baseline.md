@@ -40,7 +40,6 @@ resource "duploai_cluster_baseline" "full" {
   name         = "prod-cluster-full"
   network_id   = duploai_network_baseline.this.network_id
 
-  mode                  = "Create"
   eks_version           = "1.34"
   cluster_type          = "Standard"
   api_server_visibility = "PublicAndPrivate"
@@ -67,6 +66,7 @@ resource "duploai_cluster_baseline" "full" {
 
 ### Required
 
+- `eks_version` (String) Kubernetes version for the EKS cluster (e.g. "1.34").
 - `name` (String) Name of the cluster baseline.
 - `workspace_id` (String) ID of the workspace that owns this cluster baseline.
 
@@ -78,8 +78,6 @@ resource "duploai_cluster_baseline" "full" {
 - `control_plane_logging` (List of String) Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler).
 - `description` (String) Optional description.
 - `domain_name_filter` (String) Comma-joined list of Route53 hosted-zone names that external-dns should manage for this cluster.
-- `eks_version` (String) Kubernetes version for the EKS cluster (e.g. "1.34"). Required when mode is Create.
-- `mode` (String) Provisioning mode: Create a new cluster or Import an existing one.
 - `network_id` (String) ID of the network baseline whose VPC and subnets this cluster will use. Mutually exclusive with supplying vpc_id, region, and subnet_ids directly.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.

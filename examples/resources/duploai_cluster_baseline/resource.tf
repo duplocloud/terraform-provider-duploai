@@ -25,7 +25,6 @@ resource "duploai_cluster_baseline" "full" {
   name         = "prod-cluster-full"
   network_id   = duploai_network_baseline.this.network_id
 
-  mode                  = "Create"
   eks_version           = "1.34"
   cluster_type          = "Standard"
   api_server_visibility = "PublicAndPrivate"
