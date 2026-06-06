@@ -18,7 +18,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -115,8 +114,11 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 		if len(a.OneOf) > 0 {
 			o.Validators = []validator.String{stringvalidator.OneOf(a.OneOf...)}
 		}
+		if useStateForUnknown(a) {
+			o.PlanModifiers = append(o.PlanModifiers, stringplanmodifier.UseStateForUnknown())
+		}
 		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.String{stringplanmodifier.RequiresReplace()}
+			o.PlanModifiers = append(o.PlanModifiers, stringplanmodifier.RequiresReplace())
 		}
 		return o
 	case "bool":
@@ -126,8 +128,11 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			_ = json.Unmarshal(*a.Default, &b)
 			o.Default = booldefault.StaticBool(b)
 		}
+		if useStateForUnknown(a) {
+			o.PlanModifiers = append(o.PlanModifiers, boolplanmodifier.UseStateForUnknown())
+		}
 		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.Bool{boolplanmodifier.RequiresReplace()}
+			o.PlanModifiers = append(o.PlanModifiers, boolplanmodifier.RequiresReplace())
 		}
 		return o
 	case "int":
@@ -137,8 +142,11 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			_ = json.Unmarshal(*a.Default, &i)
 			o.Default = int64default.StaticInt64(i)
 		}
+		if useStateForUnknown(a) {
+			o.PlanModifiers = append(o.PlanModifiers, int64planmodifier.UseStateForUnknown())
+		}
 		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.Int64{int64planmodifier.RequiresReplace()}
+			o.PlanModifiers = append(o.PlanModifiers, int64planmodifier.RequiresReplace())
 		}
 		return o
 	default: // number
@@ -148,11 +156,26 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			_ = json.Unmarshal(*a.Default, &f)
 			o.Default = float64default.StaticFloat64(f)
 		}
+		if useStateForUnknown(a) {
+			o.PlanModifiers = append(o.PlanModifiers, float64planmodifier.UseStateForUnknown())
+		}
 		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.Float64{float64planmodifier.RequiresReplace()}
+			o.PlanModifiers = append(o.PlanModifiers, float64planmodifier.RequiresReplace())
 		}
 		return o
 	}
+}
+
+// useStateForUnknown reports whether a computed attribute should keep its prior
+// state value when the config does not change it, instead of going unknown
+// ("known after apply") on every update. This is essential for computed+forceNew
+// attributes — otherwise an unknown planned value combined with RequiresReplace
+// spuriously forces replacement on unrelated changes — and is the standard
+// behavior for optional+computed (server-defaulted) attributes. It is
+// deliberately NOT applied to pure-output computed fields (e.g. status), which
+// legitimately change on each apply and must stay recomputed.
+func useStateForUnknown(a AttributeSpec) bool {
+	return a.Computed && (a.Optional || a.ForceNew)
 }
 
 func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute {
@@ -160,20 +183,29 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 	switch info.coll {
 	case "set":
 		o := schema.SetAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		if useStateForUnknown(a) {
+			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())
+		}
 		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.Set{setplanmodifier.RequiresReplace()}
+			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.RequiresReplace())
 		}
 		return o
 	case "map":
 		o := schema.MapAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		if useStateForUnknown(a) {
+			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.UseStateForUnknown())
+		}
 		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.Map{mapplanmodifier.RequiresReplace()}
+			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.RequiresReplace())
 		}
 		return o
 	default: // list
 		o := schema.ListAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		if useStateForUnknown(a) {
+			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
+		}
 		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.List{listplanmodifier.RequiresReplace()}
+			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.RequiresReplace())
 		}
 		return o
 	}
@@ -192,26 +224,38 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 	switch info.coll {
 	case "list":
 		o := schema.ListNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		if useStateForUnknown(a) {
+			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
+		}
 		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.List{listplanmodifier.RequiresReplace()}
+			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.RequiresReplace())
 		}
 		return o
 	case "set":
 		o := schema.SetNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		if useStateForUnknown(a) {
+			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())
+		}
 		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.Set{setplanmodifier.RequiresReplace()}
+			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.RequiresReplace())
 		}
 		return o
 	case "map":
 		o := schema.MapNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		if useStateForUnknown(a) {
+			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.UseStateForUnknown())
+		}
 		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.Map{mapplanmodifier.RequiresReplace()}
+			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.RequiresReplace())
 		}
 		return o
 	default: // single object
 		o := schema.SingleNestedAttribute{Attributes: nested, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		if useStateForUnknown(a) {
+			o.PlanModifiers = append(o.PlanModifiers, objectplanmodifier.UseStateForUnknown())
+		}
 		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.Object{objectplanmodifier.RequiresReplace()}
+			o.PlanModifiers = append(o.PlanModifiers, objectplanmodifier.RequiresReplace())
 		}
 		return o
 	}
@@ -428,6 +472,47 @@ func objectFromResponse(attrs []AttributeSpec, t tftypes.Type, data any) tftypes
 			childData = extractPath(dm, strings.Split(key, "."))
 		}
 		out[na.Name] = attrFromResponse(na, at, childData)
+	}
+	return tftypes.NewValue(t, out)
+}
+
+// mergeUnknownFromResponse keeps the known leaves of a plan value and fills only
+// the still-unknown ones from the API response. It is used on create/update so a
+// computed child nested inside a configured object (e.g. a server-populated
+// list) gets resolved to a known value, without overwriting the sibling values
+// the user configured. respData is the response value at the attribute's path.
+func mergeUnknownFromResponse(a AttributeSpec, t tftypes.Type, plan tftypes.Value, respData any) tftypes.Value {
+	if plan.IsFullyKnown() {
+		return plan
+	}
+	if !plan.IsKnown() {
+		// The whole value is unknown — take it from the response.
+		return attrFromResponse(a, t, respData)
+	}
+	// Known at this level but with unknown descendants: only single nested
+	// objects need a per-field merge; anything else is rebuilt from the response.
+	info, _ := parseType(a.Type)
+	ot, isObj := t.(tftypes.Object)
+	if info.elem != "object" || info.coll != "" || !isObj {
+		return attrFromResponse(a, t, respData)
+	}
+	var cur map[string]tftypes.Value
+	if err := plan.As(&cur); err != nil {
+		return attrFromResponse(a, t, respData)
+	}
+	dm, _ := respData.(map[string]any)
+	out := make(map[string]tftypes.Value, len(ot.AttributeTypes))
+	for _, na := range a.Attributes {
+		ct := ot.AttributeTypes[na.Name]
+		var childResp any
+		if dm != nil {
+			key := na.responsePath()
+			if key == "" {
+				key = na.Name
+			}
+			childResp = extractPath(dm, strings.Split(key, "."))
+		}
+		out[na.Name] = mergeUnknownFromResponse(na, ct, cur[na.Name], childResp)
 	}
 	return tftypes.NewValue(t, out)
 }

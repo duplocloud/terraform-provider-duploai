@@ -141,6 +141,11 @@ type WaiterSpec struct {
 	SuccessState string `json:"successState"`
 	// FailureStates maps terminal failure values to human-readable reasons.
 	FailureStates map[string]string `json:"failureStates"`
+	// DeprovisionedState is the terminal status reached after a deprovision step
+	// completes (e.g. "DeProvisioned"). Required only for resources whose
+	// endpoint declares a Deprovision operation; the delete flow waits for this
+	// state before issuing the final delete call.
+	DeprovisionedState string `json:"deprovisionedState,omitempty"`
 	// FailureDetailPath optionally points to a field with extra error context.
 	FailureDetailPath string `json:"failureDetailPath,omitempty"`
 	// PollIntervalSeconds defaults to 10 when zero.

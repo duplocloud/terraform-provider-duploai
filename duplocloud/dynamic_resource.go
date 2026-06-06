@@ -249,6 +249,31 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 	log.Printf("[TRACE] dynamic %s Delete(%s): start", r.spec.Name, id)
 	api := r.api(scope)
+
+	var timeout time.Duration
+	if r.spec.Waiter != nil {
+		timeout = r.timeout(ctx, req.State, "delete", &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	// Resources the API refuses to delete while live declare a Deprovision
+	// operation: tear down the underlying cloud resources and wait for the
+	// deprovisioned state before issuing the delete call.
+	if r.endpoint.HasDeprovision() {
+		if clientErr := api.Deprovision(objID); clientErr != nil {
+			resp.Diagnostics.AddError("Error deprovisioning "+r.spec.Name, clientErr.Error())
+			return
+		}
+		if r.spec.Waiter != nil && r.spec.Waiter.DeprovisionedState != "" {
+			if clientErr := api.WaitUntilDeprovisioned(ctx, objID, r.spec.Waiter.DeprovisionedState, timeout); clientErr != nil {
+				resp.Diagnostics.AddError("Error waiting for "+r.spec.Name+" deprovisioning", clientErr.Error())
+				return
+			}
+		}
+	}
+
 	if clientErr := api.Delete(objID); clientErr != nil {
 		resp.Diagnostics.AddError("Error deleting "+r.spec.Name, clientErr.Error())
 		return
@@ -257,10 +282,6 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 	// For asynchronously-provisioned resources, the delete call only starts
 	// deprovisioning — poll until the object is actually gone.
 	if r.spec.Waiter != nil {
-		timeout := r.timeout(ctx, req.State, "delete", &resp.Diagnostics)
-		if resp.Diagnostics.HasError() {
-			return
-		}
 		if clientErr := api.WaitUntilGone(ctx, objID, timeout); clientErr != nil {
 			resp.Diagnostics.AddError("Error waiting for "+r.spec.Name+" deletion", clientErr.Error())
 			return
@@ -509,10 +530,11 @@ func (r *dynamicResource) stateFromResponse(_ context.Context, baseRaw tftypes.V
 		// On create/update we normally keep the configured plan value to avoid
 		// "provider produced inconsistent result" errors. But we must take the
 		// value from the response when it is computed-only, OR when the plan
-		// value is still unknown (an Optional+Computed field the user left unset
-		// and that has no static default) — leaving it unknown would error.
-		planUnknown := !next[a.Name].IsKnown()
-		if !computedOnly && !refreshInputs && !planUnknown {
+		// value is not fully known — an Optional+Computed field the user left
+		// unset (no static default), or a configured object whose own computed
+		// child is still unknown. Leaving any unknown would error after apply.
+		planFullyKnown := next[a.Name].IsFullyKnown()
+		if !computedOnly && !refreshInputs && planFullyKnown {
 			continue // keep configured value from the plan
 		}
 		attrType, hasType := objType.AttributeTypes[a.Name]
@@ -520,7 +542,14 @@ func (r *dynamicResource) stateFromResponse(_ context.Context, baseRaw tftypes.V
 			continue
 		}
 		goVal := extractPath(resp, strings.Split(respPath, "."))
-		next[a.Name] = attrFromResponse(a, attrType, goVal)
+		if !computedOnly && !refreshInputs {
+			// Preserve the user's configured (known) leaves and fill only the
+			// still-unknown ones from the response, so we never replace a
+			// configured value with a server-normalized one.
+			next[a.Name] = mergeUnknownFromResponse(a, attrType, next[a.Name], goVal)
+		} else {
+			next[a.Name] = attrFromResponse(a, attrType, goVal)
+		}
 	}
 
 	return tftypes.NewValue(objType, next)

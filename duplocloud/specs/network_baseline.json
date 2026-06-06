@@ -91,6 +91,7 @@
       "name": "flow_logs_retention_days",
       "type": "int",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.flowLogsRetentionDays",
       "description": "Flow logs retention in days. Required when enable_flow_logs is true."
     },
@@ -138,6 +139,13 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "network_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "UUID of this network baseline, for reference by dependent resources (e.g. a cluster baseline)."
     },
     {
       "name": "vpc_id",

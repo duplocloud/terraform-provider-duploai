@@ -98,3 +98,45 @@ func (w *Waiter[T]) WaitGone(ctx context.Context, name string, timeout time.Dura
 		}
 	}
 }
+
+// WaitDeprovisioned polls fetchFn until the resource reaches successState (the
+// terminal deprovisioned value) or is gone (a NotFound error), erroring on a
+// FailureState (e.g. DeprovisionFailed), timeout, or ctx cancellation. Use it
+// between a deprovision call and the final delete.
+func (w *Waiter[T]) WaitDeprovisioned(ctx context.Context, name, successState string, timeout time.Duration, fetchFn func() (*T, ClientError)) ClientError {
+	log.Printf("[TRACE] waiter(%s): waiting for deprovision to %q (timeout=%s)", name, successState, timeout)
+	deadline := time.Now().Add(timeout)
+	for {
+		obj, err := fetchFn()
+		if err != nil {
+			if err.IsNotFound() {
+				return nil // already gone — nothing left to deprovision
+			}
+			return err
+		}
+		status := w.StatusFn(obj)
+		log.Printf("[TRACE] waiter(%s): deprovision status=%s", name, status)
+
+		if status == successState {
+			return nil
+		}
+		if reason, bad := w.FailureStates[status]; bad {
+			msg := fmt.Sprintf("%s (status: %q)", reason, status)
+			if w.FailureDetailFn != nil {
+				if detail := w.FailureDetailFn(obj); detail != "" {
+					msg += ": " + detail
+				}
+			}
+			return newClientError(0, fmt.Errorf("%s", msg))
+		}
+		if time.Now().After(deadline) {
+			return newClientError(0, fmt.Errorf("timed out waiting for %s to deprovision (last status: %q)", name, status))
+		}
+
+		select {
+		case <-ctx.Done():
+			return newClientError(0, fmt.Errorf("waiting for %s deprovision cancelled: %w", name, ctx.Err()))
+		case <-time.After(w.PollInterval):
+		}
+	}
+}

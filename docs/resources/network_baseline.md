@@ -76,6 +76,7 @@ resource "duploai_network_baseline" "with_nat_and_logs" {
 
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `nat_gateway_ids` (List of String) Provisioned NAT gateway IDs.
+- `network_id` (String) UUID of this network baseline, for reference by dependent resources (e.g. a cluster baseline).
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) Provisioned subnet IDs.
 - `vpc_id` (String) Provisioned VPC ID.
@@ -97,8 +98,8 @@ The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/c
 
 ```shell
 # Import an existing network baseline resource.
-#  - WORKSPACE_ID is the MongoDB ObjectId of the workspace (e.g. 69b2aa30675718845bfe87a0)
-#  - NETWORK_ID is the MongoDB ObjectId of the network baseline (e.g. 6a2258e94703bc957a1b824e)
+#  - WORKSPACE_ID is the ID of the workspace (e.g. 69b2aa30675718845bfe87a0)
+#  - NETWORK_ID is the ID of the network baseline (e.g. 6a2258e94703bc957a1b824e)
 terraform import duploai_network_baseline.mynetwork WORKSPACE_ID/NETWORK_ID
 # Example:
 # terraform import duploai_network_baseline.mynetwork 69b2aa30675718845bfe87a0/6a2258e94703bc957a1b824e
