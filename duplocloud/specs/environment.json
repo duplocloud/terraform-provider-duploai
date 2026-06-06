@@ -50,6 +50,7 @@
       "name": "plan_ids",
       "type": "list(string)",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.planIds",
       "description": "Plan IDs applied to this environment."
     },
@@ -79,6 +80,7 @@
       "type": "list(string)",
       "optional": true,
       "computed": true,
+      "default": [],
       "apiPath": "allowedWorkspaceIds",
       "description": "Workspace IDs allowed to access this environment in addition to the owner."
     },
