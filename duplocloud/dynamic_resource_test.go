@@ -11,6 +11,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/defaults"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
@@ -583,3 +585,76 @@ func splitOn(s string, sep rune) []string {
 }
 
 func bigFloatOf(i int64) any { return toBigFloat(float64(i)) }
+
+// A `default` on a list/set/map/object attribute must actually reach the
+// framework schema (it was previously parsed into the spec but silently
+// dropped, so the declared default never applied). Verify each collection kind
+// wires a Default and that it resolves to the configured value.
+func TestAttrSchema_CollectionAndObjectDefaults(t *testing.T) {
+	ctx := context.Background()
+	rawPtr := func(s string) *json.RawMessage { r := jsonRaw(s); return &r }
+
+	// list(string): default resolves to the configured elements.
+	la, ok := attrSchema(AttributeSpec{
+		Name: "tags", Type: "list(string)", Optional: true, Computed: true,
+		Default: rawPtr(`["a","b"]`),
+	}).(schema.ListAttribute)
+	if !ok {
+		t.Fatal("expected ListAttribute")
+	}
+	if la.Default == nil {
+		t.Fatal("list(string) default not wired")
+	}
+	var lr defaults.ListResponse
+	la.Default.DefaultList(ctx, defaults.ListRequest{}, &lr)
+	if lr.Diagnostics.HasError() {
+		t.Fatalf("list default diags: %v", lr.Diagnostics)
+	}
+	var got []string
+	lr.PlanValue.ElementsAs(ctx, &got, false)
+	if !reflect.DeepEqual(got, []string{"a", "b"}) {
+		t.Errorf("list(string) default = %v, want [a b]", got)
+	}
+
+	// set(int) and map(string): default must be wired.
+	if sa := attrSchema(AttributeSpec{Name: "ports", Type: "set(int)", Optional: true, Computed: true, Default: rawPtr(`[80,443]`)}).(schema.SetAttribute); sa.Default == nil {
+		t.Error("set(int) default not wired")
+	}
+	if ma := attrSchema(AttributeSpec{Name: "labels", Type: "map(string)", Optional: true, Computed: true, Default: rawPtr(`{"k":"v"}`)}).(schema.MapAttribute); ma.Default == nil {
+		t.Error("map(string) default not wired")
+	}
+
+	// list(object): default resolves through the nested object attributes.
+	na, ok := attrSchema(AttributeSpec{
+		Name: "rules", Type: "list(object)", Optional: true, Computed: true,
+		Attributes: []AttributeSpec{
+			{Name: "port", Type: "int", Optional: true},
+			{Name: "proto", Type: "string", Optional: true},
+		},
+		Default: rawPtr(`[{"port":8080,"proto":"tcp"}]`),
+	}).(schema.ListNestedAttribute)
+	if !ok {
+		t.Fatal("expected ListNestedAttribute")
+	}
+	if na.Default == nil {
+		t.Fatal("list(object) default not wired")
+	}
+	var nr defaults.ListResponse
+	na.Default.DefaultList(ctx, defaults.ListRequest{}, &nr)
+	if nr.Diagnostics.HasError() {
+		t.Fatalf("list(object) default diags: %v", nr.Diagnostics)
+	}
+	elems := nr.PlanValue.Elements()
+	if len(elems) != 1 {
+		t.Fatalf("list(object) default len = %d, want 1", len(elems))
+	}
+	obj := elems[0].(types.Object).Attributes()
+	if p := obj["proto"].(types.String).ValueString(); p != "tcp" {
+		t.Errorf("nested proto = %q, want tcp", p)
+	}
+
+	// A malformed default is ignored (no default wired), not fatal.
+	if bad := attrSchema(AttributeSpec{Name: "x", Type: "list(string)", Optional: true, Computed: true, Default: rawPtr(`{not json`)}).(schema.ListAttribute); bad.Default != nil {
+		t.Error("malformed default should not be wired")
+	}
+}
