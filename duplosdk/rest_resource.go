@@ -62,6 +62,26 @@ func (r *RESTResource[T]) Delete(id string) ClientError {
 	return err
 }
 
+// Deprovision triggers teardown of the resource's underlying cloud resources
+// without removing the record itself. It is the pre-delete step for resources
+// the API will not delete while live. A 404 is treated as success (already gone).
+func (r *RESTResource[T]) Deprovision(id string) ClientError {
+	err := r.client.callAPI(r.endpoint.deprovisionVerb(), r.endpoint.deprovisionPath(r.scope, id), nil, nil)
+	if err != nil && err.IsNotFound() {
+		return nil
+	}
+	return err
+}
+
+// WaitUntilDeprovisioned polls Get until the resource reaches the deprovisioned
+// state or is gone (404), erroring on a terminal failure state. Use it between
+// Deprovision and Delete so the record is in a deletable state before removal.
+func (r *RESTResource[T]) WaitUntilDeprovisioned(ctx context.Context, id, state string, timeout time.Duration) ClientError {
+	return r.waiter.WaitDeprovisioned(ctx, r.scopeLabel()+"/"+id, state, timeout, func() (*T, ClientError) {
+		return r.Get(id)
+	})
+}
+
 // WaitUntilReady polls Get until the configured Waiter signals completion. The
 // context aborts the poll loop promptly when the operation is cancelled.
 func (r *RESTResource[T]) WaitUntilReady(ctx context.Context, id string, timeout time.Duration) (*T, ClientError) {

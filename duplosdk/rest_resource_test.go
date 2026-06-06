@@ -1,6 +1,7 @@
 package duplosdk
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -74,6 +75,66 @@ func TestRESTResource_DeleteNotFoundIsSuccess(t *testing.T) {
 	})
 	if err := newThings(c).Delete("gone"); err != nil {
 		t.Errorf("Delete on 404 should be nil, got %v", err)
+	}
+}
+
+// Deprovision posts to the configured deprovision path (verb + {id}), and a 404
+// is treated as success (already gone).
+func TestRESTResource_Deprovision(t *testing.T) {
+	var gotMethod, gotPath string
+	c := newServerClient(t, func(w http.ResponseWriter, req *http.Request) {
+		gotMethod, gotPath = req.Method, req.URL.Path
+		_, _ = w.Write([]byte(`{"data":{}}`))
+	})
+	ep := Endpoint{
+		UriBase:     "/things",
+		Deprovision: Operation{Verb: http.MethodPost, Path: "/{id}/deprovision"},
+	}
+	r := NewRESTResource[map[string]any](c, ep, map[string]string{}, nil)
+	if !ep.HasDeprovision() {
+		t.Fatal("HasDeprovision should be true when a deprovision path is set")
+	}
+	if err := r.Deprovision("obj-1"); err != nil {
+		t.Fatalf("Deprovision: %v", err)
+	}
+	if gotMethod != http.MethodPost || gotPath != "/things/obj-1/deprovision" {
+		t.Errorf("got %s %s, want POST /things/obj-1/deprovision", gotMethod, gotPath)
+	}
+
+	c404 := newServerClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	if err := NewRESTResource[map[string]any](c404, ep, map[string]string{}, nil).Deprovision("gone"); err != nil {
+		t.Errorf("Deprovision on 404 should be nil, got %v", err)
+	}
+}
+
+// WaitDeprovisioned returns once the resource reports the deprovisioned state,
+// and errors on a terminal failure state.
+func TestWaitDeprovisioned(t *testing.T) {
+	w := &Waiter[map[string]any]{
+		PollInterval:  time.Millisecond,
+		FailureStates: map[string]string{"DeprovisionFailed": "deprovisioning failed"},
+		StatusFn:      func(m *map[string]any) string { return (*m)["status"].(string) },
+	}
+	calls := 0
+	err := w.WaitDeprovisioned(context.Background(), "x", "DeProvisioned", time.Second, func() (*map[string]any, ClientError) {
+		calls++
+		st := "DeProvisioning"
+		if calls >= 2 {
+			st = "DeProvisioned"
+		}
+		return &map[string]any{"status": st}, nil
+	})
+	if err != nil {
+		t.Fatalf("WaitDeprovisioned: %v", err)
+	}
+
+	failErr := w.WaitDeprovisioned(context.Background(), "x", "DeProvisioned", time.Second, func() (*map[string]any, ClientError) {
+		return &map[string]any{"status": "DeprovisionFailed"}, nil
+	})
+	if failErr == nil {
+		t.Error("WaitDeprovisioned should error on DeprovisionFailed")
 	}
 }
 

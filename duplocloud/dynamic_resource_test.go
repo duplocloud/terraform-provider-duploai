@@ -16,6 +16,42 @@ import (
 
 func jsonRaw(s string) json.RawMessage { return json.RawMessage(s) }
 
+// A computed+forceNew attribute must get UseStateForUnknown so an unchanged
+// auto-populated value (e.g. region/vpc_id from a linked network) does not go
+// unknown and spuriously force replacement. A pure-output computed attribute
+// (e.g. status) must NOT get it — it has to recompute each apply.
+func TestAttrSchema_UseStateForUnknownPlanModifier(t *testing.T) {
+	cases := []struct {
+		name string
+		a    AttributeSpec
+		want int // number of plan modifiers
+	}{
+		{"optional+computed+forceNew string", AttributeSpec{Type: "string", Optional: true, Computed: true, ForceNew: true}, 2}, // UseStateForUnknown + RequiresReplace
+		{"optional+computed string", AttributeSpec{Type: "string", Optional: true, Computed: true}, 1},                          // UseStateForUnknown only
+		{"pure computed string", AttributeSpec{Type: "string", Computed: true}, 0},                                              // recomputes each apply
+		{"required forceNew string", AttributeSpec{Type: "string", Required: true, ForceNew: true}, 1},                          // RequiresReplace only
+		{"optional+computed+forceNew list", AttributeSpec{Type: "list(string)", Optional: true, Computed: true, ForceNew: true}, 2},
+		{"pure computed list", AttributeSpec{Type: "list(string)", Computed: true}, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := attrSchema(tc.a)
+			var n int
+			switch v := s.(type) {
+			case schema.StringAttribute:
+				n = len(v.PlanModifiers)
+			case schema.ListAttribute:
+				n = len(v.PlanModifiers)
+			default:
+				t.Fatalf("unexpected attribute type %T", s)
+			}
+			if n != tc.want {
+				t.Errorf("plan modifiers = %d, want %d", n, tc.want)
+			}
+		})
+	}
+}
+
 func TestLoadResourceSpecs(t *testing.T) {
 	// The framework branch ships no resource specs; the loader must succeed and
 	// return an empty set (and must validate every spec that is present).
@@ -314,6 +350,61 @@ func TestStateFromResponse_RefreshesUnknownKeepsInput(t *testing.T) {
 	_ = m["name"].As(&name)
 	if name != "myname" {
 		t.Errorf("name = %q, want myname (configured value must be kept on create)", name)
+	}
+}
+
+// A computed child nested inside a configured object must be resolved to a known
+// value from the response on create — leaving it unknown errors with "provider
+// returned invalid result object after apply". Sibling configured leaves are kept.
+func TestStateFromResponse_ResolvesNestedComputedUnknown(t *testing.T) {
+	ngType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"instance_type":   tftypes.String,
+		"node_subnet_ids": tftypes.List{ElementType: tftypes.String},
+	}}
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"id":                tftypes.String,
+		"system_node_group": ngType,
+	}}
+	base := tftypes.NewValue(objType, map[string]tftypes.Value{
+		"id": tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+		"system_node_group": tftypes.NewValue(ngType, map[string]tftypes.Value{
+			"instance_type":   tftypes.NewValue(tftypes.String, "t3.medium"),                                     // configured
+			"node_subnet_ids": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, tftypes.UnknownValue), // computed, unknown
+		}),
+	})
+	r := &dynamicResource{spec: ResourceSpec{Attributes: []AttributeSpec{
+		{Name: "system_node_group", Type: "object", Optional: true, APIPath: "spec.systemNodeGroup", Attributes: []AttributeSpec{
+			{Name: "instance_type", Type: "string", Optional: true, Computed: true, APIPath: "instanceType"},
+			{Name: "node_subnet_ids", Type: "list(string)", Computed: true, NoSend: true, APIPath: "nodeSubnetIds"},
+		}},
+	}}}
+
+	var diags diag.Diagnostics
+	out := r.stateFromResponse(context.Background(), base,
+		map[string]any{"spec": map[string]any{"systemNodeGroup": map[string]any{
+			"instanceType":  "t3.medium",
+			"nodeSubnetIds": []any{"subnet-a", "subnet-b"},
+		}}},
+		map[string]string{}, "obj-1", false, &diags)
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+	if !out.IsFullyKnown() {
+		t.Fatal("result still has unknown values after apply — nested computed not resolved")
+	}
+	m := map[string]tftypes.Value{}
+	_ = out.As(&m)
+	ng := map[string]tftypes.Value{}
+	_ = m["system_node_group"].As(&ng)
+	var instance string
+	_ = ng["instance_type"].As(&instance)
+	if instance != "t3.medium" {
+		t.Errorf("instance_type = %q, want t3.medium (configured value must be kept)", instance)
+	}
+	var subnets []tftypes.Value
+	_ = ng["node_subnet_ids"].As(&subnets)
+	if len(subnets) != 2 {
+		t.Errorf("node_subnet_ids len = %d, want 2 (resolved from response)", len(subnets))
 	}
 }
 

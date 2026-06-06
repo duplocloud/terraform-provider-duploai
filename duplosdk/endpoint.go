@@ -30,6 +30,14 @@ type Endpoint struct {
 	Read   Operation
 	Update Operation
 	Delete Operation
+
+	// Deprovision, when set, is invoked as a pre-delete step for resources the
+	// API refuses to delete while live (e.g. a provisioned cluster must tear down
+	// its cloud resources first). Leave it zero for resources whose Delete call
+	// handles teardown directly — the delete then proceeds unchanged. There is no
+	// default path: a Deprovision step runs only when Path is set explicitly,
+	// e.g. Operation{Verb: http.MethodPost, Path: "/{id}/deprovision"}.
+	Deprovision Operation
 }
 
 // Operation is one CRUD action's HTTP verb and the path appended to the
@@ -87,6 +95,14 @@ func (e Endpoint) updatePath(scope map[string]string, id string) string {
 }
 func (e Endpoint) deletePath(scope map[string]string, id string) string {
 	return e.resolve(e.UriBase+itemPath(e.Delete.Path), scope, id)
+}
+
+// HasDeprovision reports whether a pre-delete deprovision step is configured.
+func (e Endpoint) HasDeprovision() bool { return e.Deprovision.Path != "" }
+
+func (e Endpoint) deprovisionVerb() string { return orDefault(e.Deprovision.Verb, http.MethodPost) }
+func (e Endpoint) deprovisionPath(scope map[string]string, id string) string {
+	return e.resolve(e.UriBase+e.Deprovision.Path, scope, id)
 }
 
 // itemPath defaults a read/update/delete path to the conventional "/{id}".
