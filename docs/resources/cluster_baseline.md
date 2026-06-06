@@ -76,7 +76,7 @@ resource "duploai_cluster_baseline" "full" {
 - `api_server_visibility` (String) Visibility of the EKS API server endpoint.
 - `cluster_ip_cidr` (String) CIDR block for the Kubernetes service IP range (e.g. 172.20.0.0/16). Defaults to the AWS default when unset.
 - `cluster_type` (String) Cluster mode: Standard (self-managed/managed node groups) or Auto (EKS Auto Mode).
-- `control_plane_logging` (List of String) Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler).
+- `control_plane_logging` (List of String) Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler). When unset, defaults to none (server-assigned; list attributes take no static default).
 - `description` (String) Optional description.
 - `domain_name_filter` (String) Comma-joined list of Route53 hosted-zone names that external-dns should manage for this cluster.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.

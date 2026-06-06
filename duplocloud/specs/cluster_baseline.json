@@ -101,7 +101,7 @@
       "optional": true,
       "computed": true,
       "apiPath": "spec.controlPlaneLogging",
-      "description": "Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler)."
+      "description": "Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler). When unset, defaults to none (server-assigned; list attributes take no static default)."
     },
     {
       "name": "cluster_ip_cidr",
