@@ -24,11 +24,9 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          # Pinned for reproducible CI. v1.64.8 matches the v1-schema .golangci.yml
-          # and the @v6 action. install-mode: goinstall builds it from source with
-          # the toolchain set up above, so its build Go is >= the version targeted
-          # in go.mod (the prebuilt binaries lag and error out against a newer go
-          # directive). The v1 module path keeps this on the latest v1.x, not v2.
-          version: v1.64.8
+          # Pinned for reproducible CI. v2.12.2 matches the v2-schema .golangci.yml.
+          # install-mode: goinstall builds it from source with the toolchain set up
+          # above, so its build Go is >= the version targeted in go.mod.
+          version: v2.12.2
           install-mode: goinstall
           args: --timeout=5m

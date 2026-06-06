@@ -5,7 +5,6 @@ run:
 
 formatters:
   enable:
-    - gofmt
     - goimports
 
   settings:
