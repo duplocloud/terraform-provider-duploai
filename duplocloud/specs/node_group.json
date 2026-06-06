@@ -1,0 +1,243 @@
+{
+  "name": "node_group",
+  "description": "Manages a DuploCloud AI Helpdesk AWS EKS managed node group.",
+  "idPath": "id",
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this node group."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the node group."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this node group to a cloud provider account."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group (EKS cluster, under an environment) this node group belongs to."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment that owns the resource group."
+    },
+
+    {
+      "name": "instance_types",
+      "type": "list(string)",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.instanceTypes",
+      "description": "EC2 instance types for the node group (e.g. t3.medium)."
+    },
+    {
+      "name": "min_size",
+      "type": "int",
+      "required": true,
+      "apiPath": "spec.minSize",
+      "description": "Minimum number of nodes."
+    },
+    {
+      "name": "max_size",
+      "type": "int",
+      "required": true,
+      "apiPath": "spec.maxSize",
+      "description": "Maximum number of nodes."
+    },
+    {
+      "name": "desired_size",
+      "type": "int",
+      "required": true,
+      "apiPath": "spec.desiredSize",
+      "description": "Desired number of nodes (between min_size and max_size)."
+    },
+    {
+      "name": "disk_size_gb",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.diskSizeGb",
+      "description": "Root EBS volume size in GiB for each node."
+    },
+    {
+      "name": "capacity_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.capacityType",
+      "description": "Capacity type (e.g. on-demand vs. spot). Accepted values are defined by the backend EksNodeGroupCapacityType enum; confirm the exact value against your tenant."
+    },
+    {
+      "name": "ami_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.amiType",
+      "description": "AMI type for the nodes. Accepted values are defined by the backend EksNodeGroupAmiType enum; confirm the exact value against your tenant."
+    },
+    {
+      "name": "additional_labels",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.additionalLabels",
+      "description": "Kubernetes labels applied to the nodes."
+    },
+    {
+      "name": "taints",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.taints",
+      "description": "Kubernetes taints applied to the nodes.",
+      "attributes": [
+        { "name": "key", "type": "string", "required": true, "apiPath": "key",
+          "description": "Taint key." },
+        { "name": "value", "type": "string", "optional": true, "apiPath": "value",
+          "description": "Taint value." },
+        { "name": "effect", "type": "string", "required": true, "apiPath": "effect",
+          "description": "Taint effect. Accepted values are defined by the backend EksNodeGroupTaintEffect enum (e.g. NoSchedule/PreferNoSchedule/NoExecute); confirm the exact value against your tenant." }
+      ]
+    },
+    {
+      "name": "allocation_tag",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.allocationTag",
+      "description": "Allocation tag used to target workloads to this node group."
+    },
+    {
+      "name": "instance_visibility",
+      "type": "string",
+      "optional": true,
+      "forceNew": true,
+      "apiPath": "spec.instanceVisibility",
+      "description": "Node placement visibility (public vs. private subnets). Accepted values are defined by the backend InstanceVisibilityType enum; confirm the exact value against your tenant."
+    },
+
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Cli",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    },
+    {
+      "name": "node_group_name",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.nodeGroupName",
+      "description": "Provisioned EKS node group name."
+    },
+    {
+      "name": "node_group_arn",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.nodeGroupArn",
+      "description": "ARN of the provisioned node group."
+    },
+    {
+      "name": "stack_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.stackId",
+      "description": "ID of the underlying provisioning stack."
+    },
+    {
+      "name": "kubernetes_version",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.kubernetesVersion",
+      "description": "Kubernetes version of the node group."
+    },
+    {
+      "name": "release_version",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.releaseVersion",
+      "description": "AMI release version of the node group."
+    },
+    {
+      "name": "asg_name",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.asgName",
+      "description": "Name of the backing Auto Scaling group."
+    },
+    {
+      "name": "subnet_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "result.subnets",
+      "description": "Subnets the node group is deployed into."
+    }
+  ],
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "failureStates": {
+      "Failed": "provisioning failed",
+      "Blocked": "provisioning is blocked",
+      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+      "DeprovisionFailed": "deprovisioning failed"
+    },
+    "failureDetailPath": "blockedReason",
+    "pollIntervalSeconds": 15,
+    "createTimeoutMinutes": 30,
+    "updateTimeoutMinutes": 30,
+    "deleteTimeoutMinutes": 20
+  }
+}
