@@ -93,9 +93,7 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# Import an existing environment.
-#  - WORKSPACE_ID is the MongoDB ObjectId of the workspace (e.g. 69b2aa30675718845bfe87a0)
-#  - ENVIRONMENT_ID is the MongoDB ObjectId of the environment (e.g. 6a2258e94703bc957a1b824e)
+# Import an existing environment using its composite ID: WORKSPACE_ID/ENVIRONMENT_ID
 terraform import duploai_environment.myenv WORKSPACE_ID/ENVIRONMENT_ID
 # Example:
 # terraform import duploai_environment.myenv 69b2aa30675718845bfe87a0/6a2258e94703bc957a1b824e
