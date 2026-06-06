@@ -121,6 +121,34 @@ For **every** PR:
         grep -E '\.tfvars$|\.tfstate|^local-test/|^main\.tf$|^terraform-provider-'
       ```
 
+- [ ] **Schema correctness — build/apply-breaking (Terraform Plugin Framework).**
+      These make the resource fail to build its schema or fail to plan/apply, so
+      they are Blockers:
+  - **No `Required` + `Computed`** on the same attribute — the framework rejects
+    it. (`required` and `computed` both true in the spec ⇒ invalid.)
+  - **`default` requires `computed`.** Any attribute with a `default` must also
+    set `computed: true` (normally `optional` + `computed` + `default`). The
+    engine wires the default unconditionally, but the framework hard-errors
+    `"Default set, but Computed is false"` at schema-construction time — so an
+    `optional`-only attribute with a `default` ships a resource that fails to
+    build. The spec's `validate()` does **not** catch this; it only surfaces when
+    the schema is instantiated (`go generate` / `go test`). Grep the spec for any
+    attribute with `default` but no `computed`.
+  - **No `Required` + `Optional`** on the same attribute — nonsensical and
+    framework-invalid. Not rejected at spec-load, so flag it here.
+  - **Server-defaulted/normalized field must be `Optional+Computed`, not
+    `Optional`-only.** If the API fills in or rewrites a value the user didn't
+    set (default, case-fold, canonical form), an Optional-only attribute triggers
+    `"provider produced inconsistent result after apply"` on *every* apply. Make
+    it Optional+Computed (and give it the right `default`).
+  - **Optional+Computed with no `default` that the server does not always
+    return** ⇒ the engine keeps the plan value `unknown` ⇒ inconsistent-result
+    error. Either add a `default` or confirm the create/read response always
+    populates it. (If it only causes `(known after apply)` churn, drop to Minor.)
+  - **Secret-bearing attribute must set `sensitive: true`** (tokens, passwords,
+    keys, connection strings). Missing it leaks the value into plan output and
+    state — treat as a secret-exposure Blocker.
+
 ### 🟠 Major
 
 - [ ] **No MongoDB / internal-database leakage** in any doc, example, comment, or
@@ -146,6 +174,24 @@ For **every** PR:
       `ClickUp Ticket ID`, `Overview`, `Summary of changes`,
       `Testing performed` (with at least one box checked), and a
       `Describe any breaking changes` note.
+- [ ] **Schema correctness — drift / update-breaking.** These don't crash apply
+      but degrade correctness, so they are Major:
+  - **`forceNew` on immutable inputs.** Any field the API has no update path for
+    (path params like `workspace_id`, identity fields, anything only the Create
+    body accepts) must set `forceNew`. Missing it ⇒ a changed value silently
+    no-ops or the update call fails. Cross-check the spec's `forceNew` flags
+    against `duplosdk/<name>.go` (which operations exist) and the field mapping.
+  - **`default` must match the server's actual default.** A `default` that
+    differs from what the API assigns shows perpetual drift. Verify against the
+    real response (the live test in `local-test/` is the source of truth).
+  - **Enum fields use `oneOf`.** String attributes with a fixed value set should
+    declare `oneOf` so bad values fail at plan time, not apply time. Note `oneOf`
+    is only wired for `string` attributes — on any non-string type it is silently
+    ignored (no validation, no error), so an `int`/`number` enum needs a different
+    guard.
+  - **Required fields the server normalizes** (e.g. case-folds) show a permanent
+    diff, since Create keeps the plan value while a later Read refreshes from the
+    server. Flag and recommend Optional+Computed or server-side guidance.
 
 ### 🟡 Minor / standard provider hygiene
 
@@ -162,11 +208,12 @@ For **every** PR:
       go vet ./... && go build -o /dev/null ./... && go test ./... -timeout 90s
       ```
 
-- [ ] **`forceNew`** is set on immutable inputs (path params like
-      `workspace_id`, `name`, anything the API can't change in place).
-- [ ] **Optional+Computed attributes have a `default`** — without one the engine
-      keeps the plan value `unknown` and Terraform errors with "provider produced
-      inconsistent result after apply".
+- [ ] **`(known after apply)` churn** — an Optional+Computed field whose server
+      value is stable across plans but shows as unknown on every plan is a
+      cosmetic nit (the apply-breaking variants are graded above). Note it.
+- [ ] **Sensible types** — `int`/`number` for numeric fields (not `string`),
+      `list`/`set`/`map` matching the API shape; `set` over `list` when order is
+      not significant.
 - [ ] **Waiter sanity** (if the spec has a `waiter`): `statusPath` and
       `successState` set; failure states cover the real terminal-failure values;
       poll interval and timeouts are reasonable.
@@ -208,6 +255,7 @@ Prefix each result with a status icon: ✅ pass/clean · 🔴 blocker-level fail
 - gofmt: <✅ clean | 🔴 list>
 - go vet / build / test: <✅ pass | 🔴 fail + output>
 - secret scan: <✅ clean | 🔴 hits>
+- schema correctness: <✅ ok | 🔴 build/apply-breaking | 🟠 drift/update risk>
 - mongo scan: <✅ clean | 🟠 hits>
 - ClickUp id: <✅ DUPLOAI-NNNN | 🟠 MISSING>
 - PR template: <✅ complete | 🟠 missing sections | ⚠️ not verifiable>
