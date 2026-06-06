@@ -28,7 +28,7 @@ func TestAttrSchema_UseStateForUnknownPlanModifier(t *testing.T) {
 	}{
 		{"optional+computed+forceNew string", AttributeSpec{Type: "string", Optional: true, Computed: true, ForceNew: true}, 2}, // UseStateForUnknown + RequiresReplace
 		{"optional+computed string", AttributeSpec{Type: "string", Optional: true, Computed: true}, 1},                          // UseStateForUnknown only
-		{"pure computed string", AttributeSpec{Type: "string", Computed: true}, 0},                                             // recomputes each apply
+		{"pure computed string", AttributeSpec{Type: "string", Computed: true}, 0},                                              // recomputes each apply
 		{"required forceNew string", AttributeSpec{Type: "string", Required: true, ForceNew: true}, 1},                          // RequiresReplace only
 		{"optional+computed+forceNew list", AttributeSpec{Type: "list(string)", Optional: true, Computed: true, ForceNew: true}, 2},
 		{"pure computed list", AttributeSpec{Type: "list(string)", Computed: true}, 0},
@@ -368,7 +368,7 @@ func TestStateFromResponse_ResolvesNestedComputedUnknown(t *testing.T) {
 	base := tftypes.NewValue(objType, map[string]tftypes.Value{
 		"id": tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
 		"system_node_group": tftypes.NewValue(ngType, map[string]tftypes.Value{
-			"instance_type":   tftypes.NewValue(tftypes.String, "t3.medium"),          // configured
+			"instance_type":   tftypes.NewValue(tftypes.String, "t3.medium"),                                     // configured
 			"node_subnet_ids": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, tftypes.UnknownValue), // computed, unknown
 		}),
 	})
