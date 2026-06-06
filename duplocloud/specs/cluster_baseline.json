@@ -38,10 +38,10 @@
     {
       "name": "network_id",
       "type": "string",
-      "optional": true,
+      "required": true,
       "forceNew": true,
       "apiPath": "spec.networkId",
-      "description": "ID of the network baseline whose VPC and subnets this cluster will use. Mutually exclusive with supplying vpc_id, region, and subnet_ids directly."
+      "description": "ID of the network baseline whose VPC and subnets this cluster will use. The cluster inherits its region, VPC, subnets, and scope from this network."
     },
     {
       "name": "region",

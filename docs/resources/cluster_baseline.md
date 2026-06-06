@@ -68,6 +68,7 @@ resource "duploai_cluster_baseline" "full" {
 
 - `eks_version` (String) Kubernetes version for the EKS cluster (e.g. "1.34").
 - `name` (String) Name of the cluster baseline.
+- `network_id` (String) ID of the network baseline whose VPC and subnets this cluster will use. The cluster inherits its region, VPC, subnets, and scope from this network.
 - `workspace_id` (String) ID of the workspace that owns this cluster baseline.
 
 ### Optional
@@ -78,7 +79,6 @@ resource "duploai_cluster_baseline" "full" {
 - `control_plane_logging` (List of String) Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler).
 - `description` (String) Optional description.
 - `domain_name_filter` (String) Comma-joined list of Route53 hosted-zone names that external-dns should manage for this cluster.
-- `network_id` (String) ID of the network baseline whose VPC and subnets this cluster will use. Mutually exclusive with supplying vpc_id, region, and subnet_ids directly.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))
