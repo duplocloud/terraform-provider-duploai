@@ -66,7 +66,7 @@ resource "duploai_network_baseline" "with_nat_and_logs" {
 - `enable_dns` (Boolean) Enable DNS support in the VPC.
 - `enable_flow_logs` (Boolean) Enable VPC flow logs.
 - `env_tag` (String) Environment tag applied to provisioned resources.
-- `flow_logs_retention_days` (Number) Flow logs retention in days. Required when enable_flow_logs is true.
+- `flow_logs_retention_days` (Number) Flow logs retention in days. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default).
 - `nat_mode` (String) NAT gateway mode: None, SingleAz, or MultiAz.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.

@@ -93,7 +93,7 @@
       "optional": true,
       "computed": true,
       "apiPath": "spec.flowLogsRetentionDays",
-      "description": "Flow logs retention in days. Required when enable_flow_logs is true."
+      "description": "Flow logs retention in days. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default)."
     },
     {
       "name": "env_tag",
