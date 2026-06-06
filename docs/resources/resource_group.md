@@ -20,7 +20,7 @@ resource "duploai_resource_group" "basic" {
   name           = "<resource-group-name>"
   environment_id = "<environment-id>"
   scope_ids      = ["<scope-id>"]
-  region         = "us-east-1"
+  region         = ""
   network_id     = "<network-baseline-id>"
 }
 
@@ -31,7 +31,7 @@ resource "duploai_resource_group" "from_vpc" {
   name           = "<resource-group-name>"
   environment_id = "<environment-id>"
   scope_ids      = ["<scope-id>"]
-  region         = "us-east-1"
+  region         = ""
   vpc_id         = "<vpc-id>"
 }
 
@@ -42,7 +42,7 @@ resource "duploai_resource_group" "custom" {
   environment_id    = "<environment-id>"
   description       = "Production resource group with IaC-native provisioner"
   scope_ids         = ["<scope-id>"]
-  region            = "us-east-1"
+  region            = ""
   network_id        = "<network-baseline-id>"
   provisioner_type  = "IacNativeTf"
   aws_resource_name = "prod-rg"
