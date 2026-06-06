@@ -1,0 +1,186 @@
+{
+  "name": "resource_group",
+  "description": "Manages a DuploCloud AI Helpdesk resource group (shared security groups, IAM role, KMS key).",
+  "idPath": "id",
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this resource group."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the resource group."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs linking this resource group to a cloud provider account."
+    },
+    {
+      "name": "region",
+      "type": "string",
+      "optional": true,
+      "forceNew": true,
+      "apiPath": "spec.region",
+      "description": "AWS region (e.g. us-east-1)."
+    },
+    {
+      "name": "network_id",
+      "type": "string",
+      "optional": true,
+      "forceNew": true,
+      "apiPath": "spec.networkId",
+      "description": "ID of the network baseline this resource group is linked to. At least one of network_id or vpc_id is required."
+    },
+    {
+      "name": "vpc_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.vpcId",
+      "description": "VPC ID to associate with this resource group. At least one of vpc_id or network_id is required. The API derives this automatically when network_id is set."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "Environment ID to associate with this resource group."
+    },
+    {
+      "name": "cluster_id",
+      "type": "string",
+      "optional": true,
+      "forceNew": true,
+      "apiPath": "spec.clusterId",
+      "description": "Cluster ID to associate with this resource group."
+    },
+    {
+      "name": "aws_resource_name",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.awsResourceName",
+      "description": "AWS resource name prefix for provisioned resources."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Cli",
+      "forceNew": true,
+      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    },
+    {
+      "name": "security_group_id",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.securityGroup.SecurityGroupId",
+      "description": "Provisioned main security group ID."
+    },
+    {
+      "name": "security_group_name",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.securityGroup.GroupName",
+      "description": "Provisioned main security group name."
+    },
+    {
+      "name": "alb_security_group_id",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.albSecurityGroup.SecurityGroupId",
+      "description": "Provisioned ALB security group ID."
+    },
+    {
+      "name": "iam_role_arn",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.iamRole.IamRoleArn",
+      "description": "Provisioned IAM role ARN."
+    },
+    {
+      "name": "iam_role_name",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.iamRole.RoleName",
+      "description": "Provisioned IAM role name."
+    },
+    {
+      "name": "kms_key_arn",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.kmsKey.KmsKeyArn",
+      "description": "Provisioned KMS key ARN."
+    },
+    {
+      "name": "kms_key_alias",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.kmsKey.KmsKeyAlias",
+      "description": "Provisioned KMS key alias."
+    }
+  ],
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "failureStates": {
+      "Failed": "provisioning failed",
+      "Blocked": "provisioning is blocked",
+      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+      "DeprovisionFailed": "deprovisioning failed"
+    },
+    "failureDetailPath": "blockedReason",
+    "pollIntervalSeconds": 10,
+    "createTimeoutMinutes": 30,
+    "updateTimeoutMinutes": 30,
+    "deleteTimeoutMinutes": 15
+  }
+}
