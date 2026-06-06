@@ -141,6 +141,11 @@ type WaiterSpec struct {
 	SuccessState string `json:"successState"`
 	// FailureStates maps terminal failure values to human-readable reasons.
 	FailureStates map[string]string `json:"failureStates"`
+	// FailureRetries is how many extra polls to tolerate after first seeing a
+	// failure state before treating it as terminal. Use it for backends that
+	// report a transient failure mid-provisioning (a first attempt fails, the
+	// worker retries) and then recover. Defaults to 0 (abort on first failure).
+	FailureRetries int `json:"failureRetries,omitempty"`
 	// DeprovisionedState is the terminal status reached after a deprovision step
 	// completes (e.g. "DeProvisioned"). Required only for resources whose
 	// endpoint declares a Deprovision operation; the delete flow waits for this

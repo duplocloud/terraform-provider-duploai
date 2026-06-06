@@ -50,6 +50,45 @@ func TestWaiter_FailureState(t *testing.T) {
 	}
 }
 
+// FailureRetries: a transient failure status that recovers within the allowed
+// retries should not abort the wait — the resource still succeeds.
+func TestWaiter_TransientFailureRecovers(t *testing.T) {
+	w := statusWaiter()
+	w.FailureRetries = 3
+	n := 0
+	// Pending → Failed → Failed → Pending → Ready (Failed seen twice, within 3 retries).
+	seq := []string{"Pending", "Failed", "Failed", "Pending", "Ready"}
+	obj, err := w.Wait(context.Background(), "x", time.Second, func() (*map[string]any, ClientError) {
+		s := seq[n]
+		n++
+		return &map[string]any{"s": s}, nil
+	})
+	if err != nil {
+		t.Fatalf("transient failure within retries should recover, got error: %v", err)
+	}
+	if (*obj)["s"] != "Ready" {
+		t.Errorf("expected Ready, got %v", *obj)
+	}
+}
+
+// FailureRetries: a failure status that persists beyond the allowed retries is
+// still terminal.
+func TestWaiter_PersistentFailureAborts(t *testing.T) {
+	w := statusWaiter()
+	w.FailureRetries = 2
+	n := 0
+	_, err := w.Wait(context.Background(), "x", time.Second, func() (*map[string]any, ClientError) {
+		n++
+		return &map[string]any{"s": "Failed", "detail": "still broken"}, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "provisioning failed") {
+		t.Fatalf("expected failure after retries exhausted, got %v", err)
+	}
+	if n != 3 { // first observation + 2 retries, then abort
+		t.Errorf("expected 3 polls (1 + 2 retries), got %d", n)
+	}
+}
+
 func TestWaiter_Timeout(t *testing.T) {
 	_, err := statusWaiter().Wait(context.Background(), "x", time.Nanosecond, func() (*map[string]any, ClientError) {
 		return &map[string]any{"s": "Pending"}, nil

@@ -129,9 +129,10 @@ func (r *dynamicResource) waiter() *duplosdk.Waiter[map[string]any] {
 	}
 	statusSegs := strings.Split(w.StatusPath, ".")
 	return &duplosdk.Waiter[map[string]any]{
-		PollInterval:  interval,
-		SuccessState:  w.SuccessState,
-		FailureStates: w.FailureStates,
+		PollInterval:   interval,
+		SuccessState:   w.SuccessState,
+		FailureStates:  w.FailureStates,
+		FailureRetries: w.FailureRetries,
 		StatusFn: func(m *map[string]any) string {
 			return toStringValue(extractPath(*m, statusSegs))
 		},
