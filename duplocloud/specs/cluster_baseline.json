@@ -1,0 +1,265 @@
+{
+  "name": "cluster_baseline",
+  "description": "Manages a DuploCloud AI Helpdesk EKS cluster baseline (control plane, networking, and optional system node group).",
+  "idPath": "id",
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this cluster baseline."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the cluster baseline."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs linking this cluster to a cloud provider account. Inherited from the linked network (network_id); computed, not user-settable."
+    },
+    {
+      "name": "network_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.networkId",
+      "description": "ID of the network baseline whose VPC and subnets this cluster will use. The cluster inherits its region, VPC, subnets, and scope from this network."
+    },
+    {
+      "name": "region",
+      "type": "string",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.region",
+      "description": "AWS region (e.g. us-east-1). Inherited from the linked network (network_id); computed, not user-settable."
+    },
+    {
+      "name": "vpc_id",
+      "type": "string",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.vpcId",
+      "description": "VPC ID for the cluster. Inherited from the linked network (network_id); computed, not user-settable."
+    },
+    {
+      "name": "subnet_ids",
+      "type": "list(string)",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.subnetIds",
+      "description": "Subnet IDs for the cluster. Inherited from the linked network (network_id); computed, not user-settable."
+    },
+    {
+      "name": "cluster_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Standard",
+      "forceNew": true,
+      "oneOf": ["Standard", "Auto"],
+      "apiPath": "spec.clusterType",
+      "description": "Cluster mode: Standard (self-managed/managed node groups) or Auto (EKS Auto Mode)."
+    },
+    {
+      "name": "eks_version",
+      "type": "string",
+      "required": true,
+      "apiPath": "spec.eksVersion",
+      "description": "Kubernetes version for the EKS cluster (e.g. \"1.34\")."
+    },
+    {
+      "name": "api_server_visibility",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Public",
+      "oneOf": ["Public", "Private", "PublicAndPrivate"],
+      "apiPath": "spec.apiServerVisibility",
+      "description": "Visibility of the EKS API server endpoint."
+    },
+    {
+      "name": "control_plane_logging",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.controlPlaneLogging",
+      "description": "Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler). When unset, defaults to none (server-assigned; list attributes take no static default)."
+    },
+    {
+      "name": "cluster_ip_cidr",
+      "type": "string",
+      "optional": true,
+      "forceNew": true,
+      "apiPath": "spec.clusterIpCidr",
+      "description": "CIDR block for the Kubernetes service IP range (e.g. 172.20.0.0/16). Defaults to the AWS default when unset."
+    },
+    {
+      "name": "domain_name_filter",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.domainNameFilter",
+      "description": "Comma-joined list of Route53 hosted-zone names that external-dns should manage for this cluster."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Cli",
+      "forceNew": true,
+      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+    {
+      "name": "system_node_group",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.systemNodeGroup",
+      "description": "Optional default system managed node group provisioned alongside the cluster. Leave unset to provision a bare cluster with no node groups.",
+      "attributes": [
+        {
+          "name": "instance_type",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "default": "t3.medium",
+          "apiPath": "instanceType",
+          "description": "EC2 instance type for the system node group (e.g. t3.medium)."
+        },
+        {
+          "name": "min_size",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "default": 2,
+          "apiPath": "minSize",
+          "description": "Minimum node count (must be >= 1)."
+        },
+        {
+          "name": "max_size",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "default": 3,
+          "apiPath": "maxSize",
+          "description": "Maximum node count (must be >= min_size)."
+        },
+        {
+          "name": "node_subnet_ids",
+          "type": "list(string)",
+          "computed": true,
+          "noSend": true,
+          "apiPath": "nodeSubnetIds",
+          "description": "Private subnet IDs the system node group is placed in. Populated server-side from the linked network's private subnets."
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    },
+    {
+      "name": "cluster_arn",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.clusterArn",
+      "description": "Provisioned EKS cluster ARN."
+    },
+    {
+      "name": "cluster_endpoint",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.clusterEndpoint",
+      "description": "EKS API server endpoint URL."
+    },
+    {
+      "name": "oidc_issuer_url",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.oidcIssuerUrl",
+      "description": "OIDC issuer URL for IRSA."
+    },
+    {
+      "name": "certificate_authority",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.certificateAuthority",
+      "description": "Base64-encoded cluster certificate authority data."
+    },
+    {
+      "name": "cluster_sg_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.clusterSgId",
+      "description": "EKS cluster security group ID."
+    },
+    {
+      "name": "cluster_all_host_sg_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.clusterAllHostSgId",
+      "description": "Security group ID applied to all cluster hosts."
+    },
+    {
+      "name": "stack_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.stackId",
+      "description": "Provisioned infrastructure stack ID."
+    }
+  ],
+  "requestConstants": [
+    {
+      "path": "spec.mode",
+      "value": "Create"
+    }
+  ],
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "deprovisionedState": "DeProvisioned",
+    "failureStates": {
+      "Failed": "provisioning failed",
+      "Blocked": "provisioning is blocked",
+      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+      "DeprovisionFailed": "deprovisioning failed"
+    },
+    "failureDetailPath": "blockedReason",
+    "pollIntervalSeconds": 10,
+    "createTimeoutMinutes": 30,
+    "updateTimeoutMinutes": 30,
+    "deleteTimeoutMinutes": 15
+  }
+}
