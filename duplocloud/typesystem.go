@@ -192,14 +192,13 @@ func useStateForUnknown(a AttributeSpec) bool {
 // full precision. It returns false (no default wired) when the JSON is
 // malformed or does not conform to the attribute's type, matching the lenient
 // stance the primitive path takes on a failed unmarshal.
-func staticDefaultValue(at attr.Type, raw *json.RawMessage) (attr.Value, bool) {
+func staticDefaultValue(ctx context.Context, at attr.Type, raw *json.RawMessage) (attr.Value, bool) {
 	dec := json.NewDecoder(bytes.NewReader(*raw))
 	dec.UseNumber()
 	var g any
 	if err := dec.Decode(&g); err != nil {
 		return nil, false
 	}
-	ctx := context.Background()
 	v, err := at.ValueFromTerraform(ctx, goToTftypesValue(at.TerraformType(ctx), g))
 	if err != nil {
 		return nil, false
@@ -213,7 +212,7 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 	case "set":
 		o := schema.SetAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
 		if a.Default != nil {
-			if v, ok := staticDefaultValue(o.GetType(), a.Default); ok {
+			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = setdefault.StaticValue(v.(types.Set))
 			}
 		}
@@ -227,7 +226,7 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 	case "map":
 		o := schema.MapAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
 		if a.Default != nil {
-			if v, ok := staticDefaultValue(o.GetType(), a.Default); ok {
+			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = mapdefault.StaticValue(v.(types.Map))
 			}
 		}
@@ -241,7 +240,7 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 	default: // list
 		o := schema.ListAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
 		if a.Default != nil {
-			if v, ok := staticDefaultValue(o.GetType(), a.Default); ok {
+			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = listdefault.StaticValue(v.(types.List))
 			}
 		}
@@ -269,7 +268,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 	case "list":
 		o := schema.ListNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
 		if a.Default != nil {
-			if v, ok := staticDefaultValue(o.GetType(), a.Default); ok {
+			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = listdefault.StaticValue(v.(types.List))
 			}
 		}
@@ -283,7 +282,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 	case "set":
 		o := schema.SetNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
 		if a.Default != nil {
-			if v, ok := staticDefaultValue(o.GetType(), a.Default); ok {
+			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = setdefault.StaticValue(v.(types.Set))
 			}
 		}
@@ -297,7 +296,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 	case "map":
 		o := schema.MapNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
 		if a.Default != nil {
-			if v, ok := staticDefaultValue(o.GetType(), a.Default); ok {
+			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = mapdefault.StaticValue(v.(types.Map))
 			}
 		}
@@ -311,7 +310,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 	default: // single object
 		o := schema.SingleNestedAttribute{Attributes: nested, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
 		if a.Default != nil {
-			if v, ok := staticDefaultValue(o.GetType(), a.Default); ok {
+			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = objectdefault.StaticValue(v.(types.Object))
 			}
 		}

@@ -616,12 +616,42 @@ func TestAttrSchema_CollectionAndObjectDefaults(t *testing.T) {
 		t.Errorf("list(string) default = %v, want [a b]", got)
 	}
 
-	// set(int) and map(string): default must be wired.
-	if sa := attrSchema(AttributeSpec{Name: "ports", Type: "set(int)", Optional: true, Computed: true, Default: rawPtr(`[80,443]`)}).(schema.SetAttribute); sa.Default == nil {
-		t.Error("set(int) default not wired")
+	// set(int): default resolves to the configured elements.
+	sa, ok := attrSchema(AttributeSpec{Name: "ports", Type: "set(int)", Optional: true, Computed: true, Default: rawPtr(`[80,443]`)}).(schema.SetAttribute)
+	if !ok {
+		t.Fatal("expected SetAttribute")
 	}
-	if ma := attrSchema(AttributeSpec{Name: "labels", Type: "map(string)", Optional: true, Computed: true, Default: rawPtr(`{"k":"v"}`)}).(schema.MapAttribute); ma.Default == nil {
-		t.Error("map(string) default not wired")
+	if sa.Default == nil {
+		t.Fatal("set(int) default not wired")
+	}
+	var sr defaults.SetResponse
+	sa.Default.DefaultSet(ctx, defaults.SetRequest{}, &sr)
+	if sr.Diagnostics.HasError() {
+		t.Fatalf("set default diags: %v", sr.Diagnostics)
+	}
+	var gotSet []int64
+	sr.PlanValue.ElementsAs(ctx, &gotSet, false)
+	if len(gotSet) != 2 {
+		t.Errorf("set(int) default len = %d, want 2", len(gotSet))
+	}
+
+	// map(string): default resolves to the configured entries.
+	ma, ok := attrSchema(AttributeSpec{Name: "labels", Type: "map(string)", Optional: true, Computed: true, Default: rawPtr(`{"k":"v"}`)}).(schema.MapAttribute)
+	if !ok {
+		t.Fatal("expected MapAttribute")
+	}
+	if ma.Default == nil {
+		t.Fatal("map(string) default not wired")
+	}
+	var mr defaults.MapResponse
+	ma.Default.DefaultMap(ctx, defaults.MapRequest{}, &mr)
+	if mr.Diagnostics.HasError() {
+		t.Fatalf("map default diags: %v", mr.Diagnostics)
+	}
+	var gotMap map[string]string
+	mr.PlanValue.ElementsAs(ctx, &gotMap, false)
+	if gotMap["k"] != "v" {
+		t.Errorf("map(string) default[k] = %q, want v", gotMap["k"])
 	}
 
 	// list(object): default resolves through the nested object attributes.
