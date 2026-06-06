@@ -353,7 +353,7 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, diags *diag.Diagnostics
 	body := map[string]any{}
 	for _, a := range r.spec.Attributes {
 		reqPath := a.requestPath()
-		if reqPath == "" || a.NoSend || !(a.Required || a.Optional) {
+		if reqPath == "" || a.NoSend || (!a.Required && !a.Optional) {
 			continue
 		}
 		child, ok := top[a.Name]
