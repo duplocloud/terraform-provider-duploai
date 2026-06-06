@@ -46,6 +46,7 @@ provider "duploai" {
 | Resource | Description |
 |---|---|
 | [`duploai_network_baseline`](docs/resources/network_baseline.md) | Manages a network baseline (VPC + subnets) |
+| [`duploai_cluster_baseline`](docs/resources/cluster_baseline.md) | Manages an EKS cluster baseline (control plane, networking, optional system node group) |
 
 ## Release Process
 
