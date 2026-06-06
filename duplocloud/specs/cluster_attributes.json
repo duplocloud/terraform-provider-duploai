@@ -221,6 +221,85 @@
       ]
     },
     {
+      "name": "eks_addons",
+      "type": "list(object)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.eksAddons",
+      "description": "EKS managed add-ons to install on the cluster.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "EKS add-on name (e.g. vpc-cni, coredns, kube-proxy)."
+        },
+        {
+          "name": "version",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "version",
+          "description": "Add-on version. Defaults to the latest compatible version when unset."
+        },
+        {
+          "name": "config_values",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "configValues",
+          "description": "JSON configuration values for the add-on."
+        },
+        {
+          "name": "service_account_role_arn",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "serviceAccountRoleArn",
+          "description": "IAM role ARN for the add-on's service account (IRSA)."
+        }
+      ]
+    },
+    {
+      "name": "installed_eks_addons",
+      "type": "list(object)",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.installedEksAddons",
+      "description": "EKS managed add-ons currently installed on the cluster.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "computed": true,
+          "apiPath": "name",
+          "description": "Add-on name."
+        },
+        {
+          "name": "version",
+          "type": "string",
+          "computed": true,
+          "apiPath": "version",
+          "description": "Installed version."
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "computed": true,
+          "apiPath": "status",
+          "description": "Add-on installation status."
+        },
+        {
+          "name": "configuration_values",
+          "type": "string",
+          "computed": true,
+          "apiPath": "configurationValues",
+          "description": "Configuration values applied to the add-on. Corresponds to config_values set in eks_addons."
+        }
+      ]
+    },
+    {
       "name": "status",
       "type": "string",
       "computed": true,
