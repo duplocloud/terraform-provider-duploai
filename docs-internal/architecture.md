@@ -91,9 +91,9 @@ over a gRPC protocol — you never call our Go code directly.
 The official SDK that handles all the gRPC plumbing, state management, and plan
 diffing so we don't have to.
 
-- [`main.go`](main.go) — the entry point. Calls `providerserver.Serve(...)` to
+- [`main.go`](../main.go) — the entry point. Calls `providerserver.Serve(...)` to
   expose the provider to Terraform.
-- [`duplocloud/provider.go`](duplocloud/provider.go) — implements the framework's
+- [`duplocloud/provider.go`](../duplocloud/provider.go) — implements the framework's
   `Provider` interface:
   - **Schema** — declares provider config: `duplo_host`, `duplo_token`,
     `ssl_no_verify`, `http_timeout`.
@@ -104,20 +104,20 @@ diffing so we don't have to.
 
 ### ③ DuploAI Dynamic Resource Engine — *the spec-driven core*
 The heart of this provider, and what makes it different from a typical hand-written
-provider. Lives in package [`duplocloud/`](duplocloud/).
+provider. Lives in package [`duplocloud/`](../duplocloud/).
 
-- [`specs/*.json`](duplocloud/specs/) — declarative **Resource Specs**. Each JSON
+- [`specs/*.json`](../duplocloud/specs/) — declarative **Resource Specs**. Each JSON
   file describes one resource: its attributes, types, required/optional flags,
   the ID path in the response, request constants, conditional-required rules, and
   an optional waiter. The files are embedded into the binary at build time.
-- [`dynamic_resource.go`](duplocloud/dynamic_resource.go) — the single generic
+- [`dynamic_resource.go`](../duplocloud/dynamic_resource.go) — the single generic
   `dynamicResource` engine. It implements Terraform's full lifecycle
   (Create / Read / Update / Delete / Import) **once**, driven entirely by the
   spec. Every resource the provider serves is an instance of this one type —
   there is no per-resource Go code.
-- [`typesystem.go`](duplocloud/typesystem.go) — translates between Terraform's
+- [`typesystem.go`](../duplocloud/typesystem.go) — translates between Terraform's
   type system and the API's JSON (`map[string]any`) in both directions.
-- [`spec.go`](duplocloud/spec.go) / [`validators.go`](duplocloud/validators.go) —
+- [`spec.go`](../duplocloud/spec.go) / [`validators.go`](../duplocloud/validators.go) —
   load and validate specs, and enforce plan-time rules like `requiredIf`.
 
 > **Contributor takeaway:** to add `duploai_<thing>`, write
@@ -125,16 +125,16 @@ provider. Lives in package [`duplocloud/`](duplocloud/).
 > SDK (the URLs). No engine changes needed.
 
 ### ④ DuploSDK — *the API client*
-Package [`duplosdk/`](duplosdk/). Knows *how* to talk to the platform; the engine
+Package [`duplosdk/`](../duplosdk/). Knows *how* to talk to the platform; the engine
 above stays transport-agnostic and just asks it to do CRUD.
 
-- [`rest_resource.go`](duplosdk/rest_resource.go) — generic `RESTResource` with
+- [`rest_resource.go`](../duplosdk/rest_resource.go) — generic `RESTResource` with
   `Create` / `Get` / `Update` / `Delete`. Callers never assemble a URL.
-- [`endpoint.go`](duplosdk/endpoint.go) — the **Endpoint Registry** mapping a
+- [`endpoint.go`](../duplosdk/endpoint.go) — the **Endpoint Registry** mapping a
   resource name to its URIs, HTTP verbs, and path parameters.
-- [`waiter.go`](duplosdk/waiter.go) — for async resources, polls the API until the
+- [`waiter.go`](../duplosdk/waiter.go) — for async resources, polls the API until the
   resource reaches a terminal/ready state (e.g. an EKS cluster finishing creation).
-- [`client.go`](duplosdk/client.go) — the low-level HTTP client: bearer-token auth,
+- [`client.go`](../duplosdk/client.go) — the low-level HTTP client: bearer-token auth,
   TLS settings, timeouts, and response/error decoding.
 
 ### ⑤ DuploCloud / DuploAI Platform — *external*
@@ -189,9 +189,9 @@ sequenceDiagram
 
 | I want to…                                | Look at                                                  |
 |-------------------------------------------|----------------------------------------------------------|
-| Add a new resource                        | [`duplocloud/specs/`](duplocloud/specs/) + [`duplosdk/endpoint.go`](duplosdk/endpoint.go) |
-| Understand the CRUD lifecycle             | [`duplocloud/dynamic_resource.go`](duplocloud/dynamic_resource.go) |
-| Change type mapping (Terraform ⇄ JSON)    | [`duplocloud/typesystem.go`](duplocloud/typesystem.go)   |
-| Change how HTTP requests are made         | [`duplosdk/client.go`](duplosdk/client.go), [`duplosdk/rest_resource.go`](duplosdk/rest_resource.go) |
-| Add provider-level config                 | [`duplocloud/provider.go`](duplocloud/provider.go)       |
-| See real usage examples                   | [`examples/`](examples/), [`docs/`](docs/)               |
+| Add a new resource                        | [`duplocloud/specs/`](../duplocloud/specs/) + [`duplosdk/endpoint.go`](../duplosdk/endpoint.go) |
+| Understand the CRUD lifecycle             | [`duplocloud/dynamic_resource.go`](../duplocloud/dynamic_resource.go) |
+| Change type mapping (Terraform ⇄ JSON)    | [`duplocloud/typesystem.go`](../duplocloud/typesystem.go)   |
+| Change how HTTP requests are made         | [`duplosdk/client.go`](../duplosdk/client.go), [`duplosdk/rest_resource.go`](../duplosdk/rest_resource.go) |
+| Add provider-level config                 | [`duplocloud/provider.go`](../duplocloud/provider.go)       |
+| See real usage examples                   | [`examples/`](../examples/), [`docs/`](../docs/)               |
