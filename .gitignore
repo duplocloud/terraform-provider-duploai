@@ -29,3 +29,5 @@ RELEASE.md
 
 # Claude Code — local session config, not for source control
 .mcp.json
+
+.DS_Store
