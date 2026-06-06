@@ -121,10 +121,21 @@ For **every** PR:
         grep -E '\.tfvars$|\.tfstate|^local-test/|^main\.tf$|^terraform-provider-'
       ```
 
-- [ ] **Schema correctness — apply-breaking (Terraform Plugin Framework).** These
-      make the resource fail to plan/apply, so they are Blockers:
+- [ ] **Schema correctness — build/apply-breaking (Terraform Plugin Framework).**
+      These make the resource fail to build its schema or fail to plan/apply, so
+      they are Blockers:
   - **No `Required` + `Computed`** on the same attribute — the framework rejects
     it. (`required` and `computed` both true in the spec ⇒ invalid.)
+  - **`default` requires `computed`.** Any attribute with a `default` must also
+    set `computed: true` (normally `optional` + `computed` + `default`). The
+    engine wires the default unconditionally, but the framework hard-errors
+    `"Default set, but Computed is false"` at schema-construction time — so an
+    `optional`-only attribute with a `default` ships a resource that fails to
+    build. The spec's `validate()` does **not** catch this; it only surfaces when
+    the schema is instantiated (`go generate` / `go test`). Grep the spec for any
+    attribute with `default` but no `computed`.
+  - **No `Required` + `Optional`** on the same attribute — nonsensical and
+    framework-invalid. Not rejected at spec-load, so flag it here.
   - **Server-defaulted/normalized field must be `Optional+Computed`, not
     `Optional`-only.** If the API fills in or rewrites a value the user didn't
     set (default, case-fold, canonical form), an Optional-only attribute triggers
@@ -174,7 +185,10 @@ For **every** PR:
     differs from what the API assigns shows perpetual drift. Verify against the
     real response (the live test in `local-test/` is the source of truth).
   - **Enum fields use `oneOf`.** String attributes with a fixed value set should
-    declare `oneOf` so bad values fail at plan time, not apply time.
+    declare `oneOf` so bad values fail at plan time, not apply time. Note `oneOf`
+    is only wired for `string` attributes — on any non-string type it is silently
+    ignored (no validation, no error), so an `int`/`number` enum needs a different
+    guard.
   - **Required fields the server normalizes** (e.g. case-folds) show a permanent
     diff, since Create keeps the plan value while a later Read refreshes from the
     server. Flag and recommend Optional+Computed or server-side guidance.
@@ -241,7 +255,7 @@ Prefix each result with a status icon: ✅ pass/clean · 🔴 blocker-level fail
 - gofmt: <✅ clean | 🔴 list>
 - go vet / build / test: <✅ pass | 🔴 fail + output>
 - secret scan: <✅ clean | 🔴 hits>
-- schema correctness: <✅ ok | 🔴 apply-breaking | 🟠 drift/update risk>
+- schema correctness: <✅ ok | 🔴 build/apply-breaking | 🟠 drift/update risk>
 - mongo scan: <✅ clean | 🟠 hits>
 - ClickUp id: <✅ DUPLOAI-NNNN | 🟠 MISSING>
 - PR template: <✅ complete | 🟠 missing sections | ⚠️ not verifiable>
