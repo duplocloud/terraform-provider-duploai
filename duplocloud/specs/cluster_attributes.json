@@ -1,0 +1,313 @@
+{
+  "name": "cluster_attributes",
+  "description": "Manages DuploCloud AI Helpdesk cluster attributes — add-ons and components installed onto an existing EKS cluster (autoscaler, ALB controller, EFS, external-dns, and more).",
+  "idPath": "id",
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this cluster attributes resource."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the cluster attributes resource."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "cluster_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.clusterId",
+      "description": "ID of the cluster baseline this resource configures."
+    },
+    {
+      "name": "cluster_name",
+      "type": "string",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.clusterName",
+      "description": "Name of the cluster. Inherited from the linked cluster baseline."
+    },
+    {
+      "name": "vpc_id",
+      "type": "string",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.vpcId",
+      "description": "VPC ID for the cluster. Inherited from the linked cluster baseline."
+    },
+    {
+      "name": "region",
+      "type": "string",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.region",
+      "description": "AWS region. Inherited from the linked cluster baseline."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs for the cluster. Inherited from the linked cluster baseline."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Cli",
+      "forceNew": true,
+      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+    {
+      "name": "components",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.components",
+      "description": "Cluster components to install.",
+      "attributes": [
+        {
+          "name": "cluster_autoscaler",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": false,
+          "apiPath": "clusterAutoscaler",
+          "description": "Install the Kubernetes Cluster Autoscaler."
+        },
+        {
+          "name": "secret_csi_driver",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": false,
+          "apiPath": "secretCsiDriver",
+          "description": "Install the AWS Secrets Store CSI driver."
+        },
+        {
+          "name": "alb_load_balancer_controller",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": false,
+          "apiPath": "albLoadBalancerController",
+          "description": "Install the AWS ALB/NLB load balancer controller."
+        },
+        {
+          "name": "efs_volumes",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": false,
+          "apiPath": "efsVolumes",
+          "description": "Install the Amazon EFS CSI driver for persistent volumes."
+        },
+        {
+          "name": "metrics_server",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": false,
+          "apiPath": "metricsServer",
+          "description": "Install the Kubernetes Metrics Server."
+        },
+        {
+          "name": "kube_state_metrics",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": false,
+          "apiPath": "kubeStateMetrics",
+          "description": "Install Kube State Metrics for cluster-level monitoring."
+        },
+        {
+          "name": "flux_cd",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": false,
+          "apiPath": "fluxCD",
+          "description": "Install Flux CD for GitOps-based continuous delivery."
+        },
+        {
+          "name": "external_dns",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": false,
+          "apiPath": "externalDns",
+          "description": "Install ExternalDNS to manage Route53 records automatically."
+        }
+      ]
+    },
+    {
+      "name": "external_dns_config",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.externalDnsConfig",
+      "description": "Configuration for ExternalDNS. Takes effect when components.external_dns is true.",
+      "attributes": [
+        {
+          "name": "provider",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "provider",
+          "description": "DNS provider (e.g. aws)."
+        },
+        {
+          "name": "sources",
+          "type": "list(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "sources",
+          "description": "Kubernetes resource types ExternalDNS should watch (e.g. [\"service\", \"ingress\"])."
+        },
+        {
+          "name": "policy",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "policy",
+          "description": "DNS sync policy (upsert-only or sync)."
+        },
+        {
+          "name": "txt_owner_id",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "txtOwnerId",
+          "description": "TXT record owner ID for tracking ExternalDNS-managed records."
+        },
+        {
+          "name": "domain_filters",
+          "type": "list(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "domainFilters",
+          "description": "Domain name filters restricting which hosted zones ExternalDNS manages."
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    },
+    {
+      "name": "cf_stack_name",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.cfStackName",
+      "description": "CloudFormation stack name for provisioned infrastructure."
+    },
+    {
+      "name": "installed_components",
+      "type": "list(object)",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.installedComponents",
+      "description": "Components currently installed on the cluster.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "computed": true,
+          "apiPath": "name",
+          "description": "Component name."
+        },
+        {
+          "name": "version",
+          "type": "string",
+          "computed": true,
+          "apiPath": "version",
+          "description": "Installed version."
+        },
+        {
+          "name": "chart_version",
+          "type": "string",
+          "computed": true,
+          "apiPath": "chartVersion",
+          "description": "Helm chart version."
+        },
+        {
+          "name": "namespace",
+          "type": "string",
+          "computed": true,
+          "apiPath": "namespace",
+          "description": "Kubernetes namespace the component is deployed into."
+        },
+        {
+          "name": "iam_role_arn",
+          "type": "string",
+          "computed": true,
+          "apiPath": "iamRoleArn",
+          "description": "IAM role ARN for the component's service account."
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "computed": true,
+          "apiPath": "status",
+          "description": "Installation status of this component."
+        }
+      ]
+    }
+  ],
+  "requestConstants": [
+    {
+      "path": "spec.mode",
+      "value": "Create"
+    }
+  ],
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "deprovisionedState": "DeProvisioned",
+    "failureStates": {
+      "Failed": "provisioning failed",
+      "Blocked": "provisioning is blocked",
+      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+      "DeprovisionFailed": "deprovisioning failed"
+    },
+    "failureDetailPath": "blockedReason",
+    "pollIntervalSeconds": 10,
+    "createTimeoutMinutes": 30,
+    "updateTimeoutMinutes": 30,
+    "deleteTimeoutMinutes": 15
+  }
+}
