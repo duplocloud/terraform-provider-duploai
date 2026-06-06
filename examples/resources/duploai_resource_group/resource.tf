@@ -6,7 +6,7 @@ resource "duploai_resource_group" "basic" {
   environment_id = "<environment-id>"
   scope_ids      = ["<scope-id>"]
   region         = ""
-  network_id     = "<network-baseline-id>"
+  network_id     = "<network-id>"
 }
 
 # Resource group linked directly to a VPC (without a network baseline).
@@ -28,7 +28,7 @@ resource "duploai_resource_group" "custom" {
   description       = "Production resource group with IaC-native provisioner"
   scope_ids         = ["<scope-id>"]
   region            = ""
-  network_id        = "<network-baseline-id>"
+  network_id        = "<network-id>"
   provisioner_type  = "IacNativeTf"
   aws_resource_name = "prod-rg"
 
