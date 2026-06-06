@@ -24,7 +24,7 @@ resource "duploai_plan" "main" {
   name                = "prod-plan"
   scope_ids           = ["<scope-id>"]
   region              = "us-east-1"
-  network_baseline_id = "<network-baseline-id>"
+  network_baseline_id = "<network-id>"
 
   timeouts {
     create = "30m"
