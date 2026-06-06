@@ -11,6 +11,8 @@ The core idea to internalise first:
 > A single generic engine turns each spec into a fully functional Terraform
 > resource at runtime. This is the "boto3 model" applied to a Terraform provider.
 
+![terraform-provider-duploai architecture: Terraform CLI → Plugin Framework → Duplo Resource Engine → DuploSDK → DuploAI Platform](terraform_provider_duploai_architecture.png)
+
 ---
 
 ## The Big Picture
