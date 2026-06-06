@@ -14,11 +14,31 @@ import (
 // front, the actual polling loop is generic, and callers only supply a
 // fetch function — they never write the loop themselves.
 type Waiter[T any] struct {
-	PollInterval    time.Duration
-	SuccessState    string
-	FailureStates   map[string]string // status value → human-readable reason
+	PollInterval  time.Duration
+	SuccessState  string
+	FailureStates map[string]string // status value → human-readable reason
+	// FailureRetries is how many extra polls to allow after first observing a
+	// failure state before treating it as terminal. Some backends report a
+	// transient failure status mid-provisioning (e.g. a first attempt fails and
+	// the worker retries) and then recover. With FailureRetries=N the waiter
+	// only aborts once a failure state has been seen on N+1 consecutive polls;
+	// if the status leaves the failure set in between, the counter resets. The
+	// default of 0 means abort on the first failure observation.
+	FailureRetries  int
 	StatusFn        func(*T) string
 	FailureDetailFn func(*T) string // optional: extra context appended to the error message
+}
+
+// failureMsg builds the terminal-failure error text for a status, appending any
+// detail from FailureDetailFn.
+func (w *Waiter[T]) failureMsg(status, reason string, obj *T) string {
+	msg := fmt.Sprintf("%s (status: %q)", reason, status)
+	if w.FailureDetailFn != nil {
+		if detail := w.FailureDetailFn(obj); detail != "" {
+			msg += ": " + detail
+		}
+	}
+	return msg
 }
 
 // Wait polls fetchFn until the resource reaches SuccessState, a FailureState,
@@ -26,6 +46,7 @@ type Waiter[T any] struct {
 func (w *Waiter[T]) Wait(ctx context.Context, name string, timeout time.Duration, fetchFn func() (*T, ClientError)) (*T, ClientError) {
 	log.Printf("[TRACE] waiter(%s): start (timeout=%s)", name, timeout)
 	deadline := time.Now().Add(timeout)
+	failCount := 0
 	for {
 		obj, err := fetchFn()
 		if err != nil {
@@ -38,13 +59,13 @@ func (w *Waiter[T]) Wait(ctx context.Context, name string, timeout time.Duration
 			return obj, nil
 		}
 		if reason, bad := w.FailureStates[status]; bad {
-			msg := fmt.Sprintf("%s (status: %q)", reason, status)
-			if w.FailureDetailFn != nil {
-				if detail := w.FailureDetailFn(obj); detail != "" {
-					msg += ": " + detail
-				}
+			failCount++
+			if failCount > w.FailureRetries {
+				return nil, newClientError(0, fmt.Errorf("%s", w.failureMsg(status, reason, obj)))
 			}
-			return nil, newClientError(0, fmt.Errorf("%s", msg))
+			log.Printf("[TRACE] waiter(%s): failure state %q, retry %d/%d before treating as terminal", name, status, failCount, w.FailureRetries)
+		} else {
+			failCount = 0
 		}
 		if time.Now().After(deadline) {
 			return nil, newClientError(0, fmt.Errorf("timed out waiting for %s (last status: %q)", name, status))
@@ -67,6 +88,7 @@ func (w *Waiter[T]) Wait(ctx context.Context, name string, timeout time.Duration
 func (w *Waiter[T]) WaitGone(ctx context.Context, name string, timeout time.Duration, fetchFn func() (*T, ClientError)) ClientError {
 	log.Printf("[TRACE] waiter(%s): waiting for deletion (timeout=%s)", name, timeout)
 	deadline := time.Now().Add(timeout)
+	failCount := 0
 	for {
 		obj, err := fetchFn()
 		if err != nil {
@@ -79,13 +101,13 @@ func (w *Waiter[T]) WaitGone(ctx context.Context, name string, timeout time.Dura
 		log.Printf("[TRACE] waiter(%s): still present, status=%s", name, status)
 
 		if reason, bad := w.FailureStates[status]; bad {
-			msg := fmt.Sprintf("%s (status: %q)", reason, status)
-			if w.FailureDetailFn != nil {
-				if detail := w.FailureDetailFn(obj); detail != "" {
-					msg += ": " + detail
-				}
+			failCount++
+			if failCount > w.FailureRetries {
+				return newClientError(0, fmt.Errorf("%s", w.failureMsg(status, reason, obj)))
 			}
-			return newClientError(0, fmt.Errorf("%s", msg))
+			log.Printf("[TRACE] waiter(%s): failure state %q, retry %d/%d before treating as terminal", name, status, failCount, w.FailureRetries)
+		} else {
+			failCount = 0
 		}
 		if time.Now().After(deadline) {
 			return newClientError(0, fmt.Errorf("timed out waiting for %s to be deleted (last status: %q)", name, status))
@@ -106,6 +128,7 @@ func (w *Waiter[T]) WaitGone(ctx context.Context, name string, timeout time.Dura
 func (w *Waiter[T]) WaitDeprovisioned(ctx context.Context, name, successState string, timeout time.Duration, fetchFn func() (*T, ClientError)) ClientError {
 	log.Printf("[TRACE] waiter(%s): waiting for deprovision to %q (timeout=%s)", name, successState, timeout)
 	deadline := time.Now().Add(timeout)
+	failCount := 0
 	for {
 		obj, err := fetchFn()
 		if err != nil {
@@ -121,13 +144,13 @@ func (w *Waiter[T]) WaitDeprovisioned(ctx context.Context, name, successState st
 			return nil
 		}
 		if reason, bad := w.FailureStates[status]; bad {
-			msg := fmt.Sprintf("%s (status: %q)", reason, status)
-			if w.FailureDetailFn != nil {
-				if detail := w.FailureDetailFn(obj); detail != "" {
-					msg += ": " + detail
-				}
+			failCount++
+			if failCount > w.FailureRetries {
+				return newClientError(0, fmt.Errorf("%s", w.failureMsg(status, reason, obj)))
 			}
-			return newClientError(0, fmt.Errorf("%s", msg))
+			log.Printf("[TRACE] waiter(%s): failure state %q, retry %d/%d before treating as terminal", name, status, failCount, w.FailureRetries)
+		} else {
+			failCount = 0
 		}
 		if time.Now().After(deadline) {
 			return newClientError(0, fmt.Errorf("timed out waiting for %s to deprovision (last status: %q)", name, status))
