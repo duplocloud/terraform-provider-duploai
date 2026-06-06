@@ -13,8 +13,8 @@ Manages DuploCloud AI Helpdesk cluster attributes — add-ons and components ins
 ## Example Usage
 
 ```terraform
-# Install core cluster components onto an existing EKS cluster baseline.
-# region, vpc_id, scope_ids, and cluster_name are inherited from the cluster.
+# Minimal example — install a few components onto an existing EKS cluster.
+# region, vpc_id, cluster_name, and scope_ids are inherited from the cluster.
 resource "duploai_cluster_attributes" "basic" {
   workspace_id = "<workspace-id>"
   name         = "<cluster-attributes-name>"
@@ -25,7 +25,6 @@ resource "duploai_cluster_attributes" "basic" {
     alb_load_balancer_controller = true
     efs_volumes                  = true
     metrics_server               = true
-    external_dns                 = false
   }
 }
 
@@ -52,8 +51,22 @@ resource "duploai_cluster_attributes" "with_external_dns" {
   }
 }
 
-# Full example linked to a cluster baseline resource in the same configuration,
-# with a custom provisioner and extended timeouts.
+# Full example — linked to a cluster baseline resource, with EKS managed add-ons,
+# ExternalDNS, the Secrets Store CSI driver, GitOps via Flux CD, a custom
+# provisioner, and extended timeouts.
+#
+# Available EKS managed add-on names:
+#   vpc-cni                      — VPC CNI plugin for pod networking
+#   coredns                      — In-cluster DNS
+#   kube-proxy                   — Kubernetes network proxy
+#   aws-ebs-csi-driver           — EBS persistent volumes          (needs IRSA)
+#   aws-efs-csi-driver           — EFS persistent volumes          (needs IRSA)
+#   aws-mountpoint-s3-csi-driver — S3 as a filesystem              (needs IRSA)
+#   snapshot-controller          — Volume snapshot support
+#   eks-pod-identity-agent       — EKS Pod Identity (modern IRSA alternative)
+#   amazon-cloudwatch-observability — CloudWatch Container Insights (needs IRSA)
+#   adot                         — AWS Distro for OpenTelemetry    (needs IRSA)
+#   aws-guardduty-agent          — GuardDuty runtime monitoring
 resource "duploai_cluster_baseline" "this" {
   workspace_id = "<workspace-id>"
   name         = "prod-cluster"
@@ -70,13 +83,55 @@ resource "duploai_cluster_attributes" "full" {
 
   components = {
     cluster_autoscaler           = true
+    secret_csi_driver            = true
     alb_load_balancer_controller = true
     efs_volumes                  = true
     metrics_server               = true
     kube_state_metrics           = true
-    flux_cd                      = false
+    flux_cd                      = true
     external_dns                 = true
   }
+
+  eks_addons = [
+    # Core networking and DNS — usually pre-installed; pin versions to control upgrades.
+    { name = "vpc-cni", version = "v1.19.0-eksbuild.1" },
+    { name = "coredns", version = "v1.11.4-eksbuild.2" },
+    { name = "kube-proxy", version = "v1.31.2-eksbuild.3" },
+
+    # Storage — require an IRSA role with the appropriate AWS-managed policy.
+    {
+      name                     = "aws-ebs-csi-driver"
+      version                  = "v1.37.0-eksbuild.1"
+      service_account_role_arn = "<ebs-csi-irsa-role-arn>"
+    },
+    {
+      name                     = "aws-efs-csi-driver"
+      service_account_role_arn = "<efs-csi-irsa-role-arn>"
+    },
+    {
+      name                     = "aws-mountpoint-s3-csi-driver"
+      service_account_role_arn = "<s3-csi-irsa-role-arn>"
+    },
+
+    # Volume snapshots.
+    { name = "snapshot-controller" },
+
+    # Identity — EKS Pod Identity agent (modern alternative to IRSA).
+    { name = "eks-pod-identity-agent" },
+
+    # Observability — require an IRSA role.
+    {
+      name                     = "amazon-cloudwatch-observability"
+      service_account_role_arn = "<cloudwatch-irsa-role-arn>"
+    },
+    {
+      name                     = "adot"
+      service_account_role_arn = "<adot-irsa-role-arn>"
+    },
+
+    # Security.
+    { name = "aws-guardduty-agent" },
+  ]
 
   external_dns_config = {
     provider       = "aws"
@@ -107,6 +162,7 @@ resource "duploai_cluster_attributes" "full" {
 
 - `components` (Attributes) Cluster components to install. (see [below for nested schema](#nestedatt--components))
 - `description` (String) Optional description.
+- `eks_addons` (Attributes List) EKS managed add-ons to install on the cluster. (see [below for nested schema](#nestedatt--eks_addons))
 - `external_dns_config` (Attributes) Configuration for ExternalDNS. Takes effect when components.external_dns is true. (see [below for nested schema](#nestedatt--external_dns_config))
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
@@ -118,6 +174,7 @@ resource "duploai_cluster_attributes" "full" {
 - `cluster_name` (String) Name of the cluster. Inherited from the linked cluster baseline.
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `installed_components` (Attributes List) Components currently installed on the cluster. (see [below for nested schema](#nestedatt--installed_components))
+- `installed_eks_addons` (Attributes List) EKS managed add-ons currently installed on the cluster. (see [below for nested schema](#nestedatt--installed_eks_addons))
 - `region` (String) AWS region. Inherited from the linked cluster baseline.
 - `scope_ids` (List of String) Scope IDs for the cluster. Inherited from the linked cluster baseline.
 - `status` (String) Current provisioning status.
@@ -136,6 +193,20 @@ Optional:
 - `kube_state_metrics` (Boolean) Install Kube State Metrics for cluster-level monitoring.
 - `metrics_server` (Boolean) Install the Kubernetes Metrics Server.
 - `secret_csi_driver` (Boolean) Install the AWS Secrets Store CSI driver.
+
+
+<a id="nestedatt--eks_addons"></a>
+### Nested Schema for `eks_addons`
+
+Required:
+
+- `name` (String) EKS add-on name (e.g. vpc-cni, coredns, kube-proxy).
+
+Optional:
+
+- `config_values` (String) JSON configuration values for the add-on.
+- `service_account_role_arn` (String) IAM role ARN for the add-on's service account (IRSA).
+- `version` (String) Add-on version. Defaults to the latest compatible version when unset.
 
 
 <a id="nestedatt--external_dns_config"></a>
@@ -170,6 +241,17 @@ Read-Only:
 - `name` (String) Component name.
 - `namespace` (String) Kubernetes namespace the component is deployed into.
 - `status` (String) Installation status of this component.
+- `version` (String) Installed version.
+
+
+<a id="nestedatt--installed_eks_addons"></a>
+### Nested Schema for `installed_eks_addons`
+
+Read-Only:
+
+- `configuration_values` (String) Configuration values applied to the add-on. Corresponds to config_values set in eks_addons.
+- `name` (String) Add-on name.
+- `status` (String) Add-on installation status.
 - `version` (String) Installed version.
 
 ## Import
