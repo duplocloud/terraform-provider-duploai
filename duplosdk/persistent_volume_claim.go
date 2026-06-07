@@ -13,5 +13,9 @@ func init() {
 		Read:    Operation{Verb: http.MethodGet, Path: "/{id}"},    // GET    {base}/{id}
 		Update:  Operation{Verb: http.MethodPut, Path: "/{id}"},    // PUT    {base}/{id}
 		Delete:  Operation{Verb: http.MethodDelete, Path: "/{id}"}, // DELETE {base}/{id}
+		// The API rejects a delete while the claim is live ("must be
+		// deprovisioned first"), so tear it down first: POST {base}/{id}/deprovision,
+		// then wait for DeProvisioned (see the spec waiter) before the delete call.
+		Deprovision: Operation{Verb: http.MethodPost, Path: "/{id}/deprovision"}, // POST {base}/{id}/deprovision
 	})
 }

@@ -46,11 +46,10 @@
     {
       "name": "environment_id",
       "type": "string",
-      "optional": true,
-      "computed": true,
+      "required": true,
       "forceNew": true,
       "apiPath": "spec.environmentId",
-      "description": "ID of the environment that owns the resource group. Derived from the resource group when not set."
+      "description": "ID of the environment that owns the resource group (EKS cluster) this claim belongs to. Required: the backend does not derive it, and resources created without it cannot be loaded by env/RG-scoped lookups."
     },
     {
       "name": "namespace_name",
@@ -65,14 +64,16 @@
       "type": "list(string)",
       "required": true,
       "forceNew": true,
-      "apiPath": "spec.k8sResource.spec.accessModes",
+      "requestPath": "spec.k8sResource.spec.accessModes",
+      "responsePath": "result.k8sResource.spec.accessModes",
       "description": "Access modes for the volume. One or more of: ReadWriteOnce, ReadOnlyMany, ReadWriteMany, ReadWriteOncePod."
     },
     {
       "name": "storage",
       "type": "string",
       "required": true,
-      "apiPath": "spec.k8sResource.spec.resources.requests.storage",
+      "requestPath": "spec.k8sResource.spec.resources.requests.storage",
+      "responsePath": "result.k8sResource.spec.resources.requests.storage",
       "description": "Requested storage size as a Kubernetes quantity, e.g. \"10Gi\". May be increased on update (volume expansion) but not decreased."
     },
     {
@@ -81,7 +82,8 @@
       "optional": true,
       "computed": true,
       "forceNew": true,
-      "apiPath": "spec.k8sResource.spec.storageClassName",
+      "requestPath": "spec.k8sResource.spec.storageClassName",
+      "responsePath": "result.k8sResource.spec.storageClassName",
       "description": "Name of the StorageClass to provision from. Must be a storage class available in the cluster; when omitted the cluster's default StorageClass is used."
     },
     {
@@ -92,7 +94,8 @@
       "default": "Filesystem",
       "forceNew": true,
       "oneOf": ["Filesystem", "Block"],
-      "apiPath": "spec.k8sResource.spec.volumeMode",
+      "requestPath": "spec.k8sResource.spec.volumeMode",
+      "responsePath": "result.k8sResource.spec.volumeMode",
       "description": "How the volume is consumed: Filesystem (default) or Block."
     },
     {
@@ -101,22 +104,23 @@
       "optional": true,
       "computed": true,
       "forceNew": true,
-      "apiPath": "spec.k8sResource.spec.volumeName",
+      "requestPath": "spec.k8sResource.spec.volumeName",
+      "responsePath": "result.k8sResource.spec.volumeName",
       "description": "Name of a specific PersistentVolume to bind to (static binding). When omitted it is assigned by the cluster once the claim is bound."
     },
     {
       "name": "labels",
       "type": "map(string)",
       "optional": true,
-      "apiPath": "spec.k8sResource.metadata.labels",
-      "description": "Kubernetes labels applied to the persistent volume claim."
+      "requestPath": "spec.k8sResource.metadata.labels",
+      "description": "Kubernetes labels applied to the persistent volume claim. Send-only: the server injects its own duplocloud.ai/* labels, so this value is not read back to avoid spurious drift."
     },
     {
       "name": "annotations",
       "type": "map(string)",
       "optional": true,
-      "apiPath": "spec.k8sResource.metadata.annotations",
-      "description": "Kubernetes annotations applied to the persistent volume claim."
+      "requestPath": "spec.k8sResource.metadata.annotations",
+      "description": "Kubernetes annotations applied to the persistent volume claim. Send-only (not read back)."
     },
     {
       "name": "status",
@@ -133,10 +137,12 @@
   "waiter": {
     "statusPath": "status",
     "successState": "Complete",
+    "deprovisionedState": "DeProvisioned",
     "failureStates": {
       "Failed": "provisioning failed",
       "Blocked": "provisioning is blocked",
-      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide"
+      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+      "DeprovisionFailed": "deprovisioning failed"
     },
     "failureDetailPath": "blockedReason",
     "failureRetries": 3,

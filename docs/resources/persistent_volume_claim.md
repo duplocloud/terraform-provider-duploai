@@ -17,6 +17,7 @@ Manages a DuploCloud AI Helpdesk Kubernetes PersistentVolumeClaim (PVC).
 resource "duploai_persistent_volume_claim" "data" {
   workspace_id      = "<workspace-id>"
   name              = "app-data"
+  environment_id    = "<environment-id>"
   resource_group_id = "<eks-resource-group-id>"
   namespace_name    = "default"
 
@@ -29,6 +30,10 @@ resource "duploai_persistent_volume_claim" "data" {
 
   labels = {
     app = "myapp"
+  }
+
+  annotations = {
+    "volume.beta.kubernetes.io/storage-provisioner" = "ebs.csi.aws.com"
   }
 
   timeouts {
@@ -44,6 +49,7 @@ resource "duploai_persistent_volume_claim" "data" {
 ### Required
 
 - `access_modes` (List of String) Access modes for the volume. One or more of: ReadWriteOnce, ReadOnlyMany, ReadWriteMany, ReadWriteOncePod.
+- `environment_id` (String) ID of the environment that owns the resource group (EKS cluster) this claim belongs to. Required: the backend does not derive it, and resources created without it cannot be loaded by env/RG-scoped lookups.
 - `name` (String) Name of the persistent volume claim. Must be a DNS-1123 label (lowercase alphanumeric and '-', starting and ending with an alphanumeric).
 - `namespace_name` (String) Kubernetes namespace the claim is created in. Must reference an existing, fully provisioned namespace in the same resource group.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this persistent volume claim belongs to.
@@ -52,10 +58,9 @@ resource "duploai_persistent_volume_claim" "data" {
 
 ### Optional
 
-- `annotations` (Map of String) Kubernetes annotations applied to the persistent volume claim.
+- `annotations` (Map of String) Kubernetes annotations applied to the persistent volume claim. Send-only (not read back).
 - `description` (String) Optional description.
-- `environment_id` (String) ID of the environment that owns the resource group. Derived from the resource group when not set.
-- `labels` (Map of String) Kubernetes labels applied to the persistent volume claim.
+- `labels` (Map of String) Kubernetes labels applied to the persistent volume claim. Send-only: the server injects its own duplocloud.ai/* labels, so this value is not read back to avoid spurious drift.
 - `storage_class_name` (String) Name of the StorageClass to provision from. Must be a storage class available in the cluster; when omitted the cluster's default StorageClass is used.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `volume_mode` (String) How the volume is consumed: Filesystem (default) or Block.

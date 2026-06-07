@@ -2,6 +2,7 @@
 resource "duploai_persistent_volume_claim" "data" {
   workspace_id      = "<workspace-id>"
   name              = "app-data"
+  environment_id    = "<environment-id>"
   resource_group_id = "<eks-resource-group-id>"
   namespace_name    = "default"
 
@@ -14,6 +15,10 @@ resource "duploai_persistent_volume_claim" "data" {
 
   labels = {
     app = "myapp"
+  }
+
+  annotations = {
+    "volume.beta.kubernetes.io/storage-provisioner" = "ebs.csi.aws.com"
   }
 
   timeouts {
