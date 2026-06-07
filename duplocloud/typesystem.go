@@ -1,6 +1,8 @@
 package duplocloud
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -15,9 +17,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/float64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -178,11 +184,38 @@ func useStateForUnknown(a AttributeSpec) bool {
 	return a.Computed && (a.Optional || a.ForceNew)
 }
 
+// staticDefaultValue decodes a spec's raw JSON `default` into a framework
+// attr.Value of type at, so it can be wired as a list/set/map/object default
+// (the primitive equivalents use stringdefault.StaticString and friends). It
+// reuses goToTftypesValue — the same JSON→framework bridge the response path
+// relies on — and decodes with UseNumber so large integers in the default keep
+// full precision. It returns false (no default wired) when the JSON is
+// malformed or does not conform to the attribute's type, matching the lenient
+// stance the primitive path takes on a failed unmarshal.
+func staticDefaultValue(ctx context.Context, at attr.Type, raw *json.RawMessage) (attr.Value, bool) {
+	dec := json.NewDecoder(bytes.NewReader(*raw))
+	dec.UseNumber()
+	var g any
+	if err := dec.Decode(&g); err != nil {
+		return nil, false
+	}
+	v, err := at.ValueFromTerraform(ctx, goToTftypesValue(at.TerraformType(ctx), g))
+	if err != nil {
+		return nil, false
+	}
+	return v, true
+}
+
 func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 	et := primitiveAttrType(info.elem)
 	switch info.coll {
 	case "set":
 		o := schema.SetAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		if a.Default != nil {
+			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
+				o.Default = setdefault.StaticValue(v.(types.Set))
+			}
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())
 		}
@@ -192,6 +225,11 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 		return o
 	case "map":
 		o := schema.MapAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		if a.Default != nil {
+			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
+				o.Default = mapdefault.StaticValue(v.(types.Map))
+			}
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.UseStateForUnknown())
 		}
@@ -201,6 +239,11 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 		return o
 	default: // list
 		o := schema.ListAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		if a.Default != nil {
+			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
+				o.Default = listdefault.StaticValue(v.(types.List))
+			}
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
 		}
@@ -224,6 +267,11 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 	switch info.coll {
 	case "list":
 		o := schema.ListNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		if a.Default != nil {
+			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
+				o.Default = listdefault.StaticValue(v.(types.List))
+			}
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
 		}
@@ -233,6 +281,11 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		return o
 	case "set":
 		o := schema.SetNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		if a.Default != nil {
+			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
+				o.Default = setdefault.StaticValue(v.(types.Set))
+			}
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())
 		}
@@ -242,6 +295,11 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		return o
 	case "map":
 		o := schema.MapNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		if a.Default != nil {
+			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
+				o.Default = mapdefault.StaticValue(v.(types.Map))
+			}
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.UseStateForUnknown())
 		}
@@ -251,6 +309,11 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		return o
 	default: // single object
 		o := schema.SingleNestedAttribute{Attributes: nested, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		if a.Default != nil {
+			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
+				o.Default = objectdefault.StaticValue(v.(types.Object))
+			}
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, objectplanmodifier.UseStateForUnknown())
 		}
