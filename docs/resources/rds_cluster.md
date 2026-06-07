@@ -122,6 +122,7 @@ resource "duploai_rds_cluster" "serverless" {
 - `engine_mode` (String) Cluster engine mode. Accepted values are defined by the backend RdsClusterEngineMode enum (e.g. the provisioned vs. serverless mode); confirm the exact value against your tenant.
 - `engine_version` (String) Engine version. Changing this in place triggers an engine upgrade.
 - `environment_id` (String) ID of the environment that owns the resource group.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `kms_key_id` (String) KMS key ID used for storage encryption.
 - `manage_master_user_password` (Boolean) Let AWS manage the master user password in Secrets Manager instead of supplying master_user_password.
 - `master_user_password` (String, Sensitive) Master user password. Omit when manage_master_user_password is true.

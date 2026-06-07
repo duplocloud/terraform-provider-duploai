@@ -100,8 +100,6 @@
       "type": "string",
       "optional": true,
       "computed": true,
-      "default": "dev",
-      "forceNew": true,
       "apiPath": "spec.envTag",
       "description": "Environment tag applied to provisioned resources."
     },
@@ -128,7 +126,6 @@
       "type": "string",
       "optional": true,
       "computed": true,
-      "default": "",
       "forceNew": true,
       "apiPath": "spec.provisioner.version",
       "description": "Optional provisioner version."
@@ -179,6 +176,7 @@
   "waiter": {
     "statusPath": "status",
     "successState": "Complete",
+    "deprovisionedState": "DeProvisioned",
     "failureStates": {
       "Failed": "provisioning failed",
       "Blocked": "provisioning is blocked",

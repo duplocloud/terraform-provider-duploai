@@ -79,6 +79,7 @@ resource "duploai_cluster_baseline" "full" {
 - `control_plane_logging` (List of String) Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler). When unset, defaults to none (server-assigned; list attributes take no static default).
 - `description` (String) Optional description.
 - `domain_name_filter` (String) Comma-joined list of Route53 hosted-zone names that external-dns should manage for this cluster.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))

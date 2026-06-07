@@ -70,6 +70,7 @@ resource "duploai_resource_group" "custom" {
 - `aws_resource_name` (String) AWS resource name prefix for provisioned resources.
 - `cluster_id` (String) Cluster ID to associate with this resource group.
 - `description` (String) Optional description.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `network_id` (String) ID of the network baseline this resource group is linked to. At least one of network_id or vpc_id is required.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
