@@ -73,6 +73,7 @@
       "name": "engine_mode",
       "type": "string",
       "optional": true,
+      "computed": true,
       "forceNew": true,
       "apiPath": "spec.engineMode",
       "description": "Cluster engine mode. Accepted values are defined by the backend RdsClusterEngineMode enum (e.g. the provisioned vs. serverless mode); confirm the exact value against your tenant."
@@ -123,6 +124,7 @@
       "name": "visibility",
       "type": "string",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.visibility",
       "description": "Network visibility of the cluster. Accepted values are defined by the backend RdsVisibility enum (e.g. private vs. public); confirm the exact value against your tenant."
     },
@@ -155,6 +157,7 @@
       "name": "storage_encrypted",
       "type": "string",
       "optional": true,
+      "computed": true,
       "forceNew": true,
       "apiPath": "spec.storageEncrypted",
       "description": "Storage encryption mode. Accepted values are defined by the backend RdsStorageEncryptionMode enum; confirm the exact value against your tenant."
