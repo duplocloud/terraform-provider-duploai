@@ -1,0 +1,253 @@
+{
+  "name": "oci_repository",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes OCI repository (Flux OCIRepository).",
+  "idPath": "id",
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this OCI repository."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the OCI repository resource."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this OCI repository to a cloud provider account."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group (EKS cluster) this OCI repository belongs to."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment that owns the resource group."
+    },
+    {
+      "name": "namespace_name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.namespaceName",
+      "description": "Kubernetes namespace the OCI repository is created in."
+    },
+
+    {
+      "name": "api_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "source.toolkit.fluxcd.io/v1beta2",
+      "apiPath": "spec.k8sResource.apiVersion",
+      "description": "Flux OCIRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1)."
+    },
+    {
+      "name": "url",
+      "type": "string",
+      "required": true,
+      "apiPath": "spec.k8sResource.spec.url",
+      "description": "URL of the OCI repository (e.g. oci://ghcr.io/org/charts)."
+    },
+    {
+      "name": "interval",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "5m",
+      "apiPath": "spec.k8sResource.spec.interval",
+      "description": "Interval at which the OCI artifact is fetched (Go duration, e.g. 5m, 1h)."
+    },
+    {
+      "name": "ref_tag",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.ref.tag",
+      "description": "OCI artifact tag to pull (mutually exclusive with ref_semver/ref_digest)."
+    },
+    {
+      "name": "ref_semver",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.ref.semver",
+      "description": "Semver range used to select the artifact tag."
+    },
+    {
+      "name": "ref_semver_filter",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.ref.semverFilter",
+      "description": "Regex filter applied to tags before the semver range is evaluated."
+    },
+    {
+      "name": "ref_digest",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.ref.digest",
+      "description": "Exact OCI artifact digest to pull (mutually exclusive with ref_tag/ref_semver)."
+    },
+    {
+      "name": "oci_provider",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.provider",
+      "description": "Provider used for authentication (e.g. generic, aws, azure, gcp)."
+    },
+    {
+      "name": "secret_ref_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.secretRef.name",
+      "description": "Name of a Kubernetes Secret holding registry credentials."
+    },
+    {
+      "name": "cert_secret_ref_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.certSecretRef.name",
+      "description": "Name of a Kubernetes Secret holding TLS certificate data."
+    },
+    {
+      "name": "proxy_secret_ref_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.proxySecretRef.name",
+      "description": "Name of a Kubernetes Secret holding proxy configuration."
+    },
+    {
+      "name": "service_account_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.serviceAccountName",
+      "description": "Service account used for workload-identity authentication to the registry."
+    },
+    {
+      "name": "layer_selector_media_type",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.layerSelector.mediaType",
+      "description": "Media type of the OCI layer to extract."
+    },
+    {
+      "name": "layer_selector_operation",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.layerSelector.operation",
+      "description": "How to handle the selected layer: extract or copy."
+    },
+    {
+      "name": "insecure",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.k8sResource.spec.insecure",
+      "description": "Allow connecting to an HTTP (non-TLS) OCI registry."
+    },
+    {
+      "name": "suspend",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.k8sResource.spec.suspend",
+      "description": "Suspend reconciliation of the repository."
+    },
+    {
+      "name": "ignore",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.ignore",
+      "description": "Cluster-ignore (.gitignore-style) patterns of files to exclude from the artifact."
+    },
+    {
+      "name": "labels",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.metadata.labels",
+      "description": "Kubernetes labels applied to the OCI repository."
+    },
+    {
+      "name": "annotations",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.metadata.annotations",
+      "description": "Kubernetes annotations applied to the OCI repository."
+    },
+
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Cli",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    }
+  ],
+  "requestConstants": [
+    { "path": "spec.k8sResource.kind", "value": "OCIRepository" }
+  ],
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "failureStates": {
+      "Failed": "provisioning failed",
+      "Blocked": "provisioning is blocked",
+      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+      "DeprovisionFailed": "deprovisioning failed"
+    },
+    "failureDetailPath": "blockedReason",
+    "pollIntervalSeconds": 10,
+    "createTimeoutMinutes": 15,
+    "updateTimeoutMinutes": 15,
+    "deleteTimeoutMinutes": 10
+  }
+}
