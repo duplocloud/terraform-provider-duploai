@@ -6,6 +6,17 @@ import (
 	"testing"
 )
 
+func TestEndpointHasUpdate(t *testing.T) {
+	withUpdate := Endpoint{Update: Operation{Verb: http.MethodPut, Path: "/{id}"}}
+	if !withUpdate.HasUpdate() {
+		t.Error("endpoint with an Update operation should report HasUpdate() = true")
+	}
+	immutable := Endpoint{Create: Operation{Verb: http.MethodPost}, Delete: Operation{Verb: http.MethodDelete, Path: "/{id}"}}
+	if immutable.HasUpdate() {
+		t.Error("endpoint without an Update operation should report HasUpdate() = false")
+	}
+}
+
 func TestEndpointPathParams(t *testing.T) {
 	e := Endpoint{UriBase: "/v3/subscriptions/{tenant_id}/clusters/{cluster_id}/nodepools"}
 	if got := e.PathParams(); !reflect.DeepEqual(got, []string{"tenant_id", "cluster_id"}) {
