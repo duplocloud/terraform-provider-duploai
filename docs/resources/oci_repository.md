@@ -70,6 +70,7 @@ resource "duploai_oci_repository" "internal" {
 - `cert_secret_ref_name` (String) Name of a Kubernetes Secret holding TLS certificate data.
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `ignore` (String) Cluster-ignore (.gitignore-style) patterns of files to exclude from the artifact.
 - `insecure` (Boolean) Allow connecting to an HTTP (non-TLS) OCI registry.
 - `interval` (String) Interval at which the OCI artifact is fetched (Go duration, e.g. 5m, 1h).

@@ -206,8 +206,8 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
 		return
 	}
-	planBody := r.bodyFromRaw(req.Plan.Raw, &resp.Diagnostics)
-	stateBody := r.bodyFromRaw(req.State.Raw, &resp.Diagnostics)
+	planBody := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
+	stateBody := r.bodyFromRaw(req.State.Raw, "update", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -237,7 +237,7 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 
 func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	scope, scopeVals := r.scopeFromReader(ctx, req.Plan, &resp.Diagnostics)
-	body := r.bodyFromRaw(req.Plan.Raw, &resp.Diagnostics)
+	body := r.bodyFromRaw(req.Plan.Raw, "create", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -304,7 +304,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if err != nil || resp.Diagnostics.HasError() {
 		return
 	}
-	body := r.bodyFromRaw(req.Plan.Raw, &resp.Diagnostics)
+	body := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -315,7 +315,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	// waiter entirely — issuing a PUT would re-trigger provisioning for a
 	// metadata-only change. ModifyPlan has already carried prior computed values
 	// into the plan, so it is fully known and safe to persist directly.
-	stateBody := r.bodyFromRaw(req.State.Raw, &resp.Diagnostics)
+	stateBody := r.bodyFromRaw(req.State.Raw, "update", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -456,10 +456,12 @@ type attrReader interface {
 	GetAttribute(ctx context.Context, p path.Path, target any) diag.Diagnostics
 }
 
-// bodyFromRaw builds the request body from the plan's raw value. Working from
-// the raw tftypes lets one code path serialize attributes of any type — scalars,
-// collections, and arbitrarily nested objects — without per-type plan reads.
-func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, diags *diag.Diagnostics) map[string]any {
+// bodyFromRaw builds the request body from the plan's raw value. verb is
+// "create" or "update" and selects the effective path for each attribute
+// (createPath vs updatePath; see AttributeSpec). Working from the raw tftypes
+// lets one code path serialize attributes of any type — scalars, collections,
+// and arbitrarily nested objects — without per-type plan reads.
+func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *diag.Diagnostics) map[string]any {
 	var top map[string]tftypes.Value
 	if err := raw.As(&top); err != nil {
 		diags.AddError("Internal error", fmt.Sprintf("decoding plan: %s", err))
@@ -467,7 +469,12 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, diags *diag.Diagnostics
 	}
 	body := map[string]any{}
 	for _, a := range r.spec.Attributes {
-		reqPath := a.requestPath()
+		var reqPath string
+		if verb == "update" {
+			reqPath = a.effectiveUpdatePath()
+		} else {
+			reqPath = a.effectiveCreatePath()
+		}
 		if reqPath == "" || a.NoSend || (!a.Required && !a.Optional) {
 			continue
 		}
@@ -482,6 +489,11 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, diags *diag.Diagnostics
 		setPath(body, strings.Split(reqPath, "."), val)
 	}
 	applyConstants(body, r.spec.RequestConstants, diags)
+	if verb == "update" {
+		applyConstants(body, r.spec.UpdateConstants, diags)
+	} else {
+		applyConstants(body, r.spec.CreateConstants, diags)
+	}
 	return body
 }
 

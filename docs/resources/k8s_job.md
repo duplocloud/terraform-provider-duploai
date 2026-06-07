@@ -131,6 +131,7 @@ resource "duploai_k8s_job" "full" {
 - `completions` (Number) Number of pods that must succeed for the job to be considered complete.
 - `containers` (Attributes List) List of containers to run in each job pod. (see [below for nested schema](#nestedatt--containers))
 - `description` (String) Optional description.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `labels` (Map of String) Labels to apply to the Kubernetes Job object.
 - `namespace_name` (String) Kubernetes namespace to run the job in.
 - `node_selector` (Map of String) Node label selector constraints for pod scheduling.

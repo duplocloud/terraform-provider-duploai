@@ -68,6 +68,7 @@ resource "duploai_helm_repository" "private_oci" {
 - `cert_secret_ref_name` (String) Name of a Kubernetes Secret holding TLS certificate data for the repository.
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `insecure` (Boolean) Allow connecting to an HTTP (non-TLS) OCI registry.
 - `interval` (String) Interval at which the repository index is fetched (Go duration, e.g. 5m, 1h).
 - `labels` (Map of String) Kubernetes labels applied to the Helm repository.

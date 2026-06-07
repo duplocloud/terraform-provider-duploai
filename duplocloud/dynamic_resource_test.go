@@ -430,7 +430,7 @@ func TestBodyFromRaw_SkipsTopLevelEmptyPath(t *testing.T) {
 	}}}
 
 	var diags diag.Diagnostics
-	body := r.bodyFromRaw(raw, &diags)
+	body := r.bodyFromRaw(raw, "create", &diags)
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
@@ -762,5 +762,49 @@ func TestAttrSchema_CollectionAndObjectDefaults(t *testing.T) {
 	// A malformed default is ignored (no default wired), not fatal.
 	if bad := attrSchema(AttributeSpec{Name: "x", Type: "list(string)", Optional: true, Computed: true, Default: rawPtr(`{not json`)}).(schema.ListAttribute); bad.Default != nil {
 		t.Error("malformed default should not be wired")
+	}
+}
+
+// TestBodyFromRaw_VerbAwareConstants verifies that createConstants are injected
+// only on create and updateConstants only on update, and that requestConstants
+// are always injected regardless of verb.
+func TestBodyFromRaw_VerbAwareConstants(t *testing.T) {
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"name": tftypes.String,
+	}}
+	raw := tftypes.NewValue(objType, map[string]tftypes.Value{
+		"name": tftypes.NewValue(tftypes.String, "fn"),
+	})
+	r := &dynamicResource{spec: ResourceSpec{
+		Attributes: []AttributeSpec{
+			{Name: "name", Type: "string", Required: true, APIPath: "name"},
+		},
+		RequestConstants: []ConstantField{{Path: "always", Value: jsonRaw(`"yes"`)}},
+		CreateConstants:  []ConstantField{{Path: "spec.mode", Value: jsonRaw(`"Create"`)}},
+		UpdateConstants:  []ConstantField{{Path: "spec.mode", Value: jsonRaw(`"Update"`)}},
+	}}
+
+	var diags diag.Diagnostics
+
+	create := r.bodyFromRaw(raw, "create", &diags)
+	if diags.HasError() {
+		t.Fatalf("create diags: %v", diags)
+	}
+	if create["always"] != "yes" {
+		t.Errorf("create: always = %v, want yes", create["always"])
+	}
+	if spec, _ := create["spec"].(map[string]any); spec["mode"] != "Create" {
+		t.Errorf("create: spec.mode = %v, want Create", spec["mode"])
+	}
+
+	update := r.bodyFromRaw(raw, "update", &diags)
+	if diags.HasError() {
+		t.Fatalf("update diags: %v", diags)
+	}
+	if update["always"] != "yes" {
+		t.Errorf("update: always = %v, want yes", update["always"])
+	}
+	if spec, _ := update["spec"].(map[string]any); spec["mode"] != "Update" {
+		t.Errorf("update: spec.mode = %v, want Update", spec["mode"])
 	}
 }

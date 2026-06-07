@@ -90,6 +90,7 @@ resource "duploai_helm_release" "app" {
 - `chart_version` (String) Chart version or semver range.
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `interval` (String) Interval at which the release is reconciled (Go duration, e.g. 5m, 1h).
 - `labels` (Map of String) Kubernetes labels applied to the HelmRelease.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
