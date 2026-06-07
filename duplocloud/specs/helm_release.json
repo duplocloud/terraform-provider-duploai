@@ -1,0 +1,246 @@
+{
+  "name": "helm_release",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes Helm release (Flux HelmRelease).",
+  "idPath": "id",
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this Helm release."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the Helm release resource."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this Helm release to a cloud provider account."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group (EKS cluster) this Helm release belongs to."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment that owns the resource group."
+    },
+    {
+      "name": "namespace_name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.namespaceName",
+      "description": "Kubernetes namespace the HelmRelease object is created in."
+    },
+
+    {
+      "name": "api_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "helm.toolkit.fluxcd.io/v2",
+      "apiPath": "spec.k8sResource.apiVersion",
+      "description": "Flux HelmRelease CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. helm.toolkit.fluxcd.io/v2beta2)."
+    },
+    {
+      "name": "interval",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "5m",
+      "apiPath": "spec.k8sResource.spec.interval",
+      "description": "Interval at which the release is reconciled (Go duration, e.g. 5m, 1h)."
+    },
+    {
+      "name": "target_namespace",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.targetNamespace",
+      "description": "Namespace the chart is installed into (defaults to the HelmRelease namespace)."
+    },
+    {
+      "name": "release_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.releaseName",
+      "description": "Helm release name (defaults to the resource name)."
+    },
+    {
+      "name": "values",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.values",
+      "description": "Inline Helm values as a YAML or JSON string."
+    },
+    {
+      "name": "values_from",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.valuesFrom",
+      "description": "Values sourced from ConfigMaps or Secrets.",
+      "attributes": [
+        { "name": "kind", "type": "string", "required": true, "apiPath": "kind",
+          "description": "Source kind: ConfigMap or Secret." },
+        { "name": "name", "type": "string", "required": true, "apiPath": "name",
+          "description": "Name of the ConfigMap or Secret." },
+        { "name": "values_key", "type": "string", "optional": true, "apiPath": "valuesKey",
+          "description": "Key in the source holding the values (defaults to values.yaml)." }
+      ]
+    },
+
+    {
+      "name": "chart_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chart.spec.chart",
+      "description": "Chart name (or path) within the referenced HelmRepository source. Use with chart_source_ref_*."
+    },
+    {
+      "name": "chart_version",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chart.spec.version",
+      "description": "Chart version or semver range."
+    },
+    {
+      "name": "chart_interval",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chart.spec.interval",
+      "description": "Interval at which the chart source is checked for updates."
+    },
+    {
+      "name": "chart_reconcile_strategy",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chart.spec.reconcileStrategy",
+      "description": "When to reconcile the chart: ChartVersion or Revision."
+    },
+    {
+      "name": "chart_source_ref_kind",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chart.spec.sourceRef.kind",
+      "description": "Kind of the chart source (e.g. HelmRepository)."
+    },
+    {
+      "name": "chart_source_ref_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chart.spec.sourceRef.name",
+      "description": "Name of the chart source object."
+    },
+
+    {
+      "name": "chart_ref_kind",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chartRef.kind",
+      "description": "Kind of a directly-referenced chart source (e.g. OCIRepository or HelmChart). Alternative to chart_name/chart_source_ref_*."
+    },
+    {
+      "name": "chart_ref_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chartRef.name",
+      "description": "Name of the directly-referenced chart source object."
+    },
+    {
+      "name": "chart_ref_namespace",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chartRef.namespace",
+      "description": "Namespace of the directly-referenced chart source object."
+    },
+
+    {
+      "name": "labels",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.metadata.labels",
+      "description": "Kubernetes labels applied to the HelmRelease."
+    },
+    {
+      "name": "annotations",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.metadata.annotations",
+      "description": "Kubernetes annotations applied to the HelmRelease."
+    },
+
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Cli",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    }
+  ],
+  "requestConstants": [
+    { "path": "spec.k8sResource.kind", "value": "HelmRelease" }
+  ],
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "failureStates": {
+      "Failed": "provisioning failed",
+      "Blocked": "provisioning is blocked",
+      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+      "DeprovisionFailed": "deprovisioning failed"
+    },
+    "failureDetailPath": "blockedReason",
+    "pollIntervalSeconds": 15,
+    "createTimeoutMinutes": 30,
+    "updateTimeoutMinutes": 30,
+    "deleteTimeoutMinutes": 15
+  }
+}
