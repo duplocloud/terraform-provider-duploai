@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/defaults"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
@@ -438,6 +439,81 @@ func TestBodyFromRaw_SkipsTopLevelEmptyPath(t *testing.T) {
 	}
 	if body["name"] != "n" {
 		t.Errorf("name = %v, want n", body["name"])
+	}
+}
+
+func TestApiBodyEqual(t *testing.T) {
+	a := map[string]any{"name": "n", "spec": map[string]any{"x": float64(1)}}
+	b := map[string]any{"spec": map[string]any{"x": float64(1)}, "name": "n"} // key order differs
+	if !apiBodyEqual(a, b) {
+		t.Error("equal bodies (differing key order) should compare equal")
+	}
+	if apiBodyEqual(a, map[string]any{"name": "n2"}) {
+		t.Error("different bodies should not compare equal")
+	}
+}
+
+// ModifyPlan: when no API-mapped attribute changed (e.g. only the timeouts block
+// differs, as after import), computed outputs are held at their prior state value
+// instead of churning to "(known after apply)".
+func TestModifyPlan_NoApiChangeHoldsComputed(t *testing.T) {
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"workspace_id": tftypes.String,
+		"name":         tftypes.String,
+		"status":       tftypes.String,
+		"vpc_id":       tftypes.String,
+	}}
+	r := &dynamicResource{spec: ResourceSpec{Attributes: []AttributeSpec{
+		{Name: "workspace_id", Type: "string", Required: true},
+		{Name: "name", Type: "string", Required: true, APIPath: "name"},
+		{Name: "status", Type: "string", Computed: true, APIPath: "status"},
+		{Name: "vpc_id", Type: "string", Computed: true, APIPath: "result.id"},
+	}}}
+	state := tftypes.NewValue(objType, map[string]tftypes.Value{
+		"workspace_id": tftypes.NewValue(tftypes.String, "ws"),
+		"name":         tftypes.NewValue(tftypes.String, "n"),
+		"status":       tftypes.NewValue(tftypes.String, "Complete"),
+		"vpc_id":       tftypes.NewValue(tftypes.String, "vpc-1"),
+	})
+	mkPlan := func(name string) tftypes.Value {
+		return tftypes.NewValue(objType, map[string]tftypes.Value{
+			"workspace_id": tftypes.NewValue(tftypes.String, "ws"),
+			"name":         tftypes.NewValue(tftypes.String, name),
+			"status":       tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+			"vpc_id":       tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+		})
+	}
+
+	// No API change (name unchanged) → computed held from state.
+	plan := mkPlan("n")
+	resp := &resource.ModifyPlanResponse{Plan: tfsdk.Plan{Raw: plan}}
+	r.ModifyPlan(context.Background(), resource.ModifyPlanRequest{
+		State: tfsdk.State{Raw: state}, Plan: tfsdk.Plan{Raw: plan},
+	}, resp)
+	var top map[string]tftypes.Value
+	if err := resp.Plan.Raw.As(&top); err != nil {
+		t.Fatal(err)
+	}
+	var status, vpc string
+	if err := top["status"].As(&status); err != nil || status != "Complete" {
+		t.Errorf("status = %q (err %v), want held value Complete", status, err)
+	}
+	if err := top["vpc_id"].As(&vpc); err != nil || vpc != "vpc-1" {
+		t.Errorf("vpc_id = %q (err %v), want held value vpc-1", vpc, err)
+	}
+
+	// Real API change (name differs) → computed must stay unknown to recompute.
+	plan2 := mkPlan("n2")
+	resp2 := &resource.ModifyPlanResponse{Plan: tfsdk.Plan{Raw: plan2}}
+	r.ModifyPlan(context.Background(), resource.ModifyPlanRequest{
+		State: tfsdk.State{Raw: state}, Plan: tfsdk.Plan{Raw: plan2},
+	}, resp2)
+	var top2 map[string]tftypes.Value
+	if err := resp2.Plan.Raw.As(&top2); err != nil {
+		t.Fatal(err)
+	}
+	if top2["status"].IsKnown() {
+		t.Error("on a real change, computed status must stay unknown (recompute)")
 	}
 }
 

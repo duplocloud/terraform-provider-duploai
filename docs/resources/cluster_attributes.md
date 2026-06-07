@@ -164,6 +164,7 @@ resource "duploai_cluster_attributes" "full" {
 - `description` (String) Optional description.
 - `eks_addons` (Attributes List) EKS managed add-ons to install on the cluster. (see [below for nested schema](#nestedatt--eks_addons))
 - `external_dns_config` (Attributes) Configuration for ExternalDNS. Takes effect when components.external_dns is true. (see [below for nested schema](#nestedatt--external_dns_config))
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
