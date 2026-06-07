@@ -53,6 +53,7 @@ resource "duploai_environment" "full" {
 
 - `allowed_workspace_ids` (List of String) Workspace IDs allowed to access this environment in addition to the owner.
 - `description` (String) Optional description of the environment.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `mode` (String) Resource mode: Create provisions new infrastructure, Import adopts existing infrastructure.
 - `plan_ids` (List of String) Plan IDs applied to this environment.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.

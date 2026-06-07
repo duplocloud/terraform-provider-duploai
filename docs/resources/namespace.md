@@ -22,6 +22,10 @@ resource "duploai_namespace" "app" {
 
   description = "Namespace for the my-app workloads"
 
+  # Tolerate up to 5 transient "Failed" polls during provisioning before giving
+  # up. Optional — overrides the resource's built-in default.
+  failure_retries = 5
+
   timeouts {
     create = "15m"
     delete = "10m"
@@ -42,6 +46,7 @@ resource "duploai_namespace" "app" {
 ### Optional
 
 - `description` (String) Optional description.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
