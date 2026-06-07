@@ -176,6 +176,7 @@
   "waiter": {
     "statusPath": "status",
     "successState": "Complete",
+    "deprovisionedState": "DeProvisioned",
     "failureStates": {
       "Failed": "provisioning failed",
       "Blocked": "provisioning is blocked",
