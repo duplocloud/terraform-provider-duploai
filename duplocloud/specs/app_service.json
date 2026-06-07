@@ -82,6 +82,7 @@
       "name": "strategy_type",
       "type": "string",
       "optional": true,
+      "oneOf": ["RollingUpdate", "Recreate"],
       "apiPath": "spec.deployment.spec.strategy.type",
       "description": "Deployment update strategy: RollingUpdate or Recreate."
     },
@@ -137,6 +138,7 @@
         { "name": "args", "type": "list(string)", "optional": true, "apiPath": "args",
           "description": "Arguments to the entrypoint." },
         { "name": "image_pull_policy", "type": "string", "optional": true, "apiPath": "imagePullPolicy",
+          "oneOf": ["Always", "IfNotPresent", "Never"],
           "description": "Image pull policy: Always, IfNotPresent, or Never." },
         { "name": "working_dir", "type": "string", "optional": true, "apiPath": "workingDir",
           "description": "Container working directory." },
@@ -149,7 +151,8 @@
             { "name": "name", "type": "string", "optional": true, "apiPath": "name",
               "description": "Named port." },
             { "name": "protocol", "type": "string", "optional": true, "apiPath": "protocol",
-              "description": "Protocol: TCP or UDP." }
+              "oneOf": ["TCP", "UDP", "SCTP"],
+              "description": "Protocol: TCP, UDP, or SCTP." }
           ]
         },
         {

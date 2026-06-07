@@ -135,7 +135,7 @@ Required:
 Optional:
 
 - `name` (String) Named port.
-- `protocol` (String) Protocol: TCP or UDP.
+- `protocol` (String) Protocol: TCP, UDP, or SCTP.
 
 
 
