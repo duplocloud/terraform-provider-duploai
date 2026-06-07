@@ -115,9 +115,14 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 		if len(a.OneOf) > 0 {
 			o.Validators = []validator.String{stringvalidator.OneOf(a.OneOf...)}
 		}
-		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.String{stringplanmodifier.RequiresReplace()}
+		var pm []planmodifier.String
+		if a.Computed {
+			pm = append(pm, stringplanmodifier.UseStateForUnknown())
 		}
+		if a.ForceNew {
+			pm = append(pm, stringplanmodifier.RequiresReplace())
+		}
+		o.PlanModifiers = pm
 		return o
 	case "bool":
 		o := schema.BoolAttribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
@@ -126,9 +131,14 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			_ = json.Unmarshal(*a.Default, &b)
 			o.Default = booldefault.StaticBool(b)
 		}
-		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.Bool{boolplanmodifier.RequiresReplace()}
+		var pm []planmodifier.Bool
+		if a.Computed {
+			pm = append(pm, boolplanmodifier.UseStateForUnknown())
 		}
+		if a.ForceNew {
+			pm = append(pm, boolplanmodifier.RequiresReplace())
+		}
+		o.PlanModifiers = pm
 		return o
 	case "int":
 		o := schema.Int64Attribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
@@ -137,9 +147,14 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			_ = json.Unmarshal(*a.Default, &i)
 			o.Default = int64default.StaticInt64(i)
 		}
-		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.Int64{int64planmodifier.RequiresReplace()}
+		var pm []planmodifier.Int64
+		if a.Computed {
+			pm = append(pm, int64planmodifier.UseStateForUnknown())
 		}
+		if a.ForceNew {
+			pm = append(pm, int64planmodifier.RequiresReplace())
+		}
+		o.PlanModifiers = pm
 		return o
 	default: // number
 		o := schema.Float64Attribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
@@ -148,9 +163,14 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			_ = json.Unmarshal(*a.Default, &f)
 			o.Default = float64default.StaticFloat64(f)
 		}
-		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.Float64{float64planmodifier.RequiresReplace()}
+		var pm []planmodifier.Float64
+		if a.Computed {
+			pm = append(pm, float64planmodifier.UseStateForUnknown())
 		}
+		if a.ForceNew {
+			pm = append(pm, float64planmodifier.RequiresReplace())
+		}
+		o.PlanModifiers = pm
 		return o
 	}
 }
@@ -160,21 +180,36 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 	switch info.coll {
 	case "set":
 		o := schema.SetAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
-		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.Set{setplanmodifier.RequiresReplace()}
+		var pm []planmodifier.Set
+		if a.Computed {
+			pm = append(pm, setplanmodifier.UseStateForUnknown())
 		}
+		if a.ForceNew {
+			pm = append(pm, setplanmodifier.RequiresReplace())
+		}
+		o.PlanModifiers = pm
 		return o
 	case "map":
 		o := schema.MapAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
-		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.Map{mapplanmodifier.RequiresReplace()}
+		var pm []planmodifier.Map
+		if a.Computed {
+			pm = append(pm, mapplanmodifier.UseStateForUnknown())
 		}
+		if a.ForceNew {
+			pm = append(pm, mapplanmodifier.RequiresReplace())
+		}
+		o.PlanModifiers = pm
 		return o
 	default: // list
 		o := schema.ListAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
-		if a.ForceNew {
-			o.PlanModifiers = []planmodifier.List{listplanmodifier.RequiresReplace()}
+		var pm []planmodifier.List
+		if a.Computed {
+			pm = append(pm, listplanmodifier.UseStateForUnknown())
 		}
+		if a.ForceNew {
+			pm = append(pm, listplanmodifier.RequiresReplace())
+		}
+		o.PlanModifiers = pm
 		return o
 	}
 }
