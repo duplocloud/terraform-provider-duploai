@@ -176,7 +176,7 @@ Required:
 
 Optional:
 
-- `value` (String) Environment variable value.
+- `value` (String, Sensitive) Environment variable value.
 
 
 

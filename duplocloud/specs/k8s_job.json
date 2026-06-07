@@ -160,6 +160,7 @@
       "optional": true,
       "computed": true,
       "default": "Never",
+      "oneOf": ["Never", "OnFailure"],
       "requestPath": "spec.k8sResource.spec.template.spec.restartPolicy",
       "responsePath": "result.k8sResource.spec.template.spec.restartPolicy",
       "description": "Pod restart policy. Use Never (default) or OnFailure for batch jobs."
@@ -187,6 +188,7 @@
       "type": "list(object)",
       "optional": true,
       "computed": true,
+      "forceNew": true,
       "requestPath": "spec.k8sResource.spec.template.spec.containers",
       "responsePath": "result.k8sResource.spec.template.spec.containers",
       "description": "List of containers to run in each job pod.",
@@ -246,6 +248,7 @@
               "type": "string",
               "optional": true,
               "computed": true,
+              "sensitive": true,
               "apiPath": "value",
               "description": "Environment variable value."
             }
