@@ -1,0 +1,206 @@
+{
+  "name": "helm_repository",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes Helm repository (Flux HelmRepository).",
+  "idPath": "id",
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this Helm repository."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the Helm repository resource."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this Helm repository to a cloud provider account."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group (EKS cluster) this Helm repository belongs to."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment that owns the resource group."
+    },
+    {
+      "name": "namespace_name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.namespaceName",
+      "description": "Kubernetes namespace the Helm repository is created in."
+    },
+
+    {
+      "name": "api_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "source.toolkit.fluxcd.io/v1",
+      "apiPath": "spec.k8sResource.apiVersion",
+      "description": "Flux HelmRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1beta2)."
+    },
+    {
+      "name": "url",
+      "type": "string",
+      "required": true,
+      "apiPath": "spec.k8sResource.spec.url",
+      "description": "URL of the Helm repository (e.g. https://charts.example.com or oci://registry.example.com/charts)."
+    },
+    {
+      "name": "interval",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "5m",
+      "apiPath": "spec.k8sResource.spec.interval",
+      "description": "Interval at which the repository index is fetched (Go duration, e.g. 5m, 1h)."
+    },
+    {
+      "name": "type",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.type",
+      "description": "Repository type: \"default\" (HTTP/HTTPS) or \"oci\"."
+    },
+    {
+      "name": "oci_provider",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.provider",
+      "description": "OCI provider for authentication (e.g. generic, aws, azure, gcp). Only used when type is oci."
+    },
+    {
+      "name": "secret_ref_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.secretRef.name",
+      "description": "Name of a Kubernetes Secret holding credentials for the repository."
+    },
+    {
+      "name": "cert_secret_ref_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.certSecretRef.name",
+      "description": "Name of a Kubernetes Secret holding TLS certificate data for the repository."
+    },
+    {
+      "name": "pass_credentials",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.k8sResource.spec.passCredentials",
+      "description": "Pass credentials to all domains the repository redirects to."
+    },
+    {
+      "name": "insecure",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.k8sResource.spec.insecure",
+      "description": "Allow connecting to an HTTP (non-TLS) OCI registry."
+    },
+    {
+      "name": "suspend",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.k8sResource.spec.suspend",
+      "description": "Suspend reconciliation of the repository."
+    },
+    {
+      "name": "labels",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.metadata.labels",
+      "description": "Kubernetes labels applied to the Helm repository."
+    },
+    {
+      "name": "annotations",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.metadata.annotations",
+      "description": "Kubernetes annotations applied to the Helm repository."
+    },
+
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Cli",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    }
+  ],
+  "requestConstants": [
+    { "path": "spec.k8sResource.kind", "value": "HelmRepository" }
+  ],
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "failureStates": {
+      "Failed": "provisioning failed",
+      "Blocked": "provisioning is blocked",
+      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+      "DeprovisionFailed": "deprovisioning failed"
+    },
+    "failureDetailPath": "blockedReason",
+    "pollIntervalSeconds": 10,
+    "createTimeoutMinutes": 15,
+    "updateTimeoutMinutes": 15,
+    "deleteTimeoutMinutes": 10
+  }
+}
