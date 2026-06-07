@@ -173,6 +173,71 @@
     },
 
     {
+      "name": "service",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.service",
+      "description": "Optional Kubernetes Service exposing the deployment. Omit to create no Service.",
+      "attributes": [
+        { "name": "api_version", "type": "string", "optional": true, "computed": true, "default": "v1", "apiPath": "apiVersion",
+          "description": "Service apiVersion." },
+        { "name": "kind", "type": "string", "optional": true, "computed": true, "default": "Service", "apiPath": "kind",
+          "description": "Service kind." },
+        { "name": "name", "type": "string", "required": true, "apiPath": "metadata.name",
+          "description": "Name of the Service object." },
+        { "name": "type", "type": "string", "optional": true, "oneOf": ["ClusterIP", "NodePort", "LoadBalancer", "ExternalName"], "apiPath": "spec.type",
+          "description": "Service type. LoadBalancer provisions an external endpoint." },
+        {
+          "name": "ports", "type": "list(object)", "optional": true, "apiPath": "spec.ports",
+          "description": "Service ports.",
+          "attributes": [
+            { "name": "port", "type": "int", "required": true, "apiPath": "port", "description": "Port the Service exposes." },
+            { "name": "target_port", "type": "int", "optional": true, "apiPath": "targetPort", "description": "Container port traffic is forwarded to." },
+            { "name": "protocol", "type": "string", "optional": true, "oneOf": ["TCP", "UDP", "SCTP"], "apiPath": "protocol", "description": "Protocol." },
+            { "name": "node_port", "type": "int", "optional": true, "apiPath": "nodePort", "description": "Static node port (NodePort/LoadBalancer)." },
+            { "name": "name", "type": "string", "optional": true, "apiPath": "name", "description": "Named port." }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ingress",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.ingress",
+      "description": "Optional Kubernetes Ingress exposing the Service over HTTP(S). Omit to create no Ingress.",
+      "attributes": [
+        { "name": "api_version", "type": "string", "optional": true, "computed": true, "default": "networking.k8s.io/v1", "apiPath": "apiVersion",
+          "description": "Ingress apiVersion." },
+        { "name": "kind", "type": "string", "optional": true, "computed": true, "default": "Ingress", "apiPath": "kind",
+          "description": "Ingress kind." },
+        { "name": "name", "type": "string", "required": true, "apiPath": "metadata.name",
+          "description": "Name of the Ingress object." },
+        { "name": "annotations", "type": "map(string)", "optional": true, "apiPath": "metadata.annotations",
+          "description": "Ingress annotations (e.g. controller-specific config)." },
+        { "name": "ingress_class_name", "type": "string", "optional": true, "apiPath": "spec.ingressClassName",
+          "description": "IngressClass name (e.g. nginx, alb)." },
+        {
+          "name": "rules", "type": "list(object)", "optional": true, "apiPath": "spec.rules",
+          "description": "Host/path routing rules.",
+          "attributes": [
+            { "name": "host", "type": "string", "optional": true, "apiPath": "host", "description": "Host this rule matches." },
+            {
+              "name": "paths", "type": "list(object)", "optional": true, "apiPath": "http.paths",
+              "description": "HTTP paths routed to a backend Service.",
+              "attributes": [
+                { "name": "path", "type": "string", "optional": true, "apiPath": "path", "description": "URL path." },
+                { "name": "path_type", "type": "string", "optional": true, "oneOf": ["Prefix", "Exact", "ImplementationSpecific"], "apiPath": "pathType", "description": "Path match type." },
+                { "name": "service_name", "type": "string", "required": true, "apiPath": "backend.service.name", "description": "Backend Service name." },
+                { "name": "service_port_number", "type": "int", "optional": true, "apiPath": "backend.service.port.number", "description": "Backend Service port number." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+
+    {
       "name": "provisioner_type",
       "type": "string",
       "optional": true,

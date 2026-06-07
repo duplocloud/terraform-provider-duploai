@@ -13,7 +13,7 @@ Manages a DuploCloud AI Helpdesk app service (Kubernetes Deployment).
 ## Example Usage
 
 ```terraform
-# A simple nginx app service (Kubernetes Deployment)
+# An nginx app service exposed via a Service + Ingress
 resource "duploai_app_service" "nginx" {
   workspace_id      = "<workspace-id>"
   name              = "nginx"
@@ -22,34 +22,49 @@ resource "duploai_app_service" "nginx" {
   resource_group_id = "<eks-resource-group-id>"
   namespace_name    = "default"
 
-  replicas = 2
-
-  match_labels = { app = "nginx" }
-  pod_labels   = { app = "nginx" }
+  replicas   = 2
+  pod_labels = { app = "nginx" }
 
   containers = [
     {
       name  = "nginx"
       image = "nginx:1.27"
-
-      ports = [
-        { container_port = 80 }
-      ]
-
-      env = [
-        { name = "LOG_LEVEL", value = "info" }
-      ]
+      ports = [{ container_port = 80 }]
 
       resources_requests = {
         cpu    = "250m"
         memory = "256Mi"
       }
-      resources_limits = {
-        cpu    = "500m"
-        memory = "512Mi"
-      }
     }
   ]
+
+  # Expose the pods inside the cluster (the platform manages the selector).
+  service = {
+    name = "nginx"
+    type = "ClusterIP"
+    ports = [
+      { port = 80, target_port = 80 }
+    ]
+  }
+
+  # Route external traffic to the service.
+  ingress = {
+    name               = "nginx"
+    ingress_class_name = "nginx"
+    rules = [
+      {
+        host = "nginx.example.com"
+        paths = [
+          {
+            path                = "/"
+            path_type           = "Prefix"
+            service_name        = "nginx"
+            service_port_number = 80
+          }
+        ]
+      }
+    ]
+  }
 
   timeouts {
     create = "20m"
@@ -77,12 +92,14 @@ resource "duploai_app_service" "nginx" {
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `ingress` (Attributes) Optional Kubernetes Ingress exposing the Service over HTTP(S). Omit to create no Ingress. (see [below for nested schema](#nestedatt--ingress))
 - `labels` (Map of String) Kubernetes labels applied to the Deployment object.
 - `match_labels` (Map of String) Deployment selector matchLabels. Must match pod_labels.
 - `pod_labels` (Map of String) Labels applied to the pod template (must satisfy match_labels).
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `replicas` (Number) Number of pod replicas.
+- `service` (Attributes) Optional Kubernetes Service exposing the deployment. Omit to create no Service. (see [below for nested schema](#nestedatt--service))
 - `service_account_name` (String) Service account the pods run as.
 - `strategy_type` (String) Deployment update strategy: RollingUpdate or Recreate.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
@@ -136,6 +153,75 @@ Optional:
 
 - `name` (String) Named port.
 - `protocol` (String) Protocol: TCP, UDP, or SCTP.
+
+
+
+<a id="nestedatt--ingress"></a>
+### Nested Schema for `ingress`
+
+Required:
+
+- `name` (String) Name of the Ingress object.
+
+Optional:
+
+- `annotations` (Map of String) Ingress annotations (e.g. controller-specific config).
+- `api_version` (String) Ingress apiVersion.
+- `ingress_class_name` (String) IngressClass name (e.g. nginx, alb).
+- `kind` (String) Ingress kind.
+- `rules` (Attributes List) Host/path routing rules. (see [below for nested schema](#nestedatt--ingress--rules))
+
+<a id="nestedatt--ingress--rules"></a>
+### Nested Schema for `ingress.rules`
+
+Optional:
+
+- `host` (String) Host this rule matches.
+- `paths` (Attributes List) HTTP paths routed to a backend Service. (see [below for nested schema](#nestedatt--ingress--rules--paths))
+
+<a id="nestedatt--ingress--rules--paths"></a>
+### Nested Schema for `ingress.rules.paths`
+
+Required:
+
+- `service_name` (String) Backend Service name.
+
+Optional:
+
+- `path` (String) URL path.
+- `path_type` (String) Path match type.
+- `service_port_number` (Number) Backend Service port number.
+
+
+
+
+<a id="nestedatt--service"></a>
+### Nested Schema for `service`
+
+Required:
+
+- `name` (String) Name of the Service object.
+
+Optional:
+
+- `api_version` (String) Service apiVersion.
+- `kind` (String) Service kind.
+- `ports` (Attributes List) Service ports. (see [below for nested schema](#nestedatt--service--ports))
+- `type` (String) Service type. LoadBalancer provisions an external endpoint.
+
+<a id="nestedatt--service--ports"></a>
+### Nested Schema for `service.ports`
+
+Required:
+
+- `port` (Number) Port the Service exposes.
+
+Optional:
+
+- `name` (String) Named port.
+- `node_port` (Number) Static node port (NodePort/LoadBalancer).
+- `protocol` (String) Protocol.
+- `target_port` (Number) Container port traffic is forwarded to.
 
 
 
