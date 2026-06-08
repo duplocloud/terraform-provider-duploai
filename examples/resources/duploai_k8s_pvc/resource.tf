@@ -1,5 +1,5 @@
 # A ReadWriteOnce persistent volume claim in a namespace
-resource "duploai_persistent_volume_claim" "data" {
+resource "duploai_k8s_pvc" "data" {
   workspace_id      = "<workspace-id>"
   name              = "app-data"
   environment_id    = "<environment-id>"

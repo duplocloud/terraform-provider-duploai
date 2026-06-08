@@ -1,6 +1,6 @@
 {
-  "name": "secret",
-  "description": "Manages a DuploCloud AI Helpdesk Kubernetes Secret.",
+  "name": "k8s_config_map",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes ConfigMap.",
   "idPath": "id",
   "attributes": [
     {
@@ -8,7 +8,7 @@
       "type": "string",
       "required": true,
       "forceNew": true,
-      "description": "ID of the workspace that owns this secret."
+      "description": "ID of the workspace that owns this config map."
     },
     {
       "name": "name",
@@ -16,7 +16,7 @@
       "required": true,
       "forceNew": true,
       "apiPath": "name",
-      "description": "Name of the secret resource."
+      "description": "Name of the config map resource."
     },
     {
       "name": "description",
@@ -33,7 +33,7 @@
       "required": true,
       "forceNew": true,
       "apiPath": "spec.scopeIds",
-      "description": "Scope IDs that link this secret to a cloud provider account."
+      "description": "Scope IDs that link this config map to a cloud provider account."
     },
     {
       "name": "resource_group_id",
@@ -41,7 +41,7 @@
       "required": true,
       "forceNew": true,
       "apiPath": "spec.resourceGroupId",
-      "description": "ID of the resource group (EKS cluster) this secret belongs to."
+      "description": "ID of the resource group (EKS cluster) this config map belongs to."
     },
     {
       "name": "environment_id",
@@ -58,33 +58,21 @@
       "required": true,
       "forceNew": true,
       "apiPath": "spec.namespaceName",
-      "description": "Kubernetes namespace the secret is created in."
-    },
-    {
-      "name": "type",
-      "type": "string",
-      "optional": true,
-      "computed": true,
-      "default": "Opaque",
-      "forceNew": true,
-      "apiPath": "spec.k8sResource.type",
-      "description": "Kubernetes secret type (e.g. Opaque, kubernetes.io/dockerconfigjson, kubernetes.io/tls)."
+      "description": "Kubernetes namespace the config map is created in."
     },
     {
       "name": "data",
       "type": "map(string)",
       "optional": true,
-      "sensitive": true,
       "apiPath": "spec.k8sResource.data",
-      "description": "Secret entries with base64-encoded values, keyed by name."
+      "description": "Configuration key/value pairs (UTF-8 string data)."
     },
     {
-      "name": "string_data",
+      "name": "binary_data",
       "type": "map(string)",
       "optional": true,
-      "sensitive": true,
-      "apiPath": "spec.k8sResource.stringData",
-      "description": "Secret entries with plaintext (non-encoded) values, keyed by name."
+      "apiPath": "spec.k8sResource.binaryData",
+      "description": "Binary configuration entries, base64-encoded values keyed by name."
     },
     {
       "name": "immutable",
@@ -92,23 +80,22 @@
       "optional": true,
       "computed": true,
       "default": false,
-      "forceNew": true,
       "apiPath": "spec.k8sResource.immutable",
-      "description": "Mark the secret immutable (its data cannot be changed after creation)."
+      "description": "Mark the config map immutable (its data cannot be changed after creation)."
     },
     {
       "name": "labels",
       "type": "map(string)",
       "optional": true,
       "apiPath": "spec.k8sResource.metadata.labels",
-      "description": "Kubernetes labels applied to the secret."
+      "description": "Kubernetes labels applied to the config map."
     },
     {
       "name": "annotations",
       "type": "map(string)",
       "optional": true,
       "apiPath": "spec.k8sResource.metadata.annotations",
-      "description": "Kubernetes annotations applied to the secret."
+      "description": "Kubernetes annotations applied to the config map."
     },
 
     {
@@ -142,7 +129,7 @@
   ],
   "requestConstants": [
     { "path": "spec.k8sResource.apiVersion", "value": "v1" },
-    { "path": "spec.k8sResource.kind", "value": "Secret" }
+    { "path": "spec.k8sResource.kind", "value": "ConfigMap" }
   ],
   "waiter": {
     "statusPath": "status",

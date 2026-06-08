@@ -1,5 +1,5 @@
 # A Kubernetes ConfigMap with string data
-resource "duploai_config_map" "app" {
+resource "duploai_k8s_config_map" "app" {
   workspace_id      = "<workspace-id>"
   name              = "app-config"
   scope_ids         = ["<scope-id>"]
