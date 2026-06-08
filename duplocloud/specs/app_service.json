@@ -1,0 +1,303 @@
+{
+  "name": "app_service",
+  "description": "Manages a DuploCloud AI Helpdesk app service (Kubernetes Deployment).",
+  "idPath": "id",
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this app service."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the app service resource."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this app service to a cloud provider account."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group (EKS cluster) this app service belongs to."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment that owns the resource group."
+    },
+    {
+      "name": "namespace_name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.namespaceName",
+      "description": "Kubernetes namespace the deployment is created in."
+    },
+
+    {
+      "name": "deployment_name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.deployment.metadata.name",
+      "description": "Name of the Kubernetes Deployment object (typically the same as name)."
+    },
+    {
+      "name": "replicas",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 1,
+      "apiPath": "spec.deployment.spec.replicas",
+      "description": "Number of pod replicas."
+    },
+    {
+      "name": "strategy_type",
+      "type": "string",
+      "optional": true,
+      "oneOf": ["RollingUpdate", "Recreate"],
+      "apiPath": "spec.deployment.spec.strategy.type",
+      "description": "Deployment update strategy: RollingUpdate or Recreate."
+    },
+    {
+      "name": "service_account_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.serviceAccountName",
+      "description": "Service account the pods run as."
+    },
+    {
+      "name": "match_labels",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.selector.matchLabels",
+      "description": "Deployment selector matchLabels. Must match pod_labels."
+    },
+    {
+      "name": "pod_labels",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.metadata.labels",
+      "description": "Labels applied to the pod template (must satisfy match_labels)."
+    },
+    {
+      "name": "labels",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.deployment.metadata.labels",
+      "description": "Kubernetes labels applied to the Deployment object."
+    },
+    {
+      "name": "annotations",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.deployment.metadata.annotations",
+      "description": "Kubernetes annotations applied to the Deployment object."
+    },
+
+    {
+      "name": "containers",
+      "type": "list(object)",
+      "required": true,
+      "apiPath": "spec.deployment.spec.template.spec.containers",
+      "description": "Containers that make up the pod.",
+      "attributes": [
+        { "name": "name", "type": "string", "required": true, "apiPath": "name",
+          "description": "Container name." },
+        { "name": "image", "type": "string", "required": true, "apiPath": "image",
+          "description": "Container image (e.g. nginx:1.27)." },
+        { "name": "command", "type": "list(string)", "optional": true, "apiPath": "command",
+          "description": "Entrypoint override." },
+        { "name": "args", "type": "list(string)", "optional": true, "apiPath": "args",
+          "description": "Arguments to the entrypoint." },
+        { "name": "image_pull_policy", "type": "string", "optional": true, "apiPath": "imagePullPolicy",
+          "oneOf": ["Always", "IfNotPresent", "Never"],
+          "description": "Image pull policy: Always, IfNotPresent, or Never." },
+        { "name": "working_dir", "type": "string", "optional": true, "apiPath": "workingDir",
+          "description": "Container working directory." },
+        {
+          "name": "ports", "type": "list(object)", "optional": true, "apiPath": "ports",
+          "description": "Ports the container exposes.",
+          "attributes": [
+            { "name": "container_port", "type": "int", "required": true, "apiPath": "containerPort",
+              "description": "Port number the container listens on." },
+            { "name": "name", "type": "string", "optional": true, "apiPath": "name",
+              "description": "Named port." },
+            { "name": "protocol", "type": "string", "optional": true, "apiPath": "protocol",
+              "oneOf": ["TCP", "UDP", "SCTP"],
+              "description": "Protocol: TCP, UDP, or SCTP." }
+          ]
+        },
+        {
+          "name": "env", "type": "list(object)", "optional": true, "apiPath": "env",
+          "description": "Environment variables (literal values).",
+          "attributes": [
+            { "name": "name", "type": "string", "required": true, "apiPath": "name",
+              "description": "Variable name." },
+            { "name": "value", "type": "string", "optional": true, "apiPath": "value",
+              "description": "Variable value." }
+          ]
+        },
+        { "name": "resources_limits", "type": "map(string)", "optional": true, "apiPath": "resources.limits",
+          "description": "Resource limits, e.g. { cpu = \"500m\", memory = \"512Mi\" }." },
+        { "name": "resources_requests", "type": "map(string)", "optional": true, "apiPath": "resources.requests",
+          "description": "Resource requests, e.g. { cpu = \"250m\", memory = \"256Mi\" }." }
+      ]
+    },
+
+    {
+      "name": "service",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.service",
+      "description": "Optional Kubernetes Service exposing the deployment. Omit to create no Service.",
+      "attributes": [
+        { "name": "api_version", "type": "string", "optional": true, "computed": true, "default": "v1", "apiPath": "apiVersion",
+          "description": "Service apiVersion." },
+        { "name": "kind", "type": "string", "optional": true, "computed": true, "default": "Service", "apiPath": "kind",
+          "description": "Service kind." },
+        { "name": "name", "type": "string", "required": true, "apiPath": "metadata.name",
+          "description": "Name of the Service object." },
+        { "name": "type", "type": "string", "optional": true, "oneOf": ["ClusterIP", "NodePort", "LoadBalancer", "ExternalName"], "apiPath": "spec.type",
+          "description": "Service type. LoadBalancer provisions an external endpoint." },
+        {
+          "name": "ports", "type": "list(object)", "optional": true, "apiPath": "spec.ports",
+          "description": "Service ports.",
+          "attributes": [
+            { "name": "port", "type": "int", "required": true, "apiPath": "port", "description": "Port the Service exposes." },
+            { "name": "target_port", "type": "int", "optional": true, "apiPath": "targetPort", "description": "Container port traffic is forwarded to." },
+            { "name": "protocol", "type": "string", "optional": true, "oneOf": ["TCP", "UDP", "SCTP"], "apiPath": "protocol", "description": "Protocol." },
+            { "name": "node_port", "type": "int", "optional": true, "apiPath": "nodePort", "description": "Static node port (NodePort/LoadBalancer)." },
+            { "name": "name", "type": "string", "optional": true, "apiPath": "name", "description": "Named port." }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ingress",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.ingress",
+      "description": "Optional Kubernetes Ingress exposing the Service over HTTP(S). Omit to create no Ingress.",
+      "attributes": [
+        { "name": "api_version", "type": "string", "optional": true, "computed": true, "default": "networking.k8s.io/v1", "apiPath": "apiVersion",
+          "description": "Ingress apiVersion." },
+        { "name": "kind", "type": "string", "optional": true, "computed": true, "default": "Ingress", "apiPath": "kind",
+          "description": "Ingress kind." },
+        { "name": "name", "type": "string", "required": true, "apiPath": "metadata.name",
+          "description": "Name of the Ingress object." },
+        { "name": "annotations", "type": "map(string)", "optional": true, "apiPath": "metadata.annotations",
+          "description": "Ingress annotations (e.g. controller-specific config)." },
+        { "name": "ingress_class_name", "type": "string", "optional": true, "apiPath": "spec.ingressClassName",
+          "description": "IngressClass name (e.g. nginx, alb)." },
+        {
+          "name": "rules", "type": "list(object)", "optional": true, "apiPath": "spec.rules",
+          "description": "Host/path routing rules.",
+          "attributes": [
+            { "name": "host", "type": "string", "optional": true, "apiPath": "host", "description": "Host this rule matches." },
+            {
+              "name": "paths", "type": "list(object)", "optional": true, "apiPath": "http.paths",
+              "description": "HTTP paths routed to a backend Service.",
+              "attributes": [
+                { "name": "path", "type": "string", "optional": true, "apiPath": "path", "description": "URL path." },
+                { "name": "path_type", "type": "string", "optional": true, "oneOf": ["Prefix", "Exact", "ImplementationSpecific"], "apiPath": "pathType", "description": "Path match type." },
+                { "name": "service_name", "type": "string", "required": true, "apiPath": "backend.service.name", "description": "Backend Service name." },
+                { "name": "service_port_number", "type": "int", "optional": true, "apiPath": "backend.service.port.number", "description": "Backend Service port number." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Cli",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    },
+    {
+      "name": "service_name",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.serviceName",
+      "description": "Name of the provisioned Service (if any)."
+    },
+    {
+      "name": "ingress_name",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.ingressName",
+      "description": "Name of the provisioned Ingress (if any)."
+    }
+  ],
+  "requestConstants": [
+    { "path": "spec.deployment.apiVersion", "value": "apps/v1" },
+    { "path": "spec.deployment.kind", "value": "Deployment" }
+  ],
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "deprovisionedState": "DeProvisioned",
+    "failureStates": {
+      "Failed": "provisioning failed",
+      "Blocked": "provisioning is blocked",
+      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+      "DeprovisionFailed": "deprovisioning failed"
+    },
+    "failureDetailPath": "blockedReason",
+    "pollIntervalSeconds": 15,
+    "createTimeoutMinutes": 20,
+    "updateTimeoutMinutes": 20,
+    "deleteTimeoutMinutes": 15
+  }
+}
