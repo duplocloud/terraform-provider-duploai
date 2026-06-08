@@ -97,4 +97,3 @@ func TestEndpointVerbs(t *testing.T) {
 		t.Error("unset verbs should keep defaults")
 	}
 }
-
