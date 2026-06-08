@@ -9,8 +9,8 @@ on:
         default: ''
 
 env:
-  git_user: duplo-bot
-  git_email: devops@duplocloud.net
+  git_user: ${{ github.actor }}
+  git_email: ${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com
 
 jobs:
   start-hotfix:
@@ -21,6 +21,13 @@ jobs:
           ref: master
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Generate token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
 
       - name: Get hotfix version
         id: version
@@ -40,10 +47,17 @@ jobs:
       - name: Start gitflow hotfix
         uses: duplocloud/ghactions-start-gitflow-release@master
         with:
-          github_token: ${{ secrets.DUPLO_GITHUB_TOKEN }}
+          github_token: ${{ steps.app-token.outputs.token }}
           version: "${{ steps.version.outputs.hotfix }}"
           is_hotfix: true
           precommit_run: |
             set -euo pipefail
             version="${{ steps.version.outputs.hotfix }}"
+
+            # Update generated documentation
+            make doc
+
+            # Replace the version number in all affected files
             sed -e 's/^\(VERSION=\)[0-9\.]*/\1'"$version"'/g' -i Makefile
+            find examples -name main.tf -exec \
+              sed -e 's/\(version = "\)[0-9\.]*\(".*# RELEASE VERSION\)/\1'"$version"'\2/g' -i \{\} \;

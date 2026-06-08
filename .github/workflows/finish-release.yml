@@ -2,16 +2,17 @@ name: Finish Release
 
 on:
   pull_request:
-    branches: [master, main]
+    branches: [master]
     types: [closed]
+
+env:
+  git_user: ${{ github.actor }}
+  git_email: ${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com
 
 jobs:
   finish-release:
-    if: github.event.pull_request.merged == true && startsWith(github.head_ref, 'release/')
+    if: github.event.pull_request.merged == true && (startsWith(github.head_ref, 'refs/heads/release/') || startsWith(github.head_ref, 'release/'))
     runs-on: ubuntu-22.04
-    env:
-      git_user: duplo-bot
-      git_email: devops@duplocloud.net
     steps:
       - uses: actions/checkout@v6
         with:
@@ -19,14 +20,67 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Generate token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
       - name: Initialize git config
         run: |
           git config --global user.name ${{ env.git_user }}
           git config --global user.email ${{ env.git_email }}
 
       - name: Finish gitflow release
-        uses: duplocloud/ghactions-start-gitflow-release@master
+        id: finish-release
+        uses: duplocloud/ghactions-finish-gitflow-release@master
         with:
-          github_token: ${{ secrets.DUPLO_GITHUB_TOKEN }}
-          is_hotfix: false
-          finish: true
+          validate_merge: false
+          delete_branch: false
+          github_token: ${{ steps.app-token.outputs.token }}
+
+  version-bump:
+    runs-on: ubuntu-22.04
+    needs:
+      - finish-release
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: develop
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Generate token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
+      - name: Initialize git config
+        run: |
+          git config --global user.name ${{ env.git_user }}
+          git config --global user.email ${{ env.git_email }}
+
+      - name: Version bump
+        run: |
+          set -euo pipefail
+
+          # Determine the new version (increment minor, reset patch to 0)
+          current="$(sed -ne 's/^VERSION=\([0-9\.]*\).*$/\1/p' <Makefile)"
+          new_version=$(echo "$current" | awk -F. '{printf "%d.%d.0", $1, $2+1}'); echo "New Release Version: $new_version"
+
+          # Replace the version number in all affected files
+          sed -e 's/^\(VERSION=\)[0-9\.]*/\1'"$new_version"'/g' -i Makefile
+          find examples -name main.tf -exec \
+            sed -e 's/\(version = "\)[0-9\.]*\(".*# RELEASE VERSION\)/\1'"$new_version"'\2/g' -i \{\} \;
+
+          # Commit
+          git commit -m 'version bump' Makefile examples
+
+      - name: Push develop
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ steps.app-token.outputs.token }}
+          branch: develop
