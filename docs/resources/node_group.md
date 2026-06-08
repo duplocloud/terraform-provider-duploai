@@ -86,6 +86,7 @@ resource "duploai_node_group" "spot" {
 - `description` (String) Optional description.
 - `disk_size_gb` (Number) Root EBS volume size in GiB for each node.
 - `environment_id` (String) ID of the environment that owns the resource group.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `instance_visibility` (String) Node placement visibility (public vs. private subnets). Accepted values are defined by the backend InstanceVisibilityType enum; confirm the exact value against your tenant.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.

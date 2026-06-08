@@ -7,6 +7,10 @@ resource "duploai_namespace" "app" {
 
   description = "Namespace for the my-app workloads"
 
+  # Tolerate up to 5 transient "Failed" polls during provisioning before giving
+  # up. Optional — overrides the resource's built-in default.
+  failure_retries = 5
+
   timeouts {
     create = "15m"
     delete = "10m"

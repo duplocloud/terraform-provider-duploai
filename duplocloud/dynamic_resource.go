@@ -35,6 +35,7 @@ var (
 	_ resource.ResourceWithConfigure        = &dynamicResource{}
 	_ resource.ResourceWithImportState      = &dynamicResource{}
 	_ resource.ResourceWithConfigValidators = &dynamicResource{}
+	_ resource.ResourceWithModifyPlan       = &dynamicResource{}
 )
 
 // dynamicResource is the single engine that turns a ResourceSpec plus its
@@ -71,6 +72,15 @@ func (r *dynamicResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 	for _, a := range r.spec.Attributes {
 		attrs[a.Name] = attrSchema(a)
 	}
+	if r.spec.Waiter != nil {
+		// Optional per-instance override of waiter.failureRetries from the spec:
+		// how many extra polls to tolerate a transient failure status before
+		// treating it as terminal. Unset → the spec default is used.
+		attrs["failure_retries"] = schema.Int64Attribute{
+			Optional:    true,
+			Description: "Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.",
+		}
+	}
 
 	out := schema.Schema{
 		Description: r.spec.Description,
@@ -87,8 +97,8 @@ func (r *dynamicResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 // ── SDK binding ───────────────────────────────────────────────────────────────
 
 // api binds an SDK client to this resource's endpoint and resolved scope.
-func (r *dynamicResource) api(scope map[string]string) *duplosdk.RESTResource[map[string]any] {
-	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, r.waiter())
+func (r *dynamicResource) api(scope map[string]string, failureRetries int) *duplosdk.RESTResource[map[string]any] {
+	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, r.waiter(failureRetries))
 }
 
 // scopeFromReader reads every path-parameter attribute (as declared by the
@@ -118,7 +128,31 @@ func composeID(scopeValues []string, objID string) string {
 	return strings.Join(append(append([]string{}, scopeValues...), objID), "/")
 }
 
-func (r *dynamicResource) waiter() *duplosdk.Waiter[map[string]any] {
+// specFailureRetries is the waiter.failureRetries declared in the spec (0 when
+// no waiter). It is the default when the config doesn't override it.
+func (r *dynamicResource) specFailureRetries() int {
+	if r.spec.Waiter == nil {
+		return 0
+	}
+	return r.spec.Waiter.FailureRetries
+}
+
+// failureRetries resolves the effective retry count for an operation: the
+// optional `failure_retries` value from the resource config if set, otherwise
+// the spec default. cfg is the plan (create/update) or state (delete).
+func (r *dynamicResource) failureRetries(ctx context.Context, cfg attrReader, diags *diag.Diagnostics) int {
+	if r.spec.Waiter == nil {
+		return 0
+	}
+	var v types.Int64
+	diags.Append(cfg.GetAttribute(ctx, path.Root("failure_retries"), &v)...)
+	if diags.HasError() || v.IsNull() || v.IsUnknown() {
+		return r.spec.Waiter.FailureRetries
+	}
+	return int(v.ValueInt64())
+}
+
+func (r *dynamicResource) waiter(failureRetries int) *duplosdk.Waiter[map[string]any] {
 	w := r.spec.Waiter
 	if w == nil {
 		return nil
@@ -132,7 +166,7 @@ func (r *dynamicResource) waiter() *duplosdk.Waiter[map[string]any] {
 		PollInterval:   interval,
 		SuccessState:   w.SuccessState,
 		FailureStates:  w.FailureStates,
-		FailureRetries: w.FailureRetries,
+		FailureRetries: failureRetries,
 		StatusFn: func(m *map[string]any) string {
 			return toStringValue(extractPath(*m, statusSegs))
 		},
@@ -145,17 +179,75 @@ func (r *dynamicResource) waiter() *duplosdk.Waiter[map[string]any] {
 	}
 }
 
+// apiBodyEqual reports whether two request bodies are identical (same API-mapped
+// inputs). Map key order is normalized by json.Marshal, so the comparison is
+// stable.
+func apiBodyEqual(a, b map[string]any) bool {
+	ja, errA := json.Marshal(a)
+	jb, errB := json.Marshal(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return string(ja) == string(jb)
+}
+
+// ModifyPlan suppresses the no-op churn that otherwise appears when a resource
+// is updated without changing anything the API cares about — most commonly the
+// first plan after `terraform import`, where the config carries a `timeouts`
+// block but imported state has none. Terraform then plans an in-place update for
+// the timeouts block alone and marks every plain `computed` output (which has no
+// UseStateForUnknown) as "(known after apply)". When no API-mapped attribute has
+// actually changed, we copy the prior-state value for each computed attribute
+// into the plan, so the plan stays quiet (only the timeouts block differs) and
+// the apply is a true no-op (see Update). This is generic — it applies to every
+// resource the engine serves, current and future.
+func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Only relevant on update: create has no prior state, destroy has no plan.
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	planBody := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
+	stateBody := r.bodyFromRaw(req.State.Raw, "update", &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !apiBodyEqual(planBody, stateBody) {
+		return // a real update — let computed outputs recompute normally
+	}
+
+	var planTop, stateTop map[string]tftypes.Value
+	if err := req.Plan.Raw.As(&planTop); err != nil {
+		return
+	}
+	if err := req.State.Raw.As(&stateTop); err != nil {
+		return
+	}
+	for _, a := range r.spec.Attributes {
+		if !a.Computed {
+			continue
+		}
+		if sv, ok := stateTop[a.Name]; ok {
+			planTop[a.Name] = sv // hold the prior value instead of (known after apply)
+		}
+	}
+	resp.Plan.Raw = tftypes.NewValue(req.Plan.Raw.Type(), planTop)
+}
+
 // ── CRUD ──────────────────────────────────────────────────────────────────────
 
 func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	scope, scopeVals := r.scopeFromReader(ctx, req.Plan, &resp.Diagnostics)
-	body := r.bodyFromRaw(req.Plan.Raw, &resp.Diagnostics)
+	body := r.bodyFromRaw(req.Plan.Raw, "create", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	log.Printf("[TRACE] dynamic %s Create(%s): start", r.spec.Name, strings.Join(scopeVals, "/"))
 
-	api := r.api(scope)
+	retries := r.failureRetries(ctx, req.Plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	api := r.api(scope, retries)
 	created, err := api.Create(&body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating "+r.spec.Name, err.Error())
@@ -189,7 +281,7 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 	log.Printf("[TRACE] dynamic %s Read(%s): start", r.spec.Name, id)
 
-	obj, clientErr := r.api(scope).Get(objID)
+	obj, clientErr := r.api(scope, r.specFailureRetries()).Get(objID)
 	if clientErr != nil {
 		if clientErr.IsNotFound() {
 			resp.State.RemoveResource(ctx)
@@ -218,7 +310,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	// only diffs that do are config-only (e.g. the timeouts block) — refresh
 	// computed values from the API and persist, without issuing an update call.
 	if !r.endpoint.HasUpdate() {
-		obj, clientErr := r.api(scope).Get(objID)
+		obj, clientErr := r.api(scope, r.specFailureRetries()).Get(objID)
 		if clientErr != nil {
 			resp.Diagnostics.AddError("Error reading "+r.spec.Name, clientErr.Error())
 			return
@@ -232,13 +324,32 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	body := r.bodyFromRaw(req.Plan.Raw, &resp.Diagnostics)
+	body := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	log.Printf("[TRACE] dynamic %s Update(%s): start", r.spec.Name, id)
 
-	api := r.api(scope)
+	// If nothing the API cares about changed (e.g. only the timeouts block
+	// differs, as on the first apply after import), skip the API call and the
+	// waiter entirely — issuing a PUT would re-trigger provisioning for a
+	// metadata-only change. ModifyPlan has already carried prior computed values
+	// into the plan, so it is fully known and safe to persist directly.
+	stateBody := r.bodyFromRaw(req.State.Raw, "update", &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if apiBodyEqual(body, stateBody) {
+		resp.State.Raw = req.Plan.Raw
+		log.Printf("[TRACE] dynamic %s Update(%s): no API-relevant change, skipped", r.spec.Name, id)
+		return
+	}
+
+	retries := r.failureRetries(ctx, req.Plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	api := r.api(scope, retries)
 	updated, clientErr := api.Update(objID, &body)
 	if clientErr != nil {
 		resp.Diagnostics.AddError("Error updating "+r.spec.Name, clientErr.Error())
@@ -269,7 +380,10 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 	log.Printf("[TRACE] dynamic %s Delete(%s): start", r.spec.Name, id)
-	api := r.api(scope)
+	api := r.api(scope, r.failureRetries(ctx, req.State, &resp.Diagnostics))
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	var timeout time.Duration
 	if r.spec.Waiter != nil {
@@ -362,10 +476,12 @@ type attrReader interface {
 	GetAttribute(ctx context.Context, p path.Path, target any) diag.Diagnostics
 }
 
-// bodyFromRaw builds the request body from the plan's raw value. Working from
-// the raw tftypes lets one code path serialize attributes of any type — scalars,
-// collections, and arbitrarily nested objects — without per-type plan reads.
-func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, diags *diag.Diagnostics) map[string]any {
+// bodyFromRaw builds the request body from the plan's raw value. verb is
+// "create" or "update" and selects the effective path for each attribute
+// (createPath vs updatePath; see AttributeSpec). Working from the raw tftypes
+// lets one code path serialize attributes of any type — scalars, collections,
+// and arbitrarily nested objects — without per-type plan reads.
+func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *diag.Diagnostics) map[string]any {
 	var top map[string]tftypes.Value
 	if err := raw.As(&top); err != nil {
 		diags.AddError("Internal error", fmt.Sprintf("decoding plan: %s", err))
@@ -373,7 +489,12 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, diags *diag.Diagnostics
 	}
 	body := map[string]any{}
 	for _, a := range r.spec.Attributes {
-		reqPath := a.requestPath()
+		var reqPath string
+		if verb == "update" {
+			reqPath = a.effectiveUpdatePath()
+		} else {
+			reqPath = a.effectiveCreatePath()
+		}
 		if reqPath == "" || a.NoSend || (!a.Required && !a.Optional) {
 			continue
 		}
@@ -388,6 +509,11 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, diags *diag.Diagnostics
 		setPath(body, strings.Split(reqPath, "."), val)
 	}
 	applyConstants(body, r.spec.RequestConstants, diags)
+	if verb == "update" {
+		applyConstants(body, r.spec.UpdateConstants, diags)
+	} else {
+		applyConstants(body, r.spec.CreateConstants, diags)
+	}
 	return body
 }
 

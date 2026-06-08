@@ -1,0 +1,154 @@
+{
+  "name": "persistent_volume_claim",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes PersistentVolumeClaim (PVC).",
+  "idPath": "id",
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this persistent volume claim."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the persistent volume claim. Must be a DNS-1123 label (lowercase alphanumeric and '-', starting and ending with an alphanumeric)."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this claim to a cloud provider account. Inherited from the resource group."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group (EKS cluster) this persistent volume claim belongs to."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment that owns the resource group (EKS cluster) this claim belongs to. Required: the backend does not derive it, and resources created without it cannot be loaded by env/RG-scoped lookups."
+    },
+    {
+      "name": "namespace_name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.namespaceName",
+      "description": "Kubernetes namespace the claim is created in. Must reference an existing, fully provisioned namespace in the same resource group."
+    },
+    {
+      "name": "access_modes",
+      "type": "list(string)",
+      "required": true,
+      "forceNew": true,
+      "requestPath": "spec.k8sResource.spec.accessModes",
+      "responsePath": "result.k8sResource.spec.accessModes",
+      "description": "Access modes for the volume. One or more of: ReadWriteOnce, ReadOnlyMany, ReadWriteMany, ReadWriteOncePod."
+    },
+    {
+      "name": "storage",
+      "type": "string",
+      "required": true,
+      "requestPath": "spec.k8sResource.spec.resources.requests.storage",
+      "responsePath": "result.k8sResource.spec.resources.requests.storage",
+      "description": "Requested storage size as a Kubernetes quantity, e.g. \"10Gi\". May be increased on update (volume expansion) but not decreased."
+    },
+    {
+      "name": "storage_class_name",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "requestPath": "spec.k8sResource.spec.storageClassName",
+      "responsePath": "result.k8sResource.spec.storageClassName",
+      "description": "Name of the StorageClass to provision from. Must be a storage class available in the cluster; when omitted the cluster's default StorageClass is used."
+    },
+    {
+      "name": "volume_mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Filesystem",
+      "forceNew": true,
+      "oneOf": ["Filesystem", "Block"],
+      "requestPath": "spec.k8sResource.spec.volumeMode",
+      "responsePath": "result.k8sResource.spec.volumeMode",
+      "description": "How the volume is consumed: Filesystem (default) or Block."
+    },
+    {
+      "name": "volume_name",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "requestPath": "spec.k8sResource.spec.volumeName",
+      "responsePath": "result.k8sResource.spec.volumeName",
+      "description": "Name of a specific PersistentVolume to bind to (static binding). When omitted it is assigned by the cluster once the claim is bound."
+    },
+    {
+      "name": "labels",
+      "type": "map(string)",
+      "optional": true,
+      "requestPath": "spec.k8sResource.metadata.labels",
+      "description": "Kubernetes labels applied to the persistent volume claim. Send-only: the server injects its own duplocloud.ai/* labels, so this value is not read back to avoid spurious drift."
+    },
+    {
+      "name": "annotations",
+      "type": "map(string)",
+      "optional": true,
+      "requestPath": "spec.k8sResource.metadata.annotations",
+      "description": "Kubernetes annotations applied to the persistent volume claim. Send-only (not read back)."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    }
+  ],
+  "requestConstants": [
+    { "path": "spec.k8sResource.apiVersion", "value": "v1" },
+    { "path": "spec.k8sResource.kind", "value": "PersistentVolumeClaim" }
+  ],
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "deprovisionedState": "DeProvisioned",
+    "failureStates": {
+      "Failed": "provisioning failed",
+      "Blocked": "provisioning is blocked",
+      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+      "DeprovisionFailed": "deprovisioning failed"
+    },
+    "failureDetailPath": "blockedReason",
+    "failureRetries": 3,
+    "pollIntervalSeconds": 10,
+    "createTimeoutMinutes": 15,
+    "updateTimeoutMinutes": 15,
+    "deleteTimeoutMinutes": 10
+  }
+}
