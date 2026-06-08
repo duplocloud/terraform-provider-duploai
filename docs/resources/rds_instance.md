@@ -96,6 +96,7 @@ resource "duploai_rds_instance" "mysql" {
 - `enable_performance_insights` (Boolean) Enable Performance Insights.
 - `engine_version` (String) Engine version. Changing this in place triggers an engine upgrade.
 - `environment_id` (String) ID of the environment that owns the resource group.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `kms_key_id` (String) KMS key ID used for storage encryption.
 - `master_user_password` (String, Sensitive) Master user password.
 - `master_username` (String) Master (admin) username. Required when creating a new instance (not restoring from a snapshot).

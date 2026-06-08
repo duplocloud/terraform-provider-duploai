@@ -40,6 +40,12 @@ type ResourceSpec struct {
 	// attributes.
 	RequestConstants []ConstantField `json:"requestConstants,omitempty"`
 
+	// CreateConstants / UpdateConstants inject fixed fields into the POST
+	// (create) or PUT (update) body only. Each overrides RequestConstants for
+	// its verb when both set the same path.
+	CreateConstants []ConstantField `json:"createConstants,omitempty"`
+	UpdateConstants []ConstantField `json:"updateConstants,omitempty"`
+
 	// RequiredIf declares conditional-required rules evaluated at plan time.
 	RequiredIf []RequiredIfRule `json:"requiredIf,omitempty"`
 
@@ -96,6 +102,18 @@ type AttributeSpec struct {
 	RequestPath  string `json:"requestPath,omitempty"`
 	ResponsePath string `json:"responsePath,omitempty"`
 
+	// CreatePath / UpdatePath override RequestPath (and APIPath) for the POST
+	// and PUT bodies respectively. Use when the API uses different DTOs for
+	// create vs update (e.g. spec.createRequest vs spec.updateRequest). Each
+	// falls back to RequestPath, then APIPath, when empty.
+	CreatePath string `json:"createPath,omitempty"`
+	UpdatePath string `json:"updatePath,omitempty"`
+
+	// CreateOnly marks an attribute that is only sent in the POST (create)
+	// body and never in the PUT (update) body. Useful for fields that are
+	// immutable after creation but not forceNew (e.g. code source for Lambda).
+	CreateOnly bool `json:"createOnly,omitempty"`
+
 	// NoSend marks an attribute that maps from the response but is never sent in
 	// the request (computed-only fields like status, vpc_id).
 	NoSend bool `json:"noSend,omitempty"`
@@ -121,6 +139,28 @@ func (a AttributeSpec) responsePath() string {
 		return a.ResponsePath
 	}
 	return a.APIPath
+}
+
+// effectiveCreatePath resolves the path used in POST (create) bodies.
+// Priority: createPath > requestPath > apiPath.
+func (a AttributeSpec) effectiveCreatePath() string {
+	if a.CreatePath != "" {
+		return a.CreatePath
+	}
+	return a.requestPath()
+}
+
+// effectiveUpdatePath resolves the path used in PUT (update) bodies.
+// Returns "" for createOnly fields so they are skipped on update.
+// Priority: updatePath > requestPath > apiPath.
+func (a AttributeSpec) effectiveUpdatePath() string {
+	if a.CreateOnly {
+		return ""
+	}
+	if a.UpdatePath != "" {
+		return a.UpdatePath
+	}
+	return a.requestPath()
 }
 
 // ConstantField injects a fixed value into every request body at the given

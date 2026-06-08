@@ -1,0 +1,313 @@
+{
+  "name": "k8s_job",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes Job — a batch workload that runs one or more containers to completion within an environment or resource group.",
+  "idPath": "id",
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this Kubernetes job."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the Kubernetes job resource."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment in which the job runs."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group in which the job runs."
+    },
+    {
+      "name": "namespace_name",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.namespaceName",
+      "description": "Kubernetes namespace to run the job in."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Cli",
+      "forceNew": true,
+      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs inherited from the linked environment or resource group."
+    },
+    {
+      "name": "labels",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.metadata.labels",
+      "responsePath": "result.k8sResource.metadata.labels",
+      "description": "Labels to apply to the Kubernetes Job object."
+    },
+    {
+      "name": "annotations",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.metadata.annotations",
+      "responsePath": "result.k8sResource.metadata.annotations",
+      "description": "Annotations to apply to the Kubernetes Job object."
+    },
+    {
+      "name": "backoff_limit",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 6,
+      "requestPath": "spec.k8sResource.spec.backoffLimit",
+      "responsePath": "result.k8sResource.spec.backoffLimit",
+      "description": "Number of retries before the job is marked as failed. Defaults to 6."
+    },
+    {
+      "name": "completions",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.completions",
+      "responsePath": "result.k8sResource.spec.completions",
+      "description": "Number of pods that must succeed for the job to be considered complete."
+    },
+    {
+      "name": "parallelism",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.parallelism",
+      "responsePath": "result.k8sResource.spec.parallelism",
+      "description": "Maximum number of pods running in parallel at any time."
+    },
+    {
+      "name": "ttl_seconds_after_finished",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.ttlSecondsAfterFinished",
+      "responsePath": "result.k8sResource.spec.ttlSecondsAfterFinished",
+      "description": "Seconds after the job finishes before it is automatically deleted. Omit to disable automatic cleanup."
+    },
+    {
+      "name": "active_deadline_seconds",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.activeDeadlineSeconds",
+      "responsePath": "result.k8sResource.spec.activeDeadlineSeconds",
+      "description": "Maximum duration in seconds the job may run before being terminated."
+    },
+    {
+      "name": "suspend",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "requestPath": "spec.k8sResource.spec.suspend",
+      "responsePath": "result.k8sResource.spec.suspend",
+      "description": "When true, the job is suspended and no new pods are created."
+    },
+    {
+      "name": "restart_policy",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Never",
+      "oneOf": ["Never", "OnFailure"],
+      "requestPath": "spec.k8sResource.spec.template.spec.restartPolicy",
+      "responsePath": "result.k8sResource.spec.template.spec.restartPolicy",
+      "description": "Pod restart policy. Use Never (default) or OnFailure for batch jobs."
+    },
+    {
+      "name": "service_account_name",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.template.spec.serviceAccountName",
+      "responsePath": "result.k8sResource.spec.template.spec.serviceAccountName",
+      "description": "Kubernetes service account to run the pod as."
+    },
+    {
+      "name": "node_selector",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.template.spec.nodeSelector",
+      "responsePath": "result.k8sResource.spec.template.spec.nodeSelector",
+      "description": "Node label selector constraints for pod scheduling."
+    },
+    {
+      "name": "containers",
+      "type": "list(object)",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "requestPath": "spec.k8sResource.spec.template.spec.containers",
+      "responsePath": "result.k8sResource.spec.template.spec.containers",
+      "description": "List of containers to run in each job pod.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "Container name."
+        },
+        {
+          "name": "image",
+          "type": "string",
+          "required": true,
+          "apiPath": "image",
+          "description": "Container image (e.g. my-repo/my-image:latest)."
+        },
+        {
+          "name": "command",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "command",
+          "description": "Entrypoint command array (overrides the image ENTRYPOINT)."
+        },
+        {
+          "name": "args",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "args",
+          "description": "Arguments to the entrypoint command (overrides the image CMD)."
+        },
+        {
+          "name": "working_dir",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "workingDir",
+          "description": "Container working directory."
+        },
+        {
+          "name": "env",
+          "type": "list(object)",
+          "optional": true,
+          "apiPath": "env",
+          "description": "Environment variables to set in the container.",
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "apiPath": "name",
+              "description": "Environment variable name."
+            },
+            {
+              "name": "value",
+              "type": "string",
+              "optional": true,
+              "computed": true,
+              "sensitive": true,
+              "apiPath": "value",
+              "description": "Environment variable value."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status of the job resource."
+    },
+    {
+      "name": "job_active",
+      "type": "int",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.k8sResource.status.active",
+      "description": "Number of pods actively running for the job."
+    },
+    {
+      "name": "job_succeeded",
+      "type": "int",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.k8sResource.status.succeeded",
+      "description": "Number of pods that have successfully completed."
+    },
+    {
+      "name": "job_failed",
+      "type": "int",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.k8sResource.status.failed",
+      "description": "Number of pods that have failed."
+    }
+  ],
+  "requestConstants": [
+    {
+      "path": "spec.mode",
+      "value": "Create"
+    }
+  ],
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "failureStates": {
+      "Failed": "provisioning failed",
+      "Blocked": "provisioning is blocked",
+      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+      "DeprovisionFailed": "deprovisioning failed"
+    },
+    "failureDetailPath": "blockedReason",
+    "pollIntervalSeconds": 10,
+    "failureRetries": 3,
+    "createTimeoutMinutes": 30,
+    "updateTimeoutMinutes": 30,
+    "deleteTimeoutMinutes": 15
+  }
+}

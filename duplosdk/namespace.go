@@ -9,10 +9,11 @@ func init() {
 
 	RegisterEndpoint("namespace", Endpoint{
 		UriBase: base,
-		Create:  Operation{Verb: http.MethodPost, Path: ""},        // POST   {base}
-		Read:    Operation{Verb: http.MethodGet, Path: "/{id}"},    // GET    {base}/{id}
-		Update:  Operation{Verb: http.MethodPut, Path: "/{id}"},    // PUT    {base}/{id}
-		Delete:  Operation{Verb: http.MethodDelete, Path: "/{id}"}, // DELETE {base}/{id}
+		Create:  Operation{Verb: http.MethodPost, Path: ""},     // POST   {base}
+		Read:    Operation{Verb: http.MethodGet, Path: "/{id}"}, // GET    {base}/{id}
+		// No Update: a namespace is immutable. Any change to its inputs forces
+		// replacement; the API exposes no meaningful in-place update.
+		Delete: Operation{Verb: http.MethodDelete, Path: "/{id}"}, // DELETE {base}/{id}
 		// The API rejects a delete while the namespace is live, so tear it down
 		// first: POST {base}/{id}/deprovision, then wait for DeProvisioned (see
 		// the spec waiter) before the delete call.

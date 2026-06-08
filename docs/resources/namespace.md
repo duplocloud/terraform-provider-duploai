@@ -22,6 +22,10 @@ resource "duploai_namespace" "app" {
 
   description = "Namespace for the my-app workloads"
 
+  # Tolerate up to 5 transient "Failed" polls during provisioning before giving
+  # up. Optional — overrides the resource's built-in default.
+  failure_retries = 5
+
   timeouts {
     create = "15m"
     delete = "10m"
@@ -41,7 +45,8 @@ resource "duploai_namespace" "app" {
 
 ### Optional
 
-- `description` (String) Optional description.
+- `description` (String) Optional description. Namespaces are immutable, so changing this forces replacement.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
@@ -57,7 +62,6 @@ Optional:
 
 - `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 - `delete` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours). Setting a timeout for a Delete operation is only applicable if changes are saved into state before the destroy operation occurs.
-- `update` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 
 ## Import
 

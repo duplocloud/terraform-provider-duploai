@@ -47,6 +47,7 @@ resource "duploai_plan" "main" {
 ### Optional
 
 - `description` (String) Optional description.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))

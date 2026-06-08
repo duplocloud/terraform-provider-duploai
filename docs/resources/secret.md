@@ -56,6 +56,7 @@ resource "duploai_secret" "app" {
 - `data` (Map of String, Sensitive) Secret entries with base64-encoded values, keyed by name.
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `immutable` (Boolean) Mark the secret immutable (its data cannot be changed after creation).
 - `labels` (Map of String) Kubernetes labels applied to the secret.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
