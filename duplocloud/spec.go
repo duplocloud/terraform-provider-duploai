@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"sort"
 	"strings"
+
+	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
 )
 
 // all:specs embeds the directory (including the .gitkeep) so the provider still
@@ -27,10 +29,12 @@ type ResourceSpec struct {
 
 	// IDPath is the dot-path into the create/read response that yields the
 	// backend-assigned object id, e.g. "id".
-	//
-	// The API URIs and verbs are NOT configured here — they live in the
-	// resource's Endpoint, registered by name in the duplosdk package.
 	IDPath string `json:"idPath"`
+
+	// Endpoint configures the API URIs and HTTP verbs for all CRUD operations.
+	// It replaces the per-resource Go files in duplosdk/ — one spec file is all
+	// that is needed to add a new resource.
+	Endpoint EndpointSpec `json:"endpoint"`
 
 	// Attributes describes every schema attribute.
 	Attributes []AttributeSpec `json:"attributes"`
@@ -52,6 +56,84 @@ type ResourceSpec struct {
 	// Waiter, when present, makes Create/Update poll until the resource
 	// reaches a terminal state.
 	Waiter *WaiterSpec `json:"waiter,omitempty"`
+}
+
+// OperationSpec overrides the HTTP verb and/or path for one CRUD operation.
+// Both fields default to the operation's conventional REST value when omitted.
+type OperationSpec struct {
+	Verb string `json:"verb,omitempty"`
+	Path string `json:"path,omitempty"`
+}
+
+// EndpointSpec configures the API URIs and HTTP verbs for a resource's CRUD
+// operations. It lives in the spec JSON alongside the Terraform schema so that
+// adding a new resource requires only one file.
+type EndpointSpec struct {
+	// UriBase is required. Common path prefix for all operations with
+	// {placeholder} tokens for path parameters, e.g.
+	//   /v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Plans
+	UriBase string `json:"uriBase"`
+
+	// Immutable marks resources that have no in-place Update operation.
+	// Any change to a non-computed attribute forces resource replacement.
+	// Defaults to false (standard PUT /{id} update).
+	Immutable bool `json:"immutable,omitempty"`
+
+	// Create/Read/Update/Delete override the default verb and path for each
+	// operation. Leave nil to use the REST conventions (POST/"", GET/PUT/DELETE /{id}).
+	Create *OperationSpec `json:"create,omitempty"`
+	Read   *OperationSpec `json:"read,omitempty"`
+	Update *OperationSpec `json:"update,omitempty"`
+	Delete *OperationSpec `json:"delete,omitempty"`
+
+	// Deprovision, when non-nil, adds a pre-delete teardown step.
+	// Defaults to POST /{id}/deprovision; set verb/path only to override.
+	Deprovision *OperationSpec `json:"deprovision,omitempty"`
+}
+
+// BuildEndpoint converts this spec's EndpointSpec into a duplosdk.Endpoint
+// ready for use by the dynamic resource engine.
+func (s *ResourceSpec) BuildEndpoint() (duplosdk.Endpoint, error) {
+	ep := s.Endpoint
+	if ep.UriBase == "" {
+		return duplosdk.Endpoint{}, fmt.Errorf("endpoint.uriBase is required")
+	}
+	result := duplosdk.Endpoint{UriBase: ep.UriBase}
+	if ep.Create != nil {
+		result.Create = duplosdk.Operation{Verb: ep.Create.Verb, Path: ep.Create.Path}
+	}
+	if ep.Read != nil {
+		result.Read = duplosdk.Operation{Verb: ep.Read.Verb, Path: ep.Read.Path}
+	}
+	if !ep.Immutable {
+		// Endpoint.HasUpdate() checks Update != Operation{}, so the value must
+		// be non-zero. Start with the REST convention and apply any overrides.
+		update := duplosdk.Operation{Verb: "PUT", Path: "/{id}"}
+		if ep.Update != nil {
+			if ep.Update.Verb != "" {
+				update.Verb = ep.Update.Verb
+			}
+			if ep.Update.Path != "" {
+				update.Path = ep.Update.Path
+			}
+		}
+		result.Update = update
+	}
+	if ep.Delete != nil {
+		result.Delete = duplosdk.Operation{Verb: ep.Delete.Verb, Path: ep.Delete.Path}
+	}
+	if ep.Deprovision != nil {
+		path := ep.Deprovision.Path
+		if path == "" {
+			path = "/{id}/deprovision"
+		}
+		verb := ep.Deprovision.Verb
+		if verb == "" {
+			verb = "POST"
+		}
+		result.Deprovision = duplosdk.Operation{Verb: verb, Path: path}
+	}
+	return result, nil
 }
 
 // AttributeSpec describes one schema attribute and how it maps to the API.
@@ -239,6 +321,9 @@ func (s *ResourceSpec) validate() error {
 	}
 	if s.IDPath == "" {
 		return fmt.Errorf("idPath is required")
+	}
+	if s.Endpoint.UriBase == "" {
+		return fmt.Errorf("endpoint.uriBase is required")
 	}
 	seen, err := validateAttributes(s.Attributes)
 	if err != nil {

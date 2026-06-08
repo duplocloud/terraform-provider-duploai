@@ -9,9 +9,9 @@ import (
 var pathParamRe = regexp.MustCompile(`\{(\w+)\}`)
 
 // Endpoint configures the API URIs and HTTP verbs for one resource's CRUD
-// operations. Register exactly one per resource — in that resource's own file
-// in this package — via RegisterEndpoint. This is the single place to change
-// when an API path moves or a resource needs a non-standard verb or path.
+// operations. It is produced at startup from the resource's EndpointSpec in the
+// JSON spec file. This is the single place to change when an API path moves or
+// a resource needs a non-standard verb or path.
 //
 // Every operation's full URL is UriBase + Operation.Path, so the shared prefix
 // is written once and each operation only states its verb and the bit that
@@ -49,20 +49,6 @@ type Operation struct {
 	// Path is appended to UriBase. Empty uses the operation default:
 	// "" for Create (the collection itself), "/{id}" for Read/Update/Delete.
 	Path string
-}
-
-var endpointRegistry = map[string]Endpoint{}
-
-// RegisterEndpoint records a resource's URI configuration. Call it from an
-// init() in the resource's file so the engine can look it up by name.
-func RegisterEndpoint(resource string, e Endpoint) {
-	endpointRegistry[resource] = e
-}
-
-// LookupEndpoint returns the endpoint registered for a resource.
-func LookupEndpoint(resource string) (Endpoint, bool) {
-	e, ok := endpointRegistry[resource]
-	return e, ok
 }
 
 // PathParams returns the ordered path-parameter names in UriBase, excluding the

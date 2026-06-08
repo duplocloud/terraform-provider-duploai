@@ -2,6 +2,10 @@
   "name": "k8s_pvc",
   "description": "Manages a DuploCloud AI Helpdesk Kubernetes PersistentVolumeClaim (PVC).",
   "idPath": "id",
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sPersistentVolumeClaims",
+    "deprovision": {}
+  },
   "attributes": [
     {
       "name": "workspace_id",

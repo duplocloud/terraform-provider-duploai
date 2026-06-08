@@ -2,6 +2,9 @@
   "name": "foo",
   "description": "Type catalog: one attribute per supported type. Each attribute's description documents the type. Copy/trim into duplocloud/specs/<name>.json for a real resource. (Reference only — not embedded.)",
   "idPath": "id",
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/foos"
+  },
   "attributes": [
     {
       "name": "workspace_id",

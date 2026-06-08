@@ -2,6 +2,10 @@
   "name": "rds_instance",
   "description": "Manages a DuploCloud AI Helpdesk standalone AWS RDS instance.",
   "idPath": "id",
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AWSRdsInstances",
+    "deprovision": {}
+  },
   "attributes": [
     {
       "name": "workspace_id",

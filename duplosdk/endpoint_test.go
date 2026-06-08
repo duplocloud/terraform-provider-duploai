@@ -98,13 +98,3 @@ func TestEndpointVerbs(t *testing.T) {
 	}
 }
 
-func TestEndpointRegistry(t *testing.T) {
-	RegisterEndpoint("test_resource", Endpoint{UriBase: "/test/{x}"})
-	got, ok := LookupEndpoint("test_resource")
-	if !ok || got.UriBase != "/test/{x}" {
-		t.Errorf("registry round-trip failed: %v %v", got, ok)
-	}
-	if _, ok := LookupEndpoint("nonexistent"); ok {
-		t.Error("expected miss for unregistered resource")
-	}
-}

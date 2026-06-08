@@ -2,6 +2,10 @@
   "name": "resource_group",
   "description": "Manages a DuploCloud AI Helpdesk resource group (shared security groups, IAM role, KMS key).",
   "idPath": "id",
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/resource-groups",
+    "deprovision": {}
+  },
   "attributes": [
     {
       "name": "workspace_id",

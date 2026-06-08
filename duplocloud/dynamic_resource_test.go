@@ -79,6 +79,7 @@ func TestSpecValidate(t *testing.T) {
 			name: "valid",
 			spec: ResourceSpec{
 				Name: "x", IDPath: "id",
+				Endpoint:   EndpointSpec{UriBase: "/v1/test"},
 				Attributes: []AttributeSpec{{Name: "name", Type: "string", Required: true}},
 			},
 		},
