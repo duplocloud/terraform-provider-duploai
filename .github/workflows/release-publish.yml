@@ -41,3 +41,47 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+
+  publish-release:
+    runs-on: ubuntu-22.04
+    needs:
+      - release
+    steps:
+      - name: Generate token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
+      - name: Publish the release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            // List all releases.
+            let releases = await github.rest.repos.listReleases({ owner: context.repo.owner, repo: context.repo.repo });
+            console.log(`Found ${releases.data.length} releases:`);
+
+            // Identify the draft release.
+            const draftRelease = releases.data.find((r) => r.draft && r.tag_name == '${{ github.ref_name }}');
+            if (!draftRelease) {
+              const msg = `No draft release found: ${{ github.ref_name }}`;
+              console.log(msg);
+              core.setFailed(msg);
+            }
+
+            // Publish the draft release.
+            else {
+              console.log(`Found draft release: ${draftRelease.tag_name} (${draftRelease.id})`);
+              await github.rest.repos.updateRelease({ owner: context.repo.owner, repo: context.repo.repo,
+                                                      release_id: draftRelease.id, draft: false });
+              console.log(`Published draft release: ${draftRelease.tag_name} (${draftRelease.id})`);
+            }
+
+      - name: Notify Slack
+        if: success()
+        run: |
+          curl -s -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"🚀 *terraform-provider-duploai* \`${{ github.ref_name }}\` has been published to the Terraform Registry!\"}" \
+            "${{ secrets.SLACK_WEBHOOK }}"
