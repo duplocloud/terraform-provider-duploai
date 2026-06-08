@@ -1,6 +1,6 @@
 {
   "name": "k8s_job",
-  "description": "Manages a DuploCloud AI Helpdesk Kubernetes Job — a batch workload that runs one or more containers to completion within an environment or resource group.",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes Job \u2014 a batch workload that runs one or more containers to completion within an environment or resource group.",
   "idPath": "id",
   "attributes": [
     {
@@ -25,7 +25,8 @@
       "computed": true,
       "default": "",
       "apiPath": "description",
-      "description": "Optional description."
+      "description": "Optional description.",
+      "forceNew": true
     },
     {
       "name": "environment_id",
@@ -59,7 +60,12 @@
       "computed": true,
       "default": "Cli",
       "forceNew": true,
-      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
+      "oneOf": [
+        "Cli",
+        "IacNativeTf",
+        "IacDuploTf",
+        "DirectApiCall"
+      ],
       "apiPath": "spec.provisioner.type",
       "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
     },
@@ -70,7 +76,8 @@
       "computed": true,
       "default": "",
       "apiPath": "spec.provisioner.version",
-      "description": "Optional provisioner version."
+      "description": "Optional provisioner version.",
+      "forceNew": true
     },
     {
       "name": "scope_ids",
@@ -87,7 +94,8 @@
       "computed": true,
       "requestPath": "spec.k8sResource.metadata.labels",
       "responsePath": "result.k8sResource.metadata.labels",
-      "description": "Labels to apply to the Kubernetes Job object."
+      "description": "Labels to apply to the Kubernetes Job object.",
+      "forceNew": true
     },
     {
       "name": "annotations",
@@ -96,7 +104,8 @@
       "computed": true,
       "requestPath": "spec.k8sResource.metadata.annotations",
       "responsePath": "result.k8sResource.metadata.annotations",
-      "description": "Annotations to apply to the Kubernetes Job object."
+      "description": "Annotations to apply to the Kubernetes Job object.",
+      "forceNew": true
     },
     {
       "name": "backoff_limit",
@@ -106,7 +115,8 @@
       "default": 6,
       "requestPath": "spec.k8sResource.spec.backoffLimit",
       "responsePath": "result.k8sResource.spec.backoffLimit",
-      "description": "Number of retries before the job is marked as failed. Defaults to 6."
+      "description": "Number of retries before the job is marked as failed. Defaults to 6.",
+      "forceNew": true
     },
     {
       "name": "completions",
@@ -115,7 +125,8 @@
       "computed": true,
       "requestPath": "spec.k8sResource.spec.completions",
       "responsePath": "result.k8sResource.spec.completions",
-      "description": "Number of pods that must succeed for the job to be considered complete."
+      "description": "Number of pods that must succeed for the job to be considered complete.",
+      "forceNew": true
     },
     {
       "name": "parallelism",
@@ -124,7 +135,8 @@
       "computed": true,
       "requestPath": "spec.k8sResource.spec.parallelism",
       "responsePath": "result.k8sResource.spec.parallelism",
-      "description": "Maximum number of pods running in parallel at any time."
+      "description": "Maximum number of pods running in parallel at any time.",
+      "forceNew": true
     },
     {
       "name": "ttl_seconds_after_finished",
@@ -133,7 +145,8 @@
       "computed": true,
       "requestPath": "spec.k8sResource.spec.ttlSecondsAfterFinished",
       "responsePath": "result.k8sResource.spec.ttlSecondsAfterFinished",
-      "description": "Seconds after the job finishes before it is automatically deleted. Omit to disable automatic cleanup."
+      "description": "Seconds after the job finishes before it is automatically deleted. Omit to disable automatic cleanup.",
+      "forceNew": true
     },
     {
       "name": "active_deadline_seconds",
@@ -142,7 +155,8 @@
       "computed": true,
       "requestPath": "spec.k8sResource.spec.activeDeadlineSeconds",
       "responsePath": "result.k8sResource.spec.activeDeadlineSeconds",
-      "description": "Maximum duration in seconds the job may run before being terminated."
+      "description": "Maximum duration in seconds the job may run before being terminated.",
+      "forceNew": true
     },
     {
       "name": "suspend",
@@ -152,7 +166,8 @@
       "default": false,
       "requestPath": "spec.k8sResource.spec.suspend",
       "responsePath": "result.k8sResource.spec.suspend",
-      "description": "When true, the job is suspended and no new pods are created."
+      "description": "When true, the job is suspended and no new pods are created.",
+      "forceNew": true
     },
     {
       "name": "restart_policy",
@@ -160,10 +175,14 @@
       "optional": true,
       "computed": true,
       "default": "Never",
-      "oneOf": ["Never", "OnFailure"],
+      "oneOf": [
+        "Never",
+        "OnFailure"
+      ],
       "requestPath": "spec.k8sResource.spec.template.spec.restartPolicy",
       "responsePath": "result.k8sResource.spec.template.spec.restartPolicy",
-      "description": "Pod restart policy. Use Never (default) or OnFailure for batch jobs."
+      "description": "Pod restart policy. Use Never (default) or OnFailure for batch jobs.",
+      "forceNew": true
     },
     {
       "name": "service_account_name",
@@ -172,7 +191,8 @@
       "computed": true,
       "requestPath": "spec.k8sResource.spec.template.spec.serviceAccountName",
       "responsePath": "result.k8sResource.spec.template.spec.serviceAccountName",
-      "description": "Kubernetes service account to run the pod as."
+      "description": "Kubernetes service account to run the pod as.",
+      "forceNew": true
     },
     {
       "name": "node_selector",
@@ -181,7 +201,8 @@
       "computed": true,
       "requestPath": "spec.k8sResource.spec.template.spec.nodeSelector",
       "responsePath": "result.k8sResource.spec.template.spec.nodeSelector",
-      "description": "Node label selector constraints for pod scheduling."
+      "description": "Node label selector constraints for pod scheduling.",
+      "forceNew": true
     },
     {
       "name": "containers",
