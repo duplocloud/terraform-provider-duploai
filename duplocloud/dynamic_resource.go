@@ -88,7 +88,7 @@ func (r *dynamicResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 	}
 	if r.spec.Waiter != nil {
 		out.Blocks = map[string]schema.Block{
-			"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true, Update: true, Delete: true}),
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true, Update: r.endpoint.HasUpdate(), Delete: true}),
 		}
 	}
 	resp.Schema = out
@@ -304,6 +304,26 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if err != nil || resp.Diagnostics.HasError() {
 		return
 	}
+
+	// Immutable resource (no Update operation registered): every attribute is
+	// forceNew, so attribute changes force replacement and never reach here. The
+	// only diffs that do are config-only (e.g. the timeouts block) — refresh
+	// computed values from the API and persist, without issuing an update call.
+	if !r.endpoint.HasUpdate() {
+		obj, clientErr := r.api(scope, r.specFailureRetries()).Get(objID)
+		if clientErr != nil {
+			resp.Diagnostics.AddError("Error reading "+r.spec.Name, clientErr.Error())
+			return
+		}
+		state := r.stateFromResponse(ctx, req.Plan.Raw, *obj, scope, id, false, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		resp.State.Raw = state
+		log.Printf("[TRACE] dynamic %s Update(%s): immutable resource, refreshed without update call", r.spec.Name, id)
+		return
+	}
+
 	body := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return

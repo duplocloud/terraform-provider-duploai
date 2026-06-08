@@ -97,6 +97,11 @@ func (e Endpoint) deletePath(scope map[string]string, id string) string {
 	return e.resolve(e.UriBase+itemPath(e.Delete.Path), scope, id)
 }
 
+// HasUpdate reports whether the resource supports in-place updates. When the
+// Update operation is left unset, the resource is immutable: attribute changes
+// force replacement, and the engine never issues an update call.
+func (e Endpoint) HasUpdate() bool { return e.Update != (Operation{}) }
+
 // HasDeprovision reports whether a pre-delete deprovision step is configured.
 func (e Endpoint) HasDeprovision() bool { return e.Deprovision.Path != "" }
 

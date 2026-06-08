@@ -24,8 +24,9 @@
       "optional": true,
       "computed": true,
       "default": "",
+      "forceNew": true,
       "apiPath": "description",
-      "description": "Optional description."
+      "description": "Optional description. Namespaces are immutable, so changing this forces replacement."
     },
     {
       "name": "resource_group_id",
@@ -73,7 +74,6 @@
     "failureRetries": 3,
     "pollIntervalSeconds": 10,
     "createTimeoutMinutes": 15,
-    "updateTimeoutMinutes": 15,
     "deleteTimeoutMinutes": 10
   }
 }
