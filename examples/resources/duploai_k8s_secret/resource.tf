@@ -1,5 +1,5 @@
 # An Opaque Kubernetes Secret with plaintext values (string_data)
-resource "duploai_secret" "app" {
+resource "duploai_k8s_secret" "app" {
   workspace_id      = "<workspace-id>"
   name              = "app-secret"
   scope_ids         = ["<scope-id>"]

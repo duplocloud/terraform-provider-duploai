@@ -2,12 +2,12 @@ package duplosdk
 
 import "net/http"
 
-// Kubernetes Secret API endpoint — the single source of truth for this
+// Kubernetes ConfigMap API endpoint — the single source of truth for this
 // resource's URIs and verbs. The Terraform schema lives in the JSON spec.
 func init() {
-	const base = "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sSecrets"
+	const base = "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sConfigMaps"
 
-	RegisterEndpoint("secret", Endpoint{
+	RegisterEndpoint("k8s_config_map", Endpoint{
 		UriBase: base,
 		Create:  Operation{Verb: http.MethodPost, Path: ""},        // POST   {base}
 		Read:    Operation{Verb: http.MethodGet, Path: "/{id}"},    // GET    {base}/{id}

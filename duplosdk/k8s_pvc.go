@@ -7,7 +7,7 @@ import "net/http"
 func init() {
 	const base = "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sPersistentVolumeClaims"
 
-	RegisterEndpoint("persistent_volume_claim", Endpoint{
+	RegisterEndpoint("k8s_pvc", Endpoint{
 		UriBase: base,
 		Create:  Operation{Verb: http.MethodPost, Path: ""},        // POST   {base}
 		Read:    Operation{Verb: http.MethodGet, Path: "/{id}"},    // GET    {base}/{id}

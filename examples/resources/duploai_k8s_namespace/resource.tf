@@ -1,5 +1,5 @@
 # A Kubernetes namespace in an EKS resource group
-resource "duploai_namespace" "app" {
+resource "duploai_k8s_namespace" "app" {
   workspace_id      = "<workspace-id>"
   name              = "my-app"
   environment_id    = "<environment-id>"

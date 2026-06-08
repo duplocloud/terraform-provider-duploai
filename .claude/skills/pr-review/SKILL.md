@@ -5,8 +5,9 @@ description: >-
   Use when asked to review a PR, validate a new resource, or check a branch
   before merge. Enforces no-MongoDB-in-docs, ClickUp ticket id, the repo PR
   template, the four new-resource requirements (spec / endpoint / examples /
-  docs), no leaked secrets, and CI-parity (vet / build / test / generate-drift /
-  lint).
+  docs), no leaked secrets, CI-parity (vet / build / test / generate-drift /
+  lint), and base-branch policy (manual PRs only on develop / hotfix/* /
+  release/*; master is CI/CD-only).
 ---
 
 # pr-review — terraform-provider-duploai
@@ -151,6 +152,21 @@ For **every** PR:
 
 ### 🟠 Major
 
+- [ ] **Base-branch policy.** This repo's branching model:
+  - `develop` — default integration branch; all regular feature/fix PRs target here.
+  - `hotfix/*` — hotfix stabilisation branches; PRs may target these directly.
+  - `release/*` — release stabilisation branches; PRs may target these directly.
+  - `master` — **CI/CD-only.** PRs to `master` are raised exclusively by GitHub
+    Actions workflows (release/hotfix promotion). A manually opened PR whose base
+    is `master` is always a policy violation.
+
+  Check the base branch and flag as Major if it is `master` or any branch other
+  than `develop`, `hotfix/*`, or `release/*`:
+
+  ```bash
+  gh pr view <pr> --json baseRefName -q '.baseRefName'
+  ```
+
 - [ ] **No MongoDB / internal-database leakage** in any doc, example, comment, or
       schema description. MongoDB is the internal database and must never appear
       in public-facing text. Use neutral wording like "unique identifier".
@@ -251,6 +267,7 @@ Prefix each result with a status icon: ✅ pass/clean · 🔴 blocker-level fail
 🟠 major issue · ⚠️ skipped or not verifiable.
 
 - review type: <✅ independent | 🪞 self-review (<who>)>
+- base branch: <✅ develop | hotfix/… | release/… | 🟠 INVALID — <branch>>
 - go generate drift: <✅ clean | 🔴 N files drifted>
 - gofmt: <✅ clean | 🔴 list>
 - go vet / build / test: <✅ pass | 🔴 fail + output>

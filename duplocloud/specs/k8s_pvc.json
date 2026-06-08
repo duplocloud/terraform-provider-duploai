@@ -1,5 +1,5 @@
 {
-  "name": "persistent_volume_claim",
+  "name": "k8s_pvc",
   "description": "Manages a DuploCloud AI Helpdesk Kubernetes PersistentVolumeClaim (PVC).",
   "idPath": "id",
   "attributes": [

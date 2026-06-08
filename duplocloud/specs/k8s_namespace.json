@@ -1,5 +1,5 @@
 {
-  "name": "namespace",
+  "name": "k8s_namespace",
   "description": "Manages a DuploCloud AI Helpdesk Kubernetes Namespace.",
   "idPath": "id",
   "attributes": [
