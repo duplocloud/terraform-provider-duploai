@@ -35,7 +35,7 @@ flowchart TD
 
     subgraph L3["③ DuploAI Dynamic Resource Engine  —  spec-driven core (package duplocloud)"]
         direction TB
-        SPEC["📄 Resource Specs (specs/*.json)<br/>one JSON file = one resource"]
+        SPEC["📄 Resource Specs (specs/*.json)<br/>one JSON file = one resource<br/>(schema + endpoint config)"]
         ENGINE["dynamicResource (dynamic_resource.go)<br/>generic CRUD engine — no per-resource Go code"]
         TYPES["Type System (typesystem.go)<br/>Terraform types ⇄ API JSON"]
         VALID["Validators + RequiredIf (validators.go, spec.go)<br/>plan-time validation"]
@@ -47,7 +47,7 @@ flowchart TD
     subgraph L4["④ DuploSDK  —  API client (package duplosdk)"]
         direction TB
         REST["RESTResource (rest_resource.go)<br/>Create · Get · Update · Delete"]
-        EP["Endpoint Registry (endpoint.go)<br/>resource name → URIs / verbs / path params"]
+        EP["Endpoint (endpoint.go)<br/>URI templates · verb defaults · path-resolution helpers"]
         WAIT["Waiter (waiter.go)<br/>polls until a resource is ready"]
         HTTP["Client (client.go)<br/>HTTP + bearer-token auth + TLS"]
         REST --> EP
@@ -99,8 +99,9 @@ diffing so we don't have to.
     `ssl_no_verify`, `http_timeout`.
   - **Configure** — builds the `duplosdk.Client` from that config and shares it
     with every resource.
-  - **Resources** — loads every spec, looks up its API endpoint, and registers
-    one engine instance per spec. **This is the bridge into Layer ③.**
+  - **Resources** — loads every spec, builds each `Endpoint` from the spec's
+    inline endpoint config, and registers one engine instance per spec.
+    **This is the bridge into Layer ③.**
 
 ### ③ DuploAI Dynamic Resource Engine — *the spec-driven core*
 The heart of this provider, and what makes it different from a typical hand-written
@@ -108,7 +109,8 @@ provider. Lives in package [`duplocloud/`](../duplocloud/).
 
 - [`specs/*.json`](../duplocloud/specs/) — declarative **Resource Specs**. Each JSON
   file describes one resource: its attributes, types, required/optional flags,
-  the ID path in the response, request constants, conditional-required rules, and
+  the ID path in the response, **the API endpoint config** (URI base, HTTP verbs,
+  optional deprovision step), request constants, conditional-required rules, and
   an optional waiter. The files are embedded into the binary at build time.
 - [`dynamic_resource.go`](../duplocloud/dynamic_resource.go) — the single generic
   `dynamicResource` engine. It implements Terraform's full lifecycle
@@ -121,8 +123,8 @@ provider. Lives in package [`duplocloud/`](../duplocloud/).
   load and validate specs, and enforce plan-time rules like `requiredIf`.
 
 > **Contributor takeaway:** to add `duploai_<thing>`, write
-> `duplocloud/specs/<thing>.json` (the schema) and register its endpoint in the
-> SDK (the URLs). No engine changes needed.
+> `duplocloud/specs/<thing>.json` — the schema **and** the API endpoint config
+> (URI base, verbs, deprovision flag) both live there. No Go code needed at all.
 
 ### ④ DuploSDK — *the API client*
 Package [`duplosdk/`](../duplosdk/). Knows *how* to talk to the platform; the engine
@@ -130,8 +132,10 @@ above stays transport-agnostic and just asks it to do CRUD.
 
 - [`rest_resource.go`](../duplosdk/rest_resource.go) — generic `RESTResource` with
   `Create` / `Get` / `Update` / `Delete`. Callers never assemble a URL.
-- [`endpoint.go`](../duplosdk/endpoint.go) — the **Endpoint Registry** mapping a
-  resource name to its URIs, HTTP verbs, and path parameters.
+- [`endpoint.go`](../duplosdk/endpoint.go) — the **`Endpoint` struct** with URI
+  templates, HTTP verb defaults, and path-resolution helpers. Endpoint config is
+  declared in each resource's spec JSON and converted to an `Endpoint` at startup
+  via `spec.BuildEndpoint()` — no per-resource Go file needed.
 - [`waiter.go`](../duplosdk/waiter.go) — for async resources, polls the API until the
   resource reaches a terminal/ready state (e.g. an EKS cluster finishing creation).
 - [`client.go`](../duplosdk/client.go) — the low-level HTTP client: bearer-token auth,
@@ -189,7 +193,7 @@ sequenceDiagram
 
 | I want to…                                | Look at                                                  |
 |-------------------------------------------|----------------------------------------------------------|
-| Add a new resource                        | [`duplocloud/specs/`](../duplocloud/specs/) + [`duplosdk/endpoint.go`](../duplosdk/endpoint.go) |
+| Add a new resource                        | [`duplocloud/specs/`](../duplocloud/specs/) (schema + endpoint config in one JSON file) |
 | Understand the CRUD lifecycle             | [`duplocloud/dynamic_resource.go`](../duplocloud/dynamic_resource.go) |
 | Change type mapping (Terraform ⇄ JSON)    | [`duplocloud/typesystem.go`](../duplocloud/typesystem.go)   |
 | Change how HTTP requests are made         | [`duplosdk/client.go`](../duplosdk/client.go), [`duplosdk/rest_resource.go`](../duplosdk/rest_resource.go) |

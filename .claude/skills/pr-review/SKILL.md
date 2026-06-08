@@ -88,10 +88,13 @@ For each **new resource** `<name>` (derived from the new spec's `name` field):
       top-level keys: `name`, `description`, `idPath`, `attributes`. Each
       attribute has a `name`, a `type`, and exactly one of
       `required` / `optional` / `computed` (Optional+Computed allowed).
-- [ ] **Endpoint registration** `duplosdk/<name>.go` exists with a `func init()`
-      calling `RegisterEndpoint("<name>", Endpoint{...})`. The registered key
-      **must equal** the spec's `name`. Every `{placeholder}` in `UriBase`
-      (other than `{id}`) must map to a string attribute in the spec.
+- [ ] **Endpoint config** the spec JSON has a top-level `"endpoint"` object with a
+      non-empty `"uriBase"`. Every `{placeholder}` in `uriBase` (other than `{id}`)
+      must map to a string attribute in the spec. Flag any missing or empty
+      `"uriBase"` — `validate()` catches it at startup, but catching it in review
+      is faster. Check `"immutable": true` is set for resources with no Update path,
+      and `"deprovision": {}` is present for resources the API refuses to delete
+      while live.
 - [ ] **Examples** `examples/resources/duploai_<name>/` contains **both**
       `resource.tf` and `import.sh`.
 - [ ] **Generated docs** `docs/resources/<name>.md` exists and carries the
@@ -196,7 +199,9 @@ For **every** PR:
     (path params like `workspace_id`, identity fields, anything only the Create
     body accepts) must set `forceNew`. Missing it ⇒ a changed value silently
     no-ops or the update call fails. Cross-check the spec's `forceNew` flags
-    against `duplosdk/<name>.go` (which operations exist) and the field mapping.
+    against the spec's `"endpoint"` block (`"immutable": true` means no Update at
+    all; `createOnly` on individual attributes means those fields are not sent on
+    update).
   - **`default` must match the server's actual default.** A `default` that
     differs from what the API assigns shows perpetual drift. Verify against the
     real response (the live test in `local-test/` is the source of truth).
