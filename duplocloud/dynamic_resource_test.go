@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -208,6 +209,96 @@ func TestRequestResponsePaths(t *testing.T) {
 	b := AttributeSpec{APIPath: "name"}
 	if b.requestPath() != "name" || b.responsePath() != "name" {
 		t.Errorf("fallback failed: req=%q resp=%q", b.requestPath(), b.responsePath())
+	}
+}
+
+func TestRequiredIf_CompoundAndHelpers(t *testing.T) {
+	// conditions(): single form normalizes to one equals condition.
+	single := RequiredIfRule{Attribute: "x", WhenAttribute: "engine", WhenEquals: "Memcached"}
+	if c := single.conditions(); len(c) != 1 || c[0].Attribute != "engine" || c[0].Equals != "Memcached" {
+		t.Errorf("single conditions() = %+v", c)
+	}
+	// conditions(): compound form returns its When list.
+	comp := RequiredIfRule{Attribute: "num_node_groups", When: []RequiredIfCondition{
+		{Attribute: "engine", NotEquals: "Memcached"},
+		{Attribute: "cluster_mode", Equals: "Enabled"},
+	}}
+	if c := comp.conditions(); len(c) != 2 {
+		t.Fatalf("compound conditions() len = %d", len(c))
+	}
+
+	// defaultString renders a static default; empty when none.
+	d := jsonRaw(`"Disabled"`)
+	if got := defaultString(AttributeSpec{Default: &d}); got != "Disabled" {
+		t.Errorf("defaultString string = %q", got)
+	}
+	if got := defaultString(AttributeSpec{}); got != "" {
+		t.Errorf("defaultString(no default) = %q", got)
+	}
+
+	// message lists every condition.
+	msg := requiredIfMessage(comp)
+	if !strings.Contains(msg, "engine is not \"Memcached\"") || !strings.Contains(msg, "cluster_mode is \"Enabled\"") {
+		t.Errorf("requiredIfMessage = %q", msg)
+	}
+}
+
+func TestSpecValidate_CompoundRequiredIf(t *testing.T) {
+	base := func(rule RequiredIfRule) ResourceSpec {
+		return ResourceSpec{
+			Name: "x", IDPath: "id",
+			Attributes: []AttributeSpec{
+				{Name: "engine", Type: "string", Required: true},
+				{Name: "cluster_mode", Type: "string", Optional: true, Computed: true},
+				{Name: "num_node_groups", Type: "int", Optional: true},
+			},
+			RequiredIf: []RequiredIfRule{rule},
+		}
+	}
+	valid := base(RequiredIfRule{Attribute: "num_node_groups", When: []RequiredIfCondition{
+		{Attribute: "engine", NotEquals: "Memcached"}, {Attribute: "cluster_mode", Equals: "Enabled"},
+	}})
+	if err := valid.validate(); err != nil {
+		t.Errorf("valid compound requiredIf rejected: %v", err)
+	}
+	unknown := base(RequiredIfRule{Attribute: "num_node_groups", When: []RequiredIfCondition{{Attribute: "nope", Equals: "x"}}})
+	if err := unknown.validate(); err == nil {
+		t.Error("expected error for condition referencing unknown attribute")
+	}
+	bothSet := base(RequiredIfRule{Attribute: "num_node_groups", When: []RequiredIfCondition{{Attribute: "engine", Equals: "Redis", NotEquals: "Memcached"}}})
+	if err := bothSet.validate(); err == nil {
+		t.Error("expected error when a condition sets both equals and notEquals")
+	}
+}
+
+func TestSpecValidate_ConflictsWithAndIsEmpty(t *testing.T) {
+	vErr := func(s ResourceSpec) error {
+		s.Name, s.IDPath = "x", "id"
+		s.Attributes = append(s.Attributes,
+			AttributeSpec{Name: "engine_version", Type: "string", Optional: true},
+			AttributeSpec{Name: "snapshot_name", Type: "string", Optional: true},
+			AttributeSpec{Name: "snapshot_arns", Type: "list(string)", Optional: true},
+		)
+		return s.validate()
+	}
+	if err := vErr(ResourceSpec{ConflictsWith: [][]string{{"snapshot_name", "snapshot_arns"}}}); err != nil {
+		t.Errorf("valid conflictsWith rejected: %v", err)
+	}
+	if err := vErr(ResourceSpec{ConflictsWith: [][]string{{"snapshot_name", "nope"}}}); err == nil {
+		t.Error("expected error for conflictsWith referencing unknown attribute")
+	}
+	if err := vErr(ResourceSpec{ConflictsWith: [][]string{{"snapshot_name"}}}); err == nil {
+		t.Error("expected error for conflictsWith group with < 2 attributes")
+	}
+	if err := vErr(ResourceSpec{RequiredIf: []RequiredIfRule{
+		{Attribute: "engine_version", When: []RequiredIfCondition{{Attribute: "snapshot_name", IsEmpty: true}}},
+	}}); err != nil {
+		t.Errorf("valid isEmpty requiredIf rejected: %v", err)
+	}
+	if err := vErr(ResourceSpec{RequiredIf: []RequiredIfRule{
+		{Attribute: "engine_version", When: []RequiredIfCondition{{Attribute: "snapshot_name", IsEmpty: true, Equals: "x"}}},
+	}}); err == nil {
+		t.Error("expected error when a condition sets isEmpty and equals")
 	}
 }
 
