@@ -81,7 +81,18 @@ jobs:
 
       - name: Notify Slack
         if: success()
+        env:
+          VERSION: ${{ github.ref_name }}
+          ACTOR: ${{ github.actor }}
+          RELEASE_URL: https://github.com/duplocloud/terraform-provider-duploai/releases/tag/${{ github.ref_name }}
         run: |
+          REGISTRY_VERSION="${VERSION#v}"
+          REGISTRY_URL="https://registry.terraform.io/providers/duplocloud/duploai/${REGISTRY_VERSION}"
           curl -s -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"🚀 *terraform-provider-duploai* \`${{ github.ref_name }}\` has been published to the Terraform Registry!\"}" \
+            --data "{
+              \"version\": \"${VERSION}\",
+              \"actor\": \"${ACTOR}\",
+              \"registry_url\": \"${REGISTRY_URL}\",
+              \"release_url\": \"${RELEASE_URL}\"
+            }" \
             "${{ secrets.SLACK_WEBHOOK }}"
