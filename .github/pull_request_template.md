@@ -5,6 +5,14 @@
 
 **ClickUp Ticket ID:**
 
+## Type
+
+<!-- Check exactly one type that best describes this PR -->
+- [ ] `enhancement` — New feature or improvement
+- [ ] `bug` — Bug fix
+- [ ] `breaking-change` — Breaking change
+- [ ] `documentation` — Documentation only
+
 ## Overview
 
 ## Summary of changes
