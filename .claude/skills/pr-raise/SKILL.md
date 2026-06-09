@@ -25,8 +25,9 @@ the full conventions this skill enforces.
   the PR.
 - **One approval gate.** Show the full preview once; user clicks **Raise PR** or
   **Cancel**. If they request a change, update and re-show once — no further loops.
-- **Never invent content.** Overview and Summary are optional; omit them from the
-  body if not provided.
+- **Never invent content.** Fill only what was provided. Always use
+  [`.github/pull_request_template.md`](../../../.github/pull_request_template.md)
+  as the body structure — never inline a copy.
 
 ---
 
@@ -53,8 +54,8 @@ Parse from the invocation phrase first. Ask for anything missing in **one**
 
 | Input | Behaviour if absent |
 |---|---|
-| **Overview** | Section omitted from body |
-| **Summary of changes** | Section omitted from body |
+| **Overview** | Section header included but left empty |
+| **Summary of changes** | Section header + "This PR does the following:" included but bullet left as `- ...` |
 
 ### Validation
 
@@ -121,6 +122,16 @@ step — existing commits on the branch are used as-is.
 
 ## Step 4 — Approval gate
 
+Read [`.github/pull_request_template.md`](../../../.github/pull_request_template.md)
+and use it as the exact PR body structure. Fill in the collected values:
+
+- `**ClickUp Ticket ID:**` → `<id>`
+- Check `[x]` on the matching type; leave the rest `[ ]`
+- `## Overview` → overview text if provided, otherwise leave the section empty
+- `## Summary of changes` → fill bullets if provided; otherwise keep the
+  placeholder (`- ...`) that is already in the template
+- `## Describe any breaking changes` → `None.` unless breaking changes were described
+
 Show the full PR in one `AskUserQuestion` preview, options: **Raise PR** /
 **Cancel**.
 
@@ -131,27 +142,7 @@ Commits: <N commit(s) — list from git log origin/<target>..HEAD --oneline>
 Files:   <staged file list from Step 3, or "no new changes staged">
 
 ---
-## ClickUp Ticket
-**ClickUp Ticket ID:** <id>
-
-## Type
-- [x] `<type>` — <label>
-- [ ] ...
-
-## Overview          ← omit entire section if not provided
-<overview>
-
-## Summary of changes   ← omit entire section if not provided
-<summary>
-
-## Testing performed
-- [ ] Using unit tests
-- [ ] Using acceptance tests (`TF_ACC=1`)
-- [ ] Manually, on my local system
-- [ ] Manually, on a remote test system
-
-## Describe any breaking changes
-<"None." or description>
+<filled-in body matching .github/pull_request_template.md>
 ```
 
 If the user requests a change after seeing the preview, update that field,
