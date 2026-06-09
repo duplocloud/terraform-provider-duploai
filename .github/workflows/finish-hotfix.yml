@@ -40,3 +40,51 @@ jobs:
           delete_branch: false
           is_hotfix: true
           github_token: ${{ steps.app-token.outputs.token }}
+
+  merge-back-to-develop:
+    runs-on: ubuntu-22.04
+    needs:
+      - finish-hotfix
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: develop
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Generate token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
+      - name: Initialize git config
+        run: |
+          git config --global user.name ${{ env.git_user }}
+          git config --global user.email ${{ env.git_email }}
+
+      - name: Merge hotfix back to develop
+        run: |
+          set -euo pipefail
+          git fetch origin master
+
+          if ! git merge origin/master --no-ff -m "Merge ${{ github.head_ref }} back to develop"; then
+            # Auto-resolve if Makefile is the only conflict (version line always diverges)
+            conflicted=$(git diff --name-only --diff-filter=U)
+            if [ "$conflicted" = "Makefile" ]; then
+              git checkout --ours Makefile
+              git add Makefile
+              GIT_EDITOR=true git merge --continue
+            else
+              echo "Merge conflicts detected in: $conflicted"
+              git merge --abort
+              exit 1
+            fi
+          fi
+
+      - name: Push develop
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ steps.app-token.outputs.token }}
+          branch: develop
