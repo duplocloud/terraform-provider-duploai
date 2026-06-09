@@ -66,18 +66,8 @@
     }
   ],
   "waiter": {
-    "statusPath": "status",
-    "successState": "Complete",
     "deprovisionedState": "DeProvisioned",
-    "failureStates": {
-      "Failed": "provisioning failed",
-      "Blocked": "provisioning is blocked",
-      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
-      "DeprovisionFailed": "deprovisioning failed"
-    },
-    "failureDetailPath": "blockedReason",
     "failureRetries": 3,
-    "pollIntervalSeconds": 10,
     "createTimeoutMinutes": 15,
     "deleteTimeoutMinutes": 10
   }

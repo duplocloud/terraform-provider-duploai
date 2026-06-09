@@ -97,7 +97,10 @@
       "computed": true,
       "default": "Filesystem",
       "forceNew": true,
-      "oneOf": ["Filesystem", "Block"],
+      "oneOf": [
+        "Filesystem",
+        "Block"
+      ],
       "requestPath": "spec.k8sResource.spec.volumeMode",
       "responsePath": "result.k8sResource.spec.volumeMode",
       "description": "How the volume is consumed: Filesystem (default) or Block."
@@ -135,22 +138,18 @@
     }
   ],
   "requestConstants": [
-    { "path": "spec.k8sResource.apiVersion", "value": "v1" },
-    { "path": "spec.k8sResource.kind", "value": "PersistentVolumeClaim" }
+    {
+      "path": "spec.k8sResource.apiVersion",
+      "value": "v1"
+    },
+    {
+      "path": "spec.k8sResource.kind",
+      "value": "PersistentVolumeClaim"
+    }
   ],
   "waiter": {
-    "statusPath": "status",
-    "successState": "Complete",
     "deprovisionedState": "DeProvisioned",
-    "failureStates": {
-      "Failed": "provisioning failed",
-      "Blocked": "provisioning is blocked",
-      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
-      "DeprovisionFailed": "deprovisioning failed"
-    },
-    "failureDetailPath": "blockedReason",
     "failureRetries": 3,
-    "pollIntervalSeconds": 10,
     "createTimeoutMinutes": 15,
     "updateTimeoutMinutes": 15,
     "deleteTimeoutMinutes": 10

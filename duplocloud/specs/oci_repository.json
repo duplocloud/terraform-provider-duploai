@@ -63,7 +63,6 @@
       "apiPath": "spec.namespaceName",
       "description": "Kubernetes namespace the OCI repository is created in."
     },
-
     {
       "name": "api_version",
       "type": "string",
@@ -205,7 +204,6 @@
       "apiPath": "spec.k8sResource.metadata.annotations",
       "description": "Kubernetes annotations applied to the OCI repository."
     },
-
     {
       "name": "provisioner_type",
       "type": "string",
@@ -226,7 +224,6 @@
       "apiPath": "spec.provisioner.version",
       "description": "Optional provisioner version."
     },
-
     {
       "name": "status",
       "type": "string",
@@ -236,19 +233,12 @@
     }
   ],
   "requestConstants": [
-    { "path": "spec.k8sResource.kind", "value": "OCIRepository" }
+    {
+      "path": "spec.k8sResource.kind",
+      "value": "OCIRepository"
+    }
   ],
   "waiter": {
-    "statusPath": "status",
-    "successState": "Complete",
-    "failureStates": {
-      "Failed": "provisioning failed",
-      "Blocked": "provisioning is blocked",
-      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
-      "DeprovisionFailed": "deprovisioning failed"
-    },
-    "failureDetailPath": "blockedReason",
-    "pollIntervalSeconds": 10,
     "createTimeoutMinutes": 15,
     "updateTimeoutMinutes": 15,
     "deleteTimeoutMinutes": 10

@@ -44,7 +44,10 @@
       "optional": true,
       "computed": true,
       "default": "Create",
-      "oneOf": ["Create", "Import"],
+      "oneOf": [
+        "Create",
+        "Import"
+      ],
       "forceNew": true,
       "apiPath": "spec.mode",
       "description": "Resource mode: Create provisions new infrastructure, Import adopts existing infrastructure."
@@ -63,7 +66,12 @@
       "optional": true,
       "computed": true,
       "default": "Cli",
-      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
+      "oneOf": [
+        "Cli",
+        "IacNativeTf",
+        "IacDuploTf",
+        "DirectApiCall"
+      ],
       "forceNew": true,
       "apiPath": "spec.provisioner.type",
       "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
@@ -87,7 +95,6 @@
       "apiPath": "allowedWorkspaceIds",
       "description": "Workspace IDs allowed to access this environment in addition to the owner."
     },
-
     {
       "name": "status",
       "type": "string",
@@ -187,19 +194,5 @@
       "description": "Number of resource groups provisioned for this environment."
     }
   ],
-  "waiter": {
-    "statusPath": "status",
-    "successState": "Complete",
-    "failureStates": {
-      "Failed": "provisioning failed",
-      "Blocked": "provisioning is blocked",
-      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
-      "DeprovisionFailed": "deprovisioning failed"
-    },
-    "failureDetailPath": "blockedReason",
-    "pollIntervalSeconds": 10,
-    "createTimeoutMinutes": 30,
-    "updateTimeoutMinutes": 30,
-    "deleteTimeoutMinutes": 15
-  }
+  "waiter": {}
 }

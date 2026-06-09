@@ -56,7 +56,6 @@
       "apiPath": "spec.environmentId",
       "description": "ID of the environment that owns the resource group."
     },
-
     {
       "name": "engine",
       "type": "string",
@@ -123,7 +122,6 @@
       "apiPath": "spec.snapshotIdentifier",
       "description": "Identifier of a snapshot to restore the cluster from."
     },
-
     {
       "name": "visibility",
       "type": "string",
@@ -148,7 +146,6 @@
       "apiPath": "spec.vpcSecurityGroupIds",
       "description": "VPC security group IDs attached to the cluster."
     },
-
     {
       "name": "storage_type",
       "type": "string",
@@ -175,7 +172,6 @@
       "apiPath": "spec.kmsKeyId",
       "description": "KMS key ID used for storage encryption."
     },
-
     {
       "name": "backup_retention_period",
       "type": "int",
@@ -284,7 +280,6 @@
       "apiPath": "spec.caCertificateIdentifier",
       "description": "CA certificate identifier for the cluster."
     },
-
     {
       "name": "serverless_v2_scaling",
       "type": "object",
@@ -292,10 +287,20 @@
       "apiPath": "spec.serverlessV2ScalingConfiguration",
       "description": "Aurora Serverless v2 capacity range, in ACUs.",
       "attributes": [
-        { "name": "min_capacity", "type": "number", "required": true, "apiPath": "minCapacity",
-          "description": "Minimum Aurora capacity units." },
-        { "name": "max_capacity", "type": "number", "required": true, "apiPath": "maxCapacity",
-          "description": "Maximum Aurora capacity units." }
+        {
+          "name": "min_capacity",
+          "type": "number",
+          "required": true,
+          "apiPath": "minCapacity",
+          "description": "Minimum Aurora capacity units."
+        },
+        {
+          "name": "max_capacity",
+          "type": "number",
+          "required": true,
+          "apiPath": "maxCapacity",
+          "description": "Maximum Aurora capacity units."
+        }
       ]
     },
     {
@@ -305,10 +310,20 @@
       "apiPath": "spec.clusterParameters",
       "description": "Cluster parameter group overrides.",
       "attributes": [
-        { "name": "name", "type": "string", "required": true, "apiPath": "name",
-          "description": "Parameter name." },
-        { "name": "value", "type": "string", "required": true, "apiPath": "value",
-          "description": "Parameter value." }
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "Parameter name."
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "required": true,
+          "apiPath": "value",
+          "description": "Parameter value."
+        }
       ]
     },
     {
@@ -318,21 +333,50 @@
       "apiPath": "spec.clusterInstances",
       "description": "Instances (writer/readers) that make up the cluster.",
       "attributes": [
-        { "name": "name", "type": "string", "required": true, "apiPath": "name",
-          "description": "Instance identifier." },
-        { "name": "db_instance_class", "type": "string", "required": true, "apiPath": "dbInstanceClass",
-          "description": "Instance class (e.g. db.r6g.large, db.serverless)." },
-        { "name": "availability_zone", "type": "string", "optional": true, "apiPath": "availabilityZone",
-          "description": "Availability zone for the instance." },
-        { "name": "promotion_tier", "type": "int", "optional": true, "apiPath": "promotionTier",
-          "description": "Failover promotion tier (0-15; lower is promoted first)." },
-        { "name": "ca_certificate_identifier", "type": "string", "optional": true, "apiPath": "caCertificateIdentifier",
-          "description": "CA certificate identifier for the instance." },
-        { "name": "performance_insights_retention_period", "type": "int", "optional": true, "apiPath": "performanceInsightsRetentionPeriod",
-          "description": "Performance Insights retention period in days." }
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "Instance identifier."
+        },
+        {
+          "name": "db_instance_class",
+          "type": "string",
+          "required": true,
+          "apiPath": "dbInstanceClass",
+          "description": "Instance class (e.g. db.r6g.large, db.serverless)."
+        },
+        {
+          "name": "availability_zone",
+          "type": "string",
+          "optional": true,
+          "apiPath": "availabilityZone",
+          "description": "Availability zone for the instance."
+        },
+        {
+          "name": "promotion_tier",
+          "type": "int",
+          "optional": true,
+          "apiPath": "promotionTier",
+          "description": "Failover promotion tier (0-15; lower is promoted first)."
+        },
+        {
+          "name": "ca_certificate_identifier",
+          "type": "string",
+          "optional": true,
+          "apiPath": "caCertificateIdentifier",
+          "description": "CA certificate identifier for the instance."
+        },
+        {
+          "name": "performance_insights_retention_period",
+          "type": "int",
+          "optional": true,
+          "apiPath": "performanceInsightsRetentionPeriod",
+          "description": "Performance Insights retention period in days."
+        }
       ]
     },
-
     {
       "name": "provisioner_type",
       "type": "string",
@@ -353,7 +397,6 @@
       "apiPath": "spec.provisioner.version",
       "description": "Optional provisioner version."
     },
-
     {
       "name": "status",
       "type": "string",
@@ -398,16 +441,7 @@
     }
   ],
   "waiter": {
-    "statusPath": "status",
-    "successState": "Complete",
     "deprovisionedState": "DeProvisioned",
-    "failureStates": {
-      "Failed": "provisioning failed",
-      "Blocked": "provisioning is blocked",
-      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
-      "DeprovisionFailed": "deprovisioning failed"
-    },
-    "failureDetailPath": "blockedReason",
     "pollIntervalSeconds": 15,
     "createTimeoutMinutes": 60,
     "updateTimeoutMinutes": 60,

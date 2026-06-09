@@ -284,6 +284,56 @@ type WaiterSpec struct {
 	DeleteTimeoutMinutes int `json:"deleteTimeoutMinutes,omitempty"`
 }
 
+// defaultWaiterSpec returns the waiter defaults shared by all DuploAI resources.
+// A spec's "waiter" block needs only the fields that differ from these values.
+func defaultWaiterSpec() WaiterSpec {
+	return WaiterSpec{
+		StatusPath:   "status",
+		SuccessState: "Complete",
+		FailureStates: map[string]string{
+			"Failed":             "provisioning failed",
+			"Blocked":            "provisioning is blocked",
+			"WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+			"DeprovisionFailed":  "deprovisioning failed",
+		},
+		FailureDetailPath:    "blockedReason",
+		PollIntervalSeconds:  10,
+		CreateTimeoutMinutes: 30,
+		UpdateTimeoutMinutes: 30,
+		DeleteTimeoutMinutes: 15,
+	}
+}
+
+// applyWaiterDefaults fills zero-value WaiterSpec fields from the shared defaults.
+// Per-spec fields (deprovisionedState, failureRetries) are left unchanged.
+func applyWaiterDefaults(w *WaiterSpec) {
+	d := defaultWaiterSpec()
+	if w.StatusPath == "" {
+		w.StatusPath = d.StatusPath
+	}
+	if w.SuccessState == "" {
+		w.SuccessState = d.SuccessState
+	}
+	if len(w.FailureStates) == 0 {
+		w.FailureStates = d.FailureStates
+	}
+	if w.FailureDetailPath == "" {
+		w.FailureDetailPath = d.FailureDetailPath
+	}
+	if w.PollIntervalSeconds == 0 {
+		w.PollIntervalSeconds = d.PollIntervalSeconds
+	}
+	if w.CreateTimeoutMinutes == 0 {
+		w.CreateTimeoutMinutes = d.CreateTimeoutMinutes
+	}
+	if w.UpdateTimeoutMinutes == 0 {
+		w.UpdateTimeoutMinutes = d.UpdateTimeoutMinutes
+	}
+	if w.DeleteTimeoutMinutes == 0 {
+		w.DeleteTimeoutMinutes = d.DeleteTimeoutMinutes
+	}
+}
+
 // loadResourceSpecs reads and validates every embedded JSON spec, sorted by
 // name for deterministic resource registration order.
 func loadResourceSpecs() ([]ResourceSpec, error) {
@@ -306,6 +356,9 @@ func loadResourceSpecs() ([]ResourceSpec, error) {
 		}
 		if validErr := spec.validate(); validErr != nil {
 			return nil, fmt.Errorf("invalid spec %s: %w", e.Name(), validErr)
+		}
+		if spec.Waiter != nil {
+			applyWaiterDefaults(spec.Waiter)
 		}
 		specs = append(specs, spec)
 	}

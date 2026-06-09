@@ -500,21 +500,52 @@ Each rule:
 
 ## Waiter
 
-For resources that provision asynchronously (most resources in this provider),
-the `"waiter"` block tells the engine how to poll until the resource reaches a
-terminal state. Without a waiter, `terraform apply` returns immediately after
-the API call, leaving the resource potentially still provisioning.
+The `"waiter"` key is an **explicit opt-in for asynchronous provisioning**:
+
+| Spec | Engine behaviour |
+|------|-----------------|
+| `"waiter"` key **absent** | **Synchronous** — `apply` returns immediately after the API call completes. Use only when the API itself blocks until the resource is ready. |
+| `"waiter": {}` or `"waiter": { ... }` | **Asynchronous** — the engine polls the resource's `status` field until it reaches a terminal state (success or failure). |
+
+Do not omit the `"waiter"` key for a resource whose API returns immediately but whose backend provisions asynchronously — doing so makes `terraform apply` return before the resource is ready, breaking any dependent resources.
+
+### Defaults
+
+The engine applies the following defaults to every `"waiter"` block at load
+time. A spec only needs to declare the fields that differ from these values —
+most specs reduce to 1–4 fields.
+
+| Field | Default value |
+|-------|--------------|
+| `statusPath` | `"status"` |
+| `successState` | `"Complete"` |
+| `failureDetailPath` | `"blockedReason"` |
+| `failureStates` | `Failed`, `Blocked`, `WaitingForApproval`, `DeprovisionFailed` (see below) |
+| `pollIntervalSeconds` | `10` |
+| `createTimeoutMinutes` | `30` |
+| `updateTimeoutMinutes` | `30` |
+| `deleteTimeoutMinutes` | `15` |
+
+Default `failureStates` map (identical across all resources):
+```json
+{
+  "Failed":             "provisioning failed",
+  "Blocked":            "provisioning is blocked",
+  "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+  "DeprovisionFailed":  "deprovisioning failed"
+}
+```
 
 ### Fields
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `statusPath` | string | — | **Required.** Dot-path in the read response to the status string (e.g. `"status"`). |
-| `successState` | string | — | **Required.** The terminal success value (e.g. `"Complete"`). |
-| `failureStates` | object | — | Map of terminal failure values → human-readable error message. The engine surfaces the message as a Terraform error. |
-| `deprovisionedState` | string | — | Terminal status after the deprovision step completes (e.g. `"DeProvisioned"`). Required when `endpoint.deprovision` is set — the delete flow waits for this state before issuing the final delete call. |
-| `failureDetailPath` | string | — | Dot-path to a response field with extra error context (e.g. `"blockedReason"`). Appended to the error message when the status is a failure state. |
-| `failureRetries` | int | `0` | How many extra polls to tolerate after first seeing a failure state before treating it as terminal. Use for backends that report a transient failure and then self-recover. |
+| `statusPath` | string | `"status"` | Dot-path in the read response to the status string. |
+| `successState` | string | `"Complete"` | The terminal success value. |
+| `failureStates` | object | see above | Map of terminal failure values → human-readable error message. Overrides the default map entirely when specified. |
+| `deprovisionedState` | string | — | **No default.** Terminal status after the deprovision step completes (e.g. `"DeProvisioned"`). Required when `endpoint.deprovision` is set — the delete flow waits for this state before issuing the final delete call. |
+| `failureDetailPath` | string | `"blockedReason"` | Dot-path to a field with extra error context. Appended to the error message when the status is a failure state. |
+| `failureRetries` | int | `0` | **No default.** Extra polls to tolerate after first seeing a failure state before treating it as terminal. Use for backends that report a transient failure and then self-recover. |
 | `pollIntervalSeconds` | int | `10` | Seconds between status polls. |
 | `createTimeoutMinutes` | int | `30` | Default create timeout. Overridable per-instance via the `timeouts` block. |
 | `updateTimeoutMinutes` | int | `30` | Default update timeout. |
@@ -524,28 +555,49 @@ When a waiter is present, the provider automatically adds a `failure_retries`
 attribute (optional `int64`) to the schema so users can override
 `failureRetries` per resource instance without changing the spec.
 
-When a waiter is present and `endpoint.hasUpdate()` is true (i.e. the resource
-is mutable), a `timeouts` block is automatically added to the schema.
+When a waiter is present and the resource is mutable (not `immutable: true`),
+a `timeouts` block is automatically added to the schema.
 
-### Example waiter
+### Waiter patterns
 
+**Asynchronous resource, all standard defaults (no custom timeouts or poll interval needed):**
+```json
+"waiter": {}
+```
+
+**With deprovision step (most resources):**
 ```json
 "waiter": {
-  "statusPath": "status",
-  "successState": "Complete",
+  "deprovisionedState": "DeProvisioned"
+}
+```
+
+**Fast resource (k8s) — shorter timeouts:**
+```json
+"waiter": {
   "deprovisionedState": "DeProvisioned",
-  "failureStates": {
-    "Failed": "provisioning failed",
-    "Blocked": "provisioning is blocked",
-    "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
-    "DeprovisionFailed": "deprovisioning failed"
-  },
-  "failureDetailPath": "blockedReason",
-  "failureRetries": 3,
+  "createTimeoutMinutes": 15,
+  "updateTimeoutMinutes": 15,
+  "deleteTimeoutMinutes": 10
+}
+```
+
+**Slow resource (RDS) — longer poll and timeouts:**
+```json
+"waiter": {
+  "deprovisionedState": "DeProvisioned",
   "pollIntervalSeconds": 15,
   "createTimeoutMinutes": 60,
   "updateTimeoutMinutes": 60,
   "deleteTimeoutMinutes": 30
+}
+```
+
+**With transient-failure tolerance:**
+```json
+"waiter": {
+  "deprovisionedState": "DeProvisioned",
+  "failureRetries": 3
 }
 ```
 
@@ -656,18 +708,7 @@ the canonical reference file:
   ],
 
   "waiter": {
-    "statusPath": "status",
-    "successState": "Complete",
-    "deprovisionedState": "DeProvisioned",
-    "failureStates": {
-      "Failed": "provisioning failed",
-      "Blocked": "provisioning is blocked"
-    },
-    "failureDetailPath": "blockedReason",
-    "pollIntervalSeconds": 10,
-    "createTimeoutMinutes": 30,
-    "updateTimeoutMinutes": 30,
-    "deleteTimeoutMinutes": 15
+    "deprovisionedState": "DeProvisioned"
   }
 }
 ```
@@ -684,7 +725,7 @@ the canonical reference file:
 4. **Set `immutable: true`** in `endpoint` if the API has no PUT operation at all.
 5. **Add `"deprovision": {}`** in `endpoint` if the API requires a teardown step
    before deletion, and add `deprovisionedState` to the `waiter`.
-6. **Add a `waiter`** if provisioning is asynchronous (most resources here are).
+6. **Add a `waiter`** if provisioning is asynchronous (most resources here are). Minimum is `"waiter": {}` — defaults cover `statusPath`, `successState`, `failureStates`, `failureDetailPath`, and standard timeouts. Only set fields that differ (e.g. `deprovisionedState`, non-standard timeouts, `failureRetries`).
 7. **Run `go generate ./...`** to regenerate docs, then
    **run `go build ./...` and `go test ./...`** to verify the spec is valid.
 8. **Add `examples/resources/duploai_<name>/resource.tf`** and

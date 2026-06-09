@@ -95,7 +95,12 @@
       "computed": true,
       "default": "Cli",
       "forceNew": true,
-      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
+      "oneOf": [
+        "Cli",
+        "IacNativeTf",
+        "IacDuploTf",
+        "DirectApiCall"
+      ],
       "apiPath": "spec.provisioner.type",
       "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
     },
@@ -172,19 +177,5 @@
       "description": "Provisioned KMS key alias."
     }
   ],
-  "waiter": {
-    "statusPath": "status",
-    "successState": "Complete",
-    "failureStates": {
-      "Failed": "provisioning failed",
-      "Blocked": "provisioning is blocked",
-      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
-      "DeprovisionFailed": "deprovisioning failed"
-    },
-    "failureDetailPath": "blockedReason",
-    "pollIntervalSeconds": 10,
-    "createTimeoutMinutes": 30,
-    "updateTimeoutMinutes": 30,
-    "deleteTimeoutMinutes": 15
-  }
+  "waiter": {}
 }
