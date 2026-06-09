@@ -2,6 +2,9 @@
   "name": "helm_release",
   "description": "Manages a DuploCloud AI Helpdesk Kubernetes Helm release (Flux HelmRelease).",
   "idPath": "id",
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sHelmReleases"
+  },
   "attributes": [
     {
       "name": "workspace_id",
@@ -60,7 +63,6 @@
       "apiPath": "spec.namespaceName",
       "description": "Kubernetes namespace the HelmRelease object is created in."
     },
-
     {
       "name": "api_version",
       "type": "string",
@@ -107,15 +109,29 @@
       "apiPath": "spec.k8sResource.spec.valuesFrom",
       "description": "Values sourced from ConfigMaps or Secrets.",
       "attributes": [
-        { "name": "kind", "type": "string", "required": true, "apiPath": "kind",
-          "description": "Source kind: ConfigMap or Secret." },
-        { "name": "name", "type": "string", "required": true, "apiPath": "name",
-          "description": "Name of the ConfigMap or Secret." },
-        { "name": "values_key", "type": "string", "optional": true, "apiPath": "valuesKey",
-          "description": "Key in the source holding the values (defaults to values.yaml)." }
+        {
+          "name": "kind",
+          "type": "string",
+          "required": true,
+          "apiPath": "kind",
+          "description": "Source kind: ConfigMap or Secret."
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "Name of the ConfigMap or Secret."
+        },
+        {
+          "name": "values_key",
+          "type": "string",
+          "optional": true,
+          "apiPath": "valuesKey",
+          "description": "Key in the source holding the values (defaults to values.yaml)."
+        }
       ]
     },
-
     {
       "name": "chart_name",
       "type": "string",
@@ -158,7 +174,6 @@
       "apiPath": "spec.k8sResource.spec.chart.spec.sourceRef.name",
       "description": "Name of the chart source object."
     },
-
     {
       "name": "chart_ref_kind",
       "type": "string",
@@ -180,7 +195,6 @@
       "apiPath": "spec.k8sResource.spec.chartRef.namespace",
       "description": "Namespace of the directly-referenced chart source object."
     },
-
     {
       "name": "labels",
       "type": "map(string)",
@@ -195,7 +209,6 @@
       "apiPath": "spec.k8sResource.metadata.annotations",
       "description": "Kubernetes annotations applied to the HelmRelease."
     },
-
     {
       "name": "provisioner_type",
       "type": "string",
@@ -216,7 +229,6 @@
       "apiPath": "spec.provisioner.version",
       "description": "Optional provisioner version."
     },
-
     {
       "name": "status",
       "type": "string",
@@ -226,21 +238,12 @@
     }
   ],
   "requestConstants": [
-    { "path": "spec.k8sResource.kind", "value": "HelmRelease" }
+    {
+      "path": "spec.k8sResource.kind",
+      "value": "HelmRelease"
+    }
   ],
   "waiter": {
-    "statusPath": "status",
-    "successState": "Complete",
-    "failureStates": {
-      "Failed": "provisioning failed",
-      "Blocked": "provisioning is blocked",
-      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
-      "DeprovisionFailed": "deprovisioning failed"
-    },
-    "failureDetailPath": "blockedReason",
-    "pollIntervalSeconds": 15,
-    "createTimeoutMinutes": 30,
-    "updateTimeoutMinutes": 30,
-    "deleteTimeoutMinutes": 15
+    "pollIntervalSeconds": 15
   }
 }

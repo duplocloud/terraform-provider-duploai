@@ -2,6 +2,10 @@
   "name": "resource_group",
   "description": "Manages a DuploCloud AI Helpdesk resource group (shared security groups, IAM role, KMS key).",
   "idPath": "id",
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/resource-groups",
+    "deprovision": {}
+  },
   "attributes": [
     {
       "name": "workspace_id",
@@ -91,7 +95,12 @@
       "computed": true,
       "default": "Cli",
       "forceNew": true,
-      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
+      "oneOf": [
+        "Cli",
+        "IacNativeTf",
+        "IacDuploTf",
+        "DirectApiCall"
+      ],
       "apiPath": "spec.provisioner.type",
       "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
     },
@@ -168,19 +177,5 @@
       "description": "Provisioned KMS key alias."
     }
   ],
-  "waiter": {
-    "statusPath": "status",
-    "successState": "Complete",
-    "failureStates": {
-      "Failed": "provisioning failed",
-      "Blocked": "provisioning is blocked",
-      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
-      "DeprovisionFailed": "deprovisioning failed"
-    },
-    "failureDetailPath": "blockedReason",
-    "pollIntervalSeconds": 10,
-    "createTimeoutMinutes": 30,
-    "updateTimeoutMinutes": 30,
-    "deleteTimeoutMinutes": 15
-  }
+  "waiter": {}
 }
