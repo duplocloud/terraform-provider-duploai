@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  issues: write
 
 jobs:
   validate-pr:
@@ -27,9 +28,9 @@ jobs:
             let prTitle = context.payload.pull_request.title || '';
 
             // Strip ClickUp ID from title if present and update via API
-            const titleClickupMatch = prTitle.match(/DUPLOAI-\d+[:\s-]*/i);
+            const titleClickupMatch = prTitle.match(/\s*DUPLOAI-\d+[:\s-]*/i);
             if (titleClickupMatch) {
-              const cleanTitle = prTitle.replace(/DUPLOAI-\d+[:\s-]*/i, '').trim();
+              const cleanTitle = prTitle.replace(/\s*DUPLOAI-\d+[:\s-]*/i, '').replace(/ {2,}/g, ' ').trim();
               await github.rest.pulls.update({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
