@@ -93,7 +93,6 @@
       "optional": true,
       "computed": true,
       "default": "",
-      "forceNew": true,
       "apiPath": "spec.provisioner.version",
       "description": "Optional provisioner version."
     },
@@ -376,13 +375,15 @@
       ]
     }
   ],
-  "requestConstants": [
+  "createConstants": [
     {
       "path": "spec.mode",
       "value": "Create"
     }
   ],
   "waiter": {
-    "deprovisionedState": "DeProvisioned"
+    "deprovisionedState": "DeProvisioned",
+    "failureRetries": 5,
+    "failurePollIntervalSeconds": 60
   }
 }

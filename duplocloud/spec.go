@@ -277,6 +277,11 @@ type WaiterSpec struct {
 	FailureDetailPath string `json:"failureDetailPath,omitempty"`
 	// PollIntervalSeconds defaults to 10 when zero.
 	PollIntervalSeconds int `json:"pollIntervalSeconds,omitempty"`
+	// FailurePollIntervalSeconds overrides PollIntervalSeconds when the resource
+	// is in a failure state during a retry. Use a longer value to give the
+	// backend more time to self-recover between polls. Falls back to
+	// PollIntervalSeconds when zero.
+	FailurePollIntervalSeconds int `json:"failurePollIntervalSeconds,omitempty"`
 	// CreateTimeoutMinutes / UpdateTimeoutMinutes / DeleteTimeoutMinutes
 	// supply default operation timeouts (overridable via the timeouts block).
 	CreateTimeoutMinutes int `json:"createTimeoutMinutes,omitempty"`

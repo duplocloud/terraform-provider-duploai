@@ -177,5 +177,7 @@
       "description": "Provisioned KMS key alias."
     }
   ],
-  "waiter": {}
+  "waiter": {
+    "deprovisionedState": "DeProvisioned"
+  }
 }

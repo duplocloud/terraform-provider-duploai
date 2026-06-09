@@ -181,18 +181,40 @@ For **every** PR:
       ```
 
       Flag every hit with file:line and the suggested neutral replacement.
-- [ ] **ClickUp id present** — the PR title **or** body contains a `DUPLOAI-\d+`
-      reference (the repo PR template puts it under `ClickUp Ticket ID:`).
+- [ ] **ClickUp id present in body** — the PR **body** (not the title) contains a
+      `DUPLOAI-\d+` reference. CI auto-strips the ticket ID from the title and
+      rewrites it; the body is the required location.
 
       ```bash
-      gh pr view <pr> --json title,body -q '.title + "\n" + .body' | grep -oE 'DUPLOAI-[0-9]+'
+      gh pr view <pr> --json body -q '.body' | grep -oE 'DUPLOAI-[0-9]+'
+      # Also confirm the title is clean (no ticket ID remaining after auto-strip):
+      gh pr view <pr> --json title -q '.title' | grep -oE 'DUPLOAI-[0-9]+'  # should be empty
       ```
 
-- [ ] **PR body follows the template** (`.github/PULL_REQUEST_TEMPLATE.md`).
+- [ ] **PR title hygiene.** Title must have no ClickUp ticket ID and be 20–72
+      characters. Titles become changelog entries verbatim — quality here is
+      quality in the published release notes.
+
+      ```bash
+      title=$(gh pr view <pr> --json title -q '.title')
+      echo "Length: ${#title}"                   # must be 20–72
+      echo "$title" | grep -oE 'DUPLOAI-[0-9]+'  # must be empty
+      ```
+
+      Flag as Major if length is outside 20–72 or ticket ID is still present.
+
+- [ ] **PR body follows the template** (`.github/pull_request_template.md`).
       Confirm these sections are present and filled, not left as placeholders:
-      `ClickUp Ticket ID`, `Overview`, `Summary of changes`,
-      `Testing performed` (with at least one box checked), and a
-      `Describe any breaking changes` note.
+      `ClickUp Ticket`, `Type`, `Overview`, `Summary of changes`,
+      `Testing performed` (with at least one box checked),
+      `Describe any breaking changes`, and the `Type` section has **exactly
+      one** checkbox checked from: `enhancement`, `bug`, `breaking-change`,
+      `documentation`.
+
+      ```bash
+      gh pr view <pr> --json body -q '.body' | grep -cE '- \[x\] `(enhancement|bug|breaking-change|documentation)`'
+      # must equal 1; 0 = no type selected, >1 = multiple selected
+      ```
 - [ ] **Schema correctness — drift / update-breaking.** These don't crash apply
       but degrade correctness, so they are Major:
   - **`forceNew` on immutable inputs.** Any field the API has no update path for
@@ -279,7 +301,10 @@ Prefix each result with a status icon: ✅ pass/clean · 🔴 blocker-level fail
 - secret scan: <✅ clean | 🔴 hits>
 - schema correctness: <✅ ok | 🔴 build/apply-breaking | 🟠 drift/update risk>
 - mongo scan: <✅ clean | 🟠 hits>
-- ClickUp id: <✅ DUPLOAI-NNNN | 🟠 MISSING>
+- ClickUp id (body): <✅ DUPLOAI-NNNN | 🟠 MISSING>
+- ClickUp id (title): <✅ clean | 🟠 ticket ID present in title>
+- PR title length: <✅ N chars (20–72) | 🟠 too short/long — N chars>
+- PR type checkbox: <✅ enhancement | bug | breaking-change | documentation | 🟠 none checked | 🟠 multiple checked>
 - PR template: <✅ complete | 🟠 missing sections | ⚠️ not verifiable>
 
 ### Verdict
