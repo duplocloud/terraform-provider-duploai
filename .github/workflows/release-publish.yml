@@ -34,6 +34,142 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate release notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_TAG: ${{ github.ref_name }}
+        run: |
+          python3 << 'PYEOF'
+          import subprocess, json, os
+
+          tag  = os.environ["CURRENT_TAG"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+
+          # Find previous tag
+          tags = subprocess.run(
+              ["git", "tag", "--sort=-version:refname"],
+              capture_output=True, text=True
+          ).stdout.strip().split("\n")
+          tags = [t for t in tags if t and t != tag]
+          prev_tag = tags[0] if tags else None
+
+          # Date of previous tag (used to filter gh pr list)
+          if prev_tag:
+              prev_date = subprocess.run(
+                  ["git", "log", "-1", "--format=%aI", prev_tag],
+                  capture_output=True, text=True
+              ).stdout.strip()
+          else:
+              prev_date = "2020-01-01T00:00:00Z"
+
+          print(f"Generating notes: {prev_tag} -> {tag} (since {prev_date})")
+
+          def list_prs(base, since, until=None):
+              search = f"merged:>{since}"
+              if until:
+                  search += f" merged:<{until}"
+              out = subprocess.run([
+                  "gh", "pr", "list",
+                  "--repo", repo, "--base", base, "--state", "merged",
+                  "--json", "number,title,labels,author,headRefName",
+                  "--search", search,
+                  "--limit", "500",
+              ], capture_output=True, text=True).stdout
+              return json.loads(out or "[]")
+
+          # Detect stabilization branch from PRs merged to master in this window.
+          # We query master only to find the branch name — master PRs themselves
+          # are automation and are excluded from the changelog.
+          master_prs = list_prs("master", prev_date)
+          stab_branch = next(
+              (pr["headRefName"] for pr in master_prs
+               if pr["headRefName"].startswith(("hotfix/", "release/"))),
+              None
+          )
+
+          # Collect the real work PRs based on release type
+          stab_prs = list_prs(stab_branch, prev_date) if stab_branch else []
+          extra_prs = []
+
+          if stab_branch and stab_branch.startswith("release/"):
+              # Major release: also include PRs merged into develop between the
+              # previous tag and when the release branch was cut from develop.
+              cut_hash = subprocess.run(
+                  ["git", "merge-base", "develop", stab_branch],
+                  capture_output=True, text=True
+              ).stdout.strip()
+              cut_date = subprocess.run(
+                  ["git", "log", "-1", "--format=%aI", cut_hash],
+                  capture_output=True, text=True
+              ).stdout.strip()
+              extra_prs = list_prs("develop", since=prev_date, until=cut_date)
+              print(f"Release branch {stab_branch} cut from develop at {cut_date}")
+              print(f"Including {len(stab_prs)} release/* PRs + {len(extra_prs)} develop PRs")
+          elif stab_branch:
+              print(f"Hotfix branch {stab_branch}: including {len(stab_prs)} PRs")
+
+          # Merge and deduplicate (stabilization PRs first, then develop PRs)
+          seen, all_prs = set(), []
+          for pr in stab_prs + extra_prs:
+              if pr["number"] not in seen:
+                  seen.add(pr["number"])
+                  all_prs.append(pr)
+
+          EXCLUDE_LABELS  = {"ignore-for-release", "dependencies"}
+          EXCLUDE_AUTHORS = {"github-actions[bot]", "duploai-tf[bot]"}
+          CATEGORIES = [
+              ("breaking-change", "## Breaking Changes"),
+              ("enhancement",     "## New Features"),
+              ("bug",             "## Bug Fixes"),
+              ("documentation",   "## Documentation"),
+          ]
+
+          def pr_labels(pr):
+              return {l["name"] for l in pr.get("labels", [])}
+
+          def excluded(pr):
+              return (pr["author"]["login"] in EXCLUDE_AUTHORS or
+                      bool(pr_labels(pr) & EXCLUDE_LABELS))
+
+          def fmt(pr):
+              return f"* {pr['title']} by @{pr['author']['login']} in #{pr['number']}"
+
+          lines, used = [], set()
+
+          for label_key, title in CATEGORIES:
+              section = [p for p in all_prs
+                         if label_key in pr_labels(p) and not excluded(p)
+                         and p["number"] not in used]
+              if section:
+                  lines.append(title)
+                  for p in section:
+                      lines.append(fmt(p))
+                      used.add(p["number"])
+                  lines.append("")
+
+          others = [p for p in all_prs if not excluded(p) and p["number"] not in used]
+          if others:
+              lines.append("## Other Changes")
+              for p in others:
+                  lines.append(fmt(p))
+              lines.append("")
+
+          if prev_tag:
+              lines.append(f"**Full Changelog**: https://github.com/{repo}/compare/{prev_tag}...{tag}")
+
+          notes = "\n".join(lines)
+          print("\n--- RELEASE NOTES ---\n" + notes)
+          with open("RELEASE_NOTES.md", "w") as f:
+              f.write(notes)
+          PYEOF
+
+      - name: Ensure RELEASE_NOTES.md exists
+        run: |
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "Release notes generation produced no output — using fallback." >&2
+            echo "See full changelog: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}" > RELEASE_NOTES.md
+          fi
+
       - name: Run tests before publish
         run: go test ./... -timeout 90s
 
@@ -42,7 +178,7 @@ jobs:
         with:
           distribution: goreleaser
           version: latest
-          args: release --clean
+          args: release --clean --release-notes RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
