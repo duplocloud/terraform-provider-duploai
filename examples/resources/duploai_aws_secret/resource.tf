@@ -2,7 +2,6 @@
 resource "duploai_aws_secret" "db_password" {
   workspace_id      = "<workspace-id>"
   name              = "db-password"
-  secret_name       = "db-password"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<resource-group-id>"
 
@@ -14,7 +13,6 @@ resource "duploai_aws_secret" "db_password" {
 resource "duploai_aws_secret" "app_config" {
   workspace_id      = "<workspace-id>"
   name              = "app-config"
-  secret_name       = "app-config"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<resource-group-id>"
 
