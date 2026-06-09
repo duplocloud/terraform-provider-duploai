@@ -3,7 +3,8 @@ name: pr-raise
 description: >-
   Raise a pull request for terraform-provider-duploai following the git hygiene
   rules in docs-internal/git-hygiene.md. Collects ClickUp ID, PR title, target
-  branch, and PR type from the user; builds the PR body from the repo template;
+  branch, and PR type from the user; creates the working branch (with counter
+  suffix if the name is taken); builds the PR body from the repo template;
   shows a full preview for approval; then creates the PR with gh. TRIGGER on
   phrases like "raise PR", "create PR", "open PR", "raise a PR for DUPLOAI-XXXX",
   "create PR against develop". Parse ClickUp ID, title, and target branch
@@ -19,10 +20,10 @@ in [`docs-internal/git-hygiene.md`](../../docs-internal/git-hygiene.md).
 
 - **Approval gate is mandatory.** Never call `gh pr create` without first showing
   the exact PR title and body to the user and receiving explicit approval.
+- **Always create the working branch.** Never assume the user is already on the
+  right branch. Branch creation (Step 2) always runs.
 - Collect missing required inputs by asking — do not assume or invent values.
 - Validate inputs before building the body; fail fast with a clear error message.
-- This skill does **not** commit or push code. If uncommitted changes or an
-  unpushed branch are detected, warn the user and pause until resolved.
 
 ---
 
@@ -36,15 +37,13 @@ Extract from the invocation phrase (or ask if missing):
 |---|---|
 | **ClickUp ID** | Must match `DUPLOAI-\d+`. Goes in the PR body, never the title. |
 | **PR title** | 20–72 characters. No ClickUp ID. Written as a customer-facing changelog entry. |
-| **Target branch** | Must be `develop`, `hotfix/<version>`, or `release/<version>`. Reject `master` or any other branch — it is CI/CD-only. |
+| **Target branch** | Must be `develop`, `hotfix/<version>`, or `release/<version>`. Reject `master` — it is CI/CD-only. |
 | **PR type** | Exactly one of: `enhancement`, `bug`, `breaking-change`, `documentation`. |
 
 If any required input is missing, ask for all missing values in a single
 `AskUserQuestion` call (do not ask one at a time when multiple are missing).
 
 ### Title validation
-
-Before proceeding, check the title:
 
 ```
 length = len(title stripped of leading/trailing whitespace)
@@ -55,10 +54,10 @@ length = len(title stripped of leading/trailing whitespace)
 
 ### Target branch validation
 
+Confirm the target exists on the remote:
+
 ```bash
-# Confirm the branch exists on the remote (or at least locally)
-git branch --list "<target>"
-gh api repos/{owner}/{repo}/branches/<target> 2>/dev/null || echo "not found on remote"
+git ls-remote --heads origin <target> | grep -q <target> && echo "exists" || echo "not found"
 ```
 
 Reject with a clear message if the branch is `master` or anything other than
@@ -66,25 +65,79 @@ Reject with a clear message if the branch is `master` or anything other than
 
 ---
 
-## Step 2 — Check git state
+## Step 2 — Create working branch
 
-Run the following and surface any issues to the user before building the body:
+Always create a new local branch from the current HEAD and push it.
+
+### Derive branch name
+
+1. **Slugify the PR title:** lowercase, replace spaces with `-`, strip anything
+   not alphanumeric or `-`, collapse consecutive `-`, truncate to 40 chars,
+   strip leading/trailing `-`.
+
+   Example: `"Add S3 bucket resource with versioning"` → `add-s3-bucket-resource-with-versioning`
+
+2. **Base name:** `<DUPLOAI-ID>-<slug>`
+
+   Example: `DUPLOAI-1641-add-s3-bucket-resource-with-versioning`
+
+3. **Counter logic:** if the base name is taken (locally or remotely), append
+   `-01`, `-02`, … until a free name is found.
 
 ```bash
-git status --short          # uncommitted changes?
-git log origin/<target>..HEAD --oneline  # commits not yet on remote?
-git rev-parse --abbrev-ref HEAD          # current branch name
+# Check existence (both local and remote)
+branch_exists() {
+  git branch --list "$1" | grep -q "$1" || \
+  git ls-remote --heads origin "$1" | grep -q "$1"
+}
+
+base="DUPLOAI-<id>-<slug>"
+name="$base"
+counter=1
+while branch_exists "$name"; do
+  name=$(printf "%s-%02d" "$base" $counter)
+  counter=$((counter + 1))
+done
 ```
 
-- **Uncommitted changes** → warn: "You have uncommitted changes. Commit or stash them before raising the PR, or proceed knowing only pushed commits will be included."
-- **Nothing pushed (no commits ahead of remote)** → warn: "No commits are pushed to the remote for this branch yet. The PR will be empty. Push first with `git push -u origin <branch>`."
-- **Branch not pushed at all** → error: "Branch `<branch>` has no upstream. Run `git push -u origin <branch>` first."
+Examples of counter progression:
+```
+DUPLOAI-1641-add-s3-bucket-resource        (base, free → use this)
+DUPLOAI-1641-add-s3-bucket-resource-01     (if base taken)
+DUPLOAI-1641-add-s3-bucket-resource-02     (if -01 also taken)
+```
 
-Pause and ask the user to confirm they want to continue if any warning fires.
+### Create and push
+
+```bash
+git checkout -b <branch-name>
+git push -u origin <branch-name>
+```
+
+Tell the user: `Created branch: <branch-name>`
+
+If `git checkout -b` fails because there are uncommitted changes that block the
+switch, surface the error and ask the user to commit or stash first.
 
 ---
 
-## Step 3 — Build PR body
+## Step 3 — Check git state
+
+After the branch is created, verify there are commits to include in the PR:
+
+```bash
+git log origin/<target>..HEAD --oneline
+```
+
+- **No commits ahead of target** → warn: "The branch has no commits yet relative
+  to `<target>`. The PR will be empty. Add commits before raising the PR, or
+  proceed to create a draft PR now."
+
+Pause and ask the user to confirm before continuing if the warning fires.
+
+---
+
+## Step 4 — Build PR body
 
 Construct the body by filling in the repo's PR template
 (`.github/pull_request_template.md`) with the collected inputs.
@@ -106,7 +159,7 @@ Use this exact structure:
 
 ## Overview
 
-<Ask the user for 1–2 sentences on WHY this change exists if not provided in the invocation. Do not invent this.>
+<Ask the user for 1–2 sentences on WHY this change exists if not provided. Do not invent this.>
 
 ## Summary of changes
 
@@ -132,7 +185,7 @@ text for approval.
 
 ---
 
-## Step 4 — Approval gate (mandatory)
+## Step 5 — Approval gate (mandatory)
 
 Present the complete PR to the user for review using `AskUserQuestion` with two
 options — **Raise PR** and **Edit** — and use the `preview` field to render the
@@ -141,26 +194,29 @@ exact title and body the user will see on GitHub.
 Format the preview as:
 
 ```
-Title: <pr title>
+Branch:  <branch-name>  →  <target-branch>
+Title:   <pr title>
 
 ---
 
 <full pr body>
 ```
 
-Only proceed to Step 5 when the user selects **Raise PR**.
-If the user selects **Edit**, ask which part they want to change, update that
-part, and re-show the approval gate.
+Only proceed to Step 6 when the user selects **Raise PR**.
+If the user selects **Edit**, ask which part they want to change (title, type,
+overview, summary, breaking changes), update that part, and re-show the approval
+gate.
 
 ---
 
-## Step 5 — Raise the PR
+## Step 6 — Raise the PR
 
 Once approved, run:
 
 ```bash
 gh pr create \
   --base <target-branch> \
+  --head <branch-name> \
   --title "<pr-title>" \
   --body "$(cat <<'EOF'
 <pr-body>
@@ -171,8 +227,7 @@ EOF
 After creation:
 1. Print the PR URL.
 2. Remind the user to create the GitHub labels if they do not yet exist (only
-   needed once per repo — see the label setup commands in
-   [`docs-internal/git-hygiene.md`](../../docs-internal/git-hygiene.md#4-labels)).
+   needed once per repo — see `docs-internal/git-hygiene.md` § Labels).
 
 ---
 
@@ -184,5 +239,5 @@ After creation:
 | Title too short | "PR title too short (N chars, min 20). Write a descriptive title — it becomes the changelog entry." |
 | Title too long | "PR title too long (N chars, max 72). Shorten it to keep the changelog readable." |
 | ClickUp ID in title | "Remove the ClickUp ticket ID from the title. It belongs in the ClickUp Ticket section of the body." |
-| No upstream for branch | "Branch has no upstream. Run `git push -u origin <branch>` first." |
+| Branch checkout fails (uncommitted changes) | "Uncommitted changes block branch creation. Run `git stash` or commit first." |
 | `gh` not authenticated | "GitHub CLI is not authenticated. Run `gh auth login` and retry." |
