@@ -23,7 +23,23 @@ jobs:
           script: |
             const prBody = context.payload.pull_request.body || '';
             const prNumber = context.payload.pull_request.number;
+            const prTitle = context.payload.pull_request.title || '';
+            const prAuthor = context.payload.pull_request.user.login || '';
             const typeLabels = ['enhancement', 'bug', 'breaking-change', 'documentation'];
+
+            // Auto-label infrastructure/automation PRs as ignore-for-release
+            const infraTitlePattern = /^(hotfix release|release v|develop to master|master to develop|bump version|finish (release|hotfix))/i;
+            const botAuthors = ['github-actions[bot]', 'duploai-tf[bot]'];
+            if (infraTitlePattern.test(prTitle) || botAuthors.includes(prAuthor)) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                labels: ['ignore-for-release'],
+              });
+              core.info(`ℹ️ Applied ignore-for-release label to automation PR: "${prTitle}"`);
+              return;
+            }
 
             // Find checked type inside the Type section only
             const typeSection = (prBody.match(/##\s*Type[\s\S]*?(?=##|$)/i) || [''])[0];

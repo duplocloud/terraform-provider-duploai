@@ -3,6 +3,9 @@ changelog:
     labels:
       - ignore-for-release
       - dependencies
+    authors:
+      - github-actions
+      - duploai-tf
   categories:
     - title: Breaking Changes
       labels:
