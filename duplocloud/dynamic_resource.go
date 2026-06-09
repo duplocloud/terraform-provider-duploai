@@ -161,12 +161,17 @@ func (r *dynamicResource) waiter(failureRetries int) *duplosdk.Waiter[map[string
 	if w.PollIntervalSeconds > 0 {
 		interval = time.Duration(w.PollIntervalSeconds) * time.Second
 	}
+	var failureInterval time.Duration
+	if w.FailurePollIntervalSeconds > 0 {
+		failureInterval = time.Duration(w.FailurePollIntervalSeconds) * time.Second
+	}
 	statusSegs := strings.Split(w.StatusPath, ".")
 	return &duplosdk.Waiter[map[string]any]{
-		PollInterval:   interval,
-		SuccessState:   w.SuccessState,
-		FailureStates:  w.FailureStates,
-		FailureRetries: failureRetries,
+		PollInterval:        interval,
+		FailurePollInterval: failureInterval,
+		SuccessState:        w.SuccessState,
+		FailureStates:       w.FailureStates,
+		FailureRetries:      failureRetries,
 		StatusFn: func(m *map[string]any) string {
 			return toStringValue(extractPath(*m, statusSegs))
 		},

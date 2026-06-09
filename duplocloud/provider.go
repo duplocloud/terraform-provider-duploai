@@ -95,9 +95,9 @@ func (p *duploaiProvider) Resources(_ context.Context) []func() resource.Resourc
 	}
 	factories := make([]func() resource.Resource, 0, len(specs))
 	for _, spec := range specs {
-		endpoint, ok := duplosdk.LookupEndpoint(spec.Name)
-		if !ok {
-			panic(fmt.Sprintf("no API endpoint registered for resource %q (add it to the duplosdk package)", spec.Name))
+		endpoint, buildErr := spec.BuildEndpoint()
+		if buildErr != nil {
+			panic(fmt.Sprintf("resource %q: %s", spec.Name, buildErr))
 		}
 		if err := spec.checkPathParams(endpoint.PathParams()); err != nil {
 			panic(fmt.Sprintf("resource %q: %s", spec.Name, err))

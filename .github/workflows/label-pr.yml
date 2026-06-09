@@ -1,0 +1,60 @@
+name: Label PR
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches:
+      - develop
+      - release/**
+      - hotfix/**
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  label:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Apply PR type label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prBody = context.payload.pull_request.body || '';
+            const prNumber = context.payload.pull_request.number;
+            const typeLabels = ['enhancement', 'bug', 'breaking-change', 'documentation'];
+
+            // Find checked type inside the Type section only
+            const typeSection = (prBody.match(/##\s*Type[\s\S]*?(?=##|$)/i) || [''])[0];
+            const checkedMatch = typeSection.match(/- \[x\] `(enhancement|bug|breaking-change|documentation)`/i);
+            const selectedType = checkedMatch ? checkedMatch[1].toLowerCase() : null;
+
+            // Remove any existing type labels before applying new one
+            const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+            for (const label of currentLabels) {
+              if (typeLabels.includes(label.name)) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: label.name,
+                });
+              }
+            }
+
+            if (selectedType) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                labels: [selectedType],
+              });
+              core.info(`✅ Applied label: ${selectedType}`);
+            } else {
+              core.info('ℹ️ No type checked yet — label will be applied once type is selected.');
+            }

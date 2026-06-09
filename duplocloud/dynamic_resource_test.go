@@ -79,6 +79,7 @@ func TestSpecValidate(t *testing.T) {
 			name: "valid",
 			spec: ResourceSpec{
 				Name: "x", IDPath: "id",
+				Endpoint:   EndpointSpec{UriBase: "/v1/test"},
 				Attributes: []AttributeSpec{{Name: "name", Type: "string", Required: true}},
 			},
 		},
@@ -640,6 +641,66 @@ func TestObjectRoundTripNameRemap(t *testing.T) {
 	}
 	if _, leaked := body["max_size"]; leaked {
 		t.Error("schema name leaked into request body")
+	}
+}
+
+func TestWaiterDefaults(t *testing.T) {
+	d := defaultWaiterSpec()
+
+	// Empty waiter gets all defaults applied.
+	w := &WaiterSpec{}
+	applyWaiterDefaults(w)
+	if w.StatusPath != d.StatusPath {
+		t.Errorf("StatusPath = %q, want %q", w.StatusPath, d.StatusPath)
+	}
+	if w.SuccessState != d.SuccessState {
+		t.Errorf("SuccessState = %q, want %q", w.SuccessState, d.SuccessState)
+	}
+	if !reflect.DeepEqual(w.FailureStates, d.FailureStates) {
+		t.Errorf("FailureStates = %v, want %v", w.FailureStates, d.FailureStates)
+	}
+	if w.FailureDetailPath != d.FailureDetailPath {
+		t.Errorf("FailureDetailPath = %q, want %q", w.FailureDetailPath, d.FailureDetailPath)
+	}
+	if w.PollIntervalSeconds != d.PollIntervalSeconds {
+		t.Errorf("PollIntervalSeconds = %d, want %d", w.PollIntervalSeconds, d.PollIntervalSeconds)
+	}
+	if w.CreateTimeoutMinutes != d.CreateTimeoutMinutes {
+		t.Errorf("CreateTimeoutMinutes = %d, want %d", w.CreateTimeoutMinutes, d.CreateTimeoutMinutes)
+	}
+	if w.UpdateTimeoutMinutes != d.UpdateTimeoutMinutes {
+		t.Errorf("UpdateTimeoutMinutes = %d, want %d", w.UpdateTimeoutMinutes, d.UpdateTimeoutMinutes)
+	}
+	if w.DeleteTimeoutMinutes != d.DeleteTimeoutMinutes {
+		t.Errorf("DeleteTimeoutMinutes = %d, want %d", w.DeleteTimeoutMinutes, d.DeleteTimeoutMinutes)
+	}
+
+	// Explicitly set fields are not overwritten by defaults.
+	custom := &WaiterSpec{
+		PollIntervalSeconds:  15,
+		CreateTimeoutMinutes: 60,
+		DeprovisionedState:   "DeProvisioned",
+		FailureRetries:       3,
+	}
+	applyWaiterDefaults(custom)
+	if custom.PollIntervalSeconds != 15 {
+		t.Errorf("custom PollIntervalSeconds overwritten, got %d", custom.PollIntervalSeconds)
+	}
+	if custom.CreateTimeoutMinutes != 60 {
+		t.Errorf("custom CreateTimeoutMinutes overwritten, got %d", custom.CreateTimeoutMinutes)
+	}
+	if custom.DeprovisionedState != "DeProvisioned" {
+		t.Errorf("DeprovisionedState overwritten, got %q", custom.DeprovisionedState)
+	}
+	if custom.FailureRetries != 3 {
+		t.Errorf("FailureRetries overwritten, got %d", custom.FailureRetries)
+	}
+	// Unset fields still get defaults.
+	if custom.StatusPath != d.StatusPath {
+		t.Errorf("StatusPath not defaulted, got %q", custom.StatusPath)
+	}
+	if custom.UpdateTimeoutMinutes != d.UpdateTimeoutMinutes {
+		t.Errorf("UpdateTimeoutMinutes not defaulted, got %d", custom.UpdateTimeoutMinutes)
 	}
 }
 
