@@ -159,15 +159,15 @@ jobs:
 
           notes = "\n".join(lines)
           print("\n--- RELEASE NOTES ---\n" + notes)
-          with open("RELEASE_NOTES.md", "w") as f:
+          with open("/tmp/RELEASE_NOTES.md", "w") as f:
               f.write(notes)
           PYEOF
 
-      - name: Ensure RELEASE_NOTES.md exists
+      - name: Ensure release notes exist
         run: |
-          if [ ! -s RELEASE_NOTES.md ]; then
+          if [ ! -s /tmp/RELEASE_NOTES.md ]; then
             echo "Release notes generation produced no output — using fallback." >&2
-            echo "See full changelog: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}" > RELEASE_NOTES.md
+            echo "See full changelog: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}" > /tmp/RELEASE_NOTES.md
           fi
 
       - name: Run tests before publish
@@ -178,7 +178,12 @@ jobs:
         with:
           distribution: goreleaser
           version: latest
-          args: release --clean --release-notes RELEASE_NOTES.md
+          args: release --clean --release-notes 
+          
+          
+          
+          
+          /RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
