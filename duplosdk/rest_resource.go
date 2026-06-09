@@ -66,7 +66,7 @@ func (r *RESTResource[T]) Delete(id string) ClientError {
 // without removing the record itself. It is the pre-delete step for resources
 // the API will not delete while live. A 404 is treated as success (already gone).
 func (r *RESTResource[T]) Deprovision(id string) ClientError {
-	err := r.client.callAPI(r.endpoint.deprovisionVerb(), r.endpoint.deprovisionPath(r.scope, id), nil, nil)
+	err := r.client.callAPI(r.endpoint.deprovisionVerb(), r.endpoint.deprovisionPath(r.scope, id), map[string]any{}, nil)
 	if err != nil && err.IsNotFound() {
 		return nil
 	}

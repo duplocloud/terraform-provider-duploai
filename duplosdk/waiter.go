@@ -24,9 +24,14 @@ type Waiter[T any] struct {
 	// only aborts once a failure state has been seen on N+1 consecutive polls;
 	// if the status leaves the failure set in between, the counter resets. The
 	// default of 0 means abort on the first failure observation.
-	FailureRetries  int
-	StatusFn        func(*T) string
-	FailureDetailFn func(*T) string // optional: extra context appended to the error message
+	FailureRetries int
+	// FailurePollInterval overrides PollInterval when the resource is in a
+	// failure state. Useful for backends that recover slowly after a transient
+	// failure — a longer wait avoids hammering the API during retry. Falls back
+	// to PollInterval when zero.
+	FailurePollInterval time.Duration
+	StatusFn            func(*T) string
+	FailureDetailFn     func(*T) string // optional: extra context appended to the error message
 }
 
 // failureMsg builds the terminal-failure error text for a status, appending any
@@ -71,12 +76,14 @@ func (w *Waiter[T]) Wait(ctx context.Context, name string, timeout time.Duration
 			return nil, newClientError(0, fmt.Errorf("timed out waiting for %s (last status: %q)", name, status))
 		}
 
-		// Sleep between polls, but wake immediately if the operation is
-		// cancelled (e.g. the user interrupts terraform apply).
+		interval := w.PollInterval
+		if failCount > 0 && w.FailurePollInterval > 0 {
+			interval = w.FailurePollInterval
+		}
 		select {
 		case <-ctx.Done():
 			return nil, newClientError(0, fmt.Errorf("waiting for %s cancelled: %w", name, ctx.Err()))
-		case <-time.After(w.PollInterval):
+		case <-time.After(interval):
 		}
 	}
 }
@@ -113,10 +120,14 @@ func (w *Waiter[T]) WaitGone(ctx context.Context, name string, timeout time.Dura
 			return newClientError(0, fmt.Errorf("timed out waiting for %s to be deleted (last status: %q)", name, status))
 		}
 
+		interval := w.PollInterval
+		if failCount > 0 && w.FailurePollInterval > 0 {
+			interval = w.FailurePollInterval
+		}
 		select {
 		case <-ctx.Done():
 			return newClientError(0, fmt.Errorf("waiting for %s deletion cancelled: %w", name, ctx.Err()))
-		case <-time.After(w.PollInterval):
+		case <-time.After(interval):
 		}
 	}
 }
@@ -156,10 +167,14 @@ func (w *Waiter[T]) WaitDeprovisioned(ctx context.Context, name, successState st
 			return newClientError(0, fmt.Errorf("timed out waiting for %s to deprovision (last status: %q)", name, status))
 		}
 
+		interval := w.PollInterval
+		if failCount > 0 && w.FailurePollInterval > 0 {
+			interval = w.FailurePollInterval
+		}
 		select {
 		case <-ctx.Done():
 			return newClientError(0, fmt.Errorf("waiting for %s deprovision cancelled: %w", name, ctx.Err()))
-		case <-time.After(w.PollInterval):
+		case <-time.After(interval):
 		}
 	}
 }
