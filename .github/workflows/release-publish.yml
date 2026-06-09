@@ -40,7 +40,7 @@ jobs:
           CURRENT_TAG: ${{ github.ref_name }}
         run: |
           python3 << 'PYEOF'
-          import subprocess, json, os
+          import subprocess, json, os, sys
 
           tag  = os.environ["CURRENT_TAG"]
           repo = os.environ["GITHUB_REPOSITORY"]
@@ -62,20 +62,24 @@ jobs:
           else:
               prev_date = "2020-01-01T00:00:00Z"
 
-          print(f"Generating notes: {prev_tag} -> {tag} (since {prev_date})")
+          print(f"Generating notes: {prev_tag} -> {tag} (since {prev_date})", flush=True)
 
           def list_prs(base, since, until=None):
               search = f"merged:>{since}"
               if until:
                   search += f" merged:<{until}"
-              out = subprocess.run([
+              result = subprocess.run([
                   "gh", "pr", "list",
                   "--repo", repo, "--base", base, "--state", "merged",
                   "--json", "number,title,labels,author,headRefName",
                   "--search", search,
                   "--limit", "500",
-              ], capture_output=True, text=True).stdout
-              return json.loads(out or "[]")
+              ], capture_output=True, text=True)
+              if result.returncode != 0:
+                  print(f"WARN gh pr list error: {result.stderr.strip()}", flush=True)
+              prs = json.loads(result.stdout or "[]")
+              print(f"  list_prs(base={base!r}, since={since}, until={until}) -> {len(prs)} PRs", flush=True)
+              return prs
 
           # Detect stabilization branch from PRs merged to master in this window.
           # We query master only to find the branch name — master PRs themselves
@@ -86,6 +90,7 @@ jobs:
                if pr["headRefName"].startswith(("hotfix/", "release/"))),
               None
           )
+          print(f"Stabilization branch: {stab_branch}", flush=True)
 
           # Collect the real work PRs based on release type
           stab_prs = list_prs(stab_branch, prev_date) if stab_branch else []
@@ -103,10 +108,10 @@ jobs:
                   capture_output=True, text=True
               ).stdout.strip()
               extra_prs = list_prs("develop", since=prev_date, until=cut_date)
-              print(f"Release branch {stab_branch} cut from develop at {cut_date}")
-              print(f"Including {len(stab_prs)} release/* PRs + {len(extra_prs)} develop PRs")
+              print(f"Release branch {stab_branch} cut from develop at {cut_date}", flush=True)
+              print(f"Including {len(stab_prs)} release/* PRs + {len(extra_prs)} develop PRs", flush=True)
           elif stab_branch:
-              print(f"Hotfix branch {stab_branch}: including {len(stab_prs)} PRs")
+              print(f"Hotfix branch {stab_branch}: including {len(stab_prs)} PRs", flush=True)
 
           # Merge and deduplicate (stabilization PRs first, then develop PRs)
           seen, all_prs = set(), []
@@ -117,11 +122,14 @@ jobs:
 
           EXCLUDE_LABELS  = {"ignore-for-release", "dependencies"}
           EXCLUDE_AUTHORS = {"github-actions[bot]", "duploai-tf[bot]"}
+
+          # Each category matches any PR whose labels intersect the given set.
+          # Order matters — first match wins.
           CATEGORIES = [
-              ("breaking-change", "## Breaking Changes"),
-              ("enhancement",     "## New Features"),
-              ("bug",             "## Bug Fixes"),
-              ("documentation",   "## Documentation"),
+              ({"breaking-change"},           "## Breaking Changes"),
+              ({"enhancement", "feature"},    "## New Features"),
+              ({"bug", "fix"},                "## Bug Fixes"),
+              ({"documentation", "docs"},     "## Documentation"),
           ]
 
           def pr_labels(pr):
@@ -131,14 +139,15 @@ jobs:
               return (pr["author"]["login"] in EXCLUDE_AUTHORS or
                       bool(pr_labels(pr) & EXCLUDE_LABELS))
 
+          # Format: "- PR title (#number)" — no author, no noise
           def fmt(pr):
-              return f"* {pr['title']} by @{pr['author']['login']} in #{pr['number']}"
+              return f"- {pr['title']} (#{pr['number']})"
 
           lines, used = [], set()
 
-          for label_key, title in CATEGORIES:
+          for label_keys, title in CATEGORIES:
               section = [p for p in all_prs
-                         if label_key in pr_labels(p) and not excluded(p)
+                         if pr_labels(p) & label_keys and not excluded(p)
                          and p["number"] not in used]
               if section:
                   lines.append(title)
@@ -154,11 +163,15 @@ jobs:
                   lines.append(fmt(p))
               lines.append("")
 
-          if prev_tag:
-              lines.append(f"**Full Changelog**: https://github.com/{repo}/compare/{prev_tag}...{tag}")
+          changelog_url = (
+              f"https://github.com/{repo}/compare/{prev_tag}...{tag}"
+              if prev_tag else
+              f"https://github.com/{repo}/releases/tag/{tag}"
+          )
+          lines.append(f"**Full Changelog**: {changelog_url}")
 
           notes = "\n".join(lines)
-          print("\n--- RELEASE NOTES ---\n" + notes)
+          print(f"\n--- RELEASE NOTES ({len(all_prs)} PRs) ---\n{notes}\n---", flush=True)
           with open("/tmp/RELEASE_NOTES.md", "w") as f:
               f.write(notes)
           PYEOF
@@ -167,8 +180,15 @@ jobs:
         run: |
           if [ ! -s /tmp/RELEASE_NOTES.md ]; then
             echo "Release notes generation produced no output — using fallback." >&2
-            echo "See full changelog: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}" > /tmp/RELEASE_NOTES.md
+            printf '**Full Changelog**: https://github.com/%s/compare/%s...%s\n' \
+              "${GITHUB_REPOSITORY}" \
+              "$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo 'initial')" \
+              "${GITHUB_REF_NAME}" \
+              > /tmp/RELEASE_NOTES.md
           fi
+          echo "--- /tmp/RELEASE_NOTES.md ---"
+          cat /tmp/RELEASE_NOTES.md
+          echo "--- end ---"
 
       - name: Run tests before publish
         run: go test ./... -timeout 90s

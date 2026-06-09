@@ -22,6 +22,8 @@ Both paths converge at the same publish pipeline: merging to `master` creates a
 git tag, the tag push triggers GoReleaser, and a draft GitHub Release is
 published after a two-job pipeline.
 
+![Release Flow Diagram](./terraform_provider_release_flow.png)
+
 ---
 
 ## 2. Versioning Scheme
