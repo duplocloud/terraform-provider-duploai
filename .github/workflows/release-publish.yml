@@ -203,6 +203,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
 
+      - name: Set release notes
+        # GoReleaser v2 may still call GitHub's generate_release_notes API,
+        # which overwrites the file we passed via --release-notes with the
+        # squash commit body. This step explicitly forces our custom notes as
+        # the final body before publish-release makes the draft live.
+        run: |
+          gh release edit "${{ github.ref_name }}" \
+            --notes-file /tmp/RELEASE_NOTES.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   publish-release:
     runs-on: ubuntu-22.04
     needs:
