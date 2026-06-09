@@ -12,6 +12,7 @@ import (
 
 //go:generate terraform fmt -recursive ./examples/
 //go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name duploai
+//go:generate go run ./tools/gen_readme
 
 func main() {
 	var debug bool
