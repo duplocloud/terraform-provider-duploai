@@ -1,0 +1,703 @@
+# Resource Spec Reference — terraform-provider-duploai
+
+Every resource in this provider is driven by a single JSON file under
+[`duplocloud/specs/`](../duplocloud/specs/). No Go code is required. This document
+is the complete reference for writing a spec file.
+
+---
+
+## Overview
+
+A spec file is a JSON object at `duplocloud/specs/<name>.json`. The provider
+embeds every file in that directory at build time and registers one Terraform
+resource per file. The resource type name is `duploai_<name>`.
+
+**The minimum viable spec** (no waiter, default REST conventions):
+
+```json
+{
+  "name": "plan",
+  "description": "Manages a DuploAI plan.",
+  "idPath": "id",
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Plans"
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "Workspace that owns this plan (path parameter)."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "apiPath": "name",
+      "description": "Plan name."
+    }
+  ]
+}
+```
+
+Saving this file, running `go generate ./...` (to regenerate docs), and running
+`go build ./...` is all that is needed to add `duploai_plan` to the provider.
+
+---
+
+## Top-level fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | **yes** | Resource type suffix. Must match the file name (without `.json`). Yields `duploai_<name>` in Terraform. |
+| `description` | string | **yes** | User-facing description shown in generated docs and the Terraform schema. |
+| `idPath` | string | **yes** | Dot-path into the create/read response that contains the backend-assigned object ID (e.g. `"id"`, `"result.id"`). The engine composes the Terraform resource ID as `<scope_values>/<backend_id>`. |
+| `endpoint` | object | **yes** | API endpoint configuration. See [Endpoint config](#endpoint-config). |
+| `attributes` | array | **yes** | Schema attributes. See [Attributes](#attributes). |
+| `requestConstants` | array | no | Fixed key/value pairs injected into every request body. See [Request constants](#request-constants). |
+| `createConstants` | array | no | Fixed pairs injected into **create** (POST) bodies only. Overrides `requestConstants` for the same path. |
+| `updateConstants` | array | no | Fixed pairs injected into **update** (PUT) bodies only. Overrides `requestConstants` for the same path. |
+| `requiredIf` | array | no | Conditional-required rules evaluated at plan time. See [RequiredIf rules](#requiredif-rules). |
+| `waiter` | object | no | Async polling config. Required for resources that provision asynchronously. See [Waiter](#waiter). |
+
+---
+
+## Endpoint config
+
+The `"endpoint"` object tells the engine which URLs and HTTP verbs to use for
+each CRUD operation. All per-resource Go files that used to live in `duplosdk/`
+have been replaced by this block.
+
+### Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `uriBase` | string | — | **Required.** URL path prefix for all operations. May contain `{placeholder}` tokens that map to string attributes by the same name (e.g. `{workspace_id}`). |
+| `immutable` | bool | `false` | When `true`, the resource has no update operation — any change to a non-computed attribute forces resource replacement. |
+| `create` | OperationSpec | see below | Override the HTTP verb and/or path for the Create operation. |
+| `read` | OperationSpec | see below | Override for Read. |
+| `update` | OperationSpec | see below | Override for Update. Ignored when `immutable` is true. |
+| `delete` | OperationSpec | see below | Override for Delete. |
+| `deprovision` | OperationSpec | absent | When present, adds a pre-delete teardown step **before** the Delete call. `{}` uses defaults. |
+
+**OperationSpec fields:**
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `verb` | see table below | HTTP method (e.g. `"POST"`, `"PUT"`, `"DELETE"`). |
+| `path` | see table below | Path suffix appended to `uriBase`. May contain `{id}`. |
+
+### Default REST conventions
+
+When no override is given, the engine uses these defaults:
+
+| Operation | Default verb | Default path suffix |
+|-----------|-------------|---------------------|
+| Create | `POST` | *(none — posts to `uriBase`)* |
+| Read | `GET` | `/{id}` |
+| Update | `PUT` | `/{id}` |
+| Delete | `DELETE` | `/{id}` |
+| Deprovision | `POST` | `/{id}/deprovision` |
+
+The resolved URL is always `uriBase` + path suffix, with `{placeholder}` tokens
+substituted from the plan state.
+
+### Common patterns
+
+**Standard mutable resource** (default conventions, no override needed):
+```json
+"endpoint": {
+  "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Plans"
+}
+```
+
+**Mutable resource with a deprovision step** (pre-delete teardown, default POST /{id}/deprovision):
+```json
+"endpoint": {
+  "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AWSRdsInstances",
+  "deprovision": {}
+}
+```
+
+**Immutable resource** (no update — all changes force replacement):
+```json
+"endpoint": {
+  "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Namespaces",
+  "immutable": true,
+  "deprovision": {}
+}
+```
+
+**Custom deprovision verb/path** (override the defaults):
+```json
+"endpoint": {
+  "uriBase": "/v1/.../things",
+  "deprovision": {
+    "verb": "DELETE",
+    "path": "/{id}/teardown"
+  }
+}
+```
+
+**Action-style API** (each operation has its own path, non-REST):
+```json
+"endpoint": {
+  "uriBase": "/v1/svc/{tenant_id}",
+  "create": { "verb": "POST", "path": "/CreateThing" },
+  "read":   { "verb": "GET",  "path": "/GetThing/{id}" },
+  "update": { "verb": "POST", "path": "/UpdateThing/{id}" },
+  "delete": { "verb": "POST", "path": "/DeleteThing/{id}" }
+}
+```
+
+### Path parameters
+
+Every `{placeholder}` in `uriBase` (other than `{id}`) must have a matching
+`string` attribute in the spec with the same name. The engine validates this at
+startup. Path-parameter attributes should have no `apiPath` (so they are not
+sent in the request body — they go into the URL only):
+
+```json
+{
+  "name": "workspace_id",
+  "type": "string",
+  "required": true,
+  "forceNew": true,
+  "description": "Workspace ID (path parameter)."
+}
+```
+
+The reserved name `id` must not appear in `attributes` — the engine injects it
+automatically.
+
+---
+
+## Attributes
+
+The `"attributes"` array describes the Terraform schema and how each field maps
+to the API's JSON body. Each entry is an `AttributeSpec` object.
+
+### Attribute fields reference
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | **Required.** Terraform attribute name (snake_case). Must be unique within the spec. `"id"` is reserved. |
+| `description` | string | User-facing description in generated docs and the schema. |
+| `type` | string | **Required.** Terraform type. See [Supported types](#supported-types). |
+| `required` | bool | Attribute must be set in config. Mutually exclusive with `computed`-only. |
+| `optional` | bool | Attribute may be set in config. |
+| `computed` | bool | Attribute may be set by the provider (server-returned). |
+| `sensitive` | bool | Value is masked in plan output and state. Use for passwords, tokens, keys. |
+| `forceNew` | bool | Changing this attribute destroys and recreates the resource (`RequiresReplace`). |
+| `default` | any | Static default value (JSON literal). Requires `computed: true` — the framework errors if `computed` is false and a default is set. |
+| `oneOf` | array of strings | Enum constraint on a `string` attribute. Bad values fail at plan time. Only wired for `string` — on any other type it is silently ignored. |
+| `apiPath` | string | Dot-path in the API body this attribute reads/writes (e.g. `"spec.region"`). See [Path mapping](#path-mapping). |
+| `requestPath` | string | Override `apiPath` for write direction only. |
+| `responsePath` | string | Override `apiPath` for read direction only. |
+| `createPath` | string | Override for POST (create) body. Falls back to `requestPath`, then `apiPath`. |
+| `updatePath` | string | Override for PUT (update) body. Falls back to `requestPath`, then `apiPath`. |
+| `createOnly` | bool | Send this field in POST (create) only; never in PUT (update). Useful for fields immutable after creation that do not trigger replacement. |
+| `noSend` | bool | Read from the response but never sent in requests. Use for computed-only output fields. |
+| `attributes` | array | Nested `AttributeSpec` entries. Required when `type` is an object form. Recurses to any depth. |
+
+### Supported types
+
+| Type string | Terraform type | Notes |
+|-------------|---------------|-------|
+| `"string"` | `types.String` | Supports `default`, `oneOf`, `sensitive`, `forceNew`. |
+| `"bool"` | `types.Bool` | Supports `default`, `forceNew`. |
+| `"int"` | `types.Int64` | Supports `default`, `forceNew`. |
+| `"number"` | `types.Float64` | Supports `default`, `forceNew`. Use for floating-point values. |
+| `"list(string)"` | `types.List` of string | Ordered, allows duplicates. |
+| `"list(bool)"` | `types.List` of bool | |
+| `"list(int)"` | `types.List` of int64 | |
+| `"list(number)"` | `types.List` of float64 | |
+| `"list(object)"` | `ListNestedAttribute` | Requires `attributes`. |
+| `"set(string)"` | `types.Set` of string | Unordered, deduplicated. Prefer over `list` when order doesn't matter. |
+| `"set(bool)"` | `types.Set` of bool | |
+| `"set(int)"` | `types.Set` of int64 | |
+| `"set(number)"` | `types.Set` of float64 | |
+| `"set(object)"` | `SetNestedAttribute` | Requires `attributes`. |
+| `"map(string)"` | `types.Map` of string | String-keyed map. |
+| `"map(bool)"` | `types.Map` of bool | |
+| `"map(int)"` | `types.Map` of int64 | |
+| `"map(number)"` | `types.Map` of float64 | |
+| `"map(object)"` | `MapNestedAttribute` | String keys, object values. Requires `attributes`. |
+| `"object"` | `SingleNestedAttribute` | Single nested object. Requires `attributes`. |
+
+### Terraform schema combinations
+
+| Combination | Meaning | Notes |
+|-------------|---------|-------|
+| `required: true` | User must supply a value. | Cannot combine with `optional` or be `computed`-only. |
+| `optional: true` | User may supply a value. | Omitting leaves it null. |
+| `computed: true` | Provider may set the value. | Alone = read-only output field. |
+| `optional + computed` | User may set it; if not, the server fills it in. | The most common pattern for server-defaulted fields. **Must have `default`** if the server always returns a value, to avoid perpetual drift. |
+| `required: false, optional: false, computed: true` | Purely computed (e.g. `status`, `id`). Not user-configurable. | |
+
+**Rules enforced at startup:**
+- Exactly one of `required` / `optional` / `computed` must be true (or `optional + computed`).
+- `required + computed` is invalid (framework rejects it).
+- `required + optional` is invalid.
+- `default` requires `computed: true` — the framework hard-errors otherwise.
+
+### Path mapping
+
+`apiPath` is a dot-separated path into the JSON body. The engine uses it for
+both reading the response and writing the request.
+
+**Examples:**
+
+| `apiPath` | JSON body location |
+|-----------|-------------------|
+| `"name"` | `{ "name": "..." }` |
+| `"spec.region"` | `{ "spec": { "region": "..." } }` |
+| `"spec.provisioner.type"` | `{ "spec": { "provisioner": { "type": "..." } } }` |
+
+**Array element extraction** (read-only, using `[]`):
+```json
+{
+  "name": "node_ids",
+  "type": "list(string)",
+  "computed": true,
+  "apiPath": "status.nodes[].id"
+}
+```
+This reads `status.nodes` as an array and extracts the `id` field from each
+element into a `list(string)`.
+
+**Top-level attribute with no `apiPath`** is a path parameter — it goes into
+the URL and is never sent in the body, and is never read from the response.
+This is how `workspace_id` works.
+
+**Nested attribute with no `apiPath`** defaults to the field's own `name` as
+the key in the parent object. No `apiPath` needed for straightforward mappings.
+
+**Split request/response paths** — use when the API sends and receives a value
+at different locations:
+```json
+{
+  "name": "region",
+  "type": "string",
+  "optional": true,
+  "requestPath": "spec.region",
+  "responsePath": "configuration.region"
+}
+```
+
+**Per-verb path overrides** — use when create and update DTOs differ:
+```json
+{
+  "name": "config",
+  "type": "string",
+  "optional": true,
+  "createPath": "spec.createRequest.config",
+  "updatePath": "spec.updateRequest.config"
+}
+```
+
+### Attribute examples
+
+**Required path parameter (no body mapping):**
+```json
+{
+  "name": "workspace_id",
+  "type": "string",
+  "required": true,
+  "forceNew": true,
+  "description": "Workspace ID (URL path parameter)."
+}
+```
+
+**Required body field:**
+```json
+{
+  "name": "name",
+  "type": "string",
+  "required": true,
+  "apiPath": "name",
+  "description": "Resource name."
+}
+```
+
+**Optional + computed with default (server-defaulted):**
+```json
+{
+  "name": "description",
+  "type": "string",
+  "optional": true,
+  "computed": true,
+  "default": "",
+  "apiPath": "description",
+  "description": "Optional description."
+}
+```
+
+**Enum string:**
+```json
+{
+  "name": "mode",
+  "type": "string",
+  "optional": true,
+  "computed": true,
+  "default": "Create",
+  "oneOf": ["Create", "Import"],
+  "forceNew": true,
+  "apiPath": "spec.mode",
+  "description": "Provisioning mode."
+}
+```
+
+**Sensitive (credentials, tokens):**
+```json
+{
+  "name": "master_user_password",
+  "type": "string",
+  "optional": true,
+  "sensitive": true,
+  "apiPath": "spec.masterUserPassword",
+  "description": "Master user password."
+}
+```
+
+**Computed-only output (read from response, never sent):**
+```json
+{
+  "name": "status",
+  "type": "string",
+  "computed": true,
+  "apiPath": "status",
+  "description": "Current provisioning status."
+}
+```
+
+**Computed-only, explicitly not sent (noSend):**
+```json
+{
+  "name": "cf_stack_name",
+  "type": "string",
+  "computed": true,
+  "noSend": true,
+  "apiPath": "result.cfStackName",
+  "description": "CloudFormation stack name."
+}
+```
+
+**Create-only field (immutable after creation, no replacement):**
+```json
+{
+  "name": "code_source",
+  "type": "string",
+  "optional": true,
+  "createOnly": true,
+  "apiPath": "spec.codeSource",
+  "description": "Code source URI. Set on create only."
+}
+```
+
+**Nested object:**
+```json
+{
+  "name": "components",
+  "type": "object",
+  "optional": true,
+  "computed": true,
+  "apiPath": "spec.components",
+  "description": "Cluster add-ons.",
+  "attributes": [
+    {
+      "name": "cluster_autoscaler",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "clusterAutoscaler",
+      "description": "Install the Cluster Autoscaler."
+    }
+  ]
+}
+```
+
+**List of objects:**
+```json
+{
+  "name": "parameters",
+  "type": "list(object)",
+  "optional": true,
+  "apiPath": "spec.parameters",
+  "description": "DB parameter overrides.",
+  "attributes": [
+    { "name": "name",  "type": "string", "required": true, "apiPath": "name" },
+    { "name": "value", "type": "string", "required": true, "apiPath": "value" }
+  ]
+}
+```
+
+---
+
+## Request constants
+
+`requestConstants`, `createConstants`, and `updateConstants` inject fixed
+key/value pairs into request bodies. They are useful for envelope fields or
+discriminators the API requires that are not user-configurable (and therefore
+should not appear in the schema).
+
+Each entry:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `path` | string | Dot-path where the value is injected in the request body. |
+| `value` | any | JSON value. Can be a string, number, bool, array, or object. |
+
+`createConstants` and `updateConstants` take precedence over `requestConstants`
+when both set the same path.
+
+**Example** — always inject `spec.mode = "Create"` into every request:
+```json
+"requestConstants": [
+  { "path": "spec.mode", "value": "Create" }
+]
+```
+
+**Example** — different values for create vs update:
+```json
+"createConstants": [
+  { "path": "operation", "value": "create" }
+],
+"updateConstants": [
+  { "path": "operation", "value": "update" }
+]
+```
+
+---
+
+## RequiredIf rules
+
+`requiredIf` enforces plan-time conditional requirements: attribute `A` must be
+set whenever attribute `B` equals a specific value.
+
+Each rule:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `attribute` | string | The attribute that becomes required. Must exist in `attributes`. |
+| `whenAttribute` | string | The trigger attribute to watch. Must exist in `attributes`. |
+| `whenEquals` | string | The value of `whenAttribute` that activates the requirement. |
+
+**Example** — `kms_key_id` is required when `storage_encrypted` is `"true"`:
+```json
+"requiredIf": [
+  {
+    "attribute": "kms_key_id",
+    "whenAttribute": "storage_encrypted",
+    "whenEquals": "true"
+  }
+]
+```
+
+---
+
+## Waiter
+
+For resources that provision asynchronously (most resources in this provider),
+the `"waiter"` block tells the engine how to poll until the resource reaches a
+terminal state. Without a waiter, `terraform apply` returns immediately after
+the API call, leaving the resource potentially still provisioning.
+
+### Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `statusPath` | string | — | **Required.** Dot-path in the read response to the status string (e.g. `"status"`). |
+| `successState` | string | — | **Required.** The terminal success value (e.g. `"Complete"`). |
+| `failureStates` | object | — | Map of terminal failure values → human-readable error message. The engine surfaces the message as a Terraform error. |
+| `deprovisionedState` | string | — | Terminal status after the deprovision step completes (e.g. `"DeProvisioned"`). Required when `endpoint.deprovision` is set — the delete flow waits for this state before issuing the final delete call. |
+| `failureDetailPath` | string | — | Dot-path to a response field with extra error context (e.g. `"blockedReason"`). Appended to the error message when the status is a failure state. |
+| `failureRetries` | int | `0` | How many extra polls to tolerate after first seeing a failure state before treating it as terminal. Use for backends that report a transient failure and then self-recover. |
+| `pollIntervalSeconds` | int | `10` | Seconds between status polls. |
+| `createTimeoutMinutes` | int | `30` | Default create timeout. Overridable per-instance via the `timeouts` block. |
+| `updateTimeoutMinutes` | int | `30` | Default update timeout. |
+| `deleteTimeoutMinutes` | int | `15` | Default delete timeout. |
+
+When a waiter is present, the provider automatically adds a `failure_retries`
+attribute (optional `int64`) to the schema so users can override
+`failureRetries` per resource instance without changing the spec.
+
+When a waiter is present and `endpoint.hasUpdate()` is true (i.e. the resource
+is mutable), a `timeouts` block is automatically added to the schema.
+
+### Example waiter
+
+```json
+"waiter": {
+  "statusPath": "status",
+  "successState": "Complete",
+  "deprovisionedState": "DeProvisioned",
+  "failureStates": {
+    "Failed": "provisioning failed",
+    "Blocked": "provisioning is blocked",
+    "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+    "DeprovisionFailed": "deprovisioning failed"
+  },
+  "failureDetailPath": "blockedReason",
+  "failureRetries": 3,
+  "pollIntervalSeconds": 15,
+  "createTimeoutMinutes": 60,
+  "updateTimeoutMinutes": 60,
+  "deleteTimeoutMinutes": 30
+}
+```
+
+---
+
+## Complete example
+
+The following spec shows every section in use. It is based on
+[`examples/adding-a-resource/foo.json`](../examples/adding-a-resource/foo.json),
+the canonical reference file:
+
+```json
+{
+  "name": "my_resource",
+  "description": "Manages a My Resource within a workspace.",
+  "idPath": "id",
+
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/MyResources",
+    "deprovision": {}
+  },
+
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "Workspace ID (URL path parameter, not sent in body)."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Resource name. Immutable after creation."
+    },
+    {
+      "name": "mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Create",
+      "oneOf": ["Create", "Import"],
+      "forceNew": true,
+      "apiPath": "spec.mode",
+      "description": "Provisioning mode."
+    },
+    {
+      "name": "instance_class",
+      "type": "string",
+      "required": true,
+      "apiPath": "spec.instanceClass",
+      "description": "Instance class (e.g. t3.medium)."
+    },
+    {
+      "name": "token",
+      "type": "string",
+      "optional": true,
+      "sensitive": true,
+      "apiPath": "spec.token",
+      "description": "Auth token (masked in plan output)."
+    },
+    {
+      "name": "tags",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.tags",
+      "description": "Resource tags."
+    },
+    {
+      "name": "settings",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.settings",
+      "description": "Additional settings.",
+      "attributes": [
+        {
+          "name": "timeout_ms",
+          "type": "int",
+          "optional": true,
+          "apiPath": "timeoutMs",
+          "description": "Request timeout in milliseconds."
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    }
+  ],
+
+  "requestConstants": [
+    { "path": "kind", "value": "MyResource" }
+  ],
+
+  "requiredIf": [
+    {
+      "attribute": "token",
+      "whenAttribute": "mode",
+      "whenEquals": "Import"
+    }
+  ],
+
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "deprovisionedState": "DeProvisioned",
+    "failureStates": {
+      "Failed": "provisioning failed",
+      "Blocked": "provisioning is blocked"
+    },
+    "failureDetailPath": "blockedReason",
+    "pollIntervalSeconds": 10,
+    "createTimeoutMinutes": 30,
+    "updateTimeoutMinutes": 30,
+    "deleteTimeoutMinutes": 15
+  }
+}
+```
+
+---
+
+## Quick checklist when adding a new resource
+
+1. **Create `duplocloud/specs/<name>.json`** with `name`, `description`,
+   `idPath`, `endpoint.uriBase`, and `attributes`.
+2. **Add `workspace_id`** (or whatever path parameter(s) appear in `uriBase`)
+   as `required + forceNew` with no `apiPath`.
+3. **Set `forceNew: true`** on every field the API cannot update in place.
+4. **Set `immutable: true`** in `endpoint` if the API has no PUT operation at all.
+5. **Add `"deprovision": {}`** in `endpoint` if the API requires a teardown step
+   before deletion, and add `deprovisionedState` to the `waiter`.
+6. **Add a `waiter`** if provisioning is asynchronous (most resources here are).
+7. **Run `go generate ./...`** to regenerate docs, then
+   **run `go build ./...` and `go test ./...`** to verify the spec is valid.
+8. **Add `examples/resources/duploai_<name>/resource.tf`** and
+   **`import.sh`** — required by CI.
+
+## Common mistakes
+
+| Mistake | Symptom | Fix |
+|---------|---------|-----|
+| `default` without `computed: true` | Provider panics at startup: `"Default set, but Computed is false"` | Add `"computed": true`. |
+| `required: true` on a top-level body field but no `apiPath` | Field silently goes into the URL, not the body | Add `"apiPath": "<field>"`. |
+| `deprovision: {}` in endpoint but no `deprovisionedState` in waiter | Delete hangs until timeout — waiter never sees the pre-delete terminal state | Add `"deprovisionedState": "DeProvisioned"` (or whatever the API returns). |
+| Path parameter not in `attributes` | Provider panics at startup: `endpoint path references unknown attribute {x}` | Add the attribute as a `string + required + forceNew` with no `apiPath`. |
+| `required + computed` on the same attribute | Provider panics at schema build: framework rejects it | Use `optional + computed` instead. |
+| Mutable field missing `forceNew` | Terraform silently no-ops or the update call fails (field not in PUT body) | Add `"forceNew": true` or `"createOnly": true` depending on semantics. |
+| `oneOf` on a non-string type | No validation, no error — constraint is silently ignored | Only `oneOf` on `"type": "string"` attributes; use a different guard for other types. |
