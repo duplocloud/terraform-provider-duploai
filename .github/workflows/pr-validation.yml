@@ -24,74 +24,96 @@ jobs:
         with:
           script: |
             const prBody = context.payload.pull_request.body || '';
-            const prTitle = context.payload.pull_request.title || '';
+            let prTitle = context.payload.pull_request.title || '';
 
-            // Check if ClickUp ticket ID exists in PR body or title
-            const clickupPattern = /DUPLOAI-\d+/;
-            const clickupUrlPattern = /https:\/\/app\.clickup\.com\/t\/\d+\/DUPLOAI-\d+/;
+            // Strip ClickUp ID from title if present and update via API
+            const titleClickupMatch = prTitle.match(/DUPLOAI-\d+[:\s-]*/i);
+            if (titleClickupMatch) {
+              const cleanTitle = prTitle.replace(/DUPLOAI-\d+[:\s-]*/i, '').trim();
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                title: cleanTitle,
+              });
+              core.warning(`⚠️ ClickUp ticket ID removed from PR title. New title: "${cleanTitle}"`);
+              prTitle = cleanTitle;
+            }
 
-            const hasClickupId = clickupPattern.test(prBody) || clickupPattern.test(prTitle);
-            const hasClickupUrl = clickupUrlPattern.test(prBody);
-
-            if (!hasClickupId && !hasClickupUrl) {
-              core.setFailed('❌ PR validation failed: ClickUp ticket ID (DUPLOAI-XXXXX) is required in either the PR title or description.\n\nPlease add a ClickUp ticket reference in one of these formats:\n1. In the PR title: "DUPLOAI-12345: Your PR title"\n2. In the PR description: "DUPLOAI-12345"\n3. As a full URL: "https://app.clickup.com/t/8655600/DUPLOAI-12345"');
+            // Title length: 20–72 chars (titles become changelog entries)
+            if (prTitle.length < 20) {
+              core.setFailed(`❌ PR title too short (${prTitle.length} chars, min 20). Write a descriptive title — it becomes the changelog entry.`);
+              return;
+            }
+            if (prTitle.length > 72) {
+              core.setFailed(`❌ PR title too long (${prTitle.length} chars, max 72). Shorten it to keep the changelog readable.`);
               return;
             }
 
-            // Check if PR description has required sections
+            // ClickUp ID must be in the body (not the title)
+            const clickupPattern = /DUPLOAI-\d+/;
+            const clickupUrlPattern = /https:\/\/app\.clickup\.com\/t\/\d+\/DUPLOAI-\d+/;
+            if (!clickupPattern.test(prBody) && !clickupUrlPattern.test(prBody)) {
+              core.setFailed('❌ PR validation failed: ClickUp ticket ID (DUPLOAI-XXXXX) is required in the PR description.\n\nAdd it to the "ClickUp Ticket" section.');
+              return;
+            }
+
+            // All required sections must be present
             const requiredSections = [
               'ClickUp Ticket',
+              'Type',
               'Overview',
               'Summary of changes',
               'Testing performed',
-              'Describe any breaking changes'
+              'Describe any breaking changes',
             ];
-
-            const missingSections = requiredSections.filter(section => {
-              const sectionPattern = new RegExp(`##\\s*${section}`, 'i');
-              return !sectionPattern.test(prBody);
-            });
-
+            const missingSections = requiredSections.filter(section =>
+              !new RegExp(`##\\s*${section}`, 'i').test(prBody)
+            );
             if (missingSections.length > 0) {
-              core.setFailed(`❌ PR validation failed: Missing required sections in PR description:\n${missingSections.map(s => `  - ${s}`).join('\n')}\n\nPlease use the PR template and fill in all required sections.`);
+              core.setFailed(`❌ PR validation failed: Missing required sections:\n${missingSections.map(s => `  - ${s}`).join('\n')}\n\nPlease use the PR template.`);
               return;
             }
 
-            // Check if ClickUp Ticket section has content (not just empty)
+            // ClickUp Ticket section must have content
             const clickupSectionMatch = prBody.match(/##\s*ClickUp Ticket[\s\S]*?(?=##|$)/i);
             if (clickupSectionMatch) {
               const clickupSection = clickupSectionMatch[0];
-              // Remove comments and the section header
               const contentWithoutComments = clickupSection.replace(/<!--[\s\S]*?-->/g, '').replace(/^##\s*ClickUp Ticket/i, '').trim();
-
-              // Check if there's meaningful content (not just the empty label)
               const hasContent = contentWithoutComments.split('\n').some(line => {
                 const trimmed = line.trim();
-                // Check if line has content after removing the label
                 if (trimmed.startsWith('**ClickUp Ticket ID:**')) {
-                  const afterLabel = trimmed.replace(/^\*\*ClickUp Ticket ID:\*\*/, '').trim();
-                  return afterLabel.length > 0;
+                  return trimmed.replace(/^\*\*ClickUp Ticket ID:\*\*/, '').trim().length > 0;
                 }
-                // Or if there's any other non-empty line
                 return trimmed.length > 0;
               });
-
               if (!hasContent) {
-                core.setFailed('❌ PR validation failed: ClickUp Ticket section is empty.\n\nPlease add your ClickUp ticket ID or URL in the "ClickUp Ticket" section.');
+                core.setFailed('❌ PR validation failed: ClickUp Ticket section is empty.\n\nAdd your ClickUp ticket ID or URL.');
                 return;
               }
             }
 
-            core.info('✅ PR validation passed: All required sections are present and ClickUp ticket ID is included.');
+            // Type: exactly one checkbox must be checked
+            const typeSection = (prBody.match(/##\s*Type[\s\S]*?(?=##|$)/i) || [''])[0];
+            const checkedTypes = [...typeSection.matchAll(/- \[x\] `(enhancement|bug|breaking-change|documentation)`/gi)];
+            if (checkedTypes.length === 0) {
+              core.setFailed('❌ PR validation failed: No PR type selected in the "Type" section. Check exactly one.');
+              return;
+            }
+            if (checkedTypes.length > 1) {
+              core.setFailed('❌ PR validation failed: Multiple types selected in the "Type" section. Check exactly one.');
+              return;
+            }
+
+            core.info(`✅ PR validation passed. Type: ${checkedTypes[0][1]}, Title length: ${prTitle.length}`);
 
       - name: Add validation comment
         if: success()
         uses: actions/github-script@v7
         with:
           script: |
-            const comment = '✅ **PR Validation Passed**\n\nAll required sections are present and ClickUp ticket ID is included.';
+            const comment = '✅ **PR Validation Passed**\n\nAll required sections are present, ClickUp ticket ID is included, and PR type is selected.';
 
-            // Check if we already commented
             const comments = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
