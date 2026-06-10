@@ -15,9 +15,11 @@ Manages a DuploCloud AI Helpdesk AWS RDS (Aurora) cluster.
 ```terraform
 # Basic Aurora PostgreSQL cluster with a managed master password
 resource "duploai_rds_cluster" "basic" {
-  workspace_id = "<workspace-id>"
-  name         = "prod-db"
-  scope_ids    = ["<scope-id>"]
+  workspace_id      = "<workspace-id>"
+  environment_id    = "<environment-id>"
+  resource_group_id = "<resource-group-id>"
+  name              = "prod-db"
+  scope_ids         = ["<scope-id>"]
 
   engine          = "aurora-postgresql"
   engine_version  = "16.4"
@@ -36,9 +38,11 @@ resource "duploai_rds_cluster" "basic" {
 
 # Serverless v2 cluster with backups, encryption, and a read replica
 resource "duploai_rds_cluster" "serverless" {
-  workspace_id = "<workspace-id>"
-  name         = "analytics-db"
-  scope_ids    = ["<scope-id>"]
+  workspace_id      = "<workspace-id>"
+  environment_id    = "<environment-id>"
+  resource_group_id = "<resource-group-id>"
+  name              = "analytics-db"
+  scope_ids         = ["<scope-id>"]
 
   engine          = "aurora-postgresql"
   engine_version  = "16.4"
@@ -96,6 +100,7 @@ resource "duploai_rds_cluster" "serverless" {
 ### Required
 
 - `engine` (String) Database engine (e.g. aurora-postgresql, aurora-mysql).
+- `environment_id` (String) ID of the environment that owns the resource group.
 - `name` (String) Name of the RDS cluster.
 - `resource_group_id` (String) ID of the resource group (under an environment) this cluster belongs to.
 - `scope_ids` (List of String) Scope IDs that link this cluster to a cloud provider account.
@@ -121,7 +126,6 @@ resource "duploai_rds_cluster" "serverless" {
 - `enable_performance_insights` (Boolean) Enable Performance Insights.
 - `engine_mode` (String) Cluster engine mode. Accepted values are defined by the backend RdsClusterEngineMode enum (e.g. the provisioned vs. serverless mode); confirm the exact value against your tenant.
 - `engine_version` (String) Engine version. Changing this in place triggers an engine upgrade.
-- `environment_id` (String) ID of the environment that owns the resource group.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `kms_key_id` (String) KMS key ID used for storage encryption.
 - `manage_master_user_password` (Boolean) Let AWS manage the master user password in Secrets Manager instead of supplying master_user_password.

@@ -4,6 +4,7 @@ resource "duploai_helm_release" "podinfo" {
   name              = "podinfo"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   interval         = "10m"
@@ -27,6 +28,7 @@ resource "duploai_helm_release" "app" {
   name              = "app"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   interval = "5m"

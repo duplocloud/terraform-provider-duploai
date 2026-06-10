@@ -5,6 +5,7 @@ resource "duploai_app_service" "nginx" {
   deployment_name   = "nginx"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   replicas   = 2

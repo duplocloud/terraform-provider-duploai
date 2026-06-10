@@ -20,6 +20,7 @@ resource "duploai_app_service" "nginx" {
   deployment_name   = "nginx"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   replicas   = 2
@@ -80,6 +81,7 @@ resource "duploai_app_service" "nginx" {
 
 - `containers` (Attributes List) Containers that make up the pod. (see [below for nested schema](#nestedatt--containers))
 - `deployment_name` (String) Name of the Kubernetes Deployment object (typically the same as name).
+- `environment_id` (String) ID of the environment that owns the resource group.
 - `name` (String) Name of the app service resource.
 - `namespace_name` (String) Kubernetes namespace the deployment is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this app service belongs to.
@@ -90,7 +92,6 @@ resource "duploai_app_service" "nginx" {
 
 - `annotations` (Map of String) Kubernetes annotations applied to the Deployment object.
 - `description` (String) Optional description.
-- `environment_id` (String) ID of the environment that owns the resource group.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `ingress` (Attributes) Optional Kubernetes Ingress exposing the Service over HTTP(S). Omit to create no Ingress. (see [below for nested schema](#nestedatt--ingress))
 - `labels` (Map of String) Kubernetes labels applied to the Deployment object.

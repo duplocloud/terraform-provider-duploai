@@ -4,6 +4,7 @@ resource "duploai_helm_repository" "bitnami" {
   name              = "bitnami"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   url      = "https://charts.bitnami.com/bitnami"
@@ -16,6 +17,7 @@ resource "duploai_helm_repository" "private_oci" {
   name              = "internal-charts"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   url             = "oci://registry.example.com/charts"

@@ -50,8 +50,7 @@
     {
       "name": "environment_id",
       "type": "string",
-      "optional": true,
-      "computed": true,
+      "required": true,
       "forceNew": true,
       "apiPath": "spec.environmentId",
       "description": "ID of the environment that owns the resource group."

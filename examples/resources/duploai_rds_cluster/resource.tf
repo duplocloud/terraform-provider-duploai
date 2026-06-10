@@ -1,8 +1,10 @@
 # Basic Aurora PostgreSQL cluster with a managed master password
 resource "duploai_rds_cluster" "basic" {
-  workspace_id = "<workspace-id>"
-  name         = "prod-db"
-  scope_ids    = ["<scope-id>"]
+  workspace_id      = "<workspace-id>"
+  environment_id    = "<environment-id>"
+  resource_group_id = "<resource-group-id>"
+  name              = "prod-db"
+  scope_ids         = ["<scope-id>"]
 
   engine          = "aurora-postgresql"
   engine_version  = "16.4"
@@ -21,9 +23,11 @@ resource "duploai_rds_cluster" "basic" {
 
 # Serverless v2 cluster with backups, encryption, and a read replica
 resource "duploai_rds_cluster" "serverless" {
-  workspace_id = "<workspace-id>"
-  name         = "analytics-db"
-  scope_ids    = ["<scope-id>"]
+  workspace_id      = "<workspace-id>"
+  environment_id    = "<environment-id>"
+  resource_group_id = "<resource-group-id>"
+  name              = "analytics-db"
+  scope_ids         = ["<scope-id>"]
 
   engine          = "aurora-postgresql"
   engine_version  = "16.4"
