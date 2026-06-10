@@ -108,5 +108,23 @@ func (p *duploaiProvider) Resources(_ context.Context) []func() resource.Resourc
 }
 
 func (p *duploaiProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{}
+	specs, err := loadResourceSpecs()
+	if err != nil {
+		panic(fmt.Sprintf("loading specs for data sources: %s", err))
+	}
+	var factories []func() datasource.DataSource
+	for _, spec := range specs {
+		if !spec.DataSource {
+			continue
+		}
+		endpoint, buildErr := spec.BuildEndpoint()
+		if buildErr != nil {
+			panic(fmt.Sprintf("data source %q: %s", spec.Name, buildErr))
+		}
+		if err := spec.checkPathParams(endpoint.PathParams()); err != nil {
+			panic(fmt.Sprintf("data source %q: %s", spec.Name, err))
+		}
+		factories = append(factories, newDynamicDataSourceFactory(spec, endpoint))
+	}
+	return factories
 }

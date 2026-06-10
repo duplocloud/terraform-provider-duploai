@@ -2,6 +2,7 @@
   "name": "network_baseline",
   "description": "Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways).",
   "idPath": "id",
+  "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/networks",
     "deprovision": {}

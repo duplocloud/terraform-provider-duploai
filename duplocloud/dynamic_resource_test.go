@@ -357,6 +357,49 @@ func TestStateFromResponse_RefreshesUnknownKeepsInput(t *testing.T) {
 	}
 }
 
+// On Read (refreshInputs=true) every API-mapped attribute — including ones the
+// user configured — is replaced by the live response so Terraform detects
+// drift, while attributes without an apiPath (e.g. path parameters) keep their
+// prior state value.
+func TestStateFromResponse_ReadRefreshesForDrift(t *testing.T) {
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"id":           tftypes.String,
+		"workspace_id": tftypes.String,
+		"size":         tftypes.String,
+	}}
+	prior := tftypes.NewValue(objType, map[string]tftypes.Value{
+		"id":           tftypes.NewValue(tftypes.String, "obj-1"),
+		"workspace_id": tftypes.NewValue(tftypes.String, "ws-1"), // path param, no apiPath
+		"size":         tftypes.NewValue(tftypes.String, "small"),
+	})
+	r := &dynamicResource{spec: ResourceSpec{Attributes: []AttributeSpec{
+		{Name: "workspace_id", Type: "string", Required: true},
+		{Name: "size", Type: "string", Optional: true, APIPath: "spec.size"},
+	}}}
+
+	var diags diag.Diagnostics
+	out := r.stateFromResponse(context.Background(), prior,
+		map[string]any{"spec": map[string]any{"size": "large"}}, // drifted out of band
+		map[string]string{}, "obj-1", true, &diags)
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+
+	m := map[string]tftypes.Value{}
+	if err := out.As(&m); err != nil {
+		t.Fatal(err)
+	}
+	var ws, size string
+	_ = m["workspace_id"].As(&ws)
+	if ws != "ws-1" {
+		t.Errorf("workspace_id = %q, want ws-1 (no apiPath — must keep prior value)", ws)
+	}
+	_ = m["size"].As(&size)
+	if size != "large" {
+		t.Errorf("size = %q, want large (read must surface drift from the response)", size)
+	}
+}
+
 // A computed child nested inside a configured object must be resolved to a known
 // value from the response on create — leaving it unknown errors with "provider
 // returned invalid result object after apply". Sibling configured leaves are kept.

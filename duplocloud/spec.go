@@ -56,6 +56,13 @@ type ResourceSpec struct {
 	// Waiter, when present, makes Create/Update poll until the resource
 	// reaches a terminal state.
 	Waiter *WaiterSpec `json:"waiter,omitempty"`
+
+	// DataSource, when true, registers a read-only data source (data.duploai_<name>)
+	// from this spec in addition to the managed resource. The data source schema is
+	// derived automatically: path-parameter attributes stay Required, all other
+	// readable attributes become Computed, and write-only attributes (those with no
+	// apiPath/responsePath) are excluded entirely.
+	DataSource bool `json:"dataSource,omitempty"`
 }
 
 // OperationSpec overrides the HTTP verb and/or path for one CRUD operation.

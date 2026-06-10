@@ -2,6 +2,7 @@
   "name": "cluster_attributes",
   "description": "Manages DuploCloud AI Helpdesk cluster attributes \u2014 add-ons and components installed onto an existing EKS cluster (autoscaler, ALB controller, EFS, external-dns, and more).",
   "idPath": "id",
+  "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/ClusterAttributes",
     "deprovision": {}

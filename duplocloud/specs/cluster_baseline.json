@@ -2,6 +2,7 @@
   "name": "cluster_baseline",
   "description": "Manages a DuploCloud AI Helpdesk EKS cluster baseline (control plane, networking, and optional system node group).",
   "idPath": "id",
+  "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Clusters",
     "deprovision": {}

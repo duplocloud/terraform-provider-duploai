@@ -2,6 +2,7 @@
   "name": "oci_repository",
   "description": "Manages a DuploCloud AI Helpdesk Kubernetes OCI repository (Flux OCIRepository).",
   "idPath": "id",
+  "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sOCIRepositories"
   },

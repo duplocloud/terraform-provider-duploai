@@ -2,6 +2,7 @@
   "name": "app_service",
   "description": "Manages a DuploCloud AI Helpdesk app service (Kubernetes Deployment).",
   "idPath": "id",
+  "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/appservices",
     "deprovision": {}

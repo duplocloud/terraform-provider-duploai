@@ -2,6 +2,7 @@
   "name": "aws_lambda",
   "description": "Manages a DuploCloud AI Helpdesk AWS Lambda function \u2014 a serverless compute resource that runs code in response to events within an environment and resource group.",
   "idPath": "id",
+  "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AwsLambdas",
     "deprovision": {}
