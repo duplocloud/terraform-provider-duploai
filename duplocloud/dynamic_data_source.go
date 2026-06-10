@@ -3,6 +3,8 @@ package duplocloud
 import (
 	"context"
 	"log"
+	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -16,6 +18,13 @@ var (
 	_ datasource.DataSource              = &dynamicDataSource{}
 	_ datasource.DataSourceWithConfigure = &dynamicDataSource{}
 )
+
+// dsReadRetryWindow bounds how long a data source read retries transient
+// failures — read-after-create lag (the backend may not return a just-created
+// object immediately), throttling, and server errors — before reporting the
+// last error. The flip side: a lookup of a genuinely nonexistent id takes this
+// long to fail.
+const dsReadRetryWindow = 60 * time.Second
 
 // dynamicDataSource is the generic Read-only engine for spec-driven data sources.
 // One instance is created per spec that has DataSource:true in specs/.
@@ -103,8 +112,17 @@ func (d *dynamicDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	objID := idVal.ValueString()
 	log.Printf("[TRACE] dynamic datasource %s Read(%s): start", d.spec.Name, objID)
 
+	// A resource's Terraform ID is composite ("scope.../object's id", see composeID)
+	// so users can chain `id = duploai_x.y.id` directly; the API itself takes only
+	// the trailing object id. State keeps the id exactly as configured — Terraform
+	// rejects a data source result whose config-set attributes change.
+	apiID := objID
+	if i := strings.LastIndex(apiID, "/"); i >= 0 {
+		apiID = apiID[i+1:]
+	}
+
 	api := duplosdk.NewRESTResource[map[string]any](d.Client, d.endpoint, scope, nil)
-	obj, clientErr := api.Get(objID)
+	obj, clientErr := api.GetWithRetry(ctx, apiID, dsReadRetryWindow)
 	if clientErr != nil {
 		if clientErr.IsNotFound() {
 			resp.Diagnostics.AddError("Object not found",

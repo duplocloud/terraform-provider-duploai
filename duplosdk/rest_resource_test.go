@@ -156,3 +156,95 @@ func TestRESTResource_DecodesLargeIntAsJSONNumber(t *testing.T) {
 		t.Errorf("big = %s, want 9007199254740993", n.String())
 	}
 }
+
+// shrinkRetryDelays makes GetWithRetry back off in microseconds for tests.
+func shrinkRetryDelays(t *testing.T) {
+	t.Helper()
+	origBase, origMax := retryBaseDelay, retryMaxDelay
+	retryBaseDelay, retryMaxDelay = 100*time.Microsecond, 400*time.Microsecond
+	t.Cleanup(func() { retryBaseDelay, retryMaxDelay = origBase, origMax })
+}
+
+// A read racing a just-finished create sees 404s before the object appears;
+// GetWithRetry must ride them out and return the object.
+func TestGetWithRetry_NotFoundThenSuccess(t *testing.T) {
+	shrinkRetryDelays(t)
+	var calls int
+	c := newServerClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls <= 2 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":{"id":"obj-1"}}`))
+	})
+	r := newThings(c)
+
+	got, err := r.GetWithRetry(context.Background(), "obj-1", time.Second)
+	if err != nil {
+		t.Fatalf("GetWithRetry: %v", err)
+	}
+	if (*got)["id"] != "obj-1" {
+		t.Errorf("id = %v, want obj-1", (*got)["id"])
+	}
+	if calls != 3 {
+		t.Errorf("calls = %d, want 3", calls)
+	}
+}
+
+// Client errors like 400/403 cannot resolve on their own — no retries.
+func TestGetWithRetry_NonRetryableFailsFast(t *testing.T) {
+	shrinkRetryDelays(t)
+	var calls int
+	c := newServerClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusBadRequest)
+	})
+	r := newThings(c)
+
+	if _, err := r.GetWithRetry(context.Background(), "obj-1", time.Second); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if calls != 1 {
+		t.Errorf("calls = %d, want 1 (no retries)", calls)
+	}
+}
+
+// An object that never appears must surface the last not-found error once the
+// retry window is exhausted.
+func TestGetWithRetry_TimeoutReturnsLastError(t *testing.T) {
+	shrinkRetryDelays(t)
+	var calls int
+	c := newServerClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusNotFound)
+	})
+	r := newThings(c)
+
+	_, err := r.GetWithRetry(context.Background(), "obj-1", 5*time.Millisecond)
+	if err == nil || !err.IsNotFound() {
+		t.Fatalf("err = %v, want not-found", err)
+	}
+	if calls < 2 {
+		t.Errorf("calls = %d, want at least one retry", calls)
+	}
+}
+
+// Cancelling the context stops the backoff loop immediately.
+func TestGetWithRetry_ContextCancelled(t *testing.T) {
+	c := newServerClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	r := newThings(c)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	start := time.Now()
+	_, err := r.GetWithRetry(ctx, "obj-1", time.Minute)
+	if err == nil || !err.IsNotFound() {
+		t.Fatalf("err = %v, want not-found", err)
+	}
+	if time.Since(start) > 5*time.Second {
+		t.Errorf("cancelled context did not stop retries promptly")
+	}
+}
