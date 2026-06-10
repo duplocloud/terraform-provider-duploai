@@ -1,0 +1,166 @@
+{
+  "name": "k8s_storage_class",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes StorageClass. A StorageClass is a cluster-scoped object that describes how a volume is dynamically provisioned; PersistentVolumeClaims reference it by name.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sStorageClasses",
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this storage class."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the storage class. Must be a DNS-1123 subdomain (lowercase alphanumeric, '-' and '.', starting and ending with an alphanumeric)."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this storage class to a cloud provider account. Inherited from the resource group."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group (EKS cluster) this storage class belongs to."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment that owns the resource group (EKS cluster) this storage class belongs to."
+    },
+    {
+      "name": "storage_provisioner",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "requestPath": "spec.k8sResource.provisioner",
+      "responsePath": "result.k8sResource.provisioner",
+      "description": "The volume plugin used to provision PersistentVolumes, e.g. \"ebs.csi.aws.com\" or \"efs.csi.aws.com\". Immutable: changing it replaces the storage class. (Named storage_provisioner because 'provisioner' is a reserved Terraform block name.)"
+    },
+    {
+      "name": "parameters",
+      "type": "map(string)",
+      "optional": true,
+      "forceNew": true,
+      "requestPath": "spec.k8sResource.parameters",
+      "responsePath": "result.k8sResource.parameters",
+      "description": "Provisioner-specific parameters, e.g. {\"type\" = \"gp3\", \"encrypted\" = \"true\"}. Immutable in Kubernetes: changing it replaces the storage class."
+    },
+    {
+      "name": "reclaim_policy",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Delete",
+      "forceNew": true,
+      "oneOf": [
+        "Delete",
+        "Retain"
+      ],
+      "requestPath": "spec.k8sResource.reclaimPolicy",
+      "responsePath": "result.k8sResource.reclaimPolicy",
+      "description": "Reclaim policy for PersistentVolumes created from this class: Delete (default) or Retain. Immutable."
+    },
+    {
+      "name": "volume_binding_mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Immediate",
+      "forceNew": true,
+      "oneOf": [
+        "Immediate",
+        "WaitForFirstConsumer"
+      ],
+      "requestPath": "spec.k8sResource.volumeBindingMode",
+      "responsePath": "result.k8sResource.volumeBindingMode",
+      "description": "When volumes are bound and provisioned: Immediate (default) or WaitForFirstConsumer (delays binding until a Pod using the claim is scheduled). Immutable."
+    },
+    {
+      "name": "allow_volume_expansion",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "forceNew": true,
+      "requestPath": "spec.k8sResource.allowVolumeExpansion",
+      "responsePath": "result.k8sResource.allowVolumeExpansion",
+      "description": "Whether PersistentVolumeClaims using this class may be expanded. Immutable."
+    },
+    {
+      "name": "mount_options",
+      "type": "list(string)",
+      "optional": true,
+      "forceNew": true,
+      "requestPath": "spec.k8sResource.mountOptions",
+      "responsePath": "result.k8sResource.mountOptions",
+      "description": "Mount options for PersistentVolumes created from this class. Immutable."
+    },
+    {
+      "name": "labels",
+      "type": "map(string)",
+      "optional": true,
+      "requestPath": "spec.k8sResource.metadata.labels",
+      "description": "Kubernetes labels applied to the storage class. Send-only: the server injects its own duplocloud.ai/* labels, so this value is not read back to avoid spurious drift."
+    },
+    {
+      "name": "annotations",
+      "type": "map(string)",
+      "optional": true,
+      "requestPath": "spec.k8sResource.metadata.annotations",
+      "description": "Kubernetes annotations applied to the storage class, e.g. {\"storageclass.kubernetes.io/is-default-class\" = \"true\"}. Send-only (not read back)."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    }
+  ],
+  "requestConstants": [
+    {
+      "path": "spec.k8sResource.apiVersion",
+      "value": "storage.k8s.io/v1"
+    },
+    {
+      "path": "spec.k8sResource.kind",
+      "value": "StorageClass"
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned",
+    "failureRetries": 3,
+    "createTimeoutMinutes": 15,
+    "updateTimeoutMinutes": 15,
+    "deleteTimeoutMinutes": 10
+  }
+}
