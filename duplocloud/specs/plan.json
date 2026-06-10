@@ -2,6 +2,7 @@
   "name": "plan",
   "description": "Manages a DuploCloud AI Helpdesk plan (region landing zone built on a network baseline).",
   "idPath": "id",
+  "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Plans"
   },

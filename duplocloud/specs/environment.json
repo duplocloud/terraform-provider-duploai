@@ -2,6 +2,7 @@
   "name": "environment",
   "description": "Manages a DuploCloud AI environment within a workspace.",
   "idPath": "id",
+  "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environments"
   },

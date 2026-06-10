@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestBuildTable(t *testing.T) {
+func TestBuildResourceTable(t *testing.T) {
 	tests := []struct {
 		name  string
 		specs []specMeta
@@ -33,11 +33,63 @@ func TestBuildTable(t *testing.T) {
 				"| [`duploai_plan`](docs/resources/plan.md) | Manages a plan |\n" +
 				"| [`duploai_env`](docs/resources/env.md) | No period here |\n",
 		},
+		{
+			name: "all resources included regardless of dataSource flag",
+			specs: []specMeta{
+				{Name: "alpha", Description: "Alpha resource.", DataSource: true},
+				{Name: "beta", Description: "Beta resource."},
+			},
+			want: "| Resource | Description |\n|---|---|\n" +
+				"| [`duploai_alpha`](docs/resources/alpha.md) | Alpha resource |\n" +
+				"| [`duploai_beta`](docs/resources/beta.md) | Beta resource |\n",
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := buildTable(tc.specs)
+			got := buildResourceTable(tc.specs)
+			if got != tc.want {
+				t.Errorf("got:\n%q\nwant:\n%q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBuildDataSourceTable(t *testing.T) {
+	tests := []struct {
+		name  string
+		specs []specMeta
+		want  string
+	}{
+		{
+			name:  "empty — no specs have dataSource",
+			specs: []specMeta{{Name: "env", Description: "Manages an environment."}},
+			want:  "| Data Source | Description |\n|---|---|\n",
+		},
+		{
+			name: "only dataSource specs are included",
+			specs: []specMeta{
+				{Name: "alpha", Description: "Alpha resource.", DataSource: true},
+				{Name: "beta", Description: "Beta resource."},
+				{Name: "gamma", Description: "Gamma resource.", DataSource: true},
+			},
+			want: "| Data Source | Description |\n|---|---|\n" +
+				"| [`duploai_alpha`](docs/data-sources/alpha.md) | Alpha resource |\n" +
+				"| [`duploai_gamma`](docs/data-sources/gamma.md) | Gamma resource |\n",
+		},
+		{
+			name: "trailing period stripped",
+			specs: []specMeta{
+				{Name: "plan", Description: "Manages a plan.", DataSource: true},
+			},
+			want: "| Data Source | Description |\n|---|---|\n" +
+				"| [`duploai_plan`](docs/data-sources/plan.md) | Manages a plan |\n",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := buildDataSourceTable(tc.specs)
 			if got != tc.want {
 				t.Errorf("got:\n%q\nwant:\n%q", got, tc.want)
 			}

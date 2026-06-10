@@ -2,6 +2,7 @@
   "name": "k8s_namespace",
   "description": "Manages a DuploCloud AI Helpdesk Kubernetes Namespace.",
   "idPath": "id",
+  "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Namespaces",
     "immutable": true,

@@ -101,11 +101,12 @@ func (r *dynamicResource) api(scope map[string]string, failureRetries int) *dupl
 	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, r.waiter(failureRetries))
 }
 
-// scopeFromReader reads every path-parameter attribute (as declared by the
-// endpoint), returning both a name→value map (for URI substitution) and the
-// ordered values (for composing the resource id).
-func (r *dynamicResource) scopeFromReader(ctx context.Context, reader attrReader, diags *diag.Diagnostics) (map[string]string, []string) {
-	params := r.endpoint.PathParams()
+// readPathParamScope reads every path-parameter attribute declared by endpoint
+// from reader, returning a name→value scope map and the ordered values for ID
+// composition. reader is satisfied by tfsdk.Plan, tfsdk.State, and tfsdk.Config —
+// so this function works for both resources and data sources.
+func readPathParamScope(ctx context.Context, endpoint duplosdk.Endpoint, reader attrReader, diags *diag.Diagnostics) (map[string]string, []string) {
+	params := endpoint.PathParams()
 	scope := make(map[string]string, len(params))
 	ordered := make([]string, 0, len(params))
 	for _, p := range params {
@@ -115,6 +116,10 @@ func (r *dynamicResource) scopeFromReader(ctx context.Context, reader attrReader
 		ordered = append(ordered, v.ValueString())
 	}
 	return scope, ordered
+}
+
+func (r *dynamicResource) scopeFromReader(ctx context.Context, reader attrReader, diags *diag.Diagnostics) (map[string]string, []string) {
+	return readPathParamScope(ctx, r.endpoint, reader, diags)
 }
 
 // composeID joins the ordered scope values and the backend object id into the
@@ -640,18 +645,17 @@ func configAttrNull(ctx context.Context, cfg attrReader, a AttributeSpec) bool {
 	return !ok
 }
 
-// stateFromResponse builds the new state object value. It starts from base
-// (the plan's raw value on create/update, or the prior state's raw value on
-// read) and overlays the id plus values derived from the API response.
+// buildStateRaw builds a tftypes.Value state from a base raw value overlaid
+// with API response data. It is shared by dynamicResource and dynamicDataSource.
 //
-// On read (refreshInputs=true) every API-mapped attribute is refreshed from the
-// response so Terraform detects drift. On create/update the configured input
-// values are kept from the plan to avoid "provider produced inconsistent
-// result" errors; only computed-only attributes are taken from the response.
-func (r *dynamicResource) stateFromResponse(_ context.Context, baseRaw tftypes.Value, resp map[string]any, scope map[string]string, id string, refreshInputs bool, diags *diag.Diagnostics) tftypes.Value {
+// refreshInputs=false (Create/Update): keep configured values; only fill
+// computed-only and still-unknown fields from the response.
+// refreshInputs=true (Read / data source): replace all API-mapped attributes
+// with live response values.
+func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string]any, scope map[string]string, id string, refreshInputs bool, diags *diag.Diagnostics) tftypes.Value {
 	objType, ok := baseRaw.Type().(tftypes.Object)
 	if !ok {
-		diags.AddError("Internal error", "resource state is not an object")
+		diags.AddError("Internal error", "state is not an object")
 		return tftypes.Value{}
 	}
 	current := map[string]tftypes.Value{}
@@ -673,7 +677,7 @@ func (r *dynamicResource) stateFromResponse(_ context.Context, baseRaw tftypes.V
 		}
 	}
 
-	for _, a := range r.spec.Attributes {
+	for _, a := range attrs {
 		respPath := a.responsePath()
 		if respPath == "" {
 			continue
@@ -705,6 +709,10 @@ func (r *dynamicResource) stateFromResponse(_ context.Context, baseRaw tftypes.V
 	}
 
 	return tftypes.NewValue(objType, next)
+}
+
+func (r *dynamicResource) stateFromResponse(_ context.Context, baseRaw tftypes.Value, resp map[string]any, scope map[string]string, id string, refreshInputs bool, diags *diag.Diagnostics) tftypes.Value {
+	return buildStateRaw(r.spec.Attributes, baseRaw, resp, scope, id, refreshInputs, diags)
 }
 
 // ── value conversion helpers ──────────────────────────────────────────────────

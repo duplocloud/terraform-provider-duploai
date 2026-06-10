@@ -1,7 +1,8 @@
-// gen_readme regenerates the Resources table in README.md from the embedded
-// spec JSON files. It replaces everything between <!-- resources-start --> and
-// <!-- resources-end --> with a sorted Markdown table derived from each spec's
-// name and description fields.
+// gen_readme regenerates the Resources and Data Sources tables in README.md
+// from the embedded spec JSON files. It replaces everything between
+// <!-- resources-start --> / <!-- resources-end --> and between
+// <!-- data-sources-start --> / <!-- data-sources-end --> with sorted Markdown
+// tables derived from each spec's name, description, and dataSource fields.
 //
 // Usage: go run ./tools/gen_readme  (run from the repo root)
 package main
@@ -18,6 +19,7 @@ import (
 type specMeta struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	DataSource  bool   `json:"dataSource,omitempty"`
 }
 
 func main() {
@@ -27,14 +29,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	table := buildTable(specs)
-
-	if err := replaceSection("README.md", "<!-- resources-start -->", "<!-- resources-end -->", table); err != nil {
-		fmt.Fprintln(os.Stderr, "gen_readme: updating README.md:", err)
+	resourceTable := buildResourceTable(specs)
+	if err := replaceSection("README.md", "<!-- resources-start -->", "<!-- resources-end -->", resourceTable); err != nil {
+		fmt.Fprintln(os.Stderr, "gen_readme: updating resources section:", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("gen_readme: wrote %d resources to README.md\n", len(specs))
+	dsTable := buildDataSourceTable(specs)
+	if err := replaceSection("README.md", "<!-- data-sources-start -->", "<!-- data-sources-end -->", dsTable); err != nil {
+		fmt.Fprintln(os.Stderr, "gen_readme: updating data-sources section:", err)
+		os.Exit(1)
+	}
+
+	dsCount := 0
+	for _, s := range specs {
+		if s.DataSource {
+			dsCount++
+		}
+	}
+	fmt.Printf("gen_readme: wrote %d resources and %d data sources to README.md\n", len(specs), dsCount)
 }
 
 func loadSpecs(dir string) ([]specMeta, error) {
@@ -63,15 +76,27 @@ func loadSpecs(dir string) ([]specMeta, error) {
 	return specs, nil
 }
 
-func buildTable(specs []specMeta) string {
+func buildResourceTable(specs []specMeta) string {
 	var sb strings.Builder
 	sb.WriteString("| Resource | Description |\n")
 	sb.WriteString("|---|---|\n")
 	for _, s := range specs {
-		desc := s.Description
-		// Trim trailing period for table consistency.
-		desc = strings.TrimRight(desc, ".")
+		desc := strings.TrimRight(s.Description, ".")
 		fmt.Fprintf(&sb, "| [`duploai_%s`](docs/resources/%s.md) | %s |\n", s.Name, s.Name, desc)
+	}
+	return sb.String()
+}
+
+func buildDataSourceTable(specs []specMeta) string {
+	var sb strings.Builder
+	sb.WriteString("| Data Source | Description |\n")
+	sb.WriteString("|---|---|\n")
+	for _, s := range specs {
+		if !s.DataSource {
+			continue
+		}
+		desc := strings.TrimRight(s.Description, ".")
+		fmt.Fprintf(&sb, "| [`duploai_%s`](docs/data-sources/%s.md) | %s |\n", s.Name, s.Name, desc)
 	}
 	return sb.String()
 }

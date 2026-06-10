@@ -2,6 +2,7 @@
   "name": "helm_release",
   "description": "Manages a DuploCloud AI Helpdesk Kubernetes Helm release (Flux HelmRelease).",
   "idPath": "id",
+  "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sHelmReleases"
   },
