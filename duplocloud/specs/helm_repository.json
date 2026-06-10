@@ -2,6 +2,7 @@
   "name": "helm_repository",
   "description": "Manages a DuploCloud AI Helpdesk Kubernetes Helm repository (Flux HelmRepository).",
   "idPath": "id",
+  "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sHelmRepositories"
   },
