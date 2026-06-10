@@ -55,6 +55,7 @@ provider "duploai" {
 | [`duploai_helm_release`](docs/resources/helm_release.md) | Manages a DuploCloud AI Helpdesk Kubernetes Helm release (Flux HelmRelease) |
 | [`duploai_helm_repository`](docs/resources/helm_repository.md) | Manages a DuploCloud AI Helpdesk Kubernetes Helm repository (Flux HelmRepository) |
 | [`duploai_k8s_config_map`](docs/resources/k8s_config_map.md) | Manages a DuploCloud AI Helpdesk Kubernetes ConfigMap |
+| [`duploai_k8s_cron_job`](docs/resources/k8s_cron_job.md) | Manages a DuploCloud AI Helpdesk Kubernetes CronJob — a scheduled workload that runs jobs on a recurring cron schedule within an environment or resource group |
 | [`duploai_k8s_job`](docs/resources/k8s_job.md) | Manages a DuploCloud AI Helpdesk Kubernetes Job — a batch workload that runs one or more containers to completion within an environment or resource group |
 | [`duploai_k8s_namespace`](docs/resources/k8s_namespace.md) | Manages a DuploCloud AI Helpdesk Kubernetes Namespace |
 | [`duploai_k8s_pvc`](docs/resources/k8s_pvc.md) | Manages a DuploCloud AI Helpdesk Kubernetes PersistentVolumeClaim (PVC) |
@@ -82,6 +83,7 @@ provider "duploai" {
 | [`duploai_helm_release`](docs/data-sources/helm_release.md) | Manages a DuploCloud AI Helpdesk Kubernetes Helm release (Flux HelmRelease) |
 | [`duploai_helm_repository`](docs/data-sources/helm_repository.md) | Manages a DuploCloud AI Helpdesk Kubernetes Helm repository (Flux HelmRepository) |
 | [`duploai_k8s_config_map`](docs/data-sources/k8s_config_map.md) | Manages a DuploCloud AI Helpdesk Kubernetes ConfigMap |
+| [`duploai_k8s_cron_job`](docs/data-sources/k8s_cron_job.md) | Manages a DuploCloud AI Helpdesk Kubernetes CronJob — a scheduled workload that runs jobs on a recurring cron schedule within an environment or resource group |
 | [`duploai_k8s_job`](docs/data-sources/k8s_job.md) | Manages a DuploCloud AI Helpdesk Kubernetes Job — a batch workload that runs one or more containers to completion within an environment or resource group |
 | [`duploai_k8s_namespace`](docs/data-sources/k8s_namespace.md) | Manages a DuploCloud AI Helpdesk Kubernetes Namespace |
 | [`duploai_k8s_pvc`](docs/data-sources/k8s_pvc.md) | Manages a DuploCloud AI Helpdesk Kubernetes PersistentVolumeClaim (PVC) |
