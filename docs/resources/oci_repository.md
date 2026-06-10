@@ -19,6 +19,7 @@ resource "duploai_oci_repository" "podinfo" {
   name              = "podinfo"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   url      = "oci://ghcr.io/stefanprodan/manifests/podinfo"
@@ -32,6 +33,7 @@ resource "duploai_oci_repository" "internal" {
   name              = "internal-app"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   url             = "oci://registry.example.com/charts/app"
@@ -56,6 +58,7 @@ resource "duploai_oci_repository" "internal" {
 
 ### Required
 
+- `environment_id` (String) ID of the environment that owns the resource group.
 - `name` (String) Name of the OCI repository resource.
 - `namespace_name` (String) Kubernetes namespace the OCI repository is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this OCI repository belongs to.
@@ -69,7 +72,6 @@ resource "duploai_oci_repository" "internal" {
 - `api_version` (String) Flux OCIRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1).
 - `cert_secret_ref_name` (String) Name of a Kubernetes Secret holding TLS certificate data.
 - `description` (String) Optional description.
-- `environment_id` (String) ID of the environment that owns the resource group.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `ignore` (String) Cluster-ignore (.gitignore-style) patterns of files to exclude from the artifact.
 - `insecure` (Boolean) Allow connecting to an HTTP (non-TLS) OCI registry.

@@ -4,6 +4,7 @@ resource "duploai_k8s_config_map" "app" {
   name              = "app-config"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   data = {

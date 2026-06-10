@@ -19,6 +19,7 @@ resource "duploai_node_group" "basic" {
   name              = "app-nodes"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
 
   instance_types = ["t3.medium"]
   min_size       = 1
@@ -32,6 +33,7 @@ resource "duploai_node_group" "spot" {
   name              = "batch-spot"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
 
   instance_types = ["m5.large", "m5a.large"]
   min_size       = 0
@@ -69,6 +71,7 @@ resource "duploai_node_group" "spot" {
 ### Required
 
 - `desired_size` (Number) Desired number of nodes (between min_size and max_size).
+- `environment_id` (String) ID of the environment that owns the resource group.
 - `instance_types` (List of String) EC2 instance types for the node group (e.g. t3.medium).
 - `max_size` (Number) Maximum number of nodes.
 - `min_size` (Number) Minimum number of nodes.
@@ -85,7 +88,6 @@ resource "duploai_node_group" "spot" {
 - `capacity_type` (String) Capacity type (e.g. on-demand vs. spot). Accepted values are defined by the backend EksNodeGroupCapacityType enum; confirm the exact value against your tenant.
 - `description` (String) Optional description.
 - `disk_size_gb` (Number) Root EBS volume size in GiB for each node.
-- `environment_id` (String) ID of the environment that owns the resource group.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `instance_visibility` (String) Node placement visibility (public vs. private subnets). Accepted values are defined by the backend InstanceVisibilityType enum; confirm the exact value against your tenant.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.

@@ -18,6 +18,7 @@ resource "duploai_aws_secret" "db_password" {
   workspace_id      = "<workspace-id>"
   name              = "db-password"
   resource_group_id = "<resource-group-id>"
+  environment_id    = "<environment-id>"
 
   secret_value_type = "PlainText"
   secret_string     = "<secret-value>"
@@ -28,6 +29,7 @@ resource "duploai_aws_secret" "app_config" {
   workspace_id      = "<workspace-id>"
   name              = "app-config"
   resource_group_id = "<resource-group-id>"
+  environment_id    = "<environment-id>"
 
   secret_value_type  = "Json"
   secret_string      = jsonencode({ username = "admin", password = "<password>" })
@@ -46,6 +48,7 @@ resource "duploai_aws_secret" "app_config" {
 
 ### Required
 
+- `environment_id` (String) ID of the environment that owns the resource group.
 - `name` (String) Name of the secret resource.
 - `resource_group_id` (String) ID of the resource group this secret belongs to.
 - `workspace_id` (String) ID of the workspace that owns this secret (path parameter).
@@ -53,7 +56,6 @@ resource "duploai_aws_secret" "app_config" {
 ### Optional
 
 - `description` (String) Optional description of the resource.
-- `environment_id` (String) ID of the environment that owns the resource group.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `kms_key_id` (String) KMS key ID used to encrypt the secret. Defaults to the AWS-managed key when omitted.
 - `provisioner_type` (String) Provisioner type (set by the platform; e.g. DirectApiCall).
