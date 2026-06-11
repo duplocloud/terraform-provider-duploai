@@ -26,4 +26,6 @@ jobs:
         run: go build -o /dev/null ./...
 
       - name: Unit tests
-        run: go test ./... -timeout 90s -parallel 4
+        # -race surfaces data races (e.g. the async waiter in duplosdk runs
+        # concurrently). It requires CGO, so enable it explicitly.
+        run: CGO_ENABLED=1 go test -race ./... -timeout 120s -parallel 4

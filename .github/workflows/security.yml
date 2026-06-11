@@ -1,0 +1,47 @@
+name: Security
+
+# Supply-chain checks that complement CodeQL (which scans our own code):
+#   - govulncheck      — flags known CVEs in our Go module dependency graph,
+#                        reporting only vulnerabilities actually reachable from
+#                        our call paths.
+#   - dependency-review — blocks PRs that add dependencies with known
+#                        vulnerabilities before they ever merge.
+on:
+  pull_request:
+  push:
+    branches: [develop, master]
+  schedule:
+    # Sunday 7:00 PM PST = Monday 03:00 UTC (cron uses UTC). Catches newly
+    # disclosed CVEs in dependencies we already ship.
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+  dependency-review:
+    # Only meaningful on PRs — it diffs the dependency graph of the PR against
+    # its base branch.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v5
+        with:
+          # Fail the PR on any newly introduced vulnerability of this severity
+          # or higher.
+          fail-on-severity: high
