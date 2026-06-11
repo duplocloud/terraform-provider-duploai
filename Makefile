@@ -42,7 +42,7 @@ install_docker: build
 
 test:
 	go test -i $$(TEST) || exit 1
-	echo $$(TEST) | xargs -t -n4 go test $$(TESTARGS) -timeout=90s -parallel=4
+	echo $$(TEST) | CGO_ENABLED=1 xargs -t -n4 go test -race $$(TESTARGS) -timeout=120s -parallel=4
 
 testacc:
 	TF_ACC=1 go test $$(TEST) -v $$(TESTARGS) -timeout 120m
