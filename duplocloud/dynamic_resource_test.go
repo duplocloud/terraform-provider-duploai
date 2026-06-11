@@ -249,6 +249,7 @@ func TestSpecValidate_CompoundRequiredIf(t *testing.T) {
 	base := func(rule RequiredIfRule) ResourceSpec {
 		return ResourceSpec{
 			Name: "x", IDPath: "id",
+			Endpoint: EndpointSpec{UriBase: "/x"},
 			Attributes: []AttributeSpec{
 				{Name: "engine", Type: "string", Required: true},
 				{Name: "cluster_mode", Type: "string", Optional: true, Computed: true},
@@ -276,6 +277,7 @@ func TestSpecValidate_CompoundRequiredIf(t *testing.T) {
 func TestSpecValidate_ConflictsWithAndIsEmpty(t *testing.T) {
 	vErr := func(s ResourceSpec) error {
 		s.Name, s.IDPath = "x", "id"
+		s.Endpoint = EndpointSpec{UriBase: "/x"}
 		s.Attributes = append(s.Attributes,
 			AttributeSpec{Name: "engine_version", Type: "string", Optional: true},
 			AttributeSpec{Name: "snapshot_name", Type: "string", Optional: true},

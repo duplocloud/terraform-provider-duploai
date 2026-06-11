@@ -2,6 +2,10 @@
   "name": "elasticache",
   "description": "Manages a DuploCloud AI Helpdesk AWS ElastiCache cluster (Redis, Valkey, or Memcached).",
   "idPath": "id",
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AWSElastiCaches",
+    "deprovision": {}
+  },
   "attributes": [
     {
       "name": "workspace_id",
@@ -191,9 +195,8 @@
       "type": "int",
       "optional": true,
       "computed": true,
-      "default": 0,
       "apiPath": "spec.snapshotRetentionLimit",
-      "description": "Days to retain automatic snapshots (Redis/Valkey). 0 disables automatic snapshots."
+      "description": "Days to retain automatic snapshots (Redis/Valkey). 0 disables automatic snapshots. Not applicable to Memcached, where the server leaves it unset; the server value is retained when omitted."
     },
     {
       "name": "snapshot_window",
@@ -207,8 +210,9 @@
       "name": "parameters",
       "type": "list(object)",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.parameters",
-      "description": "Cache parameter overrides applied to the parameter group.",
+      "description": "Cache parameter overrides applied to the parameter group. When omitted, the server's current parameter set is retained (the API returns an empty list rather than null).",
       "attributes": [
         { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Parameter name." },
         { "name": "value", "type": "string", "required": true, "apiPath": "value", "description": "Parameter value." }

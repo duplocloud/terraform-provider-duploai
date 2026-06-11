@@ -51,6 +51,7 @@ provider "duploai" {
 | [`duploai_aws_secret`](docs/resources/aws_secret.md) | Manages a DuploCloud AI Helpdesk AWS Secrets Manager secret |
 | [`duploai_cluster_attributes`](docs/resources/cluster_attributes.md) | Manages DuploCloud AI Helpdesk cluster attributes — add-ons and components installed onto an existing EKS cluster (autoscaler, ALB controller, EFS, external-dns, and more) |
 | [`duploai_cluster_baseline`](docs/resources/cluster_baseline.md) | Manages a DuploCloud AI Helpdesk EKS cluster baseline (control plane, networking, and optional system node group) |
+| [`duploai_elasticache`](docs/resources/elasticache.md) | Manages a DuploCloud AI Helpdesk AWS ElastiCache cluster (Redis, Valkey, or Memcached) |
 | [`duploai_environment`](docs/resources/environment.md) | Manages a DuploCloud AI environment within a workspace |
 | [`duploai_helm_release`](docs/resources/helm_release.md) | Manages a DuploCloud AI Helpdesk Kubernetes Helm release (Flux HelmRelease) |
 | [`duploai_helm_repository`](docs/resources/helm_repository.md) | Manages a DuploCloud AI Helpdesk Kubernetes Helm repository (Flux HelmRepository) |

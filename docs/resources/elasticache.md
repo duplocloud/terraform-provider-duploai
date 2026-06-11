@@ -181,19 +181,20 @@ resource "duploai_elasticache" "redis_from_snapshot" {
 - `description` (String) Optional description.
 - `encryption_mode` (String) At-rest encryption mode: NoEncryption, ResourceGroupKmsKey (uses the resource group's KMS key), or AwsDefaultElastiCacheKey.
 - `engine_version` (String) Engine version (e.g. 7.1). Required unless restoring from a snapshot; when unset and not restoring, the server selects a default.
+- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `log_delivery_configurations` (Attributes List) Log delivery configurations (Redis/Valkey slow-log / engine-log). (see [below for nested schema](#nestedatt--log_delivery_configurations))
 - `node_group_configuration` (Attributes List) Redis/Valkey cluster-mode-enabled: per-shard configuration. When provided, length must equal num_node_groups. (see [below for nested schema](#nestedatt--node_group_configuration))
 - `num_cache_clusters` (Number) Redis/Valkey cluster-mode-disabled: number of nodes (primary + replicas), 1-6. Required for cluster_mode=Disabled; not valid for Memcached or cluster_mode=Enabled.
 - `num_cache_nodes` (Number) Memcached: number of cache nodes, 1-40. Required when engine=Memcached; not valid for Redis/Valkey.
 - `num_node_groups` (Number) Redis/Valkey cluster-mode-enabled: number of shards (node groups), 1-90. Required for cluster_mode=Enabled.
-- `parameters` (Attributes List) Cache parameter overrides applied to the parameter group. (see [below for nested schema](#nestedatt--parameters))
+- `parameters` (Attributes List) Cache parameter overrides applied to the parameter group. When omitted, the server's current parameter set is retained (the API returns an empty list rather than null). (see [below for nested schema](#nestedatt--parameters))
 - `port` (Number) Port the cache listens on. Defaults to 6379 (Redis/Valkey) or 11211 (Memcached) when unset.
 - `preferred_availability_zones` (List of String) Memcached: preferred availability zones for the cache nodes.
 - `preferred_maintenance_window` (String) Weekly maintenance window, e.g. sun:05:00-sun:06:00.
 - `replicas_per_node_group` (Number) Redis/Valkey cluster-mode-enabled: replicas per shard, 0-5. Required for cluster_mode=Enabled.
 - `snapshot_arns` (List of String) S3 ARNs of an RDB snapshot to restore from (Redis/Valkey). Mutually exclusive with snapshot_name.
 - `snapshot_name` (String) Name of a snapshot to restore from (Redis/Valkey). Mutually exclusive with snapshot_arns.
-- `snapshot_retention_limit` (Number) Days to retain automatic snapshots (Redis/Valkey). 0 disables automatic snapshots.
+- `snapshot_retention_limit` (Number) Days to retain automatic snapshots (Redis/Valkey). 0 disables automatic snapshots. Not applicable to Memcached, where the server leaves it unset; the server value is retained when omitted.
 - `snapshot_window` (String) Daily window for automatic snapshots, e.g. 03:00-04:00 (Redis/Valkey).
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `transit_encryption_enabled` (Boolean) Enable in-transit (TLS) encryption. Must be true when auth_token is set.
