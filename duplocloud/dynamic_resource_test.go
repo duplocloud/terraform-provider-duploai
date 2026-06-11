@@ -80,6 +80,7 @@ func TestSpecValidate(t *testing.T) {
 			name: "valid",
 			spec: ResourceSpec{
 				Name: "x", IDPath: "id",
+				Endpoint:   EndpointSpec{UriBase: "/v1/test"},
 				Attributes: []AttributeSpec{{Name: "name", Type: "string", Required: true}},
 			},
 		},
@@ -447,6 +448,49 @@ func TestStateFromResponse_RefreshesUnknownKeepsInput(t *testing.T) {
 	}
 }
 
+// On Read (refreshInputs=true) every API-mapped attribute — including ones the
+// user configured — is replaced by the live response so Terraform detects
+// drift, while attributes without an apiPath (e.g. path parameters) keep their
+// prior state value.
+func TestStateFromResponse_ReadRefreshesForDrift(t *testing.T) {
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"id":           tftypes.String,
+		"workspace_id": tftypes.String,
+		"size":         tftypes.String,
+	}}
+	prior := tftypes.NewValue(objType, map[string]tftypes.Value{
+		"id":           tftypes.NewValue(tftypes.String, "obj-1"),
+		"workspace_id": tftypes.NewValue(tftypes.String, "ws-1"), // path param, no apiPath
+		"size":         tftypes.NewValue(tftypes.String, "small"),
+	})
+	r := &dynamicResource{spec: ResourceSpec{Attributes: []AttributeSpec{
+		{Name: "workspace_id", Type: "string", Required: true},
+		{Name: "size", Type: "string", Optional: true, APIPath: "spec.size"},
+	}}}
+
+	var diags diag.Diagnostics
+	out := r.stateFromResponse(context.Background(), prior,
+		map[string]any{"spec": map[string]any{"size": "large"}}, // drifted out of band
+		map[string]string{}, "obj-1", true, &diags)
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+
+	m := map[string]tftypes.Value{}
+	if err := out.As(&m); err != nil {
+		t.Fatal(err)
+	}
+	var ws, size string
+	_ = m["workspace_id"].As(&ws)
+	if ws != "ws-1" {
+		t.Errorf("workspace_id = %q, want ws-1 (no apiPath — must keep prior value)", ws)
+	}
+	_ = m["size"].As(&size)
+	if size != "large" {
+		t.Errorf("size = %q, want large (read must surface drift from the response)", size)
+	}
+}
+
 // A computed child nested inside a configured object must be resolved to a known
 // value from the response on create — leaving it unknown errors with "provider
 // returned invalid result object after apply". Sibling configured leaves are kept.
@@ -731,6 +775,66 @@ func TestObjectRoundTripNameRemap(t *testing.T) {
 	}
 	if _, leaked := body["max_size"]; leaked {
 		t.Error("schema name leaked into request body")
+	}
+}
+
+func TestWaiterDefaults(t *testing.T) {
+	d := defaultWaiterSpec()
+
+	// Empty waiter gets all defaults applied.
+	w := &WaiterSpec{}
+	applyWaiterDefaults(w)
+	if w.StatusPath != d.StatusPath {
+		t.Errorf("StatusPath = %q, want %q", w.StatusPath, d.StatusPath)
+	}
+	if w.SuccessState != d.SuccessState {
+		t.Errorf("SuccessState = %q, want %q", w.SuccessState, d.SuccessState)
+	}
+	if !reflect.DeepEqual(w.FailureStates, d.FailureStates) {
+		t.Errorf("FailureStates = %v, want %v", w.FailureStates, d.FailureStates)
+	}
+	if w.FailureDetailPath != d.FailureDetailPath {
+		t.Errorf("FailureDetailPath = %q, want %q", w.FailureDetailPath, d.FailureDetailPath)
+	}
+	if w.PollIntervalSeconds != d.PollIntervalSeconds {
+		t.Errorf("PollIntervalSeconds = %d, want %d", w.PollIntervalSeconds, d.PollIntervalSeconds)
+	}
+	if w.CreateTimeoutMinutes != d.CreateTimeoutMinutes {
+		t.Errorf("CreateTimeoutMinutes = %d, want %d", w.CreateTimeoutMinutes, d.CreateTimeoutMinutes)
+	}
+	if w.UpdateTimeoutMinutes != d.UpdateTimeoutMinutes {
+		t.Errorf("UpdateTimeoutMinutes = %d, want %d", w.UpdateTimeoutMinutes, d.UpdateTimeoutMinutes)
+	}
+	if w.DeleteTimeoutMinutes != d.DeleteTimeoutMinutes {
+		t.Errorf("DeleteTimeoutMinutes = %d, want %d", w.DeleteTimeoutMinutes, d.DeleteTimeoutMinutes)
+	}
+
+	// Explicitly set fields are not overwritten by defaults.
+	custom := &WaiterSpec{
+		PollIntervalSeconds:  15,
+		CreateTimeoutMinutes: 60,
+		DeprovisionedState:   "DeProvisioned",
+		FailureRetries:       3,
+	}
+	applyWaiterDefaults(custom)
+	if custom.PollIntervalSeconds != 15 {
+		t.Errorf("custom PollIntervalSeconds overwritten, got %d", custom.PollIntervalSeconds)
+	}
+	if custom.CreateTimeoutMinutes != 60 {
+		t.Errorf("custom CreateTimeoutMinutes overwritten, got %d", custom.CreateTimeoutMinutes)
+	}
+	if custom.DeprovisionedState != "DeProvisioned" {
+		t.Errorf("DeprovisionedState overwritten, got %q", custom.DeprovisionedState)
+	}
+	if custom.FailureRetries != 3 {
+		t.Errorf("FailureRetries overwritten, got %d", custom.FailureRetries)
+	}
+	// Unset fields still get defaults.
+	if custom.StatusPath != d.StatusPath {
+		t.Errorf("StatusPath not defaulted, got %q", custom.StatusPath)
+	}
+	if custom.UpdateTimeoutMinutes != d.UpdateTimeoutMinutes {
+		t.Errorf("UpdateTimeoutMinutes not defaulted, got %d", custom.UpdateTimeoutMinutes)
 	}
 }
 

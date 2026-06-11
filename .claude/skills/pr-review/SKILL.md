@@ -5,8 +5,9 @@ description: >-
   Use when asked to review a PR, validate a new resource, or check a branch
   before merge. Enforces no-MongoDB-in-docs, ClickUp ticket id, the repo PR
   template, the four new-resource requirements (spec / endpoint / examples /
-  docs), no leaked secrets, and CI-parity (vet / build / test / generate-drift /
-  lint).
+  docs), no leaked secrets, CI-parity (vet / build / test / generate-drift /
+  lint), and base-branch policy (manual PRs only on develop / hotfix/* /
+  release/*; master is CI/CD-only).
 ---
 
 # pr-review — terraform-provider-duploai
@@ -87,10 +88,13 @@ For each **new resource** `<name>` (derived from the new spec's `name` field):
       top-level keys: `name`, `description`, `idPath`, `attributes`. Each
       attribute has a `name`, a `type`, and exactly one of
       `required` / `optional` / `computed` (Optional+Computed allowed).
-- [ ] **Endpoint registration** `duplosdk/<name>.go` exists with a `func init()`
-      calling `RegisterEndpoint("<name>", Endpoint{...})`. The registered key
-      **must equal** the spec's `name`. Every `{placeholder}` in `UriBase`
-      (other than `{id}`) must map to a string attribute in the spec.
+- [ ] **Endpoint config** the spec JSON has a top-level `"endpoint"` object with a
+      non-empty `"uriBase"`. Every `{placeholder}` in `uriBase` (other than `{id}`)
+      must map to a string attribute in the spec. Flag any missing or empty
+      `"uriBase"` — `validate()` catches it at startup, but catching it in review
+      is faster. Check `"immutable": true` is set for resources with no Update path,
+      and `"deprovision": {}` is present for resources the API refuses to delete
+      while live.
 - [ ] **Examples** `examples/resources/duploai_<name>/` contains **both**
       `resource.tf` and `import.sh`.
 - [ ] **Generated docs** `docs/resources/<name>.md` exists and carries the
@@ -151,6 +155,21 @@ For **every** PR:
 
 ### 🟠 Major
 
+- [ ] **Base-branch policy.** This repo's branching model:
+  - `develop` — default integration branch; all regular feature/fix PRs target here.
+  - `hotfix/*` — hotfix stabilisation branches; PRs may target these directly.
+  - `release/*` — release stabilisation branches; PRs may target these directly.
+  - `master` — **CI/CD-only.** PRs to `master` are raised exclusively by GitHub
+    Actions workflows (release/hotfix promotion). A manually opened PR whose base
+    is `master` is always a policy violation.
+
+  Check the base branch and flag as Major if it is `master` or any branch other
+  than `develop`, `hotfix/*`, or `release/*`:
+
+  ```bash
+  gh pr view <pr> --json baseRefName -q '.baseRefName'
+  ```
+
 - [ ] **No MongoDB / internal-database leakage** in any doc, example, comment, or
       schema description. MongoDB is the internal database and must never appear
       in public-facing text. Use neutral wording like "unique identifier".
@@ -162,25 +181,49 @@ For **every** PR:
       ```
 
       Flag every hit with file:line and the suggested neutral replacement.
-- [ ] **ClickUp id present** — the PR title **or** body contains a `DUPLOAI-\d+`
-      reference (the repo PR template puts it under `ClickUp Ticket ID:`).
+- [ ] **ClickUp id present in body** — the PR **body** (not the title) contains a
+      `DUPLOAI-\d+` reference. CI auto-strips the ticket ID from the title and
+      rewrites it; the body is the required location.
 
       ```bash
-      gh pr view <pr> --json title,body -q '.title + "\n" + .body' | grep -oE 'DUPLOAI-[0-9]+'
+      gh pr view <pr> --json body -q '.body' | grep -oE 'DUPLOAI-[0-9]+'
+      # Also confirm the title is clean (no ticket ID remaining after auto-strip):
+      gh pr view <pr> --json title -q '.title' | grep -oE 'DUPLOAI-[0-9]+'  # should be empty
       ```
 
-- [ ] **PR body follows the template** (`.github/PULL_REQUEST_TEMPLATE.md`).
+- [ ] **PR title hygiene.** Title must have no ClickUp ticket ID and be 20–72
+      characters. Titles become changelog entries verbatim — quality here is
+      quality in the published release notes.
+
+      ```bash
+      title=$(gh pr view <pr> --json title -q '.title')
+      echo "Length: ${#title}"                   # must be 20–72
+      echo "$title" | grep -oE 'DUPLOAI-[0-9]+'  # must be empty
+      ```
+
+      Flag as Major if length is outside 20–72 or ticket ID is still present.
+
+- [ ] **PR body follows the template** (`.github/pull_request_template.md`).
       Confirm these sections are present and filled, not left as placeholders:
-      `ClickUp Ticket ID`, `Overview`, `Summary of changes`,
-      `Testing performed` (with at least one box checked), and a
-      `Describe any breaking changes` note.
+      `ClickUp Ticket`, `Type`, `Overview`, `Summary of changes`,
+      `Testing performed` (with at least one box checked),
+      `Describe any breaking changes`, and the `Type` section has **exactly
+      one** checkbox checked from: `enhancement`, `bug`, `breaking-change`,
+      `documentation`.
+
+      ```bash
+      gh pr view <pr> --json body -q '.body' | grep -cE '- \[x\] `(enhancement|bug|breaking-change|documentation)`'
+      # must equal 1; 0 = no type selected, >1 = multiple selected
+      ```
 - [ ] **Schema correctness — drift / update-breaking.** These don't crash apply
       but degrade correctness, so they are Major:
   - **`forceNew` on immutable inputs.** Any field the API has no update path for
     (path params like `workspace_id`, identity fields, anything only the Create
     body accepts) must set `forceNew`. Missing it ⇒ a changed value silently
     no-ops or the update call fails. Cross-check the spec's `forceNew` flags
-    against `duplosdk/<name>.go` (which operations exist) and the field mapping.
+    against the spec's `"endpoint"` block (`"immutable": true` means no Update at
+    all; `createOnly` on individual attributes means those fields are not sent on
+    update).
   - **`default` must match the server's actual default.** A `default` that
     differs from what the API assigns shows perpetual drift. Verify against the
     real response (the live test in `local-test/` is the source of truth).
@@ -251,13 +294,17 @@ Prefix each result with a status icon: ✅ pass/clean · 🔴 blocker-level fail
 🟠 major issue · ⚠️ skipped or not verifiable.
 
 - review type: <✅ independent | 🪞 self-review (<who>)>
+- base branch: <✅ develop | hotfix/… | release/… | 🟠 INVALID — <branch>>
 - go generate drift: <✅ clean | 🔴 N files drifted>
 - gofmt: <✅ clean | 🔴 list>
 - go vet / build / test: <✅ pass | 🔴 fail + output>
 - secret scan: <✅ clean | 🔴 hits>
 - schema correctness: <✅ ok | 🔴 build/apply-breaking | 🟠 drift/update risk>
 - mongo scan: <✅ clean | 🟠 hits>
-- ClickUp id: <✅ DUPLOAI-NNNN | 🟠 MISSING>
+- ClickUp id (body): <✅ DUPLOAI-NNNN | 🟠 MISSING>
+- ClickUp id (title): <✅ clean | 🟠 ticket ID present in title>
+- PR title length: <✅ N chars (20–72) | 🟠 too short/long — N chars>
+- PR type checkbox: <✅ enhancement | bug | breaking-change | documentation | 🟠 none checked | 🟠 multiple checked>
 - PR template: <✅ complete | 🟠 missing sections | ⚠️ not verifiable>
 
 ### Verdict

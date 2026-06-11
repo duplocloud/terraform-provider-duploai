@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -590,4 +591,116 @@ func bigFloatToJSONNumber(f *big.Float) json.Number {
 		return json.Number(f.Text('f', 0))
 	}
 	return json.Number(f.Text('g', -1))
+}
+
+// ── Data source schema building ──────────────────────────────────────────────
+//
+// These functions mirror the resource schema builders above but use
+// datasource/schema types, which have no plan modifiers or defaults.
+// The caller adjusts Required/Optional/Computed on each AttributeSpec before
+// passing it in — see dynamicDataSource.Schema() for the adjustment rules.
+
+func dsAttrSchema(a AttributeSpec) dsschema.Attribute {
+	info, _ := parseType(a.Type)
+	if info.elem == "object" {
+		return dsObjectSchema(a, info)
+	}
+	if info.coll == "" {
+		return dsPrimitiveSchema(a, info.elem)
+	}
+	return dsPrimitiveCollectionSchema(a, info)
+}
+
+func dsPrimitiveSchema(a AttributeSpec, elem string) dsschema.Attribute {
+	switch elem {
+	case "string":
+		o := dsschema.StringAttribute{
+			Required: a.Required, Optional: a.Optional, Computed: a.Computed,
+			Sensitive: a.Sensitive, Description: a.Description,
+		}
+		if len(a.OneOf) > 0 {
+			o.Validators = []validator.String{stringvalidator.OneOf(a.OneOf...)}
+		}
+		return o
+	case "bool":
+		return dsschema.BoolAttribute{
+			Required: a.Required, Optional: a.Optional, Computed: a.Computed,
+			Sensitive: a.Sensitive, Description: a.Description,
+		}
+	case "int":
+		return dsschema.Int64Attribute{
+			Required: a.Required, Optional: a.Optional, Computed: a.Computed,
+			Sensitive: a.Sensitive, Description: a.Description,
+		}
+	default: // number
+		return dsschema.Float64Attribute{
+			Required: a.Required, Optional: a.Optional, Computed: a.Computed,
+			Sensitive: a.Sensitive, Description: a.Description,
+		}
+	}
+}
+
+func dsPrimitiveCollectionSchema(a AttributeSpec, info typeInfo) dsschema.Attribute {
+	et := primitiveAttrType(info.elem)
+	switch info.coll {
+	case "set":
+		return dsschema.SetAttribute{
+			ElementType: et, Required: a.Required, Optional: a.Optional,
+			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description,
+		}
+	case "map":
+		return dsschema.MapAttribute{
+			ElementType: et, Required: a.Required, Optional: a.Optional,
+			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description,
+		}
+	default: // list
+		return dsschema.ListAttribute{
+			ElementType: et, Required: a.Required, Optional: a.Optional,
+			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description,
+		}
+	}
+}
+
+// dsNestedAttrMap builds a nested attribute map for data source object schemas.
+// All nested attributes are forced to Computed — they live inside a Computed
+// parent and are always populated from the API response, never set by the user.
+func dsNestedAttrMap(attrs []AttributeSpec) map[string]dsschema.Attribute {
+	out := make(map[string]dsschema.Attribute, len(attrs))
+	for _, na := range attrs {
+		adj := na
+		adj.Required = false
+		adj.Optional = false
+		adj.Computed = true
+		out[na.Name] = dsAttrSchema(adj)
+	}
+	return out
+}
+
+func dsObjectSchema(a AttributeSpec, info typeInfo) dsschema.Attribute {
+	nested := dsNestedAttrMap(a.Attributes)
+	switch info.coll {
+	case "list":
+		return dsschema.ListNestedAttribute{
+			NestedObject: dsschema.NestedAttributeObject{Attributes: nested},
+			Required:     a.Required, Optional: a.Optional, Computed: a.Computed,
+			Sensitive: a.Sensitive, Description: a.Description,
+		}
+	case "set":
+		return dsschema.SetNestedAttribute{
+			NestedObject: dsschema.NestedAttributeObject{Attributes: nested},
+			Required:     a.Required, Optional: a.Optional, Computed: a.Computed,
+			Sensitive: a.Sensitive, Description: a.Description,
+		}
+	case "map":
+		return dsschema.MapNestedAttribute{
+			NestedObject: dsschema.NestedAttributeObject{Attributes: nested},
+			Required:     a.Required, Optional: a.Optional, Computed: a.Computed,
+			Sensitive: a.Sensitive, Description: a.Description,
+		}
+	default: // single object
+		return dsschema.SingleNestedAttribute{
+			Attributes: nested, Required: a.Required, Optional: a.Optional,
+			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description,
+		}
+	}
 }

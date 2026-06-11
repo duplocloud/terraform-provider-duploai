@@ -2,6 +2,11 @@
   "name": "rds_instance",
   "description": "Manages a DuploCloud AI Helpdesk standalone AWS RDS instance.",
   "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AWSRdsInstances",
+    "deprovision": {}
+  },
   "attributes": [
     {
       "name": "workspace_id",
@@ -46,13 +51,11 @@
     {
       "name": "environment_id",
       "type": "string",
-      "optional": true,
-      "computed": true,
+      "required": true,
       "forceNew": true,
       "apiPath": "spec.environmentId",
       "description": "ID of the environment that owns the resource group."
     },
-
     {
       "name": "engine",
       "type": "string",
@@ -110,7 +113,6 @@
       "apiPath": "spec.availabilityZone",
       "description": "Availability zone for a single-AZ instance."
     },
-
     {
       "name": "db_name",
       "type": "string",
@@ -135,7 +137,6 @@
       "apiPath": "spec.masterUserPassword",
       "description": "Master user password."
     },
-
     {
       "name": "visibility",
       "type": "string",
@@ -160,7 +161,6 @@
       "apiPath": "spec.vpcSecurityGroupIds",
       "description": "VPC security group IDs attached to the instance."
     },
-
     {
       "name": "storage_encrypted",
       "type": "string",
@@ -179,7 +179,6 @@
       "apiPath": "spec.kmsKeyId",
       "description": "KMS key ID used for storage encryption."
     },
-
     {
       "name": "backup_retention_period",
       "type": "int",
@@ -255,13 +254,22 @@
       "apiPath": "spec.parameters",
       "description": "DB parameter group overrides.",
       "attributes": [
-        { "name": "name", "type": "string", "required": true, "apiPath": "name",
-          "description": "Parameter name." },
-        { "name": "value", "type": "string", "required": true, "apiPath": "value",
-          "description": "Parameter value." }
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "Parameter name."
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "required": true,
+          "apiPath": "value",
+          "description": "Parameter value."
+        }
       ]
     },
-
     {
       "name": "provisioner_type",
       "type": "string",
@@ -282,7 +290,6 @@
       "apiPath": "spec.provisioner.version",
       "description": "Optional provisioner version."
     },
-
     {
       "name": "status",
       "type": "string",
@@ -299,16 +306,7 @@
     }
   ],
   "waiter": {
-    "statusPath": "status",
-    "successState": "Complete",
     "deprovisionedState": "DeProvisioned",
-    "failureStates": {
-      "Failed": "provisioning failed",
-      "Blocked": "provisioning is blocked",
-      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
-      "DeprovisionFailed": "deprovisioning failed"
-    },
-    "failureDetailPath": "blockedReason",
     "pollIntervalSeconds": 15,
     "createTimeoutMinutes": 60,
     "updateTimeoutMinutes": 60,

@@ -2,6 +2,10 @@
   "name": "plan",
   "description": "Manages a DuploCloud AI Helpdesk plan (region landing zone built on a network baseline).",
   "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Plans"
+  },
   "attributes": [
     {
       "name": "workspace_id",
@@ -71,7 +75,6 @@
       "apiPath": "spec.provisioner.version",
       "description": "Optional provisioner version."
     },
-
     {
       "name": "status",
       "type": "string",
@@ -108,19 +111,5 @@
       "description": "IDs of AMIs registered by the plan."
     }
   ],
-  "waiter": {
-    "statusPath": "status",
-    "successState": "Complete",
-    "failureStates": {
-      "Failed": "provisioning failed",
-      "Blocked": "provisioning is blocked",
-      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
-      "DeprovisionFailed": "deprovisioning failed"
-    },
-    "failureDetailPath": "blockedReason",
-    "pollIntervalSeconds": 10,
-    "createTimeoutMinutes": 30,
-    "updateTimeoutMinutes": 30,
-    "deleteTimeoutMinutes": 15
-  }
+  "waiter": {}
 }

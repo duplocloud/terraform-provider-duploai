@@ -2,6 +2,9 @@
   "name": "foo",
   "description": "Type catalog: one attribute per supported type. Each attribute's description documents the type. Copy/trim into duplocloud/specs/<name>.json for a real resource. (Reference only — not embedded.)",
   "idPath": "id",
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/foos"
+  },
   "attributes": [
     {
       "name": "workspace_id",
@@ -165,6 +168,24 @@
     },
 
     {
+      "name": "create_only_field",
+      "type": "string",
+      "optional": true,
+      "createOnly": true,
+      "requestPath": "spec.createRequest.sourceKey",
+      "description": "createOnly: sent on POST, silently skipped on PUT. Use for fields that cannot be changed after creation (e.g. S3 key, image URI). Pair with forceNew if the field should force replacement when changed."
+    },
+    {
+      "name": "split_path_field",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "createPath": "spec.createRequest.memoryMb",
+      "updatePath": "spec.updateRequest.memoryMb",
+      "responsePath": "result.cloud.memorySize",
+      "description": "createPath/updatePath: different body paths for POST vs PUT. responsePath: separate path for reading back the value."
+    },
+    {
       "name": "status",
       "type": "string",
       "computed": true,
@@ -179,10 +200,19 @@
       "description": "Computed list built by mapping over a response array (the [] operator)."
     }
   ],
+  "createConstants": [
+    {
+      "path": "spec.mode",
+      "value": "Create",
+      "description_comment": "createConstants: injected into POST body only. Use for creation-only discriminators."
+    }
+  ],
   "waiter": {
     "statusPath": "status.phase",
     "successState": "Ready",
     "failureStates": { "Failed": "provisioning failed" },
+    "failureRetries": 3,
+    "failurePollIntervalSeconds": 60,
     "pollIntervalSeconds": 5,
     "createTimeoutMinutes": 20,
     "updateTimeoutMinutes": 20,

@@ -29,6 +29,167 @@ jobs:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
 
+      - name: Delete existing draft release if any
+        run: gh release delete ${{ github.ref_name }} --yes || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate release notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_TAG: ${{ github.ref_name }}
+        run: |
+          python3 << 'PYEOF'
+          import subprocess, json, os, sys
+
+          tag  = os.environ["CURRENT_TAG"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+
+          # Find previous tag
+          tags = subprocess.run(
+              ["git", "tag", "--sort=-version:refname"],
+              capture_output=True, text=True
+          ).stdout.strip().split("\n")
+          tags = [t for t in tags if t and t != tag]
+          prev_tag = tags[0] if tags else None
+
+          # Date of previous tag (used to filter gh pr list)
+          if prev_tag:
+              prev_date = subprocess.run(
+                  ["git", "log", "-1", "--format=%aI", prev_tag],
+                  capture_output=True, text=True
+              ).stdout.strip()
+          else:
+              prev_date = "2020-01-01T00:00:00Z"
+
+          print(f"Generating notes: {prev_tag} -> {tag} (since {prev_date})", flush=True)
+
+          def list_prs(base, since, until=None):
+              search = f"merged:>{since}"
+              if until:
+                  search += f" merged:<{until}"
+              result = subprocess.run([
+                  "gh", "pr", "list",
+                  "--repo", repo, "--base", base, "--state", "merged",
+                  "--json", "number,title,labels,author,headRefName",
+                  "--search", search,
+                  "--limit", "500",
+              ], capture_output=True, text=True)
+              if result.returncode != 0:
+                  print(f"WARN gh pr list error: {result.stderr.strip()}", flush=True)
+              prs = json.loads(result.stdout or "[]")
+              print(f"  list_prs(base={base!r}, since={since}, until={until}) -> {len(prs)} PRs", flush=True)
+              return prs
+
+          # Detect stabilization branch from PRs merged to master in this window.
+          # We query master only to find the branch name — master PRs themselves
+          # are automation and are excluded from the changelog.
+          master_prs = list_prs("master", prev_date)
+          stab_branch = next(
+              (pr["headRefName"] for pr in master_prs
+               if pr["headRefName"].startswith(("hotfix/", "release/"))),
+              None
+          )
+          print(f"Stabilization branch: {stab_branch}", flush=True)
+
+          # Collect the real work PRs based on release type
+          stab_prs = list_prs(stab_branch, prev_date) if stab_branch else []
+          extra_prs = []
+
+          if stab_branch and stab_branch.startswith("release/"):
+              # Major release: also include PRs merged into develop between the
+              # previous tag and when the release branch was cut from develop.
+              cut_hash = subprocess.run(
+                  ["git", "merge-base", "develop", stab_branch],
+                  capture_output=True, text=True
+              ).stdout.strip()
+              cut_date = subprocess.run(
+                  ["git", "log", "-1", "--format=%aI", cut_hash],
+                  capture_output=True, text=True
+              ).stdout.strip()
+              extra_prs = list_prs("develop", since=prev_date, until=cut_date)
+              print(f"Release branch {stab_branch} cut from develop at {cut_date}", flush=True)
+              print(f"Including {len(stab_prs)} release/* PRs + {len(extra_prs)} develop PRs", flush=True)
+          elif stab_branch:
+              print(f"Hotfix branch {stab_branch}: including {len(stab_prs)} PRs", flush=True)
+
+          # Merge and deduplicate (stabilization PRs first, then develop PRs)
+          seen, all_prs = set(), []
+          for pr in stab_prs + extra_prs:
+              if pr["number"] not in seen:
+                  seen.add(pr["number"])
+                  all_prs.append(pr)
+
+          EXCLUDE_LABELS  = {"ignore-for-release", "dependencies"}
+          EXCLUDE_AUTHORS = {"github-actions[bot]", "duploai-tf[bot]"}
+
+          # Each category matches any PR whose labels intersect the given set.
+          # Order matters — first match wins.
+          CATEGORIES = [
+              ({"breaking-change"},           "## Breaking Changes"),
+              ({"enhancement", "feature"},    "## New Features"),
+              ({"bug", "fix"},                "## Bug Fixes"),
+              ({"documentation", "docs"},     "## Documentation"),
+          ]
+
+          def pr_labels(pr):
+              return {l["name"] for l in pr.get("labels", [])}
+
+          def excluded(pr):
+              return (pr["author"]["login"] in EXCLUDE_AUTHORS or
+                      bool(pr_labels(pr) & EXCLUDE_LABELS))
+
+          # Format: "- PR title (#number)" — no author, no noise
+          def fmt(pr):
+              return f"- {pr['title']} (#{pr['number']})"
+
+          lines, used = [], set()
+
+          for label_keys, title in CATEGORIES:
+              section = [p for p in all_prs
+                         if pr_labels(p) & label_keys and not excluded(p)
+                         and p["number"] not in used]
+              if section:
+                  lines.append(title)
+                  for p in section:
+                      lines.append(fmt(p))
+                      used.add(p["number"])
+                  lines.append("")
+
+          others = [p for p in all_prs if not excluded(p) and p["number"] not in used]
+          if others:
+              lines.append("## Other Changes")
+              for p in others:
+                  lines.append(fmt(p))
+              lines.append("")
+
+          changelog_url = (
+              f"https://github.com/{repo}/compare/{prev_tag}...{tag}"
+              if prev_tag else
+              f"https://github.com/{repo}/releases/tag/{tag}"
+          )
+          lines.append(f"**Full Changelog**: {changelog_url}")
+
+          notes = "\n".join(lines)
+          print(f"\n--- RELEASE NOTES ({len(all_prs)} PRs) ---\n{notes}\n---", flush=True)
+          with open("/tmp/RELEASE_NOTES.md", "w") as f:
+              f.write(notes)
+          PYEOF
+
+      - name: Ensure release notes exist
+        run: |
+          if [ ! -s /tmp/RELEASE_NOTES.md ]; then
+            echo "Release notes generation produced no output — using fallback." >&2
+            printf '**Full Changelog**: https://github.com/%s/compare/%s...%s\n' \
+              "${GITHUB_REPOSITORY}" \
+              "$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo 'initial')" \
+              "${GITHUB_REF_NAME}" \
+              > /tmp/RELEASE_NOTES.md
+          fi
+          echo "--- /tmp/RELEASE_NOTES.md ---"
+          cat /tmp/RELEASE_NOTES.md
+          echo "--- end ---"
+
       - name: Run tests before publish
         run: go test ./... -timeout 90s
 
@@ -37,7 +198,73 @@ jobs:
         with:
           distribution: goreleaser
           version: latest
-          args: release --clean
+          args: release --clean --release-notes /tmp/RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+
+      - name: Set release notes
+        # GoReleaser v2 may still call GitHub's generate_release_notes API,
+        # which overwrites the file we passed via --release-notes with the
+        # squash commit body. This step explicitly forces our custom notes as
+        # the final body before publish-release makes the draft live.
+        run: |
+          gh release edit "${{ github.ref_name }}" \
+            --notes-file /tmp/RELEASE_NOTES.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-release:
+    runs-on: ubuntu-22.04
+    needs:
+      - release
+    steps:
+      - name: Generate token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
+      - name: Publish the release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            // List all releases.
+            let releases = await github.rest.repos.listReleases({ owner: context.repo.owner, repo: context.repo.repo });
+            console.log(`Found ${releases.data.length} releases:`);
+
+            // Identify the draft release.
+            const draftRelease = releases.data.find((r) => r.draft && r.tag_name == '${{ github.ref_name }}');
+            if (!draftRelease) {
+              const msg = `No draft release found: ${{ github.ref_name }}`;
+              console.log(msg);
+              core.setFailed(msg);
+            }
+
+            // Publish the draft release.
+            else {
+              console.log(`Found draft release: ${draftRelease.tag_name} (${draftRelease.id})`);
+              await github.rest.repos.updateRelease({ owner: context.repo.owner, repo: context.repo.repo,
+                                                      release_id: draftRelease.id, draft: false });
+              console.log(`Published draft release: ${draftRelease.tag_name} (${draftRelease.id})`);
+            }
+
+      - name: Notify Slack
+        if: success()
+        env:
+          VERSION: ${{ github.ref_name }}
+          ACTOR: ${{ github.actor }}
+          RELEASE_URL: https://github.com/duplocloud/terraform-provider-duploai/releases/tag/${{ github.ref_name }}
+        run: |
+          REGISTRY_VERSION="${VERSION#v}"
+          REGISTRY_URL="https://registry.terraform.io/providers/duplocloud/duploai/${REGISTRY_VERSION}"
+          curl -s -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"version\": \"${VERSION}\",
+              \"actor\": \"${ACTOR}\",
+              \"registry_url\": \"${REGISTRY_URL}\",
+              \"release_url\": \"${RELEASE_URL}\"
+            }" \
+            "${{ secrets.SLACK_WEBHOOK }}"

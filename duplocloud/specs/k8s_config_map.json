@@ -1,0 +1,148 @@
+{
+  "name": "k8s_config_map",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes ConfigMap.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sConfigMaps",
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this config map."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the config map resource."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this config map to a cloud provider account."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group (EKS cluster) this config map belongs to."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment that owns the resource group."
+    },
+    {
+      "name": "namespace_name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.namespaceName",
+      "description": "Kubernetes namespace the config map is created in."
+    },
+    {
+      "name": "data",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.data",
+      "description": "Configuration key/value pairs (UTF-8 string data)."
+    },
+    {
+      "name": "binary_data",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.binaryData",
+      "description": "Binary configuration entries, base64-encoded values keyed by name."
+    },
+    {
+      "name": "immutable",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.k8sResource.immutable",
+      "description": "Mark the config map immutable (its data cannot be changed after creation)."
+    },
+    {
+      "name": "labels",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.metadata.labels",
+      "description": "Kubernetes labels applied to the config map."
+    },
+    {
+      "name": "annotations",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.metadata.annotations",
+      "description": "Kubernetes annotations applied to the config map."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Cli",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    }
+  ],
+  "requestConstants": [
+    {
+      "path": "spec.k8sResource.apiVersion",
+      "value": "v1"
+    },
+    {
+      "path": "spec.k8sResource.kind",
+      "value": "ConfigMap"
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned",
+    "createTimeoutMinutes": 15,
+    "updateTimeoutMinutes": 15,
+    "deleteTimeoutMinutes": 10
+  }
+}

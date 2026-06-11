@@ -2,6 +2,11 @@
   "name": "node_group",
   "description": "Manages a DuploCloud AI Helpdesk AWS EKS managed node group.",
   "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AWSEksNodeGroups",
+    "deprovision": {}
+  },
   "attributes": [
     {
       "name": "workspace_id",
@@ -46,13 +51,11 @@
     {
       "name": "environment_id",
       "type": "string",
-      "optional": true,
-      "computed": true,
+      "required": true,
       "forceNew": true,
       "apiPath": "spec.environmentId",
       "description": "ID of the environment that owns the resource group."
     },
-
     {
       "name": "instance_types",
       "type": "list(string)",
@@ -123,12 +126,27 @@
       "apiPath": "spec.taints",
       "description": "Kubernetes taints applied to the nodes.",
       "attributes": [
-        { "name": "key", "type": "string", "required": true, "apiPath": "key",
-          "description": "Taint key." },
-        { "name": "value", "type": "string", "optional": true, "apiPath": "value",
-          "description": "Taint value." },
-        { "name": "effect", "type": "string", "required": true, "apiPath": "effect",
-          "description": "Taint effect. Accepted values are defined by the backend EksNodeGroupTaintEffect enum (e.g. NoSchedule/PreferNoSchedule/NoExecute); confirm the exact value against your tenant." }
+        {
+          "name": "key",
+          "type": "string",
+          "required": true,
+          "apiPath": "key",
+          "description": "Taint key."
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "optional": true,
+          "apiPath": "value",
+          "description": "Taint value."
+        },
+        {
+          "name": "effect",
+          "type": "string",
+          "required": true,
+          "apiPath": "effect",
+          "description": "Taint effect. Accepted values are defined by the backend EksNodeGroupTaintEffect enum (e.g. NoSchedule/PreferNoSchedule/NoExecute); confirm the exact value against your tenant."
+        }
       ]
     },
     {
@@ -146,7 +164,6 @@
       "apiPath": "spec.instanceVisibility",
       "description": "Node placement visibility (public vs. private subnets). Accepted values are defined by the backend InstanceVisibilityType enum; confirm the exact value against your tenant."
     },
-
     {
       "name": "provisioner_type",
       "type": "string",
@@ -167,7 +184,6 @@
       "apiPath": "spec.provisioner.version",
       "description": "Optional provisioner version."
     },
-
     {
       "name": "status",
       "type": "string",
@@ -226,19 +242,8 @@
     }
   ],
   "waiter": {
-    "statusPath": "status",
-    "successState": "Complete",
     "deprovisionedState": "DeProvisioned",
-    "failureStates": {
-      "Failed": "provisioning failed",
-      "Blocked": "provisioning is blocked",
-      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
-      "DeprovisionFailed": "deprovisioning failed"
-    },
-    "failureDetailPath": "blockedReason",
     "pollIntervalSeconds": 15,
-    "createTimeoutMinutes": 30,
-    "updateTimeoutMinutes": 30,
     "deleteTimeoutMinutes": 20
   }
 }

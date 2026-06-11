@@ -19,6 +19,7 @@ resource "duploai_helm_repository" "bitnami" {
   name              = "bitnami"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   url      = "https://charts.bitnami.com/bitnami"
@@ -31,6 +32,7 @@ resource "duploai_helm_repository" "private_oci" {
   name              = "internal-charts"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   url             = "oci://registry.example.com/charts"
@@ -54,6 +56,7 @@ resource "duploai_helm_repository" "private_oci" {
 
 ### Required
 
+- `environment_id` (String) ID of the environment that owns the resource group.
 - `name` (String) Name of the Helm repository resource.
 - `namespace_name` (String) Kubernetes namespace the Helm repository is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this Helm repository belongs to.
@@ -67,7 +70,6 @@ resource "duploai_helm_repository" "private_oci" {
 - `api_version` (String) Flux HelmRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1beta2).
 - `cert_secret_ref_name` (String) Name of a Kubernetes Secret holding TLS certificate data for the repository.
 - `description` (String) Optional description.
-- `environment_id` (String) ID of the environment that owns the resource group.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `insecure` (Boolean) Allow connecting to an HTTP (non-TLS) OCI registry.
 - `interval` (String) Interval at which the repository index is fetched (Go duration, e.g. 5m, 1h).

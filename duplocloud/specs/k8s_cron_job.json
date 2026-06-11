@@ -1,0 +1,357 @@
+{
+  "name": "k8s_cron_job",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes CronJob — a scheduled workload that runs jobs on a recurring cron schedule within an environment or resource group.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sCronJobs",
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this Kubernetes cron job."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the Kubernetes cron job resource."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment in which the cron job runs."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group in which the cron job runs."
+    },
+    {
+      "name": "namespace_name",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.namespaceName",
+      "description": "Kubernetes namespace to run the cron job in."
+    },
+    {
+      "name": "is_any_host_allowed",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.isAnyHostAllowed",
+      "description": "When true, the cron job pods may be scheduled on any available host."
+    },
+    {
+      "name": "allocation_tags",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.allocationTags",
+      "description": "Allocation tags used to constrain which hosts the cron job pods run on."
+    },
+    {
+      "name": "labels",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.metadata.labels",
+      "responsePath": "result.k8sResource.metadata.labels",
+      "description": "Labels to apply to the Kubernetes CronJob object."
+    },
+    {
+      "name": "annotations",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.metadata.annotations",
+      "responsePath": "result.k8sResource.metadata.annotations",
+      "description": "Annotations to apply to the Kubernetes CronJob object."
+    },
+    {
+      "name": "schedule",
+      "type": "string",
+      "required": true,
+      "requestPath": "spec.k8sResource.spec.schedule",
+      "responsePath": "result.k8sResource.spec.schedule",
+      "description": "Cron schedule expression (e.g. \"0 2 * * *\" for 2 AM daily)."
+    },
+    {
+      "name": "time_zone",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.timeZone",
+      "responsePath": "result.k8sResource.spec.timeZone",
+      "description": "Time zone name for the schedule (e.g. \"America/New_York\"). Defaults to the cluster time zone."
+    },
+    {
+      "name": "concurrency_policy",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Allow",
+      "oneOf": [
+        "Allow",
+        "Forbid",
+        "Replace"
+      ],
+      "requestPath": "spec.k8sResource.spec.concurrencyPolicy",
+      "responsePath": "result.k8sResource.spec.concurrencyPolicy",
+      "description": "How to treat concurrent executions: Allow (default), Forbid, or Replace."
+    },
+    {
+      "name": "starting_deadline_seconds",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.startingDeadlineSeconds",
+      "responsePath": "result.k8sResource.spec.startingDeadlineSeconds",
+      "description": "Seconds after the scheduled time within which a missed run may still start."
+    },
+    {
+      "name": "successful_jobs_history_limit",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 3,
+      "requestPath": "spec.k8sResource.spec.successfulJobsHistoryLimit",
+      "responsePath": "result.k8sResource.spec.successfulJobsHistoryLimit",
+      "description": "Number of successful finished jobs to retain. Defaults to 3."
+    },
+    {
+      "name": "failed_jobs_history_limit",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 1,
+      "requestPath": "spec.k8sResource.spec.failedJobsHistoryLimit",
+      "responsePath": "result.k8sResource.spec.failedJobsHistoryLimit",
+      "description": "Number of failed finished jobs to retain. Defaults to 1."
+    },
+    {
+      "name": "suspend",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "requestPath": "spec.k8sResource.spec.suspend",
+      "responsePath": "result.k8sResource.spec.suspend",
+      "description": "When true, subsequent scheduled executions are suspended."
+    },
+    {
+      "name": "backoff_limit",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 6,
+      "requestPath": "spec.k8sResource.spec.jobTemplate.spec.backoffLimit",
+      "responsePath": "result.k8sResource.spec.jobTemplate.spec.backoffLimit",
+      "description": "Number of retries before a job run is marked as failed. Defaults to 6."
+    },
+    {
+      "name": "completions",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.jobTemplate.spec.completions",
+      "responsePath": "result.k8sResource.spec.jobTemplate.spec.completions",
+      "description": "Number of pods that must succeed for each job run to be considered complete."
+    },
+    {
+      "name": "parallelism",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.jobTemplate.spec.parallelism",
+      "responsePath": "result.k8sResource.spec.jobTemplate.spec.parallelism",
+      "description": "Maximum number of pods running in parallel for each job run."
+    },
+    {
+      "name": "ttl_seconds_after_finished",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.jobTemplate.spec.ttlSecondsAfterFinished",
+      "responsePath": "result.k8sResource.spec.jobTemplate.spec.ttlSecondsAfterFinished",
+      "description": "Seconds after a job run finishes before it is automatically deleted. Omit to disable automatic cleanup."
+    },
+    {
+      "name": "active_deadline_seconds",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.jobTemplate.spec.activeDeadlineSeconds",
+      "responsePath": "result.k8sResource.spec.jobTemplate.spec.activeDeadlineSeconds",
+      "description": "Maximum duration in seconds a job run may execute before being terminated."
+    },
+    {
+      "name": "restart_policy",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Never",
+      "oneOf": [
+        "Never",
+        "OnFailure"
+      ],
+      "requestPath": "spec.k8sResource.spec.jobTemplate.spec.template.spec.restartPolicy",
+      "responsePath": "result.k8sResource.spec.jobTemplate.spec.template.spec.restartPolicy",
+      "description": "Pod restart policy. Use Never (default) or OnFailure for batch jobs."
+    },
+    {
+      "name": "service_account_name",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.jobTemplate.spec.template.spec.serviceAccountName",
+      "responsePath": "result.k8sResource.spec.jobTemplate.spec.template.spec.serviceAccountName",
+      "description": "Kubernetes service account to run the pods as."
+    },
+    {
+      "name": "node_selector",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.jobTemplate.spec.template.spec.nodeSelector",
+      "responsePath": "result.k8sResource.spec.jobTemplate.spec.template.spec.nodeSelector",
+      "description": "Node label selector constraints for pod scheduling."
+    },
+    {
+      "name": "containers",
+      "type": "list(object)",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.jobTemplate.spec.template.spec.containers",
+      "responsePath": "result.k8sResource.spec.jobTemplate.spec.template.spec.containers",
+      "description": "List of containers to run in each job pod.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "Container name."
+        },
+        {
+          "name": "image",
+          "type": "string",
+          "required": true,
+          "apiPath": "image",
+          "description": "Container image (e.g. my-repo/my-image:latest)."
+        },
+        {
+          "name": "command",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "command",
+          "description": "Entrypoint command array (overrides the image ENTRYPOINT)."
+        },
+        {
+          "name": "args",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "args",
+          "description": "Arguments to the entrypoint command (overrides the image CMD)."
+        },
+        {
+          "name": "working_dir",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "workingDir",
+          "description": "Container working directory."
+        },
+        {
+          "name": "env",
+          "type": "list(object)",
+          "optional": true,
+          "apiPath": "env",
+          "description": "Environment variables to set in the container.",
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "apiPath": "name",
+              "description": "Environment variable name."
+            },
+            {
+              "name": "value",
+              "type": "string",
+              "optional": true,
+              "computed": true,
+              "sensitive": true,
+              "apiPath": "value",
+              "description": "Environment variable value."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status of the cron job resource."
+    },
+    {
+      "name": "active_job_names",
+      "type": "list(string)",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.k8sResource.status.active[].name",
+      "description": "Names of job runs currently active for this cron job."
+    },
+    {
+      "name": "last_schedule_time",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.k8sResource.status.lastScheduleTime",
+      "description": "Time the cron job last scheduled a run."
+    },
+    {
+      "name": "last_successful_time",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.k8sResource.status.lastSuccessfulTime",
+      "description": "Time a run of the cron job last completed successfully."
+    }
+  ],
+  "requestConstants": [
+    {
+      "path": "spec.mode",
+      "value": "Create"
+    }
+  ],
+  "waiter": {
+    "failureRetries": 3
+  }
+}

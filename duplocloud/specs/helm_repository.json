@@ -2,6 +2,10 @@
   "name": "helm_repository",
   "description": "Manages a DuploCloud AI Helpdesk Kubernetes Helm repository (Flux HelmRepository).",
   "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sHelmRepositories"
+  },
   "attributes": [
     {
       "name": "workspace_id",
@@ -46,8 +50,7 @@
     {
       "name": "environment_id",
       "type": "string",
-      "optional": true,
-      "computed": true,
+      "required": true,
       "forceNew": true,
       "apiPath": "spec.environmentId",
       "description": "ID of the environment that owns the resource group."
@@ -60,7 +63,6 @@
       "apiPath": "spec.namespaceName",
       "description": "Kubernetes namespace the Helm repository is created in."
     },
-
     {
       "name": "api_version",
       "type": "string",
@@ -155,7 +157,6 @@
       "apiPath": "spec.k8sResource.metadata.annotations",
       "description": "Kubernetes annotations applied to the Helm repository."
     },
-
     {
       "name": "provisioner_type",
       "type": "string",
@@ -176,7 +177,6 @@
       "apiPath": "spec.provisioner.version",
       "description": "Optional provisioner version."
     },
-
     {
       "name": "status",
       "type": "string",
@@ -186,19 +186,12 @@
     }
   ],
   "requestConstants": [
-    { "path": "spec.k8sResource.kind", "value": "HelmRepository" }
+    {
+      "path": "spec.k8sResource.kind",
+      "value": "HelmRepository"
+    }
   ],
   "waiter": {
-    "statusPath": "status",
-    "successState": "Complete",
-    "failureStates": {
-      "Failed": "provisioning failed",
-      "Blocked": "provisioning is blocked",
-      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
-      "DeprovisionFailed": "deprovisioning failed"
-    },
-    "failureDetailPath": "blockedReason",
-    "pollIntervalSeconds": 10,
     "createTimeoutMinutes": 15,
     "updateTimeoutMinutes": 15,
     "deleteTimeoutMinutes": 10

@@ -3,6 +3,7 @@ package duplosdk
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 )
@@ -48,6 +49,49 @@ func (r *RESTResource[T]) Get(id string) (*T, ClientError) {
 	return r.decode(r.endpoint.readVerb(), r.endpoint.readPath(r.scope, id), nil)
 }
 
+// retryBaseDelay is the initial backoff between GetWithRetry attempts; it
+// doubles per attempt up to retryMaxDelay. Vars (not consts) so tests can
+// shrink them.
+var (
+	retryBaseDelay = 1 * time.Second
+	retryMaxDelay  = 8 * time.Second
+)
+
+// GetWithRetry fetches the object by id, retrying failures that may resolve on
+// their own. The backend's read path can lag a create — the object exists but
+// is not returned yet — so not-found is retried too, along with throttling
+// (429), server errors (5xx), and transport-level failures. Backoff is
+// exponential until maxWait elapses; the last error is returned if the object
+// never appears. Use for point-in-time reads (data sources); resource refresh
+// must keep single-shot Get so a genuine 404 promptly signals deletion.
+func (r *RESTResource[T]) GetWithRetry(ctx context.Context, id string, maxWait time.Duration) (*T, ClientError) {
+	delay := retryBaseDelay
+	deadline := time.Now().Add(maxWait)
+	for {
+		obj, err := r.Get(id)
+		if err == nil || !isRetryableRead(err) || !time.Now().Add(delay).Before(deadline) {
+			return obj, err
+		}
+		log.Printf("[TRACE] GetWithRetry(%s/%s): status %d, retrying in %s", r.scopeLabel(), id, err.Status(), delay)
+		select {
+		case <-ctx.Done():
+			return nil, err
+		case <-time.After(delay):
+		}
+		if delay < retryMaxDelay {
+			delay *= 2
+		}
+	}
+}
+
+// isRetryableRead reports whether a failed read may succeed on a later
+// attempt: not-found (read-after-create lag), throttling, server errors, or
+// transport/decode failures (status 0).
+func isRetryableRead(err ClientError) bool {
+	s := err.Status()
+	return err.IsNotFound() || s == 0 || s == 429 || s >= 500
+}
+
 // Update writes req to the update path and returns the updated object.
 func (r *RESTResource[T]) Update(id string, req *T) (*T, ClientError) {
 	return r.decode(r.endpoint.updateVerb(), r.endpoint.updatePath(r.scope, id), req)
@@ -66,7 +110,7 @@ func (r *RESTResource[T]) Delete(id string) ClientError {
 // without removing the record itself. It is the pre-delete step for resources
 // the API will not delete while live. A 404 is treated as success (already gone).
 func (r *RESTResource[T]) Deprovision(id string) ClientError {
-	err := r.client.callAPI(r.endpoint.deprovisionVerb(), r.endpoint.deprovisionPath(r.scope, id), nil, nil)
+	err := r.client.callAPI(r.endpoint.deprovisionVerb(), r.endpoint.deprovisionPath(r.scope, id), map[string]any{}, nil)
 	if err != nil && err.IsNotFound() {
 		return nil
 	}

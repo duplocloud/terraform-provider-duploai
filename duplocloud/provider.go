@@ -95,9 +95,9 @@ func (p *duploaiProvider) Resources(_ context.Context) []func() resource.Resourc
 	}
 	factories := make([]func() resource.Resource, 0, len(specs))
 	for _, spec := range specs {
-		endpoint, ok := duplosdk.LookupEndpoint(spec.Name)
-		if !ok {
-			panic(fmt.Sprintf("no API endpoint registered for resource %q (add it to the duplosdk package)", spec.Name))
+		endpoint, buildErr := spec.BuildEndpoint()
+		if buildErr != nil {
+			panic(fmt.Sprintf("resource %q: %s", spec.Name, buildErr))
 		}
 		if err := spec.checkPathParams(endpoint.PathParams()); err != nil {
 			panic(fmt.Sprintf("resource %q: %s", spec.Name, err))
@@ -108,5 +108,23 @@ func (p *duploaiProvider) Resources(_ context.Context) []func() resource.Resourc
 }
 
 func (p *duploaiProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{}
+	specs, err := loadResourceSpecs()
+	if err != nil {
+		panic(fmt.Sprintf("loading specs for data sources: %s", err))
+	}
+	var factories []func() datasource.DataSource
+	for _, spec := range specs {
+		if !spec.DataSource {
+			continue
+		}
+		endpoint, buildErr := spec.BuildEndpoint()
+		if buildErr != nil {
+			panic(fmt.Sprintf("data source %q: %s", spec.Name, buildErr))
+		}
+		if err := spec.checkPathParams(endpoint.PathParams()); err != nil {
+			panic(fmt.Sprintf("data source %q: %s", spec.Name, err))
+		}
+		factories = append(factories, newDynamicDataSourceFactory(spec, endpoint))
+	}
+	return factories
 }

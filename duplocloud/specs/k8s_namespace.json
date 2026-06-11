@@ -1,0 +1,75 @@
+{
+  "name": "k8s_namespace",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes Namespace.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Namespaces",
+    "immutable": true,
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this namespace."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the Kubernetes namespace. Must be a DNS-1123 label (lowercase alphanumeric and '-', starting and ending with an alphanumeric, matching ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$), 1-63 characters, and unique within the cluster."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "forceNew": true,
+      "apiPath": "description",
+      "description": "Optional description. Namespaces are immutable, so changing this forces replacement."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group (EKS cluster) this namespace belongs to."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment that owns the resource group (EKS cluster) this namespace belongs to."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this namespace to a cloud provider account. Inherited from the resource group."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned",
+    "failureRetries": 3,
+    "createTimeoutMinutes": 15,
+    "deleteTimeoutMinutes": 10
+  }
+}

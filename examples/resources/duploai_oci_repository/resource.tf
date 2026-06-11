@@ -4,6 +4,7 @@ resource "duploai_oci_repository" "podinfo" {
   name              = "podinfo"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   url      = "oci://ghcr.io/stefanprodan/manifests/podinfo"
@@ -17,6 +18,7 @@ resource "duploai_oci_repository" "internal" {
   name              = "internal-app"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   url             = "oci://registry.example.com/charts/app"
