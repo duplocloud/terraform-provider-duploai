@@ -53,6 +53,11 @@ type ResourceSpec struct {
 	// RequiredIf declares conditional-required rules evaluated at plan time.
 	RequiredIf []RequiredIfRule `json:"requiredIf,omitempty"`
 
+	// ConflictsWith declares mutually-exclusive attribute groups: within each
+	// group at most one attribute may be set. Enforced at plan time, e.g.
+	// [["snapshot_name", "snapshot_arns"]].
+	ConflictsWith [][]string `json:"conflictsWith,omitempty"`
+
 	// Waiter, when present, makes Create/Update poll until the resource
 	// reaches a terminal state.
 	Waiter *WaiterSpec `json:"waiter,omitempty"`
@@ -255,11 +260,41 @@ type ConstantField struct {
 	Value json.RawMessage `json:"value"`
 }
 
-// RequiredIfRule requires Attribute to be set when WhenAttribute equals WhenValue.
+// RequiredIfRule requires Attribute to be set when its condition holds. Two
+// forms:
+//   - Single (back-compat): Attribute is required when WhenAttribute == WhenEquals.
+//   - Compound: Attribute is required when ALL of When match (logical AND); each
+//     condition is equals or notEquals. Use this for rules like "required when
+//     engine != Memcached AND cluster_mode == Enabled".
+//
+// A condition reads the config value, falling back to the attribute's spec
+// default when the user omitted it — so a condition on a defaulted field (e.g.
+// cluster_mode defaulting to "Disabled") still evaluates correctly.
 type RequiredIfRule struct {
-	Attribute     string `json:"attribute"`
-	WhenAttribute string `json:"whenAttribute"`
-	WhenEquals    string `json:"whenEquals"`
+	Attribute     string                `json:"attribute"`
+	WhenAttribute string                `json:"whenAttribute,omitempty"`
+	WhenEquals    string                `json:"whenEquals,omitempty"`
+	When          []RequiredIfCondition `json:"when,omitempty"`
+}
+
+// RequiredIfCondition is one term of a compound requiredIf rule. Exactly one of
+// Equals / NotEquals / IsEmpty is set. IsEmpty matches when the (config-or-
+// default) value is empty — used for "required unless X is set" rules, e.g.
+// engine_version required when snapshot_name is empty.
+type RequiredIfCondition struct {
+	Attribute string `json:"attribute"`
+	Equals    string `json:"equals,omitempty"`
+	NotEquals string `json:"notEquals,omitempty"`
+	IsEmpty   bool   `json:"isEmpty,omitempty"`
+}
+
+// conditions normalizes a rule to its list of AND-ed conditions (the single
+// WhenAttribute/WhenEquals form becomes one condition).
+func (r RequiredIfRule) conditions() []RequiredIfCondition {
+	if len(r.When) > 0 {
+		return r.When
+	}
+	return []RequiredIfCondition{{Attribute: r.WhenAttribute, Equals: r.WhenEquals}}
 }
 
 // WaiterSpec drives the generic poller.
@@ -399,8 +434,40 @@ func (s *ResourceSpec) validate() error {
 		return fmt.Errorf("attribute %q is reserved", "id")
 	}
 	for _, r := range s.RequiredIf {
-		if !seen[r.Attribute] || !seen[r.WhenAttribute] {
-			return fmt.Errorf("requiredIf references unknown attribute")
+		if !seen[r.Attribute] {
+			return fmt.Errorf("requiredIf references unknown attribute %q", r.Attribute)
+		}
+		conds := r.conditions()
+		if len(conds) == 0 {
+			return fmt.Errorf("requiredIf rule for %q has no condition", r.Attribute)
+		}
+		for _, c := range conds {
+			if !seen[c.Attribute] {
+				return fmt.Errorf("requiredIf references unknown attribute %q", c.Attribute)
+			}
+			ops := 0
+			if c.Equals != "" {
+				ops++
+			}
+			if c.NotEquals != "" {
+				ops++
+			}
+			if c.IsEmpty {
+				ops++
+			}
+			if ops != 1 {
+				return fmt.Errorf("requiredIf condition on %q must set exactly one of equals/notEquals/isEmpty", c.Attribute)
+			}
+		}
+	}
+	for _, group := range s.ConflictsWith {
+		if len(group) < 2 {
+			return fmt.Errorf("conflictsWith group must list at least two attributes")
+		}
+		for _, name := range group {
+			if !seen[name] {
+				return fmt.Errorf("conflictsWith references unknown attribute %q", name)
+			}
 		}
 	}
 	return nil

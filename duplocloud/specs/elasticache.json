@@ -1,0 +1,395 @@
+{
+  "name": "elasticache",
+  "description": "Manages a DuploCloud AI Helpdesk AWS ElastiCache cluster (Redis, Valkey, or Memcached).",
+  "idPath": "id",
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AWSElastiCaches",
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this ElastiCache cluster."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the ElastiCache cluster."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group (EKS cluster) this ElastiCache cluster belongs to."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment that owns the resource group."
+    },
+    {
+      "name": "engine",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "oneOf": ["Redis", "Valkey", "Memcached"],
+      "apiPath": "spec.engine",
+      "description": "Cache engine: Redis, Valkey, or Memcached."
+    },
+    {
+      "name": "engine_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.engineVersion",
+      "description": "Engine version (e.g. 7.1). Required unless restoring from a snapshot; when unset and not restoring, the server selects a default."
+    },
+    {
+      "name": "cache_node_type",
+      "type": "string",
+      "required": true,
+      "apiPath": "spec.cacheNodeType",
+      "description": "Node instance type, e.g. cache.t4g.micro. Data tiering requires an r6gd.* type."
+    },
+    {
+      "name": "port",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.port",
+      "description": "Port the cache listens on. Defaults to 6379 (Redis/Valkey) or 11211 (Memcached) when unset."
+    },
+    {
+      "name": "cluster_mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Disabled",
+      "forceNew": true,
+      "oneOf": ["Disabled", "Enabled"],
+      "apiPath": "spec.clusterMode",
+      "description": "Redis/Valkey cluster mode: Disabled (single shard) or Enabled (sharded). Not applicable to Memcached."
+    },
+    {
+      "name": "num_cache_clusters",
+      "type": "int",
+      "optional": true,
+      "apiPath": "spec.numCacheClusters",
+      "description": "Redis/Valkey cluster-mode-disabled: number of nodes (primary + replicas), 1-6. Required for cluster_mode=Disabled; not valid for Memcached or cluster_mode=Enabled."
+    },
+    {
+      "name": "num_node_groups",
+      "type": "int",
+      "optional": true,
+      "apiPath": "spec.numNodeGroups",
+      "description": "Redis/Valkey cluster-mode-enabled: number of shards (node groups), 1-90. Required for cluster_mode=Enabled."
+    },
+    {
+      "name": "replicas_per_node_group",
+      "type": "int",
+      "optional": true,
+      "apiPath": "spec.replicasPerNodeGroup",
+      "description": "Redis/Valkey cluster-mode-enabled: replicas per shard, 0-5. Required for cluster_mode=Enabled."
+    },
+    {
+      "name": "num_cache_nodes",
+      "type": "int",
+      "optional": true,
+      "apiPath": "spec.numCacheNodes",
+      "description": "Memcached: number of cache nodes, 1-40. Required when engine=Memcached; not valid for Redis/Valkey."
+    },
+    {
+      "name": "az_mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.azMode",
+      "description": "Memcached availability-zone placement: single-az or cross-az. Server-defaulted from the node count when unset."
+    },
+    {
+      "name": "preferred_availability_zones",
+      "type": "list(string)",
+      "optional": true,
+      "apiPath": "spec.preferredAvailabilityZones",
+      "description": "Memcached: preferred availability zones for the cache nodes."
+    },
+    {
+      "name": "node_group_configuration",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.nodeGroupConfiguration",
+      "description": "Redis/Valkey cluster-mode-enabled: per-shard configuration. When provided, length must equal num_node_groups.",
+      "attributes": [
+        { "name": "node_group_id", "type": "string", "optional": true, "apiPath": "nodeGroupId", "description": "Shard (node group) identifier." },
+        { "name": "slots", "type": "string", "optional": true, "apiPath": "slots", "description": "Keyspace slot range for this shard, e.g. 0-5461." },
+        { "name": "primary_availability_zone", "type": "string", "optional": true, "apiPath": "primaryAvailabilityZone", "description": "Availability zone for the shard's primary node." },
+        { "name": "replica_availability_zones", "type": "list(string)", "optional": true, "apiPath": "replicaAvailabilityZones", "description": "Availability zones for the shard's replicas." },
+        { "name": "replica_count", "type": "int", "optional": true, "apiPath": "replicaCount", "description": "Number of replicas in this shard." }
+      ]
+    },
+    {
+      "name": "transit_encryption_enabled",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.transitEncryptionEnabled",
+      "description": "Enable in-transit (TLS) encryption. Must be true when auth_token is set."
+    },
+    {
+      "name": "auth_token",
+      "type": "string",
+      "optional": true,
+      "sensitive": true,
+      "apiPath": "spec.authToken",
+      "description": "Redis/Valkey AUTH token. Requires transit_encryption_enabled = true."
+    },
+    {
+      "name": "auto_minor_version_upgrade",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": true,
+      "apiPath": "spec.autoMinorVersionUpgrade",
+      "description": "Automatically apply minor engine version upgrades."
+    },
+    {
+      "name": "data_tiering_enabled",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.dataTieringEnabled",
+      "description": "Enable data tiering (Redis/Valkey on r6gd.* node types only)."
+    },
+    {
+      "name": "preferred_maintenance_window",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.preferredMaintenanceWindow",
+      "description": "Weekly maintenance window, e.g. sun:05:00-sun:06:00."
+    },
+    {
+      "name": "snapshot_retention_limit",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.snapshotRetentionLimit",
+      "description": "Days to retain automatic snapshots (Redis/Valkey). 0 disables automatic snapshots. Not applicable to Memcached, where the server leaves it unset; the server value is retained when omitted."
+    },
+    {
+      "name": "snapshot_window",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.snapshotWindow",
+      "description": "Daily window for automatic snapshots, e.g. 03:00-04:00 (Redis/Valkey)."
+    },
+    {
+      "name": "parameters",
+      "type": "list(object)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.parameters",
+      "description": "Cache parameter overrides applied to the parameter group. When omitted, the server's current parameter set is retained (the API returns an empty list rather than null).",
+      "attributes": [
+        { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Parameter name." },
+        { "name": "value", "type": "string", "required": true, "apiPath": "value", "description": "Parameter value." }
+      ]
+    },
+    {
+      "name": "log_delivery_configurations",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.logDeliveryConfigurations",
+      "description": "Log delivery configurations (Redis/Valkey slow-log / engine-log).",
+      "attributes": [
+        { "name": "log_type", "type": "string", "optional": true, "apiPath": "logType", "description": "Log type: slow-log or engine-log." },
+        { "name": "destination_type", "type": "string", "optional": true, "apiPath": "destinationType", "description": "Destination type: cloudwatch-logs or kinesis-firehose." },
+        { "name": "destination", "type": "string", "optional": true, "apiPath": "destination", "description": "Destination name (log group or delivery stream)." },
+        { "name": "log_format", "type": "string", "optional": true, "apiPath": "logFormat", "description": "Log format: text or json." }
+      ]
+    },
+    {
+      "name": "snapshot_name",
+      "type": "string",
+      "optional": true,
+      "forceNew": true,
+      "apiPath": "spec.snapshotName",
+      "description": "Name of a snapshot to restore from (Redis/Valkey). Mutually exclusive with snapshot_arns."
+    },
+    {
+      "name": "snapshot_arns",
+      "type": "list(string)",
+      "optional": true,
+      "forceNew": true,
+      "apiPath": "spec.snapshotArns",
+      "description": "S3 ARNs of an RDB snapshot to restore from (Redis/Valkey). Mutually exclusive with snapshot_name."
+    },
+
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs linking this cluster to a cloud provider account. Inherited from the resource group."
+    },
+    {
+      "name": "cache_subnet_group_name",
+      "type": "string",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.cacheSubnetGroupName",
+      "description": "Cache subnet group. Derived from the resource group's network."
+    },
+    {
+      "name": "security_group_ids",
+      "type": "list(string)",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.securityGroupIds",
+      "description": "Security group IDs. Derived from the resource group."
+    },
+    {
+      "name": "encryption_mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "NoEncryption",
+      "forceNew": true,
+      "oneOf": ["NoEncryption", "ResourceGroupKmsKey", "AwsDefaultElastiCacheKey"],
+      "apiPath": "spec.encryptionMode",
+      "description": "At-rest encryption mode: NoEncryption, ResourceGroupKmsKey (uses the resource group's KMS key), or AwsDefaultElastiCacheKey."
+    },
+    {
+      "name": "kms_key_id",
+      "type": "string",
+      "computed": true,
+      "forceNew": true,
+      "sensitive": true,
+      "apiPath": "spec.kmsKeyId",
+      "description": "KMS key ARN for at-rest encryption. Derived from the resource group when encryption_mode = ResourceGroupKmsKey."
+    },
+    {
+      "name": "multi_az_enabled",
+      "type": "bool",
+      "computed": true,
+      "apiPath": "spec.multiAzEnabled",
+      "description": "Whether Multi-AZ is enabled. Derived from the cluster topology."
+    },
+    {
+      "name": "automatic_failover_enabled",
+      "type": "bool",
+      "computed": true,
+      "apiPath": "spec.automaticFailoverEnabled",
+      "description": "Whether automatic failover is enabled. Derived from the cluster topology."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    },
+    {
+      "name": "configuration_endpoint",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.configurationEndpoint",
+      "description": "Configuration endpoint (cluster-mode-enabled Redis/Valkey and Memcached)."
+    },
+    {
+      "name": "primary_endpoint",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.primaryEndpoint",
+      "description": "Primary endpoint address (Redis/Valkey)."
+    },
+    {
+      "name": "reader_endpoint",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.readerEndpoint",
+      "description": "Reader endpoint address (Redis/Valkey)."
+    },
+    {
+      "name": "auth_token_secret_arn",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.authTokenSecretArn",
+      "description": "ARN of the Secrets Manager secret holding the AUTH token."
+    },
+    {
+      "name": "stack_id",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.stackId",
+      "description": "Provisioned CloudFormation stack identifier."
+    }
+  ],
+  "conflictsWith": [
+    ["snapshot_name", "snapshot_arns"]
+  ],
+  "requiredIf": [
+    { "attribute": "engine_version", "when": [
+      { "attribute": "snapshot_name", "isEmpty": true }
+    ] },
+    { "attribute": "num_cache_nodes", "whenAttribute": "engine", "whenEquals": "Memcached" },
+    { "attribute": "num_cache_clusters", "when": [
+      { "attribute": "engine", "notEquals": "Memcached" },
+      { "attribute": "cluster_mode", "equals": "Disabled" }
+    ] },
+    { "attribute": "num_node_groups", "when": [
+      { "attribute": "engine", "notEquals": "Memcached" },
+      { "attribute": "cluster_mode", "equals": "Enabled" }
+    ] },
+    { "attribute": "replicas_per_node_group", "when": [
+      { "attribute": "engine", "notEquals": "Memcached" },
+      { "attribute": "cluster_mode", "equals": "Enabled" }
+    ] }
+  ],
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "deprovisionedState": "DeProvisioned",
+    "failureStates": {
+      "Failed": "provisioning failed",
+      "Blocked": "provisioning is blocked",
+      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+      "DeprovisionFailed": "deprovisioning failed"
+    },
+    "failureDetailPath": "blockedReason",
+    "failureRetries": 3,
+    "pollIntervalSeconds": 15,
+    "createTimeoutMinutes": 60,
+    "updateTimeoutMinutes": 60,
+    "deleteTimeoutMinutes": 45
+  }
+}

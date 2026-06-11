@@ -442,10 +442,46 @@ func (r *dynamicResource) ImportState(ctx context.Context, req resource.ImportSt
 // ── Conditional-required validation ───────────────────────────────────────────
 
 func (r *dynamicResource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
-	if len(r.spec.RequiredIf) == 0 {
-		return nil
+	var vs []resource.ConfigValidator
+	if len(r.spec.RequiredIf) > 0 {
+		vs = append(vs, requiredIfValidator{spec: r.spec})
 	}
-	return []resource.ConfigValidator{requiredIfValidator{spec: r.spec}}
+	if len(r.spec.ConflictsWith) > 0 {
+		vs = append(vs, conflictsWithValidator{spec: r.spec})
+	}
+	return vs
+}
+
+// conflictsWithValidator enforces ResourceSpec.ConflictsWith: within each group,
+// at most one attribute may be set in the config.
+type conflictsWithValidator struct{ spec ResourceSpec }
+
+func (v conflictsWithValidator) Description(_ context.Context) string {
+	return "Enforces mutually-exclusive attribute groups declared in the resource spec."
+}
+func (v conflictsWithValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v conflictsWithValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	for _, group := range v.spec.ConflictsWith {
+		set := make([]string, 0, len(group))
+		for _, name := range group {
+			a := v.spec.attr(name)
+			if a != nil && !configAttrNull(ctx, req.Config, *a) {
+				set = append(set, name)
+			}
+		}
+		if len(set) > 1 {
+			for _, name := range set {
+				resp.Diagnostics.AddAttributeError(
+					path.Root(name),
+					"Conflicting attributes",
+					fmt.Sprintf("only one of %s may be set; got %s.", strings.Join(group, ", "), strings.Join(set, ", ")),
+				)
+			}
+		}
+	}
 }
 
 type requiredIfValidator struct{ spec ResourceSpec }
@@ -459,22 +495,77 @@ func (v requiredIfValidator) MarkdownDescription(ctx context.Context) string {
 
 func (v requiredIfValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	for _, rule := range v.spec.RequiredIf {
-		when := v.spec.attr(rule.WhenAttribute)
 		target := v.spec.attr(rule.Attribute)
-		if when == nil || target == nil {
-			continue
-		}
-		if readConfigString(ctx, req.Config, *when) != rule.WhenEquals {
+		if target == nil || !v.conditionsHold(ctx, req.Config, rule.conditions()) {
 			continue
 		}
 		if configAttrNull(ctx, req.Config, *target) {
 			resp.Diagnostics.AddAttributeError(
 				path.Root(rule.Attribute),
 				"Missing required attribute",
-				fmt.Sprintf("%q must be set when %q is %q.", rule.Attribute, rule.WhenAttribute, rule.WhenEquals),
+				requiredIfMessage(rule),
 			)
 		}
 	}
+}
+
+// conditionsHold reports whether every condition matches (logical AND). Each
+// condition reads the config value, falling back to the attribute's spec default
+// when the user omitted it, so conditions on defaulted fields evaluate correctly.
+func (v requiredIfValidator) conditionsHold(ctx context.Context, cfg attrReader, conds []RequiredIfCondition) bool {
+	for _, c := range conds {
+		when := v.spec.attr(c.Attribute)
+		if when == nil {
+			return false
+		}
+		val := readConfigString(ctx, cfg, *when)
+		if val == "" {
+			val = defaultString(*when) // user omitted it — use the spec default
+		}
+		switch {
+		case c.IsEmpty:
+			if val != "" {
+				return false
+			}
+		case c.NotEquals != "":
+			if val == c.NotEquals {
+				return false
+			}
+		default:
+			if val != c.Equals {
+				return false
+			}
+		}
+	}
+	return len(conds) > 0
+}
+
+// defaultString renders an attribute's static default as a string, or "" if none.
+func defaultString(a AttributeSpec) string {
+	if a.Default == nil {
+		return ""
+	}
+	var v any
+	if err := json.Unmarshal(*a.Default, &v); err != nil {
+		return ""
+	}
+	return toStringValue(v)
+}
+
+// requiredIfMessage builds a human-readable explanation of a requiredIf rule.
+func requiredIfMessage(rule RequiredIfRule) string {
+	parts := make([]string, 0, len(rule.conditions()))
+	for _, c := range rule.conditions() {
+		switch {
+		case c.IsEmpty:
+			parts = append(parts, fmt.Sprintf("%s is not set", c.Attribute))
+		case c.NotEquals != "":
+			parts = append(parts, fmt.Sprintf("%s is not %q", c.Attribute, c.NotEquals))
+		default:
+			parts = append(parts, fmt.Sprintf("%s is %q", c.Attribute, c.Equals))
+		}
+	}
+	return fmt.Sprintf("%q must be set when %s.", rule.Attribute, strings.Join(parts, " and "))
 }
 
 // ── Plan/state plumbing ───────────────────────────────────────────────────────
