@@ -8,7 +8,6 @@ resource "duploai_app_service" "nginx" {
   environment_id    = "<environment-id>"
   namespace_name    = "default"
 
-  replicas   = 2
   pod_labels = { app = "nginx" }
 
   containers = [
@@ -48,6 +47,28 @@ resource "duploai_app_service" "nginx" {
             service_port_number = 80
           }
         ]
+      }
+    ]
+  }
+
+  # Autoscale the deployment on CPU utilization. When an HPA is set it owns the
+  # replica count, so `replicas` is omitted above.
+  # replication_type must be "Hpa" for the hpa block to be accepted.
+  replication_type = "Hpa"
+  hpa = {
+    min_replicas = 2
+    max_replicas = 10
+
+    metrics = [
+      {
+        type = "Resource"
+        resource = {
+          name = "cpu"
+          target = {
+            type                = "Utilization"
+            average_utilization = 70
+          }
+        }
       }
     ]
   }
