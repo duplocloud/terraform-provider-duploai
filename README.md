@@ -70,6 +70,7 @@ provider "duploai" {
 | [`duploai_rds_cluster`](docs/resources/rds_cluster.md) | Manages a DuploCloud AI Helpdesk AWS RDS (Aurora) cluster |
 | [`duploai_rds_instance`](docs/resources/rds_instance.md) | Manages a DuploCloud AI Helpdesk standalone AWS RDS instance |
 | [`duploai_resource_group`](docs/resources/resource_group.md) | Manages a DuploCloud AI Helpdesk resource group (shared security groups, IAM role, KMS key) |
+| [`duploai_s3_bucket`](docs/resources/s3_bucket.md) | Manages a DuploCloud AI Helpdesk AWS S3 bucket |
 <!-- resources-end -->
 
 ## Data Sources
@@ -101,6 +102,7 @@ provider "duploai" {
 | [`duploai_rds_cluster`](docs/data-sources/rds_cluster.md) | Manages a DuploCloud AI Helpdesk AWS RDS (Aurora) cluster |
 | [`duploai_rds_instance`](docs/data-sources/rds_instance.md) | Manages a DuploCloud AI Helpdesk standalone AWS RDS instance |
 | [`duploai_resource_group`](docs/data-sources/resource_group.md) | Manages a DuploCloud AI Helpdesk resource group (shared security groups, IAM role, KMS key) |
+| [`duploai_s3_bucket`](docs/data-sources/s3_bucket.md) | Manages a DuploCloud AI Helpdesk AWS S3 bucket |
 <!-- data-sources-end -->
 
 ## Release Process
