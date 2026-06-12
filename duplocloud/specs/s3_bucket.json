@@ -1,0 +1,230 @@
+{
+  "name": "s3_bucket",
+  "description": "Manages a DuploCloud AI Helpdesk AWS S3 bucket.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AwsS3Buckets",
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this S3 bucket."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the S3 bucket."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this bucket to a cloud provider account."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group this bucket belongs to."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment that owns the resource group."
+    },
+    {
+      "name": "region",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.region",
+      "description": "AWS region the bucket is created in (e.g. us-west-2)."
+    },
+    {
+      "name": "enable_versioning",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.enableVersioning",
+      "description": "Enable object versioning on the bucket."
+    },
+    {
+      "name": "encryption_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "oneOf": ["Sse", "SseKmsAwsManaged", "SseResourceGroupKms"],
+      "apiPath": "spec.encryptionType",
+      "description": "Server-side encryption: Sse (S3-managed), SseKmsAwsManaged (AWS-managed KMS), or SseResourceGroupKms (resource-group KMS key)."
+    },
+    {
+      "name": "kms_key_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.kmsKeyId",
+      "description": "KMS key ID used when encryption_type is a KMS mode."
+    },
+    {
+      "name": "enable_object_lock",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "forceNew": true,
+      "apiPath": "spec.enableObjectLock",
+      "description": "Enable S3 Object Lock (can only be set at bucket creation)."
+    },
+    {
+      "name": "object_ownership",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "oneOf": ["BucketOwnerEnforced", "BucketOwnerPreferred", "ObjectWriter"],
+      "apiPath": "spec.objectOwnership",
+      "description": "Object ownership / ACL behavior."
+    },
+    {
+      "name": "block_public_access",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.blockPublicAccess",
+      "description": "S3 Block Public Access settings.",
+      "attributes": [
+        { "name": "block_public_acls", "type": "bool", "optional": true, "computed": true, "apiPath": "blockPublicAcls",
+          "description": "Block new public ACLs." },
+        { "name": "ignore_public_acls", "type": "bool", "optional": true, "computed": true, "apiPath": "ignorePublicAcls",
+          "description": "Ignore existing public ACLs." },
+        { "name": "block_public_policy", "type": "bool", "optional": true, "computed": true, "apiPath": "blockPublicPolicy",
+          "description": "Block public bucket policies." },
+        { "name": "restrict_public_buckets", "type": "bool", "optional": true, "computed": true, "apiPath": "restrictPublicBuckets",
+          "description": "Restrict access to buckets with public policies." }
+      ]
+    },
+    {
+      "name": "policies",
+      "type": "list(string)",
+      "optional": true,
+      "apiPath": "spec.policies",
+      "description": "Names of managed policies to attach to the bucket."
+    },
+    {
+      "name": "bucket_policy",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.bucketPolicy",
+      "description": "Inline bucket policy as a JSON string."
+    },
+    {
+      "name": "cors_rules",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.corsRules",
+      "description": "CORS rules for the bucket.",
+      "attributes": [
+        { "name": "allowed_methods", "type": "list(string)", "optional": true, "apiPath": "allowedMethods",
+          "description": "Allowed HTTP methods (e.g. GET, PUT)." },
+        { "name": "allowed_origins", "type": "list(string)", "optional": true, "apiPath": "allowedOrigins",
+          "description": "Allowed origins." },
+        { "name": "allowed_headers", "type": "list(string)", "optional": true, "apiPath": "allowedHeaders",
+          "description": "Allowed request headers." },
+        { "name": "expose_headers", "type": "list(string)", "optional": true, "apiPath": "exposeHeaders",
+          "description": "Response headers exposed to the browser." },
+        { "name": "max_age_seconds", "type": "int", "optional": true, "apiPath": "maxAgeSeconds",
+          "description": "Preflight cache duration in seconds." }
+      ]
+    },
+    {
+      "name": "user_tags",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.userTags",
+      "description": "User-defined tags applied to the bucket."
+    },
+
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Cli",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    },
+    {
+      "name": "bucket_arn",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.bucketArn",
+      "description": "ARN of the provisioned bucket."
+    },
+    {
+      "name": "bucket_domain_name",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.bucketDomainName",
+      "description": "Domain name of the provisioned bucket."
+    }
+  ],
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "deprovisionedState": "DeProvisioned",
+    "failureStates": {
+      "Failed": "provisioning failed",
+      "Blocked": "provisioning is blocked",
+      "WaitingForApproval": "provisioning is waiting for manual approval, which Terraform cannot provide",
+      "DeprovisionFailed": "deprovisioning failed"
+    },
+    "failureDetailPath": "blockedReason",
+    "pollIntervalSeconds": 15,
+    "createTimeoutMinutes": 30,
+    "updateTimeoutMinutes": 30,
+    "deleteTimeoutMinutes": 20
+  }
+}
