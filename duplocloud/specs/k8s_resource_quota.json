@@ -1,0 +1,116 @@
+{
+  "name": "k8s_resource_quota",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes ResourceQuota. A ResourceQuota enforces per-namespace compute and object limits.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sResourceQuotas",
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this resource quota."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the resource quota. Must be a DNS-1123 label (lowercase alphanumeric and '-', starting and ending with an alphanumeric)."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group (EKS cluster) this resource quota belongs to."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment that owns the resource group."
+    },
+    {
+      "name": "namespace_name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.namespaceName",
+      "description": "Kubernetes namespace the resource quota is applied to."
+    },
+    {
+      "name": "hard",
+      "type": "map(string)",
+      "required": true,
+      "requestPath": "spec.k8sResource.spec.hard",
+      "responsePath": "result.k8sResource.spec.hard",
+      "description": "Hard resource limits enforced by this quota. Keys are Kubernetes resource names (e.g. \"cpu\", \"memory\", \"pods\", \"requests.cpu\", \"limits.memory\") and values are Kubernetes quantity strings (e.g. \"4\", \"8Gi\", \"100\")."
+    },
+    {
+      "name": "scopes",
+      "type": "list(string)",
+      "optional": true,
+      "forceNew": true,
+      "requestPath": "spec.k8sResource.spec.scopes",
+      "responsePath": "result.k8sResource.spec.scopes",
+      "description": "Optional list of scopes that restrict which resources this quota applies to (e.g. \"Terminating\", \"NotTerminating\", \"BestEffort\", \"NotBestEffort\", \"PriorityClass\"). Immutable: changing this value forces replacement of the resource quota."
+    },
+    {
+      "name": "labels",
+      "type": "map(string)",
+      "optional": true,
+      "requestPath": "spec.k8sResource.metadata.labels",
+      "description": "Kubernetes labels applied to the resource quota. Send-only: the server injects its own duplocloud.ai/* labels, so this value is not read back to avoid spurious drift."
+    },
+    {
+      "name": "annotations",
+      "type": "map(string)",
+      "optional": true,
+      "requestPath": "spec.k8sResource.metadata.annotations",
+      "description": "Kubernetes annotations applied to the resource quota. Send-only (not read back)."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    }
+  ],
+  "requestConstants": [
+    {
+      "path": "spec.k8sResource.apiVersion",
+      "value": "v1"
+    },
+    {
+      "path": "spec.k8sResource.kind",
+      "value": "ResourceQuota"
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned",
+    "failureRetries": 3,
+    "createTimeoutMinutes": 15,
+    "updateTimeoutMinutes": 15,
+    "deleteTimeoutMinutes": 10
+  }
+}
