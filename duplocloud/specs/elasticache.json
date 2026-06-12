@@ -2,6 +2,7 @@
   "name": "elasticache",
   "description": "Manages a DuploCloud AI Helpdesk AWS ElastiCache cluster (Redis, Valkey, or Memcached).",
   "idPath": "id",
+  "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AWSElastiCaches",
     "deprovision": {}
@@ -52,7 +53,11 @@
       "type": "string",
       "required": true,
       "forceNew": true,
-      "oneOf": ["Redis", "Valkey", "Memcached"],
+      "oneOf": [
+        "Redis",
+        "Valkey",
+        "Memcached"
+      ],
       "apiPath": "spec.engine",
       "description": "Cache engine: Redis, Valkey, or Memcached."
     },
@@ -87,7 +92,10 @@
       "computed": true,
       "default": "Disabled",
       "forceNew": true,
-      "oneOf": ["Disabled", "Enabled"],
+      "oneOf": [
+        "Disabled",
+        "Enabled"
+      ],
       "apiPath": "spec.clusterMode",
       "description": "Redis/Valkey cluster mode: Disabled (single shard) or Enabled (sharded). Not applicable to Memcached."
     },
@@ -141,11 +149,41 @@
       "apiPath": "spec.nodeGroupConfiguration",
       "description": "Redis/Valkey cluster-mode-enabled: per-shard configuration. When provided, length must equal num_node_groups.",
       "attributes": [
-        { "name": "node_group_id", "type": "string", "optional": true, "apiPath": "nodeGroupId", "description": "Shard (node group) identifier." },
-        { "name": "slots", "type": "string", "optional": true, "apiPath": "slots", "description": "Keyspace slot range for this shard, e.g. 0-5461." },
-        { "name": "primary_availability_zone", "type": "string", "optional": true, "apiPath": "primaryAvailabilityZone", "description": "Availability zone for the shard's primary node." },
-        { "name": "replica_availability_zones", "type": "list(string)", "optional": true, "apiPath": "replicaAvailabilityZones", "description": "Availability zones for the shard's replicas." },
-        { "name": "replica_count", "type": "int", "optional": true, "apiPath": "replicaCount", "description": "Number of replicas in this shard." }
+        {
+          "name": "node_group_id",
+          "type": "string",
+          "optional": true,
+          "apiPath": "nodeGroupId",
+          "description": "Shard (node group) identifier."
+        },
+        {
+          "name": "slots",
+          "type": "string",
+          "optional": true,
+          "apiPath": "slots",
+          "description": "Keyspace slot range for this shard, e.g. 0-5461."
+        },
+        {
+          "name": "primary_availability_zone",
+          "type": "string",
+          "optional": true,
+          "apiPath": "primaryAvailabilityZone",
+          "description": "Availability zone for the shard's primary node."
+        },
+        {
+          "name": "replica_availability_zones",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "replicaAvailabilityZones",
+          "description": "Availability zones for the shard's replicas."
+        },
+        {
+          "name": "replica_count",
+          "type": "int",
+          "optional": true,
+          "apiPath": "replicaCount",
+          "description": "Number of replicas in this shard."
+        }
       ]
     },
     {
@@ -214,8 +252,20 @@
       "apiPath": "spec.parameters",
       "description": "Cache parameter overrides applied to the parameter group. When omitted, the server's current parameter set is retained (the API returns an empty list rather than null).",
       "attributes": [
-        { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Parameter name." },
-        { "name": "value", "type": "string", "required": true, "apiPath": "value", "description": "Parameter value." }
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "Parameter name."
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "required": true,
+          "apiPath": "value",
+          "description": "Parameter value."
+        }
       ]
     },
     {
@@ -225,10 +275,34 @@
       "apiPath": "spec.logDeliveryConfigurations",
       "description": "Log delivery configurations (Redis/Valkey slow-log / engine-log).",
       "attributes": [
-        { "name": "log_type", "type": "string", "optional": true, "apiPath": "logType", "description": "Log type: slow-log or engine-log." },
-        { "name": "destination_type", "type": "string", "optional": true, "apiPath": "destinationType", "description": "Destination type: cloudwatch-logs or kinesis-firehose." },
-        { "name": "destination", "type": "string", "optional": true, "apiPath": "destination", "description": "Destination name (log group or delivery stream)." },
-        { "name": "log_format", "type": "string", "optional": true, "apiPath": "logFormat", "description": "Log format: text or json." }
+        {
+          "name": "log_type",
+          "type": "string",
+          "optional": true,
+          "apiPath": "logType",
+          "description": "Log type: slow-log or engine-log."
+        },
+        {
+          "name": "destination_type",
+          "type": "string",
+          "optional": true,
+          "apiPath": "destinationType",
+          "description": "Destination type: cloudwatch-logs or kinesis-firehose."
+        },
+        {
+          "name": "destination",
+          "type": "string",
+          "optional": true,
+          "apiPath": "destination",
+          "description": "Destination name (log group or delivery stream)."
+        },
+        {
+          "name": "log_format",
+          "type": "string",
+          "optional": true,
+          "apiPath": "logFormat",
+          "description": "Log format: text or json."
+        }
       ]
     },
     {
@@ -247,7 +321,6 @@
       "apiPath": "spec.snapshotArns",
       "description": "S3 ARNs of an RDB snapshot to restore from (Redis/Valkey). Mutually exclusive with snapshot_name."
     },
-
     {
       "name": "scope_ids",
       "type": "list(string)",
@@ -279,7 +352,11 @@
       "computed": true,
       "default": "NoEncryption",
       "forceNew": true,
-      "oneOf": ["NoEncryption", "ResourceGroupKmsKey", "AwsDefaultElastiCacheKey"],
+      "oneOf": [
+        "NoEncryption",
+        "ResourceGroupKmsKey",
+        "AwsDefaultElastiCacheKey"
+      ],
       "apiPath": "spec.encryptionMode",
       "description": "At-rest encryption mode: NoEncryption, ResourceGroupKmsKey (uses the resource group's KMS key), or AwsDefaultElastiCacheKey."
     },
@@ -355,25 +432,65 @@
     }
   ],
   "conflictsWith": [
-    ["snapshot_name", "snapshot_arns"]
+    [
+      "snapshot_name",
+      "snapshot_arns"
+    ]
   ],
   "requiredIf": [
-    { "attribute": "engine_version", "when": [
-      { "attribute": "snapshot_name", "isEmpty": true }
-    ] },
-    { "attribute": "num_cache_nodes", "whenAttribute": "engine", "whenEquals": "Memcached" },
-    { "attribute": "num_cache_clusters", "when": [
-      { "attribute": "engine", "notEquals": "Memcached" },
-      { "attribute": "cluster_mode", "equals": "Disabled" }
-    ] },
-    { "attribute": "num_node_groups", "when": [
-      { "attribute": "engine", "notEquals": "Memcached" },
-      { "attribute": "cluster_mode", "equals": "Enabled" }
-    ] },
-    { "attribute": "replicas_per_node_group", "when": [
-      { "attribute": "engine", "notEquals": "Memcached" },
-      { "attribute": "cluster_mode", "equals": "Enabled" }
-    ] }
+    {
+      "attribute": "engine_version",
+      "when": [
+        {
+          "attribute": "snapshot_name",
+          "isEmpty": true
+        }
+      ]
+    },
+    {
+      "attribute": "num_cache_nodes",
+      "whenAttribute": "engine",
+      "whenEquals": "Memcached"
+    },
+    {
+      "attribute": "num_cache_clusters",
+      "when": [
+        {
+          "attribute": "engine",
+          "notEquals": "Memcached"
+        },
+        {
+          "attribute": "cluster_mode",
+          "equals": "Disabled"
+        }
+      ]
+    },
+    {
+      "attribute": "num_node_groups",
+      "when": [
+        {
+          "attribute": "engine",
+          "notEquals": "Memcached"
+        },
+        {
+          "attribute": "cluster_mode",
+          "equals": "Enabled"
+        }
+      ]
+    },
+    {
+      "attribute": "replicas_per_node_group",
+      "when": [
+        {
+          "attribute": "engine",
+          "notEquals": "Memcached"
+        },
+        {
+          "attribute": "cluster_mode",
+          "equals": "Enabled"
+        }
+      ]
+    }
   ],
   "waiter": {
     "statusPath": "status",
