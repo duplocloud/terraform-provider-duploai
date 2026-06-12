@@ -60,6 +60,7 @@ provider "duploai" {
 | [`duploai_k8s_job`](docs/resources/k8s_job.md) | Manages a DuploCloud AI Helpdesk Kubernetes Job — a batch workload that runs one or more containers to completion within an environment or resource group |
 | [`duploai_k8s_namespace`](docs/resources/k8s_namespace.md) | Manages a DuploCloud AI Helpdesk Kubernetes Namespace |
 | [`duploai_k8s_pvc`](docs/resources/k8s_pvc.md) | Manages a DuploCloud AI Helpdesk Kubernetes PersistentVolumeClaim (PVC) |
+| [`duploai_k8s_resource_quota`](docs/resources/k8s_resource_quota.md) | Manages a DuploCloud AI Helpdesk Kubernetes ResourceQuota. A ResourceQuota enforces per-namespace compute and object limits |
 | [`duploai_k8s_secret`](docs/resources/k8s_secret.md) | Manages a DuploCloud AI Helpdesk Kubernetes Secret |
 | [`duploai_k8s_storage_class`](docs/resources/k8s_storage_class.md) | Manages a DuploCloud AI Helpdesk Kubernetes StorageClass. A StorageClass is a cluster-scoped object that describes how a volume is dynamically provisioned; PersistentVolumeClaims reference it by name |
 | [`duploai_network_baseline`](docs/resources/network_baseline.md) | Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways) |
@@ -89,6 +90,7 @@ provider "duploai" {
 | [`duploai_k8s_job`](docs/data-sources/k8s_job.md) | Manages a DuploCloud AI Helpdesk Kubernetes Job — a batch workload that runs one or more containers to completion within an environment or resource group |
 | [`duploai_k8s_namespace`](docs/data-sources/k8s_namespace.md) | Manages a DuploCloud AI Helpdesk Kubernetes Namespace |
 | [`duploai_k8s_pvc`](docs/data-sources/k8s_pvc.md) | Manages a DuploCloud AI Helpdesk Kubernetes PersistentVolumeClaim (PVC) |
+| [`duploai_k8s_resource_quota`](docs/data-sources/k8s_resource_quota.md) | Manages a DuploCloud AI Helpdesk Kubernetes ResourceQuota. A ResourceQuota enforces per-namespace compute and object limits |
 | [`duploai_k8s_secret`](docs/data-sources/k8s_secret.md) | Manages a DuploCloud AI Helpdesk Kubernetes Secret |
 | [`duploai_k8s_storage_class`](docs/data-sources/k8s_storage_class.md) | Manages a DuploCloud AI Helpdesk Kubernetes StorageClass. A StorageClass is a cluster-scoped object that describes how a volume is dynamically provisioned; PersistentVolumeClaims reference it by name |
 | [`duploai_network_baseline`](docs/data-sources/network_baseline.md) | Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways) |
