@@ -128,7 +128,10 @@ run_tier() {
     return 0
   fi
 
-  local args=( -input=false "-parallelism=${TF_PARALLELISM:-1}" )
+  local args=( -input=false )
+  case "$action" in
+    plan|apply|destroy) args+=( "-parallelism=${TF_PARALLELISM:-1}" ) ;;
+  esac
   case "$action" in
     apply)   args+=( -auto-approve ) ;;
     destroy) [ "${AUTO_APPROVE:-}" = "1" ] && args+=( -auto-approve ) ;;

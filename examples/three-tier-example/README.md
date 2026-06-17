@@ -75,7 +75,8 @@ scripts/
 ├── _env.sh      # validates creds, exports them as TF_VAR_* (sourced)
 ├── plan.sh      # terraform plan    infra → app → services
 ├── apply.sh     # terraform apply   infra → app → services   (auto-approved)
-└── destroy.sh   # terraform destroy services → app → infra   (reverse order)
+├── destroy.sh   # terraform destroy services → app → infra   (reverse order)
+└── import.sh    # terraform import  a single resource into one tier
 ```
 
 **Prerequisites:** `terraform` >= 1.0 on `PATH`; a DuploCloud host + token.
@@ -167,6 +168,13 @@ Two knobs are exposed via env (standard `TF_LOG`, `TF_VAR_*`, … are honored to
 ./scripts/destroy.sh                 # prompts per tier: services → app → infra
 AUTO_APPROVE=1 ./scripts/destroy.sh  # non-interactive teardown
 ./scripts/destroy.sh services        # tear down only the services tier
+
+# ── import (one resource into one tier) ─────────────────────────────────────
+# import.sh <tier> <resource_address> <id> [extra terraform flags]
+./scripts/import.sh infra duploai_network_baseline.this \
+  69c13422c25d7d1dc686defa/6a32515fbb0c8056fab50422
+# id format is resource-specific — see each resource's examples/.../import.sh.
+# Creds and the tier's config/<tier>.tfvars are wired in automatically.
 
 # ── help ────────────────────────────────────────────────────────────────────
 ./scripts/plan.sh -h                 # (or apply.sh / destroy.sh) prints usage

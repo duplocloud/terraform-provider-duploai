@@ -16,29 +16,10 @@ resource "duploai_app_service" "frontend" {
     },
   ]
 
+  # The ClusterIP service the ingress routes to (assignment §5.1).
   service = {
     name  = "frontend"
     type  = "ClusterIP"
     ports = [{ port = 3000, target_port = 3000, protocol = "TCP", name = "http" }]
-  }
-
-  # Single ALB ingress with host-based rules for both services (assignment §5).
-  ingress = {
-    name               = "demo-${local.name_prefix}"
-    ingress_class_name = "alb"
-    annotations = {
-      "alb.ingress.kubernetes.io/scheme"      = "internet-facing"
-      "alb.ingress.kubernetes.io/target-type" = "ip"
-    }
-    rules = [
-      {
-        host  = "frontend-${local.name_prefix}.qa-apps.duplocloud.net"
-        paths = [{ path = "/", path_type = "Prefix", service_name = "frontend", service_port_number = 3000 }]
-      },
-      {
-        host  = "backend-${local.name_prefix}.qa-apps.duplocloud.net"
-        paths = [{ path = "/", path_type = "Prefix", service_name = "backend", service_port_number = 3000 }]
-      },
-    ]
   }
 }
