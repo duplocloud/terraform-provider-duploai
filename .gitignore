@@ -15,6 +15,9 @@ main.tf
 *.tfvars
 crash.log
 
+# Local env files (keep .env.example tracked)
+.env
+
 # Go
 vendor/
 *.test

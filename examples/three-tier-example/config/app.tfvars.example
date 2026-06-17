@@ -1,0 +1,8 @@
+# app tier inputs — copy to config/app.tfvars and fill in.
+# Must match the identity used for the infra tier. Credentials come from the
+# environment via the scripts; do NOT put them here.
+
+workspace_id = "<your-workspace-id>"
+scope_ids    = ["<your-scope-id>"]
+region       = "us-west-1"
+name_prefix  = "demo"

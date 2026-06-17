@@ -1,0 +1,6 @@
+# services tier inputs — copy to config/services.tfvars and fill in.
+# Identity and tenant/namespace ids flow in automatically from the app tier's
+# state, so only the database password is needed here. Credentials come from
+# the environment via the scripts; do NOT put them here.
+
+db_master_password = "<choose-a-strong-password>"
