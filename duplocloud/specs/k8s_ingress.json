@@ -1,0 +1,288 @@
+{
+  "name": "k8s_ingress",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes Ingress — an HTTP/HTTPS routing rule set that exposes services within an environment or resource group.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sIngresses",
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this Ingress."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the Kubernetes Ingress resource."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment in which the Ingress is created."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group (Kubernetes cluster) this Ingress belongs to."
+    },
+    {
+      "name": "namespace_name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.namespaceName",
+      "description": "Kubernetes namespace the Ingress is created in."
+    },
+    {
+      "name": "labels",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.metadata.labels",
+      "responsePath": "result.k8sResource.metadata.labels",
+      "description": "Kubernetes labels applied to the Ingress."
+    },
+    {
+      "name": "annotations",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.metadata.annotations",
+      "responsePath": "result.k8sResource.metadata.annotations",
+      "description": "Kubernetes annotations applied to the Ingress (e.g. nginx.ingress.kubernetes.io/rewrite-target)."
+    },
+    {
+      "name": "ingress_class_name",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.ingressClassName",
+      "responsePath": "result.k8sResource.spec.ingressClassName",
+      "description": "Name of the IngressClass cluster resource (e.g. nginx, alb)."
+    },
+    {
+      "name": "default_backend",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.defaultBackend",
+      "responsePath": "result.k8sResource.spec.defaultBackend",
+      "description": "Default backend to forward traffic to when no rule matches.",
+      "attributes": [
+        {
+          "name": "service",
+          "type": "object",
+          "optional": true,
+          "description": "Service backend for the default backend.",
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "description": "Kubernetes Service name to route traffic to."
+            },
+            {
+              "name": "port",
+              "type": "object",
+              "optional": true,
+              "description": "Port on the referenced service.",
+              "attributes": [
+                {
+                  "name": "name",
+                  "type": "string",
+                  "optional": true,
+                  "description": "Named port on the service."
+                },
+                {
+                  "name": "number",
+                  "type": "int",
+                  "optional": true,
+                  "description": "Numeric port on the service."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "rules",
+      "type": "list(object)",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.rules",
+      "responsePath": "result.k8sResource.spec.rules",
+      "description": "List of host rules that define how traffic is routed to backend services.",
+      "attributes": [
+        {
+          "name": "host",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "Hostname for this rule (e.g. api.example.com). Omit to match all hosts."
+        },
+        {
+          "name": "http",
+          "type": "object",
+          "optional": true,
+          "computed": true,
+          "description": "HTTP path-based routing rules for this host.",
+          "attributes": [
+            {
+              "name": "paths",
+              "type": "list(object)",
+              "required": true,
+              "description": "List of path-to-backend mappings.",
+              "attributes": [
+                {
+                  "name": "path",
+                  "type": "string",
+                  "optional": true,
+                  "computed": true,
+                  "description": "URL path to match (e.g. /api)."
+                },
+                {
+                  "name": "path_type",
+                  "type": "string",
+                  "optional": true,
+                  "computed": true,
+                  "apiPath": "pathType",
+                  "oneOf": [
+                    "Exact",
+                    "Prefix",
+                    "ImplementationSpecific"
+                  ],
+                  "description": "Path matching semantics: Exact, Prefix, or ImplementationSpecific."
+                },
+                {
+                  "name": "backend",
+                  "type": "object",
+                  "optional": true,
+                  "computed": true,
+                  "description": "Backend to route matched traffic to.",
+                  "attributes": [
+                    {
+                      "name": "service",
+                      "type": "object",
+                      "optional": true,
+                      "computed": true,
+                      "description": "Service backend.",
+                      "attributes": [
+                        {
+                          "name": "name",
+                          "type": "string",
+                          "optional": true,
+                          "computed": true,
+                          "description": "Kubernetes Service name."
+                        },
+                        {
+                          "name": "port",
+                          "type": "object",
+                          "optional": true,
+                          "computed": true,
+                          "description": "Port on the referenced service.",
+                          "attributes": [
+                            {
+                              "name": "name",
+                              "type": "string",
+                              "optional": true,
+                              "computed": true,
+                              "description": "Named port on the service."
+                            },
+                            {
+                              "name": "number",
+                              "type": "int",
+                              "optional": true,
+                              "computed": true,
+                              "description": "Numeric port on the service."
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tls",
+      "type": "list(object)",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.tls",
+      "responsePath": "result.k8sResource.spec.tls",
+      "description": "TLS configuration blocks, each pairing a list of hosts with a certificate secret.",
+      "attributes": [
+        {
+          "name": "hosts",
+          "type": "list(string)",
+          "optional": true,
+          "computed": true,
+          "description": "Hostnames covered by this TLS certificate."
+        },
+        {
+          "name": "secret_name",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "secretName",
+          "description": "Name of the Kubernetes Secret containing the TLS certificate and key."
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status of the Ingress resource."
+    }
+  ],
+  "requestConstants": [
+    {
+      "path": "spec.mode",
+      "value": "Create"
+    },
+    {
+      "path": "spec.k8sResource.apiVersion",
+      "value": "networking.k8s.io/v1"
+    },
+    {
+      "path": "spec.k8sResource.kind",
+      "value": "Ingress"
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned",
+    "failureRetries": 3,
+    "createTimeoutMinutes": 15,
+    "deleteTimeoutMinutes": 10
+  }
+}
