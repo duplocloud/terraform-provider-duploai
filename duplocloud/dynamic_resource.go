@@ -715,6 +715,32 @@ func readPlanGoValue(ctx context.Context, plan attrReader, a AttributeSpec, diag
 			}
 		}
 		return out, true
+	case "set(string)":
+		var v types.Set
+		diags.Append(plan.GetAttribute(ctx, path.Root(a.Name), &v)...)
+		if v.IsNull() || v.IsUnknown() {
+			return nil, false
+		}
+		out := make([]string, 0, len(v.Elements()))
+		for _, e := range v.Elements() {
+			if s, ok := e.(types.String); ok {
+				out = append(out, s.ValueString())
+			}
+		}
+		return out, true
+	case "map(string)":
+		var v types.Map
+		diags.Append(plan.GetAttribute(ctx, path.Root(a.Name), &v)...)
+		if v.IsNull() || v.IsUnknown() {
+			return nil, false
+		}
+		out := make(map[string]string, len(v.Elements()))
+		for k, e := range v.Elements() {
+			if s, ok := e.(types.String); ok {
+				out[k] = s.ValueString()
+			}
+		}
+		return out, true
 	default:
 		return nil, false
 	}
