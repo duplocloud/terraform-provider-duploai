@@ -62,6 +62,15 @@ type ResourceSpec struct {
 	// reaches a terminal state.
 	Waiter *WaiterSpec `json:"waiter,omitempty"`
 
+	// ReadAfterWrite, when true and there is no Waiter, makes Create/Update
+	// issue a follow-up GET and build state from that read response rather than
+	// from the POST/PUT response. Use it when the write response differs from the
+	// canonical read — e.g. the API encrypts a field on save (so the create
+	// response carries ciphertext) but decrypts it on read. Without this, such a
+	// field trips Terraform's "inconsistent result after apply". (Waiter resources
+	// already read back via polling, so this is ignored when a Waiter is set.)
+	ReadAfterWrite bool `json:"readAfterWrite,omitempty"`
+
 	// DataSource, when true, registers a read-only data source (data.duploai_<name>)
 	// from this spec in addition to the managed resource. The data source schema is
 	// derived automatically: path-parameter attributes stay Required, all other

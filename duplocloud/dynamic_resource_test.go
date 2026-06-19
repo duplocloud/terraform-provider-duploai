@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"strings"
@@ -16,6 +18,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
+	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
 )
 
 func jsonRaw(s string) json.RawMessage { return json.RawMessage(s) }
@@ -1003,5 +1007,79 @@ func TestBodyFromRaw_VerbAwareConstants(t *testing.T) {
 	}
 	if spec, _ := update["spec"].(map[string]any); spec["mode"] != "Update" {
 		t.Errorf("update: spec.mode = %v, want Update", spec["mode"])
+	}
+}
+
+// readAfterWrite makes Create build state from a follow-up GET rather than the
+// POST response. This matters when the write response differs from the read —
+// e.g. the backend encrypts a field on save (create returns ciphertext) but
+// decrypts it on read (admin_provider credentials). Here the mock returns a
+// different value for POST vs GET; a computed attribute the user left unknown
+// must end up with the GET value when readAfterWrite is set, and the POST value
+// when it is not.
+func TestCreate_ReadAfterWrite(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			_, _ = w.Write([]byte(`{"data":{"id":"o1","secret":"CIPHER"}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":{"id":"o1","secret":"PLAIN"}}`)) // GET
+	}))
+	defer srv.Close()
+
+	client, err := duplosdk.NewClient(srv.URL, "tok", false, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"id":     tftypes.String,
+		"secret": tftypes.String,
+	}}
+	// secret is left unknown in the plan, so it is filled from the response.
+	planRaw := tftypes.NewValue(objType, map[string]tftypes.Value{
+		"id":     tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+		"secret": tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+	})
+
+	create := func(readAfterWrite bool) string {
+		spec := ResourceSpec{
+			Name:           "thing",
+			IDPath:         "id",
+			ReadAfterWrite: readAfterWrite,
+			Endpoint:       EndpointSpec{UriBase: "/things"},
+			Attributes: []AttributeSpec{
+				{Name: "secret", Type: "string", Optional: true, Computed: true, APIPath: "secret"},
+			},
+		}
+		ep, err := spec.BuildEndpoint()
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := &dynamicResource{spec: spec, endpoint: ep}
+		r.Client = client
+
+		var sr resource.SchemaResponse
+		r.Schema(context.Background(), resource.SchemaRequest{}, &sr)
+		req := resource.CreateRequest{Plan: tfsdk.Plan{Schema: sr.Schema, Raw: planRaw}}
+		resp := resource.CreateResponse{State: tfsdk.State{Schema: sr.Schema}}
+		r.Create(context.Background(), req, &resp)
+		if resp.Diagnostics.HasError() {
+			t.Fatalf("readAfterWrite=%v: Create diags: %v", readAfterWrite, resp.Diagnostics)
+		}
+		m := map[string]tftypes.Value{}
+		if err := resp.State.Raw.As(&m); err != nil {
+			t.Fatal(err)
+		}
+		var secret string
+		_ = m["secret"].As(&secret)
+		return secret
+	}
+
+	if got := create(true); got != "PLAIN" {
+		t.Errorf("readAfterWrite=true: secret = %q, want PLAIN (from the follow-up GET)", got)
+	}
+	if got := create(false); got != "CIPHER" {
+		t.Errorf("readAfterWrite=false: secret = %q, want CIPHER (from the POST response)", got)
 	}
 }
