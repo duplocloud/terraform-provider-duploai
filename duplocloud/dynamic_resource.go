@@ -273,6 +273,14 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 			resp.Diagnostics.AddError("Error waiting for "+r.spec.Name, err.Error())
 			return
 		}
+	} else if r.spec.ReadAfterWrite {
+		// The create response may differ from the canonical read (e.g. encrypted
+		// fields). Refresh from a GET so state matches what reads return.
+		final, err = api.Get(objID)
+		if err != nil {
+			resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after create", err.Error())
+			return
+		}
 	}
 
 	id := composeID(scopeVals, objID)
@@ -372,6 +380,12 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 		final, clientErr = api.WaitUntilReady(ctx, objID, timeout)
 		if clientErr != nil {
 			resp.Diagnostics.AddError("Error waiting for "+r.spec.Name+" update", clientErr.Error())
+			return
+		}
+	} else if r.spec.ReadAfterWrite {
+		final, clientErr = api.Get(objID)
+		if clientErr != nil {
+			resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after update", clientErr.Error())
 			return
 		}
 	}
