@@ -1,0 +1,104 @@
+{
+  "name": "mcp_server",
+  "description": "Manages a DuploCloud AI Helpdesk MCP (Model Context Protocol) server registration — a tool/data provider that AI agents can connect to over HTTP, SSE, or a raw configuration.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/McpServers"
+  },
+  "requiredIf": [
+    { "attribute": "api_endpoint", "whenAttribute": "config_type", "whenEquals": "Http" },
+    { "attribute": "api_endpoint", "whenAttribute": "config_type", "whenEquals": "Sse" },
+    { "attribute": "transport", "whenAttribute": "config_type", "whenEquals": "Http" },
+    { "attribute": "transport", "whenAttribute": "config_type", "whenEquals": "Sse" },
+    { "attribute": "raw_config", "whenAttribute": "config_type", "whenEquals": "Raw" }
+  ],
+  "attributes": [
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "apiPath": "name",
+      "description": "Name of the MCP server."
+    },
+    {
+      "name": "config_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Http",
+      "oneOf": ["Http", "Sse", "Raw"],
+      "apiPath": "configType",
+      "description": "Configuration type. 'Http' and 'Sse' connect to a remote server at api_endpoint; 'Raw' uses raw_config. Defaults to 'Http'."
+    },
+    {
+      "name": "api_endpoint",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "apiEndpoint",
+      "description": "Absolute URL of the MCP server. Required when config_type is 'Http' or 'Sse'; must be a well-formed absolute URL."
+    },
+    {
+      "name": "transport",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "transport",
+      "description": "Transport used to reach the server (e.g. 'http', 'sse'). Required when config_type is 'Http' or 'Sse'."
+    },
+    {
+      "name": "raw_config",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "rawConfig",
+      "description": "Raw key/value configuration. Required when config_type is 'Raw', and must be omitted for 'Http'/'Sse'. Holds flat string values only — nested structures are not supported via this attribute."
+    },
+    {
+      "name": "provider_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "providerType",
+      "description": "Provider/category of the MCP server."
+    },
+    {
+      "name": "metadata",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "description": "Free-form key/value metadata."
+    },
+    {
+      "name": "is_active",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "isActive",
+      "description": "Whether the MCP server is active and available for use. Defaults to active when omitted."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the server was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the server was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ]
+}
