@@ -180,6 +180,11 @@ type AttributeSpec struct {
 	// OneOf constrains a string attribute to an enumerated set.
 	OneOf []string `json:"oneOf,omitempty"`
 
+	// MinItems, when > 0, requires a list/set attribute to have at least this
+	// many elements (validated at plan time). Use for collections the API
+	// rejects when empty, e.g. a permission set's allowed_workspaces.
+	MinItems int `json:"minItems,omitempty"`
+
 	// APIPath is the default dot-path in the API body this attribute maps to,
 	// e.g. "spec.region". Array element extraction is supported for read-back
 	// via "result.subnets[].subnetId". Used for both directions unless

@@ -42,13 +42,14 @@
       "name": "allowed_workspaces",
       "type": "list(object)",
       "required": true,
+      "minItems": 1,
       "apiPath": "allowedWorkspaces",
       "description": "Workspaces this permission set grants access to. Must contain at least one entry.",
       "attributes": [
         {
           "name": "workspace_id",
           "type": "string",
-          "optional": true,
+          "required": true,
           "apiPath": "workspaceId",
           "description": "ID of the workspace this entry applies to."
         },

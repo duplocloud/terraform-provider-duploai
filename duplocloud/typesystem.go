@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -217,6 +219,9 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 				o.Default = setdefault.StaticValue(v.(types.Set))
 			}
 		}
+		if a.MinItems > 0 {
+			o.Validators = append(o.Validators, setvalidator.SizeAtLeast(a.MinItems))
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())
 		}
@@ -244,6 +249,9 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = listdefault.StaticValue(v.(types.List))
 			}
+		}
+		if a.MinItems > 0 {
+			o.Validators = append(o.Validators, listvalidator.SizeAtLeast(a.MinItems))
 		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
@@ -273,6 +281,9 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 				o.Default = listdefault.StaticValue(v.(types.List))
 			}
 		}
+		if a.MinItems > 0 {
+			o.Validators = append(o.Validators, listvalidator.SizeAtLeast(a.MinItems))
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
 		}
@@ -286,6 +297,9 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = setdefault.StaticValue(v.(types.Set))
 			}
+		}
+		if a.MinItems > 0 {
+			o.Validators = append(o.Validators, setvalidator.SizeAtLeast(a.MinItems))
 		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())

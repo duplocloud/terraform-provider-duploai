@@ -69,13 +69,16 @@ resource "duploai_admin_permission_set" "full" {
 <a id="nestedatt--allowed_workspaces"></a>
 ### Nested Schema for `allowed_workspaces`
 
+Required:
+
+- `workspace_id` (String) ID of the workspace this entry applies to.
+
 Optional:
 
 - `allowed_agents` (List of String) Agents within the workspace this permission grants access to. Each entry may be a regex.
 - `allowed_scopes` (List of String) Scopes within the workspace this permission grants access to. Each entry may be a regex.
 - `denied_agents` (List of String) Agents within the workspace this permission blocks access to. Each entry may be a regex.
 - `denied_scopes` (List of String) Scopes within the workspace this permission blocks access to. Each entry may be a regex.
-- `workspace_id` (String) ID of the workspace this entry applies to.
 
 ## Import
 
