@@ -1,0 +1,116 @@
+{
+  "name": "admin_quota_mapping",
+  "description": "Manages a DuploCloud AI Helpdesk quota mapping — binds a quota definition to a scope (platform-wide or specific workspaces) and a dimension (workspace, user, or ticket).",
+  "idPath": "id",
+  "dataSource": true,
+  "requiredIf": [
+    { "attribute": "target_ids", "whenAttribute": "scope", "whenEquals": "Workspace" }
+  ],
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/QuotaMappings"
+  },
+  "attributes": [
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the quota mapping. Immutable — changing it forces replacement."
+    },
+    {
+      "name": "quota_reference_id",
+      "type": "string",
+      "required": true,
+      "apiPath": "quotaReferenceId",
+      "description": "ID of the quota definition this mapping binds. Must reference an existing quota definition."
+    },
+    {
+      "name": "scope",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Platform",
+      "oneOf": ["Platform", "Workspace"],
+      "apiPath": "scope",
+      "description": "Scope the quota applies at: 'Platform' (organisation-wide) or 'Workspace' (specific workspaces). Defaults to 'Platform'."
+    },
+    {
+      "name": "type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Workspace",
+      "oneOf": ["Workspace", "User", "Ticket", "All"],
+      "apiPath": "type",
+      "description": "Dimension the quota targets. Valid scope/type combinations: Workspace scope with Workspace/User/Ticket; Platform scope with All/Workspace/User. Defaults to 'Workspace'."
+    },
+    {
+      "name": "target_ids",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "targetIds",
+      "description": "Workspace IDs this mapping applies to. Required (non-empty) for 'Workspace' scope; must be omitted for 'Platform' scope."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "description",
+      "description": "Human-readable description of the quota mapping."
+    },
+    {
+      "name": "is_active",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "isActive",
+      "description": "Whether the quota mapping is active. Defaults to active when omitted."
+    },
+    {
+      "name": "metadata",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "description": "Free-form key/value metadata."
+    },
+    {
+      "name": "created_by",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdBy",
+      "description": "Identifier of the user who created the quota mapping."
+    },
+    {
+      "name": "updated_by",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedBy",
+      "description": "Identifier of the user who last updated the quota mapping."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the quota mapping was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the quota mapping was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ]
+}
