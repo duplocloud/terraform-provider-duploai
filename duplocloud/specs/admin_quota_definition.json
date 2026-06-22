@@ -1,0 +1,86 @@
+{
+  "name": "admin_quota_definition",
+  "description": "Manages a DuploCloud AI Helpdesk quota definition — a spend/token limit (with a buffer) applied over a daily or monthly period, which quota mappings then bind to platform or workspace scopes.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/Quotas"
+  },
+  "attributes": [
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "apiPath": "name",
+      "description": "Name of the quota definition."
+    },
+    {
+      "name": "type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Daily",
+      "oneOf": ["Daily", "Monthly"],
+      "apiPath": "type",
+      "description": "Period the quota applies over. Defaults to 'Daily'."
+    },
+    {
+      "name": "limit_usd",
+      "type": "number",
+      "required": true,
+      "apiPath": "limitUsd",
+      "description": "Spend limit in USD for the period. Must be greater than 0."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "description",
+      "description": "Human-readable description of the quota definition."
+    },
+    {
+      "name": "is_active",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "isActive",
+      "description": "Whether the quota definition is active. Defaults to active when omitted."
+    },
+    {
+      "name": "created_by",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdBy",
+      "description": "Identifier of the user who created the quota definition."
+    },
+    {
+      "name": "updated_by",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedBy",
+      "description": "Identifier of the user who last updated the quota definition."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the quota definition was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the quota definition was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ]
+}
