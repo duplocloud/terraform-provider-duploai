@@ -47,6 +47,7 @@ provider "duploai" {
 | Resource | Description |
 |---|---|
 | [`duploai_admin_permission_set`](docs/resources/admin_permission_set.md) | Manages a DuploCloud AI Helpdesk permission set — a named grant of workspace-scoped access (scopes and agents) that can be assigned to users via permission set groups |
+| [`duploai_admin_persona`](docs/resources/admin_persona.md) | Manages a DuploCloud AI Helpdesk persona — a named assistant profile (prompt and assigned skills) that determines how an AI agent behaves and which skills it can use |
 | [`duploai_admin_provider`](docs/resources/admin_provider.md) | Manages a DuploCloud AI Helpdesk Provider — a registered cloud, Kubernetes, source-control, or observability provider (with its authentication credentials) that scopes and agents use |
 | [`duploai_ai_agent`](docs/resources/ai_agent.md) | Manages a DuploCloud AI Helpdesk AI Agent — an external AI service or model the help desk can invoke to perform automated tasks. Agents are assigned to personas, which determine where they are available |
 | [`duploai_app_service`](docs/resources/app_service.md) | Manages a DuploCloud AI Helpdesk app service (Kubernetes Deployment) |
@@ -84,6 +85,7 @@ provider "duploai" {
 | Data Source | Description |
 |---|---|
 | [`duploai_admin_permission_set`](docs/data-sources/admin_permission_set.md) | Manages a DuploCloud AI Helpdesk permission set — a named grant of workspace-scoped access (scopes and agents) that can be assigned to users via permission set groups |
+| [`duploai_admin_persona`](docs/data-sources/admin_persona.md) | Manages a DuploCloud AI Helpdesk persona — a named assistant profile (prompt and assigned skills) that determines how an AI agent behaves and which skills it can use |
 | [`duploai_admin_provider`](docs/data-sources/admin_provider.md) | Manages a DuploCloud AI Helpdesk Provider — a registered cloud, Kubernetes, source-control, or observability provider (with its authentication credentials) that scopes and agents use |
 | [`duploai_ai_agent`](docs/data-sources/ai_agent.md) | Manages a DuploCloud AI Helpdesk AI Agent — an external AI service or model the help desk can invoke to perform automated tasks. Agents are assigned to personas, which determine where they are available |
 | [`duploai_app_service`](docs/data-sources/app_service.md) | Manages a DuploCloud AI Helpdesk app service (Kubernetes Deployment) |
