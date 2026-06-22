@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -151,6 +153,12 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			_ = json.Unmarshal(*a.Default, &i)
 			o.Default = int64default.StaticInt64(i)
 		}
+		if a.Min != nil {
+			o.Validators = append(o.Validators, int64validator.AtLeast(int64(*a.Min)))
+		}
+		if a.Max != nil {
+			o.Validators = append(o.Validators, int64validator.AtMost(int64(*a.Max)))
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, int64planmodifier.UseStateForUnknown())
 		}
@@ -164,6 +172,12 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			var f float64
 			_ = json.Unmarshal(*a.Default, &f)
 			o.Default = float64default.StaticFloat64(f)
+		}
+		if a.Min != nil {
+			o.Validators = append(o.Validators, float64validator.AtLeast(*a.Min))
+		}
+		if a.Max != nil {
+			o.Validators = append(o.Validators, float64validator.AtMost(*a.Max))
 		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, float64planmodifier.UseStateForUnknown())

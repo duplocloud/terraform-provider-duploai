@@ -28,8 +28,9 @@
       "name": "limit_usd",
       "type": "number",
       "required": true,
+      "min": 0.01,
       "apiPath": "limitUsd",
-      "description": "Spend limit in USD for the period. Must be greater than 0."
+      "description": "Spend limit in USD for the period. Must be at least 0.01."
     },
     {
       "name": "description",

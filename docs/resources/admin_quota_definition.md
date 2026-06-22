@@ -34,7 +34,7 @@ resource "duploai_admin_quota_definition" "monthly" {
 
 ### Required
 
-- `limit_usd` (Number) Spend limit in USD for the period. Must be greater than 0.
+- `limit_usd` (Number) Spend limit in USD for the period. Must be at least 0.01.
 - `name` (String) Name of the quota definition.
 
 ### Optional

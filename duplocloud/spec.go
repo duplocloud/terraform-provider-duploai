@@ -185,6 +185,11 @@ type AttributeSpec struct {
 	// rejects when empty, e.g. a permission set's allowed_workspaces.
 	MinItems int `json:"minItems,omitempty"`
 
+	// Min / Max bound a numeric attribute (int or number) inclusively, validated
+	// at plan time. Use for ranges the API enforces, e.g. limit_usd >= 0.01.
+	Min *float64 `json:"min,omitempty"`
+	Max *float64 `json:"max,omitempty"`
+
 	// APIPath is the default dot-path in the API body this attribute maps to,
 	// e.g. "spec.region". Array element extraction is supported for read-back
 	// via "result.subnets[].subnetId". Used for both directions unless

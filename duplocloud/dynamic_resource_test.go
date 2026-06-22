@@ -1083,3 +1083,38 @@ func TestCreate_ReadAfterWrite(t *testing.T) {
 		t.Errorf("readAfterWrite=false: secret = %q, want CIPHER (from the POST response)", got)
 	}
 }
+
+// min/max must attach AtLeast/AtMost validators to numeric (int/number)
+// attributes and nothing when unset. Guards the engine wiring for ranges like
+// a quota definition's limit_usd >= 0.01.
+func TestAttrSchema_MinMaxValidator(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	cases := []struct {
+		name string
+		a    AttributeSpec
+		want int
+	}{
+		{"number min", AttributeSpec{Type: "number", Required: true, Min: f(0.01)}, 1},
+		{"number min+max", AttributeSpec{Type: "number", Optional: true, Min: f(0), Max: f(100)}, 2},
+		{"number none", AttributeSpec{Type: "number", Optional: true}, 0},
+		{"int min", AttributeSpec{Type: "int", Optional: true, Min: f(1)}, 1},
+		{"int none", AttributeSpec{Type: "int", Optional: true}, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := attrSchema(tc.a)
+			var n int
+			switch v := s.(type) {
+			case schema.Float64Attribute:
+				n = len(v.Validators)
+			case schema.Int64Attribute:
+				n = len(v.Validators)
+			default:
+				t.Fatalf("unexpected attribute type %T", s)
+			}
+			if n != tc.want {
+				t.Errorf("validators = %d, want %d", n, tc.want)
+			}
+		})
+	}
+}
