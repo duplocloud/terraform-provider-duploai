@@ -1,0 +1,176 @@
+{
+  "name": "admin_skill",
+  "description": "Manages a DuploCloud AI Helpdesk skill — a reusable capability (Markdown docs, a package, or a private Git repo) that is assigned to personas.",
+  "idPath": "id",
+  "dataSource": true,
+  "requiredIf": [
+    { "attribute": "skill_md", "when": [ { "attribute": "type", "equals": "Custom" }, { "attribute": "format", "equals": "SkillMd" } ] },
+    { "attribute": "git_repo", "when": [ { "attribute": "type", "equals": "Custom" }, { "attribute": "format", "equals": "PrivateGitRepo" } ] },
+    { "attribute": "package_path", "whenAttribute": "type", "whenEquals": "External" }
+  ],
+  "conflictsWith": [
+    ["skill_md", "package_path", "git_repo"]
+  ],
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/Skills"
+  },
+  "attributes": [
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "apiPath": "name",
+      "description": "Name of the skill."
+    },
+    {
+      "name": "type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Custom",
+      "oneOf": ["Custom", "External"],
+      "apiPath": "type",
+      "description": "Skill type: 'Custom' (developed in-house) or 'External' (from a vendor). Defaults to 'Custom'."
+    },
+    {
+      "name": "format",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "SkillMd",
+      "oneOf": ["SkillMd", "Package", "PrivateGitRepo"],
+      "apiPath": "format",
+      "description": "How the skill is delivered: 'SkillMd' (Markdown), 'Package' (packaged artifact), or 'PrivateGitRepo' (private Git repository). Defaults to 'SkillMd'."
+    },
+    {
+      "name": "vendor",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "vendor",
+      "description": "Vendor that provides the skill (for External skills)."
+    },
+    {
+      "name": "skill_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "skillVersion",
+      "description": "Version of the skill."
+    },
+    {
+      "name": "skill_md",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "skillMd",
+      "description": "Skill documentation in Markdown. Required for Custom skills with 'SkillMd' format; must be omitted for 'Package' and External skills."
+    },
+    {
+      "name": "package_path",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "packagePath",
+      "description": "Path to the skill package. Required for External skills. For Custom skills with 'Package' format, do not set this — save the skill first, then upload the package files (the path is managed by the backend)."
+    },
+    {
+      "name": "git_repo",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "apiPath": "gitRepo",
+      "description": "Private Git repository the skill is loaded from. Required for Custom skills with 'PrivateGitRepo' format.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "Repository name."
+        },
+        {
+          "name": "org_name",
+          "type": "string",
+          "required": true,
+          "apiPath": "orgName",
+          "description": "Organization or owner of the repository."
+        },
+        {
+          "name": "branch",
+          "type": "string",
+          "required": true,
+          "apiPath": "branch",
+          "description": "Branch to load the skill from."
+        },
+        {
+          "name": "folder_path",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "folderPath",
+          "description": "Path within the repository to the skill folder."
+        },
+        {
+          "name": "scope_id",
+          "type": "string",
+          "required": true,
+          "apiPath": "scopeId",
+          "description": "ID of the scope that provides Git access to the repository."
+        }
+      ]
+    },
+    {
+      "name": "is_built_in",
+      "type": "bool",
+      "computed": true,
+      "apiPath": "isBuiltIn",
+      "description": "Whether this is a built-in skill. Built-in skills are system-provided and cannot be edited or deleted."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "description",
+      "description": "Human-readable description of the skill."
+    },
+    {
+      "name": "is_active",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "isActive",
+      "description": "Whether the skill is active. Defaults to active when omitted."
+    },
+    {
+      "name": "metadata",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "description": "Free-form key/value metadata."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the skill was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the skill was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ]
+}
