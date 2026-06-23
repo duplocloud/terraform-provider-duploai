@@ -1,5 +1,5 @@
 # A scope over an AWS provider credential, filtered to specific resources.
-resource "duploai_scope" "aws" {
+resource "duploai_admin_scope" "aws" {
   name            = "prod-aws-readonly"
   description     = "Read-only view of production AWS resources"
   provider_id     = "<provider-id>"
@@ -19,7 +19,7 @@ resource "duploai_scope" "aws" {
 }
 
 # A scope backed by an MCP server (no credential_name needed).
-resource "duploai_scope" "k8s" {
+resource "duploai_admin_scope" "k8s" {
   name          = "cluster-view"
   mcp_server_id = "<mcp-server-id>"
   provider_id   = "<provider-id>"
