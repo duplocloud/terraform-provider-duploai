@@ -17,10 +17,9 @@
     {
       "name": "email",
       "type": "string",
-      "optional": true,
-      "computed": true,
+      "required": true,
       "apiPath": "email",
-      "description": "Email address of the user."
+      "description": "Email address of the user (required by the backend)."
     },
     {
       "name": "display_name",

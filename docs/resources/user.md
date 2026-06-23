@@ -26,13 +26,13 @@ resource "duploai_user" "example" {
 
 ### Required
 
+- `email` (String) Email address of the user (required by the backend).
 - `name` (String) Username or handle for the user.
 
 ### Optional
 
 - `description` (String) Optional description of the user.
 - `display_name` (String) Human-readable display name shown in the UI.
-- `email` (String) Email address of the user.
 - `external_provider` (String) External OAuth/SSO provider name (e.g. 'Google', 'GitHub').
 - `external_subject` (String) Subject identifier from the external OAuth/SSO provider.
 - `is_active` (Boolean) Whether the user account is active. Defaults to true when omitted.

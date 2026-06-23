@@ -34,7 +34,7 @@ output "user_email" {
 - `created_at` (String) Timestamp when the user was created (RFC 3339).
 - `description` (String) Optional description of the user.
 - `display_name` (String) Human-readable display name shown in the UI.
-- `email` (String) Email address of the user.
+- `email` (String) Email address of the user (required by the backend).
 - `external_provider` (String) External OAuth/SSO provider name (e.g. 'Google', 'GitHub').
 - `external_subject` (String) Subject identifier from the external OAuth/SSO provider.
 - `is_active` (Boolean) Whether the user account is active. Defaults to true when omitted.
