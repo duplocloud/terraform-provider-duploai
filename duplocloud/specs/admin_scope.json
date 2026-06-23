@@ -1,5 +1,5 @@
 {
-  "name": "scope",
+  "name": "admin_scope",
   "description": "Manages a DuploCloud AI scope: a credentialed view over a provider's resources, filtered by AWS, Kubernetes, and Git rules.",
   "idPath": "id",
   "dataSource": true,
@@ -37,9 +37,9 @@
     {
       "name": "provider_id",
       "type": "string",
-      "optional": true,
+      "required": true,
       "apiPath": "providerId",
-      "description": "ID of the provider this scope is bound to. Required when mcp_server_id is set (the MCP server's provider type must match)."
+      "description": "ID of the provider this scope is bound to. The provider resolves the credential and is required for the scope to access any resources (and, when mcp_server_id is set, its type must match the MCP server)."
     },
     {
       "name": "credential_name",

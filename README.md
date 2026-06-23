@@ -51,6 +51,7 @@ provider "duploai" {
 | [`duploai_admin_provider`](docs/resources/admin_provider.md) | Manages a DuploCloud AI Helpdesk Provider — a registered cloud, Kubernetes, source-control, or observability provider (with its authentication credentials) that scopes and agents use |
 | [`duploai_admin_quota_definition`](docs/resources/admin_quota_definition.md) | Manages a DuploCloud AI Helpdesk quota definition — a spend/token limit (with a buffer) applied over a daily or monthly period, which quota mappings then bind to platform or workspace scopes |
 | [`duploai_admin_quota_mapping`](docs/resources/admin_quota_mapping.md) | Manages a DuploCloud AI Helpdesk quota mapping — binds a quota definition to a scope (platform-wide or specific workspaces) and a dimension (workspace, user, or ticket) |
+| [`duploai_admin_scope`](docs/resources/admin_scope.md) | Manages a DuploCloud AI scope: a credentialed view over a provider's resources, filtered by AWS, Kubernetes, and Git rules |
 | [`duploai_ai_agent`](docs/resources/ai_agent.md) | Manages a DuploCloud AI Helpdesk AI Agent — an external AI service or model the help desk can invoke to perform automated tasks. Agents are assigned to personas, which determine where they are available |
 | [`duploai_app_service`](docs/resources/app_service.md) | Manages a DuploCloud AI Helpdesk app service (Kubernetes Deployment) |
 | [`duploai_aws_lambda`](docs/resources/aws_lambda.md) | Manages a DuploCloud AI Helpdesk AWS Lambda function — a serverless compute resource that runs code in response to events within an environment and resource group |
@@ -79,7 +80,6 @@ provider "duploai" {
 | [`duploai_rds_instance`](docs/resources/rds_instance.md) | Manages a DuploCloud AI Helpdesk standalone AWS RDS instance |
 | [`duploai_resource_group`](docs/resources/resource_group.md) | Manages a DuploCloud AI Helpdesk resource group (shared security groups, IAM role, KMS key) |
 | [`duploai_s3_bucket`](docs/resources/s3_bucket.md) | Manages a DuploCloud AI Helpdesk AWS S3 bucket |
-| [`duploai_scope`](docs/resources/scope.md) | Manages a DuploCloud AI scope: a credentialed view over a provider's resources, filtered by AWS, Kubernetes, and Git rules |
 <!-- resources-end -->
 
 ## Data Sources
@@ -92,6 +92,7 @@ provider "duploai" {
 | [`duploai_admin_provider`](docs/data-sources/admin_provider.md) | Manages a DuploCloud AI Helpdesk Provider — a registered cloud, Kubernetes, source-control, or observability provider (with its authentication credentials) that scopes and agents use |
 | [`duploai_admin_quota_definition`](docs/data-sources/admin_quota_definition.md) | Manages a DuploCloud AI Helpdesk quota definition — a spend/token limit (with a buffer) applied over a daily or monthly period, which quota mappings then bind to platform or workspace scopes |
 | [`duploai_admin_quota_mapping`](docs/data-sources/admin_quota_mapping.md) | Manages a DuploCloud AI Helpdesk quota mapping — binds a quota definition to a scope (platform-wide or specific workspaces) and a dimension (workspace, user, or ticket) |
+| [`duploai_admin_scope`](docs/data-sources/admin_scope.md) | Manages a DuploCloud AI scope: a credentialed view over a provider's resources, filtered by AWS, Kubernetes, and Git rules |
 | [`duploai_ai_agent`](docs/data-sources/ai_agent.md) | Manages a DuploCloud AI Helpdesk AI Agent — an external AI service or model the help desk can invoke to perform automated tasks. Agents are assigned to personas, which determine where they are available |
 | [`duploai_app_service`](docs/data-sources/app_service.md) | Manages a DuploCloud AI Helpdesk app service (Kubernetes Deployment) |
 | [`duploai_aws_lambda`](docs/data-sources/aws_lambda.md) | Manages a DuploCloud AI Helpdesk AWS Lambda function — a serverless compute resource that runs code in response to events within an environment and resource group |
@@ -120,7 +121,6 @@ provider "duploai" {
 | [`duploai_rds_instance`](docs/data-sources/rds_instance.md) | Manages a DuploCloud AI Helpdesk standalone AWS RDS instance |
 | [`duploai_resource_group`](docs/data-sources/resource_group.md) | Manages a DuploCloud AI Helpdesk resource group (shared security groups, IAM role, KMS key) |
 | [`duploai_s3_bucket`](docs/data-sources/s3_bucket.md) | Manages a DuploCloud AI Helpdesk AWS S3 bucket |
-| [`duploai_scope`](docs/data-sources/scope.md) | Manages a DuploCloud AI scope: a credentialed view over a provider's resources, filtered by AWS, Kubernetes, and Git rules |
 <!-- data-sources-end -->
 
 ## Release Process
