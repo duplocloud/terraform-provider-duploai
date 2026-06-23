@@ -755,6 +755,20 @@ func readPlanGoValue(ctx context.Context, plan attrReader, a AttributeSpec, diag
 			}
 		}
 		return out, true
+	case "number":
+		var v types.Float64
+		diags.Append(plan.GetAttribute(ctx, path.Root(a.Name), &v)...)
+		if v.IsNull() || v.IsUnknown() {
+			return nil, false
+		}
+		return v.ValueFloat64(), true
+	case "object":
+		var v types.Object
+		diags.Append(plan.GetAttribute(ctx, path.Root(a.Name), &v)...)
+		if v.IsNull() || v.IsUnknown() {
+			return nil, false
+		}
+		return v.Attributes(), true
 	default:
 		return nil, false
 	}

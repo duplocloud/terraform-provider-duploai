@@ -1118,3 +1118,55 @@ func TestAttrSchema_MinMaxValidator(t *testing.T) {
 		})
 	}
 }
+
+// requiredIf on an object target must read the live config value, not treat a
+// populated object as missing. Regression for the readPlanGoValue "object" case
+// (e.g. admin_skill's git_repo requiredIf when format == PrivateGitRepo).
+func TestRequiredIf_ObjectTargetReadsConfig(t *testing.T) {
+	spec := ResourceSpec{
+		Name: "thing", IDPath: "id",
+		Endpoint:   EndpointSpec{UriBase: "/things"},
+		RequiredIf: []RequiredIfRule{{Attribute: "git_repo", WhenAttribute: "format", WhenEquals: "PrivateGitRepo"}},
+		Attributes: []AttributeSpec{
+			{Name: "format", Type: "string", Optional: true, APIPath: "format"},
+			{Name: "git_repo", Type: "object", Optional: true, APIPath: "gitRepo", Attributes: []AttributeSpec{
+				{Name: "name", Type: "string", Optional: true, APIPath: "name"},
+				{Name: "scope_id", Type: "string", Optional: true, APIPath: "scopeId"},
+			}},
+		},
+	}
+	r := &dynamicResource{spec: spec}
+	var sr resource.SchemaResponse
+	r.Schema(context.Background(), resource.SchemaRequest{}, &sr)
+	v := requiredIfValidator{spec: spec}
+
+	gitType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{"name": tftypes.String, "scope_id": tftypes.String}}
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"id":       tftypes.String,
+		"format":   tftypes.String,
+		"git_repo": gitType,
+	}}
+
+	run := func(gitRepo tftypes.Value) bool {
+		raw := tftypes.NewValue(objType, map[string]tftypes.Value{
+			"id":       tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+			"format":   tftypes.NewValue(tftypes.String, "PrivateGitRepo"),
+			"git_repo": gitRepo,
+		})
+		req := resource.ValidateConfigRequest{Config: tfsdk.Config{Schema: sr.Schema, Raw: raw}}
+		resp := resource.ValidateConfigResponse{}
+		v.ValidateResource(context.Background(), req, &resp)
+		return resp.Diagnostics.HasError()
+	}
+
+	populated := tftypes.NewValue(gitType, map[string]tftypes.Value{
+		"name":     tftypes.NewValue(tftypes.String, "skills-repo"),
+		"scope_id": tftypes.NewValue(tftypes.String, "scope-1"),
+	})
+	if run(populated) {
+		t.Error("requiredIf flagged a populated object as missing (readPlanGoValue object regression)")
+	}
+	if !run(tftypes.NewValue(gitType, nil)) {
+		t.Error("requiredIf did not fire for a null object when the condition held")
+	}
+}
