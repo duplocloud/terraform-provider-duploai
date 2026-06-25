@@ -17,7 +17,10 @@ the repo's specific conventions and CI gates. **This skill is review-only.**
 
 ## Operating contract (read first)
 
-- **Do NOT post comments, push, merge, or edit any file.** Read and report only.
+- **Do NOT push, merge, or edit any file.** Read and report only.
+- After producing the review, ask the user: **"Do you want to post this review
+  as a PR comment? (Y/N)"** Post only if the user replies `Y` or `yes` (case-
+  insensitive). Never post without explicit confirmation.
 - Produce one structured review in the chat, graded **Blocker / Major / Minor**,
   ending with a verdict.
 - State which verification commands you actually ran and their result. Never
@@ -370,8 +373,27 @@ Prefix each result with a status icon: ✅ pass/clean · 🔴 blocker-level fail
 **Verdict rule:** any Blocker ⇒ **Request changes**. Majors with no Blockers ⇒
 Request changes unless trivial. Only Minors ⇒ Approve with nits.
 
+### Post-review prompt
+
+After outputting the full review, always ask:
+
+> **Do you want to post this review as a PR comment? (Y/N)**
+
+If the user replies `Y` or `yes`, post the review body verbatim as a PR comment:
+
+```bash
+gh pr comment <pr> --body "$(cat <<'EOF'
+<full review text pasted here>
+EOF
+)"
+```
+
+If `gh` is unauthenticated or the PR number is unknown (working-tree review),
+say so and skip posting rather than erroring silently.
+
 ## 4. Guardrails (restate)
 
-- Review-only: no comments posted, nothing pushed, no files edited.
-- If `gh` is unauthenticated, say so and use the `git diff` fallback.
+- No comments posted unless the user explicitly confirms with `Y` / `yes`.
+- Nothing pushed, no files edited, ever.
+- If `gh` is unauthenticated, say so and use the `git diff` fallback for gathering diffs; skip posting even if the user confirms.
 - Report command results faithfully — if a check failed or was skipped, say so.
