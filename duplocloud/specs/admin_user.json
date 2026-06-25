@@ -1,5 +1,5 @@
 {
-  "name": "user",
+  "name": "admin_user",
   "description": "Manages a DuploCloud AI user account, including identity, roles, and metadata.",
   "idPath": "id",
   "dataSource": true,

@@ -1,5 +1,5 @@
 {
-  "name": "ai_agent",
+  "name": "admin_ai_agent",
   "description": "Manages a DuploCloud AI Helpdesk AI Agent — an external AI service or model the help desk can invoke to perform automated tasks. Agents are assigned to personas, which determine where they are available.",
   "idPath": "id",
   "dataSource": true,
