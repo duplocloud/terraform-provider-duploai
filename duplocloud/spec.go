@@ -322,6 +322,14 @@ type WaiterSpec struct {
 	StatusPath string `json:"statusPath"`
 	// SuccessState is the terminal success value.
 	SuccessState string `json:"successState"`
+	// ReadyPath / ReadyState add an optional secondary success gate: the resource
+	// is only considered provisioned once the status reaches SuccessState AND the
+	// value at ReadyPath equals ReadyState. Use for resources whose status flips
+	// to "complete" before a downstream signal is ready (e.g. an EC2 host whose
+	// status is Complete but live_state is not yet "running"). Both must be set
+	// to enable the gate; failure detection still uses StatusPath/FailureStates.
+	ReadyPath  string `json:"readyPath,omitempty"`
+	ReadyState string `json:"readyState,omitempty"`
 	// FailureStates maps terminal failure values to human-readable reasons.
 	FailureStates map[string]string `json:"failureStates"`
 	// FailureRetries is how many extra polls to tolerate after first seeing a
