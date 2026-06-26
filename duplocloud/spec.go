@@ -232,6 +232,23 @@ type AttributeSpec struct {
 	// field's apiPath/requestPath/responsePath is relative to its parent
 	// object; an empty path defaults to the field name.
 	Attributes []AttributeSpec `json:"attributes,omitempty"`
+
+	// PreserveUnmanagedInto pairs this writable collection attribute with a
+	// computed sibling attribute (named here) so that entries the server adds
+	// out-of-band survive Terraform's full-document updates. On READ, ids the
+	// API returns that are NOT in this attribute's managed set are routed into
+	// the sibling; on WRITE, the request sends the UNION of this attribute and
+	// the sibling, so server-owned entries (e.g. a Kubernetes scope the backend
+	// attaches when a cluster is created) are not cleared. Only valid on a
+	// top-level set(string)/list(string). The named sibling must be a
+	// computed + noSend attribute of the same type with no apiPath.
+	PreserveUnmanagedInto string `json:"preserveUnmanagedInto,omitempty"`
+
+	// preserveTarget is set internally (not from JSON) when another attribute
+	// names this one via PreserveUnmanagedInto. It makes the computed sibling
+	// adopt UseStateForUnknown so its prior-state value is known at plan time —
+	// required for the union-on-write to keep server-managed entries.
+	preserveTarget bool
 }
 
 // requestPath / responsePath resolve the effective per-direction path.
@@ -423,6 +440,7 @@ func loadResourceSpecs() ([]ResourceSpec, error) {
 		if validErr := spec.validate(); validErr != nil {
 			return nil, fmt.Errorf("invalid spec %s: %w", e.Name(), validErr)
 		}
+		markPreserveTargets(spec.Attributes)
 		if spec.Waiter != nil {
 			applyWaiterDefaults(spec.Waiter)
 		}
@@ -489,7 +507,63 @@ func (s *ResourceSpec) validate() error {
 			}
 		}
 	}
+	if err := validatePreservePairs(s.Attributes); err != nil {
+		return err
+	}
 	return nil
+}
+
+// validatePreservePairs checks every PreserveUnmanagedInto pairing: the source
+// must be a top-level string set/list, and the named sibling must exist as a
+// computed + noSend attribute of the same type with no apiPath (the engine
+// populates it on read and merges it on write, so it is never sent or path-mapped
+// on its own).
+func validatePreservePairs(attrs []AttributeSpec) error {
+	byName := make(map[string]AttributeSpec, len(attrs))
+	for _, a := range attrs {
+		byName[a.Name] = a
+	}
+	for _, a := range attrs {
+		if a.PreserveUnmanagedInto == "" {
+			continue
+		}
+		if a.Type != "set(string)" && a.Type != "list(string)" {
+			return fmt.Errorf("attribute %q: preserveUnmanagedInto is only valid on set(string)/list(string)", a.Name)
+		}
+		sib, ok := byName[a.PreserveUnmanagedInto]
+		if !ok {
+			return fmt.Errorf("attribute %q: preserveUnmanagedInto references unknown attribute %q", a.Name, a.PreserveUnmanagedInto)
+		}
+		if sib.Type != a.Type {
+			return fmt.Errorf("attribute %q: preserveUnmanagedInto sibling %q must have the same type (%s)", a.Name, sib.Name, a.Type)
+		}
+		if !sib.Computed || sib.Required || sib.Optional {
+			return fmt.Errorf("attribute %q: preserveUnmanagedInto sibling %q must be computed-only", a.Name, sib.Name)
+		}
+		if !sib.NoSend {
+			return fmt.Errorf("attribute %q: preserveUnmanagedInto sibling %q must set noSend (the engine merges it on write)", a.Name, sib.Name)
+		}
+		if sib.APIPath != "" || sib.ResponsePath != "" {
+			return fmt.Errorf("attribute %q: preserveUnmanagedInto sibling %q must not set apiPath/responsePath (the engine populates it)", a.Name, sib.Name)
+		}
+	}
+	return nil
+}
+
+// markPreserveTargets flags each attribute named by a PreserveUnmanagedInto so
+// the computed sibling adopts UseStateForUnknown. Must run after validate.
+func markPreserveTargets(attrs []AttributeSpec) {
+	targets := map[string]bool{}
+	for _, a := range attrs {
+		if a.PreserveUnmanagedInto != "" {
+			targets[a.PreserveUnmanagedInto] = true
+		}
+	}
+	for i := range attrs {
+		if targets[attrs[i].Name] {
+			attrs[i].preserveTarget = true
+		}
+	}
 }
 
 // validateAttributes checks a list of (possibly nested) attributes and returns

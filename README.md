@@ -53,6 +53,7 @@ provider "duploai" {
 | [`duploai_admin_quota_mapping`](docs/resources/admin_quota_mapping.md) | Manages a DuploCloud AI Helpdesk quota mapping — binds a quota definition to a scope (platform-wide or specific workspaces) and a dimension (workspace, user, or ticket) |
 | [`duploai_admin_scope`](docs/resources/admin_scope.md) | Manages a DuploCloud AI scope: a credentialed view over a provider's resources, filtered by AWS, Kubernetes, and Git rules |
 | [`duploai_admin_skill`](docs/resources/admin_skill.md) | Manages a DuploCloud AI Helpdesk skill — a reusable capability (Markdown docs, a package, or a private Git repo) that is assigned to personas |
+| [`duploai_admin_workspace`](docs/resources/admin_workspace.md) | Manages a DuploCloud AI Helpdesk workspace — the top-level container that groups personas, scopes, a quota, and configuration for a team or tenant |
 | [`duploai_ai_agent`](docs/resources/ai_agent.md) | Manages a DuploCloud AI Helpdesk AI Agent — an external AI service or model the help desk can invoke to perform automated tasks. Agents are assigned to personas, which determine where they are available |
 | [`duploai_app_service`](docs/resources/app_service.md) | Manages a DuploCloud AI Helpdesk app service (Kubernetes Deployment) |
 | [`duploai_aws_efs`](docs/resources/aws_efs.md) | Manages a DuploCloud AI Helpdesk AWS EFS file system — an elastic, managed NFS file system provisioned within an environment and resource group |
@@ -97,6 +98,7 @@ provider "duploai" {
 | [`duploai_admin_quota_mapping`](docs/data-sources/admin_quota_mapping.md) | Manages a DuploCloud AI Helpdesk quota mapping — binds a quota definition to a scope (platform-wide or specific workspaces) and a dimension (workspace, user, or ticket) |
 | [`duploai_admin_scope`](docs/data-sources/admin_scope.md) | Manages a DuploCloud AI scope: a credentialed view over a provider's resources, filtered by AWS, Kubernetes, and Git rules |
 | [`duploai_admin_skill`](docs/data-sources/admin_skill.md) | Manages a DuploCloud AI Helpdesk skill — a reusable capability (Markdown docs, a package, or a private Git repo) that is assigned to personas |
+| [`duploai_admin_workspace`](docs/data-sources/admin_workspace.md) | Manages a DuploCloud AI Helpdesk workspace — the top-level container that groups personas, scopes, a quota, and configuration for a team or tenant |
 | [`duploai_ai_agent`](docs/data-sources/ai_agent.md) | Manages a DuploCloud AI Helpdesk AI Agent — an external AI service or model the help desk can invoke to perform automated tasks. Agents are assigned to personas, which determine where they are available |
 | [`duploai_app_service`](docs/data-sources/app_service.md) | Manages a DuploCloud AI Helpdesk app service (Kubernetes Deployment) |
 | [`duploai_aws_efs`](docs/data-sources/aws_efs.md) | Manages a DuploCloud AI Helpdesk AWS EFS file system — an elastic, managed NFS file system provisioned within an environment and resource group |
