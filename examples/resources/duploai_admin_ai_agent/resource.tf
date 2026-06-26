@@ -1,11 +1,11 @@
 # Basic AWS Bedrock agent — minimal required fields.
-resource "duploai_ai_agent" "bedrock_basic" {
+resource "duploai_admin_ai_agent" "bedrock_basic" {
   name     = "bedrock-claude"
   endpoint = "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-5-sonnet-20240620-v1:0/invoke"
 }
 
 # Full AWS Bedrock agent — streaming, endpoint details, and free-form metadata.
-resource "duploai_ai_agent" "bedrock_full" {
+resource "duploai_admin_ai_agent" "bedrock_full" {
   name                   = "bedrock-claude-streaming"
   endpoint               = "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-5-sonnet-20240620-v1:0/invoke-with-response-stream"
   description            = "AWS Bedrock Claude agent for ticket triage"
