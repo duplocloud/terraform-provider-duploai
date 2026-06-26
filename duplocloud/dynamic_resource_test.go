@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -15,6 +18,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
+	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
 )
 
 func jsonRaw(s string) json.RawMessage { return json.RawMessage(s) }
@@ -210,6 +215,98 @@ func TestRequestResponsePaths(t *testing.T) {
 	b := AttributeSpec{APIPath: "name"}
 	if b.requestPath() != "name" || b.responsePath() != "name" {
 		t.Errorf("fallback failed: req=%q resp=%q", b.requestPath(), b.responsePath())
+	}
+}
+
+func TestRequiredIf_CompoundAndHelpers(t *testing.T) {
+	// conditions(): single form normalizes to one equals condition.
+	single := RequiredIfRule{Attribute: "x", WhenAttribute: "engine", WhenEquals: "Memcached"}
+	if c := single.conditions(); len(c) != 1 || c[0].Attribute != "engine" || c[0].Equals != "Memcached" {
+		t.Errorf("single conditions() = %+v", c)
+	}
+	// conditions(): compound form returns its When list.
+	comp := RequiredIfRule{Attribute: "num_node_groups", When: []RequiredIfCondition{
+		{Attribute: "engine", NotEquals: "Memcached"},
+		{Attribute: "cluster_mode", Equals: "Enabled"},
+	}}
+	if c := comp.conditions(); len(c) != 2 {
+		t.Fatalf("compound conditions() len = %d", len(c))
+	}
+
+	// defaultString renders a static default; empty when none.
+	d := jsonRaw(`"Disabled"`)
+	if got := defaultString(AttributeSpec{Default: &d}); got != "Disabled" {
+		t.Errorf("defaultString string = %q", got)
+	}
+	if got := defaultString(AttributeSpec{}); got != "" {
+		t.Errorf("defaultString(no default) = %q", got)
+	}
+
+	// message lists every condition.
+	msg := requiredIfMessage(comp)
+	if !strings.Contains(msg, "engine is not \"Memcached\"") || !strings.Contains(msg, "cluster_mode is \"Enabled\"") {
+		t.Errorf("requiredIfMessage = %q", msg)
+	}
+}
+
+func TestSpecValidate_CompoundRequiredIf(t *testing.T) {
+	base := func(rule RequiredIfRule) ResourceSpec {
+		return ResourceSpec{
+			Name: "x", IDPath: "id",
+			Endpoint: EndpointSpec{UriBase: "/x"},
+			Attributes: []AttributeSpec{
+				{Name: "engine", Type: "string", Required: true},
+				{Name: "cluster_mode", Type: "string", Optional: true, Computed: true},
+				{Name: "num_node_groups", Type: "int", Optional: true},
+			},
+			RequiredIf: []RequiredIfRule{rule},
+		}
+	}
+	valid := base(RequiredIfRule{Attribute: "num_node_groups", When: []RequiredIfCondition{
+		{Attribute: "engine", NotEquals: "Memcached"}, {Attribute: "cluster_mode", Equals: "Enabled"},
+	}})
+	if err := valid.validate(); err != nil {
+		t.Errorf("valid compound requiredIf rejected: %v", err)
+	}
+	unknown := base(RequiredIfRule{Attribute: "num_node_groups", When: []RequiredIfCondition{{Attribute: "nope", Equals: "x"}}})
+	if err := unknown.validate(); err == nil {
+		t.Error("expected error for condition referencing unknown attribute")
+	}
+	bothSet := base(RequiredIfRule{Attribute: "num_node_groups", When: []RequiredIfCondition{{Attribute: "engine", Equals: "Redis", NotEquals: "Memcached"}}})
+	if err := bothSet.validate(); err == nil {
+		t.Error("expected error when a condition sets both equals and notEquals")
+	}
+}
+
+func TestSpecValidate_ConflictsWithAndIsEmpty(t *testing.T) {
+	vErr := func(s ResourceSpec) error {
+		s.Name, s.IDPath = "x", "id"
+		s.Endpoint = EndpointSpec{UriBase: "/x"}
+		s.Attributes = append(s.Attributes,
+			AttributeSpec{Name: "engine_version", Type: "string", Optional: true},
+			AttributeSpec{Name: "snapshot_name", Type: "string", Optional: true},
+			AttributeSpec{Name: "snapshot_arns", Type: "list(string)", Optional: true},
+		)
+		return s.validate()
+	}
+	if err := vErr(ResourceSpec{ConflictsWith: [][]string{{"snapshot_name", "snapshot_arns"}}}); err != nil {
+		t.Errorf("valid conflictsWith rejected: %v", err)
+	}
+	if err := vErr(ResourceSpec{ConflictsWith: [][]string{{"snapshot_name", "nope"}}}); err == nil {
+		t.Error("expected error for conflictsWith referencing unknown attribute")
+	}
+	if err := vErr(ResourceSpec{ConflictsWith: [][]string{{"snapshot_name"}}}); err == nil {
+		t.Error("expected error for conflictsWith group with < 2 attributes")
+	}
+	if err := vErr(ResourceSpec{RequiredIf: []RequiredIfRule{
+		{Attribute: "engine_version", When: []RequiredIfCondition{{Attribute: "snapshot_name", IsEmpty: true}}},
+	}}); err != nil {
+		t.Errorf("valid isEmpty requiredIf rejected: %v", err)
+	}
+	if err := vErr(ResourceSpec{RequiredIf: []RequiredIfRule{
+		{Attribute: "engine_version", When: []RequiredIfCondition{{Attribute: "snapshot_name", IsEmpty: true, Equals: "x"}}},
+	}}); err == nil {
+		t.Error("expected error when a condition sets isEmpty and equals")
 	}
 }
 
@@ -910,5 +1007,166 @@ func TestBodyFromRaw_VerbAwareConstants(t *testing.T) {
 	}
 	if spec, _ := update["spec"].(map[string]any); spec["mode"] != "Update" {
 		t.Errorf("update: spec.mode = %v, want Update", spec["mode"])
+	}
+}
+
+// readAfterWrite makes Create build state from a follow-up GET rather than the
+// POST response. This matters when the write response differs from the read —
+// e.g. the backend encrypts a field on save (create returns ciphertext) but
+// decrypts it on read (admin_provider credentials). Here the mock returns a
+// different value for POST vs GET; a computed attribute the user left unknown
+// must end up with the GET value when readAfterWrite is set, and the POST value
+// when it is not.
+func TestCreate_ReadAfterWrite(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			_, _ = w.Write([]byte(`{"data":{"id":"o1","secret":"CIPHER"}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":{"id":"o1","secret":"PLAIN"}}`)) // GET
+	}))
+	defer srv.Close()
+
+	client, err := duplosdk.NewClient(srv.URL, "tok", false, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"id":     tftypes.String,
+		"secret": tftypes.String,
+	}}
+	// secret is left unknown in the plan, so it is filled from the response.
+	planRaw := tftypes.NewValue(objType, map[string]tftypes.Value{
+		"id":     tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+		"secret": tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+	})
+
+	create := func(readAfterWrite bool) string {
+		spec := ResourceSpec{
+			Name:           "thing",
+			IDPath:         "id",
+			ReadAfterWrite: readAfterWrite,
+			Endpoint:       EndpointSpec{UriBase: "/things"},
+			Attributes: []AttributeSpec{
+				{Name: "secret", Type: "string", Optional: true, Computed: true, APIPath: "secret"},
+			},
+		}
+		ep, err := spec.BuildEndpoint()
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := &dynamicResource{spec: spec, endpoint: ep}
+		r.Client = client
+
+		var sr resource.SchemaResponse
+		r.Schema(context.Background(), resource.SchemaRequest{}, &sr)
+		req := resource.CreateRequest{Plan: tfsdk.Plan{Schema: sr.Schema, Raw: planRaw}}
+		resp := resource.CreateResponse{State: tfsdk.State{Schema: sr.Schema}}
+		r.Create(context.Background(), req, &resp)
+		if resp.Diagnostics.HasError() {
+			t.Fatalf("readAfterWrite=%v: Create diags: %v", readAfterWrite, resp.Diagnostics)
+		}
+		m := map[string]tftypes.Value{}
+		if err := resp.State.Raw.As(&m); err != nil {
+			t.Fatal(err)
+		}
+		var secret string
+		_ = m["secret"].As(&secret)
+		return secret
+	}
+
+	if got := create(true); got != "PLAIN" {
+		t.Errorf("readAfterWrite=true: secret = %q, want PLAIN (from the follow-up GET)", got)
+	}
+	if got := create(false); got != "CIPHER" {
+		t.Errorf("readAfterWrite=false: secret = %q, want CIPHER (from the POST response)", got)
+	}
+}
+
+// min/max must attach AtLeast/AtMost validators to numeric (int/number)
+// attributes and nothing when unset. Guards the engine wiring for ranges like
+// a quota definition's limit_usd >= 0.01.
+func TestAttrSchema_MinMaxValidator(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	cases := []struct {
+		name string
+		a    AttributeSpec
+		want int
+	}{
+		{"number min", AttributeSpec{Type: "number", Required: true, Min: f(0.01)}, 1},
+		{"number min+max", AttributeSpec{Type: "number", Optional: true, Min: f(0), Max: f(100)}, 2},
+		{"number none", AttributeSpec{Type: "number", Optional: true}, 0},
+		{"int min", AttributeSpec{Type: "int", Optional: true, Min: f(1)}, 1},
+		{"int none", AttributeSpec{Type: "int", Optional: true}, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := attrSchema(tc.a)
+			var n int
+			switch v := s.(type) {
+			case schema.Float64Attribute:
+				n = len(v.Validators)
+			case schema.Int64Attribute:
+				n = len(v.Validators)
+			default:
+				t.Fatalf("unexpected attribute type %T", s)
+			}
+			if n != tc.want {
+				t.Errorf("validators = %d, want %d", n, tc.want)
+			}
+		})
+	}
+}
+
+// requiredIf on an object target must read the live config value, not treat a
+// populated object as missing. Regression for the readPlanGoValue "object" case
+// (e.g. admin_skill's git_repo requiredIf when format == PrivateGitRepo).
+func TestRequiredIf_ObjectTargetReadsConfig(t *testing.T) {
+	spec := ResourceSpec{
+		Name: "thing", IDPath: "id",
+		Endpoint:   EndpointSpec{UriBase: "/things"},
+		RequiredIf: []RequiredIfRule{{Attribute: "git_repo", WhenAttribute: "format", WhenEquals: "PrivateGitRepo"}},
+		Attributes: []AttributeSpec{
+			{Name: "format", Type: "string", Optional: true, APIPath: "format"},
+			{Name: "git_repo", Type: "object", Optional: true, APIPath: "gitRepo", Attributes: []AttributeSpec{
+				{Name: "name", Type: "string", Optional: true, APIPath: "name"},
+				{Name: "scope_id", Type: "string", Optional: true, APIPath: "scopeId"},
+			}},
+		},
+	}
+	r := &dynamicResource{spec: spec}
+	var sr resource.SchemaResponse
+	r.Schema(context.Background(), resource.SchemaRequest{}, &sr)
+	v := requiredIfValidator{spec: spec}
+
+	gitType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{"name": tftypes.String, "scope_id": tftypes.String}}
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"id":       tftypes.String,
+		"format":   tftypes.String,
+		"git_repo": gitType,
+	}}
+
+	run := func(gitRepo tftypes.Value) bool {
+		raw := tftypes.NewValue(objType, map[string]tftypes.Value{
+			"id":       tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+			"format":   tftypes.NewValue(tftypes.String, "PrivateGitRepo"),
+			"git_repo": gitRepo,
+		})
+		req := resource.ValidateConfigRequest{Config: tfsdk.Config{Schema: sr.Schema, Raw: raw}}
+		resp := resource.ValidateConfigResponse{}
+		v.ValidateResource(context.Background(), req, &resp)
+		return resp.Diagnostics.HasError()
+	}
+
+	populated := tftypes.NewValue(gitType, map[string]tftypes.Value{
+		"name":     tftypes.NewValue(tftypes.String, "skills-repo"),
+		"scope_id": tftypes.NewValue(tftypes.String, "scope-1"),
+	})
+	if run(populated) {
+		t.Error("requiredIf flagged a populated object as missing (readPlanGoValue object regression)")
+	}
+	if !run(tftypes.NewValue(gitType, nil)) {
+		t.Error("requiredIf did not fire for a null object when the condition held")
 	}
 }

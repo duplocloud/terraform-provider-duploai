@@ -1,0 +1,237 @@
+{
+  "name": "aws_efs",
+  "description": "Manages a DuploCloud AI Helpdesk AWS EFS file system \u2014 an elastic, managed NFS file system provisioned within an environment and resource group.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AwsEfss",
+    "deprovision": {}
+  },
+  "requiredIf": [
+    {
+      "attribute": "provisioned_throughput_in_mibps",
+      "when": [
+        {
+          "attribute": "throughput_mode",
+          "equals": "provisioned"
+        }
+      ]
+    }
+  ],
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this EFS file system."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the EFS file system."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description of the EFS file system."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment in which the file system is provisioned."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group in which the file system is provisioned."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "oneOf": [
+        "Cli",
+        "IacNativeTf",
+        "IacDuploTf",
+        "DirectApiCall"
+      ],
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+    {
+      "name": "encryption",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "AwsManagedKey",
+      "forceNew": true,
+      "oneOf": [
+        "NoEncryption",
+        "AwsManagedKey",
+        "ResourceGroupKmsKey"
+      ],
+      "apiPath": "spec.encryption",
+      "description": "Encryption at rest mode. NoEncryption disables encryption; AwsManagedKey uses the AWS-managed EFS key; ResourceGroupKmsKey uses the resource group's KMS key. Immutable after creation."
+    },
+    {
+      "name": "availability_zone_name",
+      "type": "string",
+      "optional": true,
+      "forceNew": true,
+      "createOnly": true,
+      "requestPath": "spec.createRequest.availabilityZoneName",
+      "responsePath": "result.cloudDetails.fileSystem.availabilityZoneName",
+      "description": "AWS Availability Zone to create a One Zone file system in (e.g. us-east-1a). Omit for a Regional (multi-AZ) file system. Immutable after creation."
+    },
+    {
+      "name": "performance_mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "createOnly": true,
+      "oneOf": [
+        "generalPurpose",
+        "maxIO"
+      ],
+      "requestPath": "spec.createRequest.performanceMode",
+      "responsePath": "result.cloudDetails.fileSystem.performanceMode",
+      "description": "Performance mode: generalPurpose (default) or maxIO. Immutable after creation."
+    },
+    {
+      "name": "creation_token",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "createOnly": true,
+      "requestPath": "spec.createRequest.creationToken",
+      "responsePath": "result.cloudDetails.fileSystem.creationToken",
+      "description": "Idempotency token used at creation. Defaults to the file system name if omitted. Immutable after creation."
+    },
+    {
+      "name": "backup",
+      "type": "bool",
+      "optional": true,
+      "forceNew": true,
+      "createOnly": true,
+      "requestPath": "spec.createRequest.backup",
+      "description": "Whether to enable automatic backups (AWS Backup) at creation. Immutable after creation."
+    },
+    {
+      "name": "throughput_mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "oneOf": [
+        "bursting",
+        "provisioned",
+        "elastic"
+      ],
+      "createPath": "spec.createRequest.throughputMode",
+      "updatePath": "spec.updateRequest.throughputMode",
+      "responsePath": "result.cloudDetails.fileSystem.throughputMode",
+      "description": "Throughput mode: bursting (default), provisioned, or elastic. Mutable."
+    },
+    {
+      "name": "provisioned_throughput_in_mibps",
+      "type": "number",
+      "optional": true,
+      "computed": true,
+      "createPath": "spec.createRequest.provisionedThroughputInMibps",
+      "updatePath": "spec.updateRequest.provisionedThroughputInMibps",
+      "responsePath": "result.cloudDetails.fileSystem.provisionedThroughputInMibps",
+      "description": "Provisioned throughput in MiB/s. Required when throughput_mode is provisioned; ignored otherwise."
+    },
+    {
+      "name": "tags",
+      "type": "list(object)",
+      "optional": true,
+      "createOnly": true,
+      "requestPath": "spec.createRequest.tags",
+      "description": "Tags applied to the file system at creation.",
+      "attributes": [
+        {
+          "name": "key",
+          "type": "string",
+          "required": true,
+          "apiPath": "key",
+          "description": "Tag key."
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "optional": true,
+          "apiPath": "value",
+          "description": "Tag value."
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status of the file system."
+    },
+    {
+      "name": "file_system_id",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.cloudDetails.fileSystem.fileSystemId",
+      "description": "AWS ID of the provisioned file system (e.g. fs-0123456789abcdef0)."
+    },
+    {
+      "name": "file_system_arn",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.cloudDetails.fileSystem.fileSystemArn",
+      "description": "ARN of the provisioned file system."
+    },
+    {
+      "name": "life_cycle_state",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.cloudDetails.fileSystem.lifeCycleState",
+      "description": "AWS lifecycle state of the file system (e.g. available, creating, deleting)."
+    }
+  ],
+  "createConstants": [
+    {
+      "path": "spec.mode",
+      "value": "Create"
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned",
+    "failureRetries": 3
+  }
+}

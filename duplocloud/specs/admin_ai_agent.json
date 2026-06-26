@@ -1,0 +1,113 @@
+{
+  "name": "admin_ai_agent",
+  "description": "Manages a DuploCloud AI Helpdesk AI Agent — an external AI service or model the help desk can invoke to perform automated tasks. Agents are assigned to personas, which determine where they are available.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/AIAgents"
+  },
+  "attributes": [
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "apiPath": "name",
+      "description": "Name of the AI agent."
+    },
+    {
+      "name": "endpoint",
+      "type": "string",
+      "required": true,
+      "apiPath": "endpoint",
+      "description": "Absolute URL of the HTTP(S) endpoint the help desk calls to invoke this agent. Must be a well-formed absolute URL."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "description",
+      "description": "Human-readable description of the agent."
+    },
+    {
+      "name": "does_support_streaming",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "doesSupportStreaming",
+      "description": "Whether the agent supports streaming (Server-Sent Events) responses."
+    },
+    {
+      "name": "is_active",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "isActive",
+      "description": "Whether the agent is active and available for use. Defaults to active when omitted."
+    },
+    {
+      "name": "metadata",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "description": "Free-form key/value configuration for the agent (e.g. model, maxTokens, systemPrompt)."
+    },
+    {
+      "name": "endpoint_details",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "apiPath": "endpointDetails",
+      "description": "Additional configuration for invoking the agent endpoint.",
+      "attributes": [
+        {
+          "name": "path",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "path",
+          "description": "Path the help desk invokes the agent on."
+        },
+        {
+          "name": "method",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "method",
+          "description": "HTTP method used to invoke the agent."
+        },
+        {
+          "name": "http_headers",
+          "type": "map(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "httpHeaders",
+          "description": "HTTP headers sent when invoking the agent."
+        }
+      ]
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the agent was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the agent was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ]
+}

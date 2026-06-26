@@ -1,0 +1,11 @@
+# infra tier inputs — copy to config/infra.tfvars and fill in.
+# Credentials (duplo_host / duplo_token / ssl_no_verify) come from the
+# environment via the scripts; do NOT put them here.
+
+workspace_id = "<your-workspace-id>"
+scope_ids    = ["<your-scope-id>"]
+region       = "us-west-1"
+name_prefix  = "demo"
+
+# Optional — defaults to "1.35" in variables.tf.
+# eks_version = "1.35"

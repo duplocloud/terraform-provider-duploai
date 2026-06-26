@@ -51,8 +51,7 @@
     {
       "name": "environment_id",
       "type": "string",
-      "optional": true,
-      "computed": true,
+      "required": true,
       "forceNew": true,
       "apiPath": "spec.environmentId",
       "description": "ID of the environment that owns the resource group."
@@ -459,6 +458,331 @@
       ]
     },
     {
+      "name": "replication_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Static",
+      "oneOf": [
+        "Static",
+        "Hpa",
+        "ExternalHpa"
+      ],
+      "apiPath": "spec.replicationType",
+      "description": "How the deployment's replica count is managed: Static (fixed replicas), Hpa (managed by the hpa block), or ExternalHpa (managed by an HPA outside this resource). Must be set to Hpa when an hpa block is configured."
+    },
+    {
+      "name": "hpa",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.hpa",
+      "description": "Optional HorizontalPodAutoscaler that scales the deployment between min and max replicas based on metrics. Requires replication_type = \"Hpa\". The platform sets the autoscaler's name and scale target to this app service's workload automatically. Omit to create no autoscaler.",
+      "attributes": [
+        {
+          "name": "api_version",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "default": "autoscaling/v2",
+          "apiPath": "apiVersion",
+          "description": "HorizontalPodAutoscaler apiVersion."
+        },
+        {
+          "name": "kind",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "default": "HorizontalPodAutoscaler",
+          "apiPath": "kind",
+          "description": "HorizontalPodAutoscaler kind."
+        },
+        {
+          "name": "annotations",
+          "type": "map(string)",
+          "optional": true,
+          "apiPath": "metadata.annotations",
+          "description": "Annotations applied to the HorizontalPodAutoscaler object."
+        },
+        {
+          "name": "min_replicas",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "default": 1,
+          "apiPath": "spec.minReplicas",
+          "description": "Lower bound on the number of replicas the autoscaler can scale down to. Defaults to 1 if omitted."
+        },
+        {
+          "name": "max_replicas",
+          "type": "int",
+          "required": true,
+          "apiPath": "spec.maxReplicas",
+          "description": "Upper bound on the number of replicas the autoscaler can scale up to. Must be greater than or equal to min_replicas."
+        },
+        {
+          "name": "metrics",
+          "type": "list(object)",
+          "optional": true,
+          "apiPath": "spec.metrics",
+          "description": "Metrics the autoscaler evaluates to compute the desired replica count. Each entry sets one metric source via the block matching its type.",
+          "attributes": [
+            {
+              "name": "type",
+              "type": "string",
+              "required": true,
+              "oneOf": [
+                "Resource",
+                "Pods",
+                "External",
+                "ContainerResource"
+              ],
+              "apiPath": "type",
+              "description": "Metric source type. Set the block matching this value: resource, pods, external, or container_resource."
+            },
+            {
+              "name": "resource",
+              "type": "object",
+              "optional": true,
+              "apiPath": "resource",
+              "description": "Resource metric (e.g. cpu or memory) of the target pods. Use with type Resource.",
+              "attributes": [
+                {
+                  "name": "name",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "name",
+                  "description": "Resource name, e.g. cpu or memory."
+                },
+                {
+                  "name": "target",
+                  "type": "object",
+                  "required": true,
+                  "apiPath": "target",
+                  "description": "Target the metric is scaled against.",
+                  "attributes": [
+                    {
+                      "name": "type",
+                      "type": "string",
+                      "required": true,
+                      "oneOf": [
+                        "Utilization",
+                        "Value",
+                        "AverageValue"
+                      ],
+                      "apiPath": "type",
+                      "description": "Target type: Utilization, Value, or AverageValue."
+                    },
+                    {
+                      "name": "average_utilization",
+                      "type": "int",
+                      "optional": true,
+                      "apiPath": "averageUtilization",
+                      "description": "Target average resource utilization across pods, as a percentage (use with type Utilization)."
+                    },
+                    {
+                      "name": "average_value",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "averageValue",
+                      "description": "Target average value of the metric across pods, as a quantity, e.g. \"500Mi\" (use with type AverageValue)."
+                    },
+                    {
+                      "name": "value",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "value",
+                      "description": "Target raw value of the metric, as a quantity (use with type Value)."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "container_resource",
+              "type": "object",
+              "optional": true,
+              "apiPath": "containerResource",
+              "description": "Resource metric of a single named container in each pod. Use with type ContainerResource.",
+              "attributes": [
+                {
+                  "name": "name",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "name",
+                  "description": "Resource name, e.g. cpu or memory."
+                },
+                {
+                  "name": "container",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "container",
+                  "description": "Name of the container in the pod to measure."
+                },
+                {
+                  "name": "target",
+                  "type": "object",
+                  "required": true,
+                  "apiPath": "target",
+                  "description": "Target the metric is scaled against.",
+                  "attributes": [
+                    {
+                      "name": "type",
+                      "type": "string",
+                      "required": true,
+                      "oneOf": [
+                        "Utilization",
+                        "Value",
+                        "AverageValue"
+                      ],
+                      "apiPath": "type",
+                      "description": "Target type: Utilization, Value, or AverageValue."
+                    },
+                    {
+                      "name": "average_utilization",
+                      "type": "int",
+                      "optional": true,
+                      "apiPath": "averageUtilization",
+                      "description": "Target average resource utilization across pods, as a percentage (use with type Utilization)."
+                    },
+                    {
+                      "name": "average_value",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "averageValue",
+                      "description": "Target average value of the metric across pods, as a quantity (use with type AverageValue)."
+                    },
+                    {
+                      "name": "value",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "value",
+                      "description": "Target raw value of the metric, as a quantity (use with type Value)."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "pods",
+              "type": "object",
+              "optional": true,
+              "apiPath": "pods",
+              "description": "Custom per-pod metric averaged across all target pods. Use with type Pods.",
+              "attributes": [
+                {
+                  "name": "metric_name",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "metric.name",
+                  "description": "Name of the custom pods metric."
+                },
+                {
+                  "name": "target",
+                  "type": "object",
+                  "required": true,
+                  "apiPath": "target",
+                  "description": "Target the metric is scaled against.",
+                  "attributes": [
+                    {
+                      "name": "type",
+                      "type": "string",
+                      "required": true,
+                      "oneOf": [
+                        "Utilization",
+                        "Value",
+                        "AverageValue"
+                      ],
+                      "apiPath": "type",
+                      "description": "Target type: Utilization, Value, or AverageValue."
+                    },
+                    {
+                      "name": "average_utilization",
+                      "type": "int",
+                      "optional": true,
+                      "apiPath": "averageUtilization",
+                      "description": "Target average utilization across pods, as a percentage (use with type Utilization)."
+                    },
+                    {
+                      "name": "average_value",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "averageValue",
+                      "description": "Target average value of the metric across pods, as a quantity (use with type AverageValue)."
+                    },
+                    {
+                      "name": "value",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "value",
+                      "description": "Target raw value of the metric, as a quantity (use with type Value)."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "external",
+              "type": "object",
+              "optional": true,
+              "apiPath": "external",
+              "description": "Metric from a source not associated with any Kubernetes object. Use with type External.",
+              "attributes": [
+                {
+                  "name": "metric_name",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "metric.name",
+                  "description": "Name of the external metric."
+                },
+                {
+                  "name": "target",
+                  "type": "object",
+                  "required": true,
+                  "apiPath": "target",
+                  "description": "Target the metric is scaled against.",
+                  "attributes": [
+                    {
+                      "name": "type",
+                      "type": "string",
+                      "required": true,
+                      "oneOf": [
+                        "Utilization",
+                        "Value",
+                        "AverageValue"
+                      ],
+                      "apiPath": "type",
+                      "description": "Target type: Utilization, Value, or AverageValue."
+                    },
+                    {
+                      "name": "average_utilization",
+                      "type": "int",
+                      "optional": true,
+                      "apiPath": "averageUtilization",
+                      "description": "Target average utilization, as a percentage (use with type Utilization)."
+                    },
+                    {
+                      "name": "average_value",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "averageValue",
+                      "description": "Target average value of the metric, as a quantity (use with type AverageValue)."
+                    },
+                    {
+                      "name": "value",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "value",
+                      "description": "Target raw value of the metric, as a quantity (use with type Value)."
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "provisioner_type",
       "type": "string",
       "optional": true,
@@ -498,6 +822,13 @@
       "computed": true,
       "apiPath": "result.ingressName",
       "description": "Name of the provisioned Ingress (if any)."
+    },
+    {
+      "name": "hpa_name",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.hpaName",
+      "description": "Name of the provisioned HorizontalPodAutoscaler (set when replication_type is Hpa)."
     }
   ],
   "requestConstants": [

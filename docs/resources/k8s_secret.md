@@ -19,6 +19,7 @@ resource "duploai_k8s_secret" "app" {
   name              = "app-secret"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   type = "Opaque"
@@ -44,6 +45,7 @@ resource "duploai_k8s_secret" "app" {
 
 ### Required
 
+- `environment_id` (String) ID of the environment that owns the resource group.
 - `name` (String) Name of the secret resource.
 - `namespace_name` (String) Kubernetes namespace the secret is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this secret belongs to.
@@ -55,7 +57,6 @@ resource "duploai_k8s_secret" "app" {
 - `annotations` (Map of String) Kubernetes annotations applied to the secret.
 - `data` (Map of String, Sensitive) Secret entries with base64-encoded values, keyed by name.
 - `description` (String) Optional description.
-- `environment_id` (String) ID of the environment that owns the resource group.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `immutable` (Boolean) Mark the secret immutable (its data cannot be changed after creation).
 - `labels` (Map of String) Kubernetes labels applied to the secret.

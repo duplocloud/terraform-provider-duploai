@@ -1,0 +1,87 @@
+{
+  "name": "admin_persona",
+  "description": "Manages a DuploCloud AI Helpdesk persona — a named assistant profile (prompt and assigned skills) that determines how an AI agent behaves and which skills it can use.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/Personas"
+  },
+  "attributes": [
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "apiPath": "name",
+      "description": "Name of the persona."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "description",
+      "description": "Human-readable description of the persona."
+    },
+    {
+      "name": "prompt_md",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "promptMd",
+      "description": "System prompt for the persona, in Markdown."
+    },
+    {
+      "name": "avatar_url",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "avatarUrl",
+      "description": "URL of the persona's avatar image."
+    },
+    {
+      "name": "skill_ids",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "skillIds",
+      "description": "IDs of the skills assigned to this persona. Each must reference an existing, active skill."
+    },
+    {
+      "name": "is_active",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "isActive",
+      "description": "Whether the persona is active. Defaults to active when omitted."
+    },
+    {
+      "name": "metadata",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "description": "Free-form key/value metadata."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the persona was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the persona was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ]
+}

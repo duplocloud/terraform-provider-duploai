@@ -53,9 +53,23 @@ type ResourceSpec struct {
 	// RequiredIf declares conditional-required rules evaluated at plan time.
 	RequiredIf []RequiredIfRule `json:"requiredIf,omitempty"`
 
+	// ConflictsWith declares mutually-exclusive attribute groups: within each
+	// group at most one attribute may be set. Enforced at plan time, e.g.
+	// [["snapshot_name", "snapshot_arns"]].
+	ConflictsWith [][]string `json:"conflictsWith,omitempty"`
+
 	// Waiter, when present, makes Create/Update poll until the resource
 	// reaches a terminal state.
 	Waiter *WaiterSpec `json:"waiter,omitempty"`
+
+	// ReadAfterWrite, when true and there is no Waiter, makes Create/Update
+	// issue a follow-up GET and build state from that read response rather than
+	// from the POST/PUT response. Use it when the write response differs from the
+	// canonical read — e.g. the API encrypts a field on save (so the create
+	// response carries ciphertext) but decrypts it on read. Without this, such a
+	// field trips Terraform's "inconsistent result after apply". (Waiter resources
+	// already read back via polling, so this is ignored when a Waiter is set.)
+	ReadAfterWrite bool `json:"readAfterWrite,omitempty"`
 
 	// DataSource, when true, registers a read-only data source (data.duploai_<name>)
 	// from this spec in addition to the managed resource. The data source schema is
@@ -166,6 +180,16 @@ type AttributeSpec struct {
 	// OneOf constrains a string attribute to an enumerated set.
 	OneOf []string `json:"oneOf,omitempty"`
 
+	// MinItems, when > 0, requires a list/set attribute to have at least this
+	// many elements (validated at plan time). Use for collections the API
+	// rejects when empty, e.g. a permission set's allowed_workspaces.
+	MinItems int `json:"minItems,omitempty"`
+
+	// Min / Max bound a numeric attribute (int or number) inclusively, validated
+	// at plan time. Use for ranges the API enforces, e.g. limit_usd >= 0.01.
+	Min *float64 `json:"min,omitempty"`
+	Max *float64 `json:"max,omitempty"`
+
 	// APIPath is the default dot-path in the API body this attribute maps to,
 	// e.g. "spec.region". Array element extraction is supported for read-back
 	// via "result.subnets[].subnetId". Used for both directions unless
@@ -255,11 +279,41 @@ type ConstantField struct {
 	Value json.RawMessage `json:"value"`
 }
 
-// RequiredIfRule requires Attribute to be set when WhenAttribute equals WhenValue.
+// RequiredIfRule requires Attribute to be set when its condition holds. Two
+// forms:
+//   - Single (back-compat): Attribute is required when WhenAttribute == WhenEquals.
+//   - Compound: Attribute is required when ALL of When match (logical AND); each
+//     condition is equals or notEquals. Use this for rules like "required when
+//     engine != Memcached AND cluster_mode == Enabled".
+//
+// A condition reads the config value, falling back to the attribute's spec
+// default when the user omitted it — so a condition on a defaulted field (e.g.
+// cluster_mode defaulting to "Disabled") still evaluates correctly.
 type RequiredIfRule struct {
-	Attribute     string `json:"attribute"`
-	WhenAttribute string `json:"whenAttribute"`
-	WhenEquals    string `json:"whenEquals"`
+	Attribute     string                `json:"attribute"`
+	WhenAttribute string                `json:"whenAttribute,omitempty"`
+	WhenEquals    string                `json:"whenEquals,omitempty"`
+	When          []RequiredIfCondition `json:"when,omitempty"`
+}
+
+// RequiredIfCondition is one term of a compound requiredIf rule. Exactly one of
+// Equals / NotEquals / IsEmpty is set. IsEmpty matches when the (config-or-
+// default) value is empty — used for "required unless X is set" rules, e.g.
+// engine_version required when snapshot_name is empty.
+type RequiredIfCondition struct {
+	Attribute string `json:"attribute"`
+	Equals    string `json:"equals,omitempty"`
+	NotEquals string `json:"notEquals,omitempty"`
+	IsEmpty   bool   `json:"isEmpty,omitempty"`
+}
+
+// conditions normalizes a rule to its list of AND-ed conditions (the single
+// WhenAttribute/WhenEquals form becomes one condition).
+func (r RequiredIfRule) conditions() []RequiredIfCondition {
+	if len(r.When) > 0 {
+		return r.When
+	}
+	return []RequiredIfCondition{{Attribute: r.WhenAttribute, Equals: r.WhenEquals}}
 }
 
 // WaiterSpec drives the generic poller.
@@ -268,6 +322,14 @@ type WaiterSpec struct {
 	StatusPath string `json:"statusPath"`
 	// SuccessState is the terminal success value.
 	SuccessState string `json:"successState"`
+	// ReadyPath / ReadyState add an optional secondary success gate: the resource
+	// is only considered provisioned once the status reaches SuccessState AND the
+	// value at ReadyPath equals ReadyState. Use for resources whose status flips
+	// to "complete" before a downstream signal is ready (e.g. an EC2 host whose
+	// status is Complete but live_state is not yet "running"). Both must be set
+	// to enable the gate; failure detection still uses StatusPath/FailureStates.
+	ReadyPath  string `json:"readyPath,omitempty"`
+	ReadyState string `json:"readyState,omitempty"`
 	// FailureStates maps terminal failure values to human-readable reasons.
 	FailureStates map[string]string `json:"failureStates"`
 	// FailureRetries is how many extra polls to tolerate after first seeing a
@@ -399,8 +461,40 @@ func (s *ResourceSpec) validate() error {
 		return fmt.Errorf("attribute %q is reserved", "id")
 	}
 	for _, r := range s.RequiredIf {
-		if !seen[r.Attribute] || !seen[r.WhenAttribute] {
-			return fmt.Errorf("requiredIf references unknown attribute")
+		if !seen[r.Attribute] {
+			return fmt.Errorf("requiredIf references unknown attribute %q", r.Attribute)
+		}
+		conds := r.conditions()
+		if len(conds) == 0 {
+			return fmt.Errorf("requiredIf rule for %q has no condition", r.Attribute)
+		}
+		for _, c := range conds {
+			if !seen[c.Attribute] {
+				return fmt.Errorf("requiredIf references unknown attribute %q", c.Attribute)
+			}
+			ops := 0
+			if c.Equals != "" {
+				ops++
+			}
+			if c.NotEquals != "" {
+				ops++
+			}
+			if c.IsEmpty {
+				ops++
+			}
+			if ops != 1 {
+				return fmt.Errorf("requiredIf condition on %q must set exactly one of equals/notEquals/isEmpty", c.Attribute)
+			}
+		}
+	}
+	for _, group := range s.ConflictsWith {
+		if len(group) < 2 {
+			return fmt.Errorf("conflictsWith group must list at least two attributes")
+		}
+		for _, name := range group {
+			if !seen[name] {
+				return fmt.Errorf("conflictsWith references unknown attribute %q", name)
+			}
 		}
 	}
 	return nil

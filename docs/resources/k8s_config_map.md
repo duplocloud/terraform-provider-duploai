@@ -19,6 +19,7 @@ resource "duploai_k8s_config_map" "app" {
   name              = "app-config"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   data = {
@@ -42,6 +43,7 @@ resource "duploai_k8s_config_map" "app" {
 
 ### Required
 
+- `environment_id` (String) ID of the environment that owns the resource group.
 - `name` (String) Name of the config map resource.
 - `namespace_name` (String) Kubernetes namespace the config map is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this config map belongs to.
@@ -54,7 +56,6 @@ resource "duploai_k8s_config_map" "app" {
 - `binary_data` (Map of String) Binary configuration entries, base64-encoded values keyed by name.
 - `data` (Map of String) Configuration key/value pairs (UTF-8 string data).
 - `description` (String) Optional description.
-- `environment_id` (String) ID of the environment that owns the resource group.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `immutable` (Boolean) Mark the config map immutable (its data cannot be changed after creation).
 - `labels` (Map of String) Kubernetes labels applied to the config map.

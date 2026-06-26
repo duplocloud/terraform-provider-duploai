@@ -59,6 +59,8 @@ Saving this file, running `go generate ./...` (to regenerate docs), and running
 | `createConstants` | array | no | Fixed pairs injected into **create** (POST) bodies only. Overrides `requestConstants` for the same path. |
 | `updateConstants` | array | no | Fixed pairs injected into **update** (PUT) bodies only. Overrides `requestConstants` for the same path. |
 | `requiredIf` | array | no | Conditional-required rules evaluated at plan time. See [RequiredIf rules](#requiredif-rules). |
+| `conflictsWith` | array | no | Mutually-exclusive attribute groups enforced at plan time. See [ConflictsWith rules](#conflictswith-rules). |
+| `dataSource` | bool | no | When `true`, also registers a read-only `data.duploai_<name>` data source derived automatically from this spec. See [Auto-generated data source](#auto-generated-data-source). |
 | `waiter` | object | no | Async polling config. Required for resources that provision asynchronously. See [Waiter](#waiter). |
 
 ---
@@ -475,9 +477,11 @@ when both set the same path.
 ## RequiredIf rules
 
 `requiredIf` enforces plan-time conditional requirements: attribute `A` must be
-set whenever attribute `B` equals a specific value.
+set whenever a condition (or set of conditions) holds.
 
-Each rule:
+Two forms are supported:
+
+### Simple form (single equality check)
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -495,6 +499,113 @@ Each rule:
   }
 ]
 ```
+
+### Compound form (logical AND of multiple conditions)
+
+Use the `when` array when the requirement depends on more than one condition.
+All conditions must hold (logical AND). Each condition targets one attribute and
+uses exactly one of `equals`, `notEquals`, or `isEmpty`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `attribute` | string | The attribute that becomes required. Must exist in `attributes`. |
+| `when` | array | List of conditions, all of which must hold (AND). |
+
+Each condition object:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `attribute` | string | The attribute whose value is checked. |
+| `equals` | string | Condition holds when the attribute equals this value. |
+| `notEquals` | string | Condition holds when the attribute does **not** equal this value. |
+| `isEmpty` | bool | Condition holds when the attribute is unset or empty. |
+
+Exactly one of `equals`, `notEquals`, or `isEmpty` must be set per condition.
+
+When evaluating, if the user omitted an attribute that has a `default`, the
+default value is used — so conditions on defaulted fields work correctly
+without the user explicitly setting them.
+
+**Example** — `num_cache_clusters` is required when `engine != "Memcached"` AND `cluster_mode == "Disabled"`:
+```json
+"requiredIf": [
+  {
+    "attribute": "num_cache_clusters",
+    "when": [
+      { "attribute": "engine",       "notEquals": "Memcached" },
+      { "attribute": "cluster_mode", "equals": "Disabled"    }
+    ]
+  }
+]
+```
+
+**Example** — `engine_version` is required when `snapshot_name` is not set:
+```json
+"requiredIf": [
+  {
+    "attribute": "engine_version",
+    "when": [
+      { "attribute": "snapshot_name", "isEmpty": true }
+    ]
+  }
+]
+```
+
+---
+
+## ConflictsWith rules
+
+`conflictsWith` enforces mutually-exclusive attribute groups at plan time: within
+each group at most one attribute may be set.
+
+Each entry in the array is a list of attribute names. If two or more attributes
+from the same group are set, validation fails with an error on each conflicting
+attribute.
+
+**Example** — `snapshot_name` and `snapshot_arns` cannot both be set:
+```json
+"conflictsWith": [
+  ["snapshot_name", "snapshot_arns"]
+]
+```
+
+Multiple groups are independent:
+```json
+"conflictsWith": [
+  ["snapshot_name", "snapshot_arns"],
+  ["replica_of", "num_cache_clusters"]
+]
+```
+
+---
+
+## Auto-generated data source
+
+Setting `"dataSource": true` registers a read-only `data.duploai_<name>` data
+source from the same spec. No extra file is needed. The schema is derived
+automatically:
+
+- **Path-parameter attributes** (those with no `apiPath`) → `Required`
+- **`id`** → `Required` (user supplies the object ID for lookup)
+- **All other readable attributes** → `Computed`
+- **Write-only attributes** (no `apiPath` and no `responsePath`) → excluded
+
+The data source performs a single `GET /{id}` and populates all computed
+attributes from the response.
+
+**Example** — add a data source alongside the managed resource:
+```json
+{
+  "name": "plan",
+  "dataSource": true,
+  ...
+}
+```
+
+This registers both `resource "duploai_plan"` and `data "duploai_plan"`.
+
+The data source example file must be placed at
+`examples/data-sources/duploai_<name>/data-source.tf`.
 
 ---
 
@@ -547,6 +658,7 @@ Default `failureStates` map (identical across all resources):
 | `failureDetailPath` | string | `"blockedReason"` | Dot-path to a field with extra error context. Appended to the error message when the status is a failure state. |
 | `failureRetries` | int | `0` | **No default.** Extra polls to tolerate after first seeing a failure state before treating it as terminal. Use for backends that report a transient failure and then self-recover. |
 | `pollIntervalSeconds` | int | `10` | Seconds between status polls. |
+| `failurePollIntervalSeconds` | int | *(same as `pollIntervalSeconds`)* | Override the poll interval when the resource is in a failure state during a retry. Use a longer value to give the backend more time to self-recover between checks. Falls back to `pollIntervalSeconds` when unset. |
 | `createTimeoutMinutes` | int | `30` | Default create timeout. Overridable per-instance via the `timeouts` block. |
 | `updateTimeoutMinutes` | int | `30` | Default update timeout. |
 | `deleteTimeoutMinutes` | int | `15` | Default delete timeout. |
@@ -730,6 +842,8 @@ the canonical reference file:
    **run `go build ./...` and `go test ./...`** to verify the spec is valid.
 8. **Add `examples/resources/duploai_<name>/resource.tf`** and
    **`import.sh`** — required by CI.
+9. **If `dataSource: true`**, add
+   **`examples/data-sources/duploai_<name>/data-source.tf`** — also required by CI.
 
 ## Common mistakes
 
@@ -742,3 +856,5 @@ the canonical reference file:
 | `required + computed` on the same attribute | Provider panics at schema build: framework rejects it | Use `optional + computed` instead. |
 | Mutable field missing `forceNew` | Terraform silently no-ops or the update call fails (field not in PUT body) | Add `"forceNew": true` or `"createOnly": true` depending on semantics. |
 | `oneOf` on a non-string type | No validation, no error — constraint is silently ignored | Only `oneOf` on `"type": "string"` attributes; use a different guard for other types. |
+| `requiredIf` compound rule missing `when` | Rule is silently skipped — `whenAttribute`/`whenEquals` are required for the simple form | Use `"when": [...]` for multi-condition rules; use `"whenAttribute"` + `"whenEquals"` for single-condition rules. |
+| `dataSource: true` but no `examples/data-sources/` file | CI fails | Add `examples/data-sources/duploai_<name>/data-source.tf`. |

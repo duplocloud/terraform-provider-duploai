@@ -4,6 +4,7 @@ resource "duploai_rds_instance" "basic" {
   name              = "prod-pg"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<resource-group-id>"
+  environment_id    = "<environment-id>"
 
   engine               = "postgres"
   engine_version       = "16.4"
@@ -20,6 +21,7 @@ resource "duploai_rds_instance" "mysql" {
   name              = "orders-db"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<resource-group-id>"
+  environment_id    = "<environment-id>"
 
   engine               = "mysql"
   engine_version       = "8.0.39"

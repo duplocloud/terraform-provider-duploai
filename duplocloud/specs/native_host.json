@@ -1,0 +1,344 @@
+{
+  "name": "native_host",
+  "description": "Manages a DuploCloud native host — an AWS EC2 instance provisioned inside a workspace environment.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AwsEc2Hosts",
+    "deprovision": {}
+  },
+  "waiter": {
+    "statusPath": "status",
+    "successState": "Complete",
+    "readyPath": "result.liveState",
+    "readyState": "running",
+    "failureStates": {
+      "Failed": "the host failed to provision",
+      "DeprovisionFailed": "the host failed to deprovision"
+    },
+    "deprovisionedState": "DeProvisioned",
+    "createTimeoutMinutes": 30,
+    "updateTimeoutMinutes": 30,
+    "deleteTimeoutMinutes": 20
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace this host belongs to."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the host. Letters, numbers, and hyphens; must start with a letter or number. Cannot be changed after creation."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment this host is provisioned in."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group this host belongs to. Provides the AWS account/region context."
+    },
+    {
+      "name": "subnet_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.subnetId",
+      "description": "ID of the subnet to launch the host in. Leave unset to auto-select the first subnet of the chosen subnet_type. Cannot be changed after creation."
+    },
+    {
+      "name": "os_platform",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 0,
+      "min": 0,
+      "max": 1,
+      "forceNew": true,
+      "apiPath": "spec.osPlatform",
+      "description": "OS platform: 0 = Linux, 1 = Windows. Cannot be changed after creation."
+    },
+    {
+      "name": "disk_size_gb",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 50,
+      "min": 20,
+      "max": 16384,
+      "forceNew": true,
+      "apiPath": "spec.diskSizeGb",
+      "description": "Root EBS volume size in GiB (20-16384, gp3)."
+    },
+    {
+      "name": "enable_os_disk_encryption",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "forceNew": true,
+      "apiPath": "spec.enableOsDiskEncryption",
+      "description": "Whether the root EBS volume is encrypted at rest."
+    },
+    {
+      "name": "os_disk_encryption_key",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.osDiskEncryptionKey",
+      "description": "KMS key ARN used to encrypt the root volume. Leave unset to use the resource group's default key."
+    },
+    {
+      "name": "metadata_service_option",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "V2Only",
+      "oneOf": ["V2Only", "V1AndV2", "Disabled"],
+      "apiPath": "spec.metadataServiceOption",
+      "description": "Instance metadata service mode. V2Only requires IMDSv2 and disables IMDSv1 (recommended)."
+    },
+    {
+      "name": "metadata_hop_limit",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 1,
+      "apiPath": "spec.metadataHopLimit",
+      "description": "Maximum number of network hops for instance metadata service requests."
+    },
+    {
+      "name": "subnet_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Private",
+      "oneOf": ["Public", "Private"],
+      "forceNew": true,
+      "apiPath": "spec.subnetType",
+      "description": "Subnet tier used when subnet_id is auto-selected. Cannot be changed after creation."
+    },
+    {
+      "name": "scope_ids",
+      "type": "set(string)",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "IDs of the scopes attached to this host."
+    },
+    {
+      "name": "tags",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.tags",
+      "description": "Key/value tags applied to the host. Platform ownership tags are added automatically."
+    },
+    {
+      "name": "instance_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "t3a.small",
+      "forceNew": true,
+      "createPath": "spec.createRequest.InstanceType",
+      "description": "EC2 instance type (e.g. t3a.small). Cannot be changed after creation."
+    },
+    {
+      "name": "ebs_optimized",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": true,
+      "forceNew": true,
+      "createPath": "spec.createRequest.EbsOptimized",
+      "description": "Whether the instance is EBS-optimized (higher IOPS/throughput on supported instance types)."
+    },
+    {
+      "name": "image_id",
+      "type": "string",
+      "optional": true,
+      "forceNew": true,
+      "createPath": "spec.createRequest.ImageId",
+      "description": "AMI ID to launch (ami-...). Leave unset to use the default AMI for the selected OS platform."
+    },
+    {
+      "name": "user_data",
+      "type": "string",
+      "optional": true,
+      "forceNew": true,
+      "createPath": "spec.createRequest.UserData",
+      "description": "Base64-encoded user data script run on first boot."
+    },
+    {
+      "name": "block_device_mappings",
+      "type": "list(object)",
+      "optional": true,
+      "forceNew": true,
+      "createPath": "spec.createRequest.BlockDeviceMappings",
+      "description": "Block device mappings (root and additional volumes).",
+      "attributes": [
+        {
+          "name": "device_name",
+          "type": "string",
+          "required": true,
+          "apiPath": "DeviceName",
+          "description": "Device name (e.g. /dev/xvda)."
+        },
+        {
+          "name": "no_device",
+          "type": "string",
+          "optional": true,
+          "apiPath": "NoDevice",
+          "description": "Set to suppress a device that would otherwise be exposed by the AMI."
+        },
+        {
+          "name": "ebs",
+          "type": "object",
+          "optional": true,
+          "apiPath": "Ebs",
+          "description": "EBS volume configuration for this device.",
+          "attributes": [
+            {
+              "name": "volume_size",
+              "type": "int",
+              "optional": true,
+              "apiPath": "VolumeSize",
+              "description": "Volume size in GiB."
+            },
+            {
+              "name": "volume_type",
+              "type": "string",
+              "optional": true,
+              "apiPath": "VolumeType",
+              "description": "EBS volume type (e.g. gp3)."
+            },
+            {
+              "name": "delete_on_termination",
+              "type": "bool",
+              "optional": true,
+              "apiPath": "DeleteOnTermination",
+              "description": "Whether the volume is deleted when the instance terminates."
+            },
+            {
+              "name": "iops",
+              "type": "int",
+              "optional": true,
+              "apiPath": "Iops",
+              "description": "Provisioned IOPS for the volume."
+            },
+            {
+              "name": "throughput",
+              "type": "int",
+              "optional": true,
+              "apiPath": "Throughput",
+              "description": "Throughput in MiB/s for the volume."
+            },
+            {
+              "name": "encrypted",
+              "type": "bool",
+              "optional": true,
+              "apiPath": "Encrypted",
+              "description": "Whether the volume is encrypted."
+            },
+            {
+              "name": "kms_key_id",
+              "type": "string",
+              "optional": true,
+              "apiPath": "KmsKeyId",
+              "description": "KMS key ARN used to encrypt the volume."
+            },
+            {
+              "name": "snapshot_id",
+              "type": "string",
+              "optional": true,
+              "apiPath": "SnapshotId",
+              "description": "Snapshot ID to create the volume from."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "instance_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.instanceId",
+      "description": "AWS EC2 instance ID of the provisioned host."
+    },
+    {
+      "name": "private_ip_address",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.privateIpAddress",
+      "description": "Private IP address of the host."
+    },
+    {
+      "name": "public_ip_address",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.publicIpAddress",
+      "description": "Public IP address of the host, if any."
+    },
+    {
+      "name": "live_state",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.liveState",
+      "description": "Current live state of the EC2 instance (e.g. running, stopped)."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Provisioning status of the host."
+    },
+    {
+      "name": "sub_status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "subStatus",
+      "description": "Additional provisioning status detail."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the host was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the host was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ]
+}

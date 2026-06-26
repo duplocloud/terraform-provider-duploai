@@ -1,0 +1,112 @@
+{
+  "name": "admin_permission_set",
+  "description": "Manages a DuploCloud AI Helpdesk permission set — a named grant of workspace-scoped access (scopes and agents) that can be assigned to users via permission set groups.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/PermissionSet"
+  },
+  "attributes": [
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "apiPath": "name",
+      "description": "Name of the permission set."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "description",
+      "description": "Human-readable description of the permission set."
+    },
+    {
+      "name": "is_active",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "isActive",
+      "description": "Whether the permission set is active. Defaults to active when omitted."
+    },
+    {
+      "name": "metadata",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "description": "Free-form key/value metadata."
+    },
+    {
+      "name": "allowed_workspaces",
+      "type": "list(object)",
+      "required": true,
+      "minItems": 1,
+      "apiPath": "allowedWorkspaces",
+      "description": "Workspaces this permission set grants access to. Must contain at least one entry.",
+      "attributes": [
+        {
+          "name": "workspace_id",
+          "type": "string",
+          "required": true,
+          "apiPath": "workspaceId",
+          "description": "ID of the workspace this entry applies to."
+        },
+        {
+          "name": "allowed_scopes",
+          "type": "list(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "allowedScopes",
+          "description": "Scopes within the workspace this permission grants access to. Each entry may be a regex."
+        },
+        {
+          "name": "denied_scopes",
+          "type": "list(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "deniedScopes",
+          "description": "Scopes within the workspace this permission blocks access to. Each entry may be a regex."
+        },
+        {
+          "name": "allowed_agents",
+          "type": "list(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "allowedAgents",
+          "description": "Agents within the workspace this permission grants access to. Each entry may be a regex."
+        },
+        {
+          "name": "denied_agents",
+          "type": "list(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "deniedAgents",
+          "description": "Agents within the workspace this permission blocks access to. Each entry may be a regex."
+        }
+      ]
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the permission set was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the permission set was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ]
+}

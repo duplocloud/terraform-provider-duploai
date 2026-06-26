@@ -20,9 +20,9 @@ resource "duploai_app_service" "nginx" {
   deployment_name   = "nginx"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
-  replicas   = 2
   pod_labels = { app = "nginx" }
 
   containers = [
@@ -66,6 +66,28 @@ resource "duploai_app_service" "nginx" {
     ]
   }
 
+  # Autoscale the deployment on CPU utilization. When an HPA is set it owns the
+  # replica count, so `replicas` is omitted above.
+  # replication_type must be "Hpa" for the hpa block to be accepted.
+  replication_type = "Hpa"
+  hpa = {
+    min_replicas = 2
+    max_replicas = 10
+
+    metrics = [
+      {
+        type = "Resource"
+        resource = {
+          name = "cpu"
+          target = {
+            type                = "Utilization"
+            average_utilization = 70
+          }
+        }
+      }
+    ]
+  }
+
   timeouts {
     create = "20m"
     delete = "15m"
@@ -80,6 +102,7 @@ resource "duploai_app_service" "nginx" {
 
 - `containers` (Attributes List) Containers that make up the pod. (see [below for nested schema](#nestedatt--containers))
 - `deployment_name` (String) Name of the Kubernetes Deployment object (typically the same as name).
+- `environment_id` (String) ID of the environment that owns the resource group.
 - `name` (String) Name of the app service resource.
 - `namespace_name` (String) Kubernetes namespace the deployment is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this app service belongs to.
@@ -90,8 +113,8 @@ resource "duploai_app_service" "nginx" {
 
 - `annotations` (Map of String) Kubernetes annotations applied to the Deployment object.
 - `description` (String) Optional description.
-- `environment_id` (String) ID of the environment that owns the resource group.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `hpa` (Attributes) Optional HorizontalPodAutoscaler that scales the deployment between min and max replicas based on metrics. Requires replication_type = "Hpa". The platform sets the autoscaler's name and scale target to this app service's workload automatically. Omit to create no autoscaler. (see [below for nested schema](#nestedatt--hpa))
 - `ingress` (Attributes) Optional Kubernetes Ingress exposing the Service over HTTP(S). Omit to create no Ingress. (see [below for nested schema](#nestedatt--ingress))
 - `labels` (Map of String) Kubernetes labels applied to the Deployment object.
 - `match_labels` (Map of String) Deployment selector matchLabels. Must match pod_labels.
@@ -99,6 +122,7 @@ resource "duploai_app_service" "nginx" {
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `replicas` (Number) Number of pod replicas.
+- `replication_type` (String) How the deployment's replica count is managed: Static (fixed replicas), Hpa (managed by the hpa block), or ExternalHpa (managed by an HPA outside this resource). Must be set to Hpa when an hpa block is configured.
 - `service` (Attributes) Optional Kubernetes Service exposing the deployment. Omit to create no Service. (see [below for nested schema](#nestedatt--service))
 - `service_account_name` (String) Service account the pods run as.
 - `strategy_type` (String) Deployment update strategy: RollingUpdate or Recreate.
@@ -106,6 +130,7 @@ resource "duploai_app_service" "nginx" {
 
 ### Read-Only
 
+- `hpa_name` (String) Name of the provisioned HorizontalPodAutoscaler (set when replication_type is Hpa).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `ingress_name` (String) Name of the provisioned Ingress (if any).
 - `service_name` (String) Name of the provisioned Service (if any).
@@ -153,6 +178,130 @@ Optional:
 
 - `name` (String) Named port.
 - `protocol` (String) Protocol: TCP, UDP, or SCTP.
+
+
+
+<a id="nestedatt--hpa"></a>
+### Nested Schema for `hpa`
+
+Required:
+
+- `max_replicas` (Number) Upper bound on the number of replicas the autoscaler can scale up to. Must be greater than or equal to min_replicas.
+
+Optional:
+
+- `annotations` (Map of String) Annotations applied to the HorizontalPodAutoscaler object.
+- `api_version` (String) HorizontalPodAutoscaler apiVersion.
+- `kind` (String) HorizontalPodAutoscaler kind.
+- `metrics` (Attributes List) Metrics the autoscaler evaluates to compute the desired replica count. Each entry sets one metric source via the block matching its type. (see [below for nested schema](#nestedatt--hpa--metrics))
+- `min_replicas` (Number) Lower bound on the number of replicas the autoscaler can scale down to. Defaults to 1 if omitted.
+
+<a id="nestedatt--hpa--metrics"></a>
+### Nested Schema for `hpa.metrics`
+
+Required:
+
+- `type` (String) Metric source type. Set the block matching this value: resource, pods, external, or container_resource.
+
+Optional:
+
+- `container_resource` (Attributes) Resource metric of a single named container in each pod. Use with type ContainerResource. (see [below for nested schema](#nestedatt--hpa--metrics--container_resource))
+- `external` (Attributes) Metric from a source not associated with any Kubernetes object. Use with type External. (see [below for nested schema](#nestedatt--hpa--metrics--external))
+- `pods` (Attributes) Custom per-pod metric averaged across all target pods. Use with type Pods. (see [below for nested schema](#nestedatt--hpa--metrics--pods))
+- `resource` (Attributes) Resource metric (e.g. cpu or memory) of the target pods. Use with type Resource. (see [below for nested schema](#nestedatt--hpa--metrics--resource))
+
+<a id="nestedatt--hpa--metrics--container_resource"></a>
+### Nested Schema for `hpa.metrics.container_resource`
+
+Required:
+
+- `container` (String) Name of the container in the pod to measure.
+- `name` (String) Resource name, e.g. cpu or memory.
+- `target` (Attributes) Target the metric is scaled against. (see [below for nested schema](#nestedatt--hpa--metrics--container_resource--target))
+
+<a id="nestedatt--hpa--metrics--container_resource--target"></a>
+### Nested Schema for `hpa.metrics.container_resource.target`
+
+Required:
+
+- `type` (String) Target type: Utilization, Value, or AverageValue.
+
+Optional:
+
+- `average_utilization` (Number) Target average resource utilization across pods, as a percentage (use with type Utilization).
+- `average_value` (String) Target average value of the metric across pods, as a quantity (use with type AverageValue).
+- `value` (String) Target raw value of the metric, as a quantity (use with type Value).
+
+
+
+<a id="nestedatt--hpa--metrics--external"></a>
+### Nested Schema for `hpa.metrics.external`
+
+Required:
+
+- `metric_name` (String) Name of the external metric.
+- `target` (Attributes) Target the metric is scaled against. (see [below for nested schema](#nestedatt--hpa--metrics--external--target))
+
+<a id="nestedatt--hpa--metrics--external--target"></a>
+### Nested Schema for `hpa.metrics.external.target`
+
+Required:
+
+- `type` (String) Target type: Utilization, Value, or AverageValue.
+
+Optional:
+
+- `average_utilization` (Number) Target average utilization, as a percentage (use with type Utilization).
+- `average_value` (String) Target average value of the metric, as a quantity (use with type AverageValue).
+- `value` (String) Target raw value of the metric, as a quantity (use with type Value).
+
+
+
+<a id="nestedatt--hpa--metrics--pods"></a>
+### Nested Schema for `hpa.metrics.pods`
+
+Required:
+
+- `metric_name` (String) Name of the custom pods metric.
+- `target` (Attributes) Target the metric is scaled against. (see [below for nested schema](#nestedatt--hpa--metrics--pods--target))
+
+<a id="nestedatt--hpa--metrics--pods--target"></a>
+### Nested Schema for `hpa.metrics.pods.target`
+
+Required:
+
+- `type` (String) Target type: Utilization, Value, or AverageValue.
+
+Optional:
+
+- `average_utilization` (Number) Target average utilization across pods, as a percentage (use with type Utilization).
+- `average_value` (String) Target average value of the metric across pods, as a quantity (use with type AverageValue).
+- `value` (String) Target raw value of the metric, as a quantity (use with type Value).
+
+
+
+<a id="nestedatt--hpa--metrics--resource"></a>
+### Nested Schema for `hpa.metrics.resource`
+
+Required:
+
+- `name` (String) Resource name, e.g. cpu or memory.
+- `target` (Attributes) Target the metric is scaled against. (see [below for nested schema](#nestedatt--hpa--metrics--resource--target))
+
+<a id="nestedatt--hpa--metrics--resource--target"></a>
+### Nested Schema for `hpa.metrics.resource.target`
+
+Required:
+
+- `type` (String) Target type: Utilization, Value, or AverageValue.
+
+Optional:
+
+- `average_utilization` (Number) Target average resource utilization across pods, as a percentage (use with type Utilization).
+- `average_value` (String) Target average value of the metric across pods, as a quantity, e.g. "500Mi" (use with type AverageValue).
+- `value` (String) Target raw value of the metric, as a quantity (use with type Value).
+
+
 
 
 

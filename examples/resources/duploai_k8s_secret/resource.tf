@@ -4,6 +4,7 @@ resource "duploai_k8s_secret" "app" {
   name              = "app-secret"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
   namespace_name    = "default"
 
   type = "Opaque"

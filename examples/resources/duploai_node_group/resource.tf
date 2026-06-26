@@ -4,6 +4,7 @@ resource "duploai_node_group" "basic" {
   name              = "app-nodes"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
 
   instance_types = ["t3.medium"]
   min_size       = 1
@@ -17,6 +18,7 @@ resource "duploai_node_group" "spot" {
   name              = "batch-spot"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
 
   instance_types = ["m5.large", "m5a.large"]
   min_size       = 0

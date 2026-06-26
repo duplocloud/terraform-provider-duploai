@@ -90,8 +90,19 @@ func (c *Client) doRequest(method, path string, body interface{}) ([]byte, Clien
 		return nil, newClientError(resp.StatusCode, fmt.Errorf("not found"))
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Printf("[TRACE] duplo-response: %s %s: error body: %s", method, url, string(respBody))
-		return nil, newClientError(resp.StatusCode, fmt.Errorf("API error %d: %s", resp.StatusCode, string(respBody)))
+		// Surface whatever the backend returned. Many auth/permission failures
+		// (401/403) come back with an empty body and put the reason in the
+		// WWW-Authenticate header instead, so fall back to that + the HTTP
+		// status text rather than emitting a blank message.
+		detail := strings.TrimSpace(string(respBody))
+		if detail == "" {
+			detail = http.StatusText(resp.StatusCode)
+			if wa := strings.TrimSpace(resp.Header.Get("WWW-Authenticate")); wa != "" {
+				detail += " (WWW-Authenticate: " + wa + ")"
+			}
+		}
+		log.Printf("[TRACE] duplo-response: %s %s: error body: %q", method, url, string(respBody))
+		return nil, newClientError(resp.StatusCode, fmt.Errorf("API error %d: %s", resp.StatusCode, detail))
 	}
 
 	return respBody, nil

@@ -8,6 +8,10 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -149,6 +153,12 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			_ = json.Unmarshal(*a.Default, &i)
 			o.Default = int64default.StaticInt64(i)
 		}
+		if a.Min != nil {
+			o.Validators = append(o.Validators, int64validator.AtLeast(int64(*a.Min)))
+		}
+		if a.Max != nil {
+			o.Validators = append(o.Validators, int64validator.AtMost(int64(*a.Max)))
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, int64planmodifier.UseStateForUnknown())
 		}
@@ -162,6 +172,12 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			var f float64
 			_ = json.Unmarshal(*a.Default, &f)
 			o.Default = float64default.StaticFloat64(f)
+		}
+		if a.Min != nil {
+			o.Validators = append(o.Validators, float64validator.AtLeast(*a.Min))
+		}
+		if a.Max != nil {
+			o.Validators = append(o.Validators, float64validator.AtMost(*a.Max))
 		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, float64planmodifier.UseStateForUnknown())
@@ -217,6 +233,9 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 				o.Default = setdefault.StaticValue(v.(types.Set))
 			}
 		}
+		if a.MinItems > 0 {
+			o.Validators = append(o.Validators, setvalidator.SizeAtLeast(a.MinItems))
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())
 		}
@@ -244,6 +263,9 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = listdefault.StaticValue(v.(types.List))
 			}
+		}
+		if a.MinItems > 0 {
+			o.Validators = append(o.Validators, listvalidator.SizeAtLeast(a.MinItems))
 		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
@@ -273,6 +295,9 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 				o.Default = listdefault.StaticValue(v.(types.List))
 			}
 		}
+		if a.MinItems > 0 {
+			o.Validators = append(o.Validators, listvalidator.SizeAtLeast(a.MinItems))
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
 		}
@@ -286,6 +311,9 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = setdefault.StaticValue(v.(types.Set))
 			}
+		}
+		if a.MinItems > 0 {
+			o.Validators = append(o.Validators, setvalidator.SizeAtLeast(a.MinItems))
 		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())

@@ -2,7 +2,7 @@
 terraform-provider-*
 bin/
 *.exe
-
+three-teir-test
 # Local dev testing
 local-test/
 main.tf
@@ -14,6 +14,9 @@ main.tf
 *.tfstate.*
 *.tfvars
 crash.log
+
+# Local env files (keep .env.example tracked)
+.env
 
 # Go
 vendor/

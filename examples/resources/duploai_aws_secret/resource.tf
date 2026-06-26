@@ -3,6 +3,7 @@ resource "duploai_aws_secret" "db_password" {
   workspace_id      = "<workspace-id>"
   name              = "db-password"
   resource_group_id = "<resource-group-id>"
+  environment_id    = "<environment-id>"
 
   secret_value_type = "PlainText"
   secret_string     = "<secret-value>"
@@ -13,6 +14,7 @@ resource "duploai_aws_secret" "app_config" {
   workspace_id      = "<workspace-id>"
   name              = "app-config"
   resource_group_id = "<resource-group-id>"
+  environment_id    = "<environment-id>"
 
   secret_value_type  = "Json"
   secret_string      = jsonencode({ username = "admin", password = "<password>" })

@@ -171,7 +171,7 @@ func (r *dynamicResource) waiter(failureRetries int) *duplosdk.Waiter[map[string
 		failureInterval = time.Duration(w.FailurePollIntervalSeconds) * time.Second
 	}
 	statusSegs := strings.Split(w.StatusPath, ".")
-	return &duplosdk.Waiter[map[string]any]{
+	waiter := &duplosdk.Waiter[map[string]any]{
 		PollInterval:        interval,
 		FailurePollInterval: failureInterval,
 		SuccessState:        w.SuccessState,
@@ -187,6 +187,14 @@ func (r *dynamicResource) waiter(failureRetries int) *duplosdk.Waiter[map[string
 			return toStringValue(extractPath(*m, strings.Split(w.FailureDetailPath, ".")))
 		},
 	}
+	if w.ReadyPath != "" && w.ReadyState != "" {
+		readySegs := strings.Split(w.ReadyPath, ".")
+		waiter.ReadyState = w.ReadyState
+		waiter.ReadyFn = func(m *map[string]any) string {
+			return toStringValue(extractPath(*m, readySegs))
+		}
+	}
+	return waiter
 }
 
 // apiBodyEqual reports whether two request bodies are identical (same API-mapped
@@ -271,6 +279,14 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 		final, err = api.WaitUntilReady(ctx, objID, timeout)
 		if err != nil {
 			resp.Diagnostics.AddError("Error waiting for "+r.spec.Name, err.Error())
+			return
+		}
+	} else if r.spec.ReadAfterWrite {
+		// The create response may differ from the canonical read (e.g. encrypted
+		// fields). Refresh from a GET so state matches what reads return.
+		final, err = api.Get(objID)
+		if err != nil {
+			resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after create", err.Error())
 			return
 		}
 	}
@@ -374,6 +390,12 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 			resp.Diagnostics.AddError("Error waiting for "+r.spec.Name+" update", clientErr.Error())
 			return
 		}
+	} else if r.spec.ReadAfterWrite {
+		final, clientErr = api.Get(objID)
+		if clientErr != nil {
+			resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after update", clientErr.Error())
+			return
+		}
 	}
 
 	state := r.stateFromResponse(ctx, req.Plan.Raw, *final, scope, id, false, &resp.Diagnostics)
@@ -442,10 +464,46 @@ func (r *dynamicResource) ImportState(ctx context.Context, req resource.ImportSt
 // ── Conditional-required validation ───────────────────────────────────────────
 
 func (r *dynamicResource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
-	if len(r.spec.RequiredIf) == 0 {
-		return nil
+	var vs []resource.ConfigValidator
+	if len(r.spec.RequiredIf) > 0 {
+		vs = append(vs, requiredIfValidator{spec: r.spec})
 	}
-	return []resource.ConfigValidator{requiredIfValidator{spec: r.spec}}
+	if len(r.spec.ConflictsWith) > 0 {
+		vs = append(vs, conflictsWithValidator{spec: r.spec})
+	}
+	return vs
+}
+
+// conflictsWithValidator enforces ResourceSpec.ConflictsWith: within each group,
+// at most one attribute may be set in the config.
+type conflictsWithValidator struct{ spec ResourceSpec }
+
+func (v conflictsWithValidator) Description(_ context.Context) string {
+	return "Enforces mutually-exclusive attribute groups declared in the resource spec."
+}
+func (v conflictsWithValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v conflictsWithValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	for _, group := range v.spec.ConflictsWith {
+		set := make([]string, 0, len(group))
+		for _, name := range group {
+			a := v.spec.attr(name)
+			if a != nil && !configAttrNull(ctx, req.Config, *a) {
+				set = append(set, name)
+			}
+		}
+		if len(set) > 1 {
+			for _, name := range set {
+				resp.Diagnostics.AddAttributeError(
+					path.Root(name),
+					"Conflicting attributes",
+					fmt.Sprintf("only one of %s may be set; got %s.", strings.Join(group, ", "), strings.Join(set, ", ")),
+				)
+			}
+		}
+	}
 }
 
 type requiredIfValidator struct{ spec ResourceSpec }
@@ -459,22 +517,77 @@ func (v requiredIfValidator) MarkdownDescription(ctx context.Context) string {
 
 func (v requiredIfValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	for _, rule := range v.spec.RequiredIf {
-		when := v.spec.attr(rule.WhenAttribute)
 		target := v.spec.attr(rule.Attribute)
-		if when == nil || target == nil {
-			continue
-		}
-		if readConfigString(ctx, req.Config, *when) != rule.WhenEquals {
+		if target == nil || !v.conditionsHold(ctx, req.Config, rule.conditions()) {
 			continue
 		}
 		if configAttrNull(ctx, req.Config, *target) {
 			resp.Diagnostics.AddAttributeError(
 				path.Root(rule.Attribute),
 				"Missing required attribute",
-				fmt.Sprintf("%q must be set when %q is %q.", rule.Attribute, rule.WhenAttribute, rule.WhenEquals),
+				requiredIfMessage(rule),
 			)
 		}
 	}
+}
+
+// conditionsHold reports whether every condition matches (logical AND). Each
+// condition reads the config value, falling back to the attribute's spec default
+// when the user omitted it, so conditions on defaulted fields evaluate correctly.
+func (v requiredIfValidator) conditionsHold(ctx context.Context, cfg attrReader, conds []RequiredIfCondition) bool {
+	for _, c := range conds {
+		when := v.spec.attr(c.Attribute)
+		if when == nil {
+			return false
+		}
+		val := readConfigString(ctx, cfg, *when)
+		if val == "" {
+			val = defaultString(*when) // user omitted it — use the spec default
+		}
+		switch {
+		case c.IsEmpty:
+			if val != "" {
+				return false
+			}
+		case c.NotEquals != "":
+			if val == c.NotEquals {
+				return false
+			}
+		default:
+			if val != c.Equals {
+				return false
+			}
+		}
+	}
+	return len(conds) > 0
+}
+
+// defaultString renders an attribute's static default as a string, or "" if none.
+func defaultString(a AttributeSpec) string {
+	if a.Default == nil {
+		return ""
+	}
+	var v any
+	if err := json.Unmarshal(*a.Default, &v); err != nil {
+		return ""
+	}
+	return toStringValue(v)
+}
+
+// requiredIfMessage builds a human-readable explanation of a requiredIf rule.
+func requiredIfMessage(rule RequiredIfRule) string {
+	parts := make([]string, 0, len(rule.conditions()))
+	for _, c := range rule.conditions() {
+		switch {
+		case c.IsEmpty:
+			parts = append(parts, fmt.Sprintf("%s is not set", c.Attribute))
+		case c.NotEquals != "":
+			parts = append(parts, fmt.Sprintf("%s is not %q", c.Attribute, c.NotEquals))
+		default:
+			parts = append(parts, fmt.Sprintf("%s is %q", c.Attribute, c.Equals))
+		}
+	}
+	return fmt.Sprintf("%q must be set when %s.", rule.Attribute, strings.Join(parts, " and "))
 }
 
 // ── Plan/state plumbing ───────────────────────────────────────────────────────
@@ -624,6 +737,46 @@ func readPlanGoValue(ctx context.Context, plan attrReader, a AttributeSpec, diag
 			}
 		}
 		return out, true
+	case "set(string)":
+		var v types.Set
+		diags.Append(plan.GetAttribute(ctx, path.Root(a.Name), &v)...)
+		if v.IsNull() || v.IsUnknown() {
+			return nil, false
+		}
+		out := make([]string, 0, len(v.Elements()))
+		for _, e := range v.Elements() {
+			if s, ok := e.(types.String); ok {
+				out = append(out, s.ValueString())
+			}
+		}
+		return out, true
+	case "map(string)":
+		var v types.Map
+		diags.Append(plan.GetAttribute(ctx, path.Root(a.Name), &v)...)
+		if v.IsNull() || v.IsUnknown() {
+			return nil, false
+		}
+		out := make(map[string]string, len(v.Elements()))
+		for k, e := range v.Elements() {
+			if s, ok := e.(types.String); ok {
+				out[k] = s.ValueString()
+			}
+		}
+		return out, true
+	case "number":
+		var v types.Float64
+		diags.Append(plan.GetAttribute(ctx, path.Root(a.Name), &v)...)
+		if v.IsNull() || v.IsUnknown() {
+			return nil, false
+		}
+		return v.ValueFloat64(), true
+	case "object":
+		var v types.Object
+		diags.Append(plan.GetAttribute(ctx, path.Root(a.Name), &v)...)
+		if v.IsNull() || v.IsUnknown() {
+			return nil, false
+		}
+		return v.Attributes(), true
 	default:
 		return nil, false
 	}

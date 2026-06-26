@@ -19,6 +19,7 @@ resource "duploai_rds_instance" "basic" {
   name              = "prod-pg"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<resource-group-id>"
+  environment_id    = "<environment-id>"
 
   engine               = "postgres"
   engine_version       = "16.4"
@@ -35,6 +36,7 @@ resource "duploai_rds_instance" "mysql" {
   name              = "orders-db"
   scope_ids         = ["<scope-id>"]
   resource_group_id = "<resource-group-id>"
+  environment_id    = "<environment-id>"
 
   engine               = "mysql"
   engine_version       = "8.0.39"
@@ -75,6 +77,7 @@ resource "duploai_rds_instance" "mysql" {
 
 - `db_instance_class` (String) Instance class (e.g. db.t3.medium, db.r6g.large).
 - `engine` (String) Database engine (e.g. postgres, mysql, mariadb, oracle-se2, sqlserver-ex).
+- `environment_id` (String) ID of the environment that owns the resource group.
 - `name` (String) Name of the RDS instance.
 - `resource_group_id` (String) ID of the resource group (under an environment) this instance belongs to.
 - `scope_ids` (List of String) Scope IDs that link this instance to a cloud provider account.
@@ -95,7 +98,6 @@ resource "duploai_rds_instance" "mysql" {
 - `enable_iam_database_authentication` (Boolean) Enable IAM database authentication.
 - `enable_performance_insights` (Boolean) Enable Performance Insights.
 - `engine_version` (String) Engine version. Changing this in place triggers an engine upgrade.
-- `environment_id` (String) ID of the environment that owns the resource group.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `kms_key_id` (String) KMS key ID used for storage encryption.
 - `master_user_password` (String, Sensitive) Master user password.

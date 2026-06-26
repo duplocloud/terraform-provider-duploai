@@ -1,0 +1,196 @@
+{
+  "name": "admin_scope",
+  "description": "Manages a DuploCloud AI scope: a credentialed view over a provider's resources, filtered by AWS, Kubernetes, and Git rules.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/Scopes"
+  },
+  "requiredIf": [
+    {
+      "attribute": "credential_name",
+      "when": [
+        {
+          "attribute": "mcp_server_id",
+          "isEmpty": true
+        }
+      ]
+    }
+  ],
+  "attributes": [
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the scope. Immutable once created."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "description",
+      "description": "Optional description of the scope."
+    },
+    {
+      "name": "provider_id",
+      "type": "string",
+      "required": true,
+      "apiPath": "providerId",
+      "description": "ID of the provider this scope is bound to. The provider resolves the credential and is required for the scope to access any resources (and, when mcp_server_id is set, its type must match the MCP server)."
+    },
+    {
+      "name": "credential_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "credentialName",
+      "description": "Name of the credential (on the referenced provider) this scope uses. Either credential_name or mcp_server_id must be set."
+    },
+    {
+      "name": "mcp_server_id",
+      "type": "string",
+      "optional": true,
+      "apiPath": "mcpServerId",
+      "description": "ID of the MCP server backing this scope. Either credential_name or mcp_server_id must be set."
+    },
+    {
+      "name": "is_active",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": true,
+      "apiPath": "isActive",
+      "description": "Whether the scope is active. Defaults to true."
+    },
+    {
+      "name": "metadata",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "description": "Arbitrary key/value metadata attached to the scope."
+    },
+    {
+      "name": "aws_resource_search_filter",
+      "type": "object",
+      "optional": true,
+      "apiPath": "awsResourceSearchFilter",
+      "description": "Optional filter restricting which AWS resources this scope can see.",
+      "attributes": [
+        {
+          "name": "region",
+          "type": "string",
+          "optional": true,
+          "apiPath": "region",
+          "description": "AWS region to scope resources to."
+        },
+        {
+          "name": "resource_types_regex",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "resourceTypesRegEx",
+          "description": "Regular expressions matching AWS resource types to include."
+        },
+        {
+          "name": "tags",
+          "type": "list(object)",
+          "optional": true,
+          "apiPath": "tags",
+          "description": "Tag key/value pairs resources must match.",
+          "attributes": [
+            {
+              "name": "key",
+              "type": "string",
+              "required": true,
+              "apiPath": "key",
+              "description": "Tag key."
+            },
+            {
+              "name": "value",
+              "type": "string",
+              "optional": true,
+              "apiPath": "value",
+              "description": "Tag value."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "kubernetes_filter_config",
+      "type": "object",
+      "optional": true,
+      "apiPath": "kubernetesFilterConfig",
+      "description": "Optional filter restricting which Kubernetes resources this scope can see.",
+      "attributes": [
+        {
+          "name": "namespace_regex",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "namespaceRegex",
+          "description": "Regular expressions matching namespaces to include."
+        },
+        {
+          "name": "namespaced_resource_types",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "namespacedResourceTypes",
+          "description": "Namespaced resource types to include (e.g. deployments, services)."
+        },
+        {
+          "name": "cluster_resource_types",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "clusterResourceTypes",
+          "description": "Cluster-scoped resource types to include (e.g. nodes, persistentvolumes)."
+        }
+      ]
+    },
+    {
+      "name": "git_resource_filter",
+      "type": "object",
+      "optional": true,
+      "apiPath": "gitResourceFilter",
+      "description": "Optional filter restricting which Git resources this scope can see.",
+      "attributes": [
+        {
+          "name": "repositories_regex",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "repositoriesRegEx",
+          "description": "Regular expressions matching repositories to include."
+        },
+        {
+          "name": "branches_regex",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "branchesRegEx",
+          "description": "Regular expressions matching branches to include."
+        }
+      ]
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the scope was created."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the scope was last updated."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Server-incremented version of the scope."
+    }
+  ]
+}

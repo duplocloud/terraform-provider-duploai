@@ -1,0 +1,222 @@
+{
+  "name": "admin_provider",
+  "description": "Manages a DuploCloud AI Helpdesk Provider — a registered cloud, Kubernetes, source-control, or observability provider (with its authentication credentials) that scopes and agents use.",
+  "idPath": "id",
+  "dataSource": true,
+  "readAfterWrite": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/Providers"
+  },
+  "attributes": [
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "apiPath": "name",
+      "description": "Name of the provider."
+    },
+    {
+      "name": "type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "type",
+      "description": "Provider type (case-insensitive). One of: eks, aks, gke, rhos, otel, aws, azure, gcp, datadog, newrelic, sentry, grafanaalertmanager, pagerduty, incident.io, github, gitlab, bitbucket, apollo, outreach, zoom, attention, gong, hubspot, salesforce, marketo, mailchimp, vanta, drata, other."
+    },
+    {
+      "name": "category",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "cloud",
+      "oneOf": ["cloud", "kubernetes", "observability", "incidentManagement", "sourceControl", "other", "sales", "marketing", "grc"],
+      "apiPath": "category",
+      "description": "Provider category. Defaults to 'cloud'."
+    },
+    {
+      "name": "account_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "accountId",
+      "description": "Account identifier for the provider (e.g. an AWS account id or cluster endpoint)."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "description",
+      "description": "Human-readable description of the provider."
+    },
+    {
+      "name": "metadata",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "description": "Free-form key/value metadata."
+    },
+    {
+      "name": "is_active",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "isActive",
+      "description": "Whether the provider is active. Defaults to active when omitted."
+    },
+    {
+      "name": "credentials",
+      "type": "list(object)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "credentials",
+      "description": "Authentication credentials for the provider. Each credential's field values are stored in Terraform state.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "Name of the credential."
+        },
+        {
+          "name": "credential_fields",
+          "type": "list(object)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "dataEx",
+          "description": "Key/value credential fields (e.g. accessKeyId, password, iamRoleArn).",
+          "attributes": [
+            {
+              "name": "key",
+              "type": "string",
+              "required": true,
+              "apiPath": "key",
+              "description": "Field name (e.g. accessKeyId, password, iamRoleArn)."
+            },
+            {
+              "name": "value",
+              "type": "string",
+              "optional": true,
+              "sensitive": true,
+              "apiPath": "value",
+              "description": "Field value. Sensitive — redacted in plan output but stored in state."
+            },
+            {
+              "name": "type",
+              "type": "string",
+              "optional": true,
+              "computed": true,
+              "apiPath": "type",
+              "description": "Field type (e.g. 'string', 'secret')."
+            },
+            {
+              "name": "is_sensitive",
+              "type": "bool",
+              "optional": true,
+              "computed": true,
+              "apiPath": "isSensitive",
+              "description": "Whether this field is sensitive. The server may auto-promote known secret keys (e.g. password, apikey)."
+            }
+          ]
+        },
+        {
+          "name": "metadata",
+          "type": "map(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "metaData",
+          "description": "Free-form key/value metadata for this credential."
+        }
+      ]
+    },
+    {
+      "name": "system_credential",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "apiPath": "systemCredential",
+      "description": "System credential for the provider. Its field values are stored in Terraform state.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "Name of the system credential."
+        },
+        {
+          "name": "credential_fields",
+          "type": "list(object)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "dataEx",
+          "description": "Key/value credential fields.",
+          "attributes": [
+            {
+              "name": "key",
+              "type": "string",
+              "required": true,
+              "apiPath": "key",
+              "description": "Field name."
+            },
+            {
+              "name": "value",
+              "type": "string",
+              "optional": true,
+              "sensitive": true,
+              "apiPath": "value",
+              "description": "Field value. Sensitive — redacted in plan output but stored in state."
+            },
+            {
+              "name": "type",
+              "type": "string",
+              "optional": true,
+              "computed": true,
+              "apiPath": "type",
+              "description": "Field type (e.g. 'string', 'secret')."
+            },
+            {
+              "name": "is_sensitive",
+              "type": "bool",
+              "optional": true,
+              "computed": true,
+              "apiPath": "isSensitive",
+              "description": "Whether this field is sensitive."
+            }
+          ]
+        },
+        {
+          "name": "metadata",
+          "type": "map(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "metaData",
+          "description": "Free-form key/value metadata for the system credential."
+        }
+      ]
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the provider was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the provider was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ]
+}
