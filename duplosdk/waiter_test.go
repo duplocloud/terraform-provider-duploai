@@ -38,6 +38,49 @@ func TestWaiter_SucceedsAfterPolling(t *testing.T) {
 	}
 }
 
+// The readiness gate holds success until BOTH status==SuccessState and the
+// ready value matches — e.g. status Ready but live not yet "running".
+func TestWaiter_ReadyGate(t *testing.T) {
+	w := statusWaiter()
+	w.ReadyState = "running"
+	w.ReadyFn = func(m *map[string]any) string { s, _ := (*m)["live"].(string); return s }
+	n := 0
+	obj, err := w.Wait(context.Background(), "x", time.Second, func() (*map[string]any, ClientError) {
+		n++
+		// Status reaches Ready on poll 2, but live_state only becomes running on poll 4.
+		s, live := "Pending", ""
+		if n >= 2 {
+			s = "Ready"
+		}
+		if n >= 4 {
+			live = "running"
+		}
+		return &map[string]any{"s": s, "live": live}, nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if n < 4 {
+		t.Errorf("waiter returned before ready gate met: calls=%d", n)
+	}
+	if (*obj)["live"] != "running" {
+		t.Errorf("final live=%v, want running", (*obj)["live"])
+	}
+}
+
+// A failure status still aborts even when a readiness gate is configured.
+func TestWaiter_ReadyGate_FailureStillAborts(t *testing.T) {
+	w := statusWaiter()
+	w.ReadyState = "running"
+	w.ReadyFn = func(m *map[string]any) string { s, _ := (*m)["live"].(string); return s }
+	_, err := w.Wait(context.Background(), "x", time.Second, func() (*map[string]any, ClientError) {
+		return &map[string]any{"s": "Failed", "detail": "boom"}, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "provisioning failed") {
+		t.Fatalf("expected failure abort, got %v", err)
+	}
+}
+
 func TestWaiter_FailureState(t *testing.T) {
 	_, err := statusWaiter().Wait(context.Background(), "x", time.Second, func() (*map[string]any, ClientError) {
 		return &map[string]any{"s": "Failed", "detail": "quota exceeded"}, nil

@@ -75,6 +75,7 @@ provider "duploai" {
 | [`duploai_k8s_secret`](docs/resources/k8s_secret.md) | Manages a DuploCloud AI Helpdesk Kubernetes Secret |
 | [`duploai_k8s_storage_class`](docs/resources/k8s_storage_class.md) | Manages a DuploCloud AI Helpdesk Kubernetes StorageClass. A StorageClass is a cluster-scoped object that describes how a volume is dynamically provisioned; PersistentVolumeClaims reference it by name |
 | [`duploai_mcp_server`](docs/resources/mcp_server.md) | Manages a DuploCloud AI Helpdesk MCP (Model Context Protocol) server registration — a tool/data provider that AI agents can connect to over HTTP, SSE, or a raw configuration |
+| [`duploai_native_host`](docs/resources/native_host.md) | Manages a DuploCloud native host — an AWS EC2 instance provisioned inside a workspace environment |
 | [`duploai_network_baseline`](docs/resources/network_baseline.md) | Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways) |
 | [`duploai_node_group`](docs/resources/node_group.md) | Manages a DuploCloud AI Helpdesk AWS EKS managed node group |
 | [`duploai_oci_repository`](docs/resources/oci_repository.md) | Manages a DuploCloud AI Helpdesk Kubernetes OCI repository (Flux OCIRepository) |
@@ -119,6 +120,7 @@ provider "duploai" {
 | [`duploai_k8s_secret`](docs/data-sources/k8s_secret.md) | Manages a DuploCloud AI Helpdesk Kubernetes Secret |
 | [`duploai_k8s_storage_class`](docs/data-sources/k8s_storage_class.md) | Manages a DuploCloud AI Helpdesk Kubernetes StorageClass. A StorageClass is a cluster-scoped object that describes how a volume is dynamically provisioned; PersistentVolumeClaims reference it by name |
 | [`duploai_mcp_server`](docs/data-sources/mcp_server.md) | Manages a DuploCloud AI Helpdesk MCP (Model Context Protocol) server registration — a tool/data provider that AI agents can connect to over HTTP, SSE, or a raw configuration |
+| [`duploai_native_host`](docs/data-sources/native_host.md) | Manages a DuploCloud native host — an AWS EC2 instance provisioned inside a workspace environment |
 | [`duploai_network_baseline`](docs/data-sources/network_baseline.md) | Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways) |
 | [`duploai_node_group`](docs/data-sources/node_group.md) | Manages a DuploCloud AI Helpdesk AWS EKS managed node group |
 | [`duploai_oci_repository`](docs/data-sources/oci_repository.md) | Manages a DuploCloud AI Helpdesk Kubernetes OCI repository (Flux OCIRepository) |

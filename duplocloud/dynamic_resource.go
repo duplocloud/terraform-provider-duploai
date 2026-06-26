@@ -171,7 +171,7 @@ func (r *dynamicResource) waiter(failureRetries int) *duplosdk.Waiter[map[string
 		failureInterval = time.Duration(w.FailurePollIntervalSeconds) * time.Second
 	}
 	statusSegs := strings.Split(w.StatusPath, ".")
-	return &duplosdk.Waiter[map[string]any]{
+	waiter := &duplosdk.Waiter[map[string]any]{
 		PollInterval:        interval,
 		FailurePollInterval: failureInterval,
 		SuccessState:        w.SuccessState,
@@ -187,6 +187,14 @@ func (r *dynamicResource) waiter(failureRetries int) *duplosdk.Waiter[map[string
 			return toStringValue(extractPath(*m, strings.Split(w.FailureDetailPath, ".")))
 		},
 	}
+	if w.ReadyPath != "" && w.ReadyState != "" {
+		readySegs := strings.Split(w.ReadyPath, ".")
+		waiter.ReadyState = w.ReadyState
+		waiter.ReadyFn = func(m *map[string]any) string {
+			return toStringValue(extractPath(*m, readySegs))
+		}
+	}
+	return waiter
 }
 
 // apiBodyEqual reports whether two request bodies are identical (same API-mapped
