@@ -76,17 +76,15 @@ Target is master  → "master is CI/CD-only. Target develop, hotfix/<ver>, or re
 
 ### Derive branch name
 
-1. Slugify title: lowercase → spaces to `-` → strip non-alphanumeric/hyphen →
-   collapse `-` → truncate at last `-` before 40 chars.
-2. Base: `<DUPLOAI-ID>-<slug>`
-3. If taken locally or on remote, try `-01` → `-02` → `-03`. If all taken, ask
+1. Base: `<DUPLOAI-ID>` (the ClickUp ticket ID alone — e.g. `DUPLOAI-2034`).
+2. If taken locally or on remote, try `-01` → `-02` → `-03`. If all taken, ask
    for a custom suffix.
 
 ```bash
 branch_exists() {
   git branch --list "$1" | grep -q "$1" || git ls-remote --heads origin "$1" | grep -q "$1"
 }
-base="DUPLOAI-<id>-<slug>"; name="$base"; counter=1
+base="DUPLOAI-<id>"; name="$base"; counter=1
 while branch_exists "$name" && [ $counter -le 3 ]; do
   name=$(printf "%s-%02d" "$base" $counter); counter=$((counter + 1))
 done
