@@ -61,6 +61,7 @@ Saving this file, running `go generate ./...` (to regenerate docs), and running
 | `requiredIf` | array | no | Conditional-required rules evaluated at plan time. See [RequiredIf rules](#requiredif-rules). |
 | `conflictsWith` | array | no | Mutually-exclusive attribute groups enforced at plan time. See [ConflictsWith rules](#conflictswith-rules). |
 | `dataSource` | bool | no | When `true`, also registers a read-only `data.duploai_<name>` data source derived automatically from this spec. See [Auto-generated data source](#auto-generated-data-source). |
+| `dataSourceOnly` | bool | no | When `true`, registers **only** a read-only `data.duploai_<name>` data source — no managed resource is registered. Use this for purely read-only APIs (e.g. look-up endpoints with no create/update/delete). Implies data source semantics; `dataSource` need not also be set. |
 | `waiter` | object | no | Async polling config. Required for resources that provision asynchronously. See [Waiter](#waiter). |
 
 ---

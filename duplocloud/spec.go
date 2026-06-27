@@ -77,6 +77,12 @@ type ResourceSpec struct {
 	// readable attributes become Computed, and write-only attributes (those with no
 	// apiPath/responsePath) are excluded entirely.
 	DataSource bool `json:"dataSource,omitempty"`
+
+	// DataSourceOnly, when true, registers ONLY a read-only data source
+	// (data.duploai_<name>) from this spec — no managed resource is registered.
+	// Use this for APIs that are purely read-only and have no create/update/delete
+	// operations. Implies DataSource semantics; DataSource need not also be set.
+	DataSourceOnly bool `json:"dataSourceOnly,omitempty"`
 }
 
 // OperationSpec overrides the HTTP verb and/or path for one CRUD operation.

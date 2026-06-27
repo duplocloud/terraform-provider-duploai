@@ -95,6 +95,9 @@ func (p *duploaiProvider) Resources(_ context.Context) []func() resource.Resourc
 	}
 	factories := make([]func() resource.Resource, 0, len(specs))
 	for _, spec := range specs {
+		if spec.DataSourceOnly {
+			continue
+		}
 		endpoint, buildErr := spec.BuildEndpoint()
 		if buildErr != nil {
 			panic(fmt.Sprintf("resource %q: %s", spec.Name, buildErr))
@@ -114,7 +117,7 @@ func (p *duploaiProvider) DataSources(_ context.Context) []func() datasource.Dat
 	}
 	var factories []func() datasource.DataSource
 	for _, spec := range specs {
-		if !spec.DataSource {
+		if !spec.DataSource && !spec.DataSourceOnly {
 			continue
 		}
 		endpoint, buildErr := spec.BuildEndpoint()
