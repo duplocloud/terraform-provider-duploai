@@ -162,6 +162,7 @@
       "optional": true,
       "computed": true,
       "default": "",
+      "forceNew": true,
       "apiPath": "spec.provisioner.version",
       "description": "Optional provisioner version."
     },

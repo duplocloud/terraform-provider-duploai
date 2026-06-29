@@ -64,6 +64,7 @@
       "optional": true,
       "computed": true,
       "default": "",
+      "forceNew": true,
       "apiPath": "spec.provisioner.version",
       "description": "Optional provisioner version."
     },
@@ -154,7 +155,6 @@
     "readyState": "ACTIVE",
     "failureRetries": 3,
     "createTimeoutMinutes": 60,
-    "updateTimeoutMinutes": 120,
     "deleteTimeoutMinutes": 60
   }
 }
