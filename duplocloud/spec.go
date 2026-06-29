@@ -78,6 +78,12 @@ type ResourceSpec struct {
 	// apiPath/responsePath) are excluded entirely.
 	DataSource bool `json:"dataSource,omitempty"`
 
+	// DataSourceOnly, when true, registers ONLY a read-only data source
+	// (data.duploai_<name>) from this spec — no managed resource is registered.
+	// Use this for APIs that are purely read-only and have no create/update/delete
+	// operations. Implies DataSource semantics; DataSource need not also be set.
+	DataSourceOnly bool `json:"dataSourceOnly,omitempty"`
+
 	// SingleIntentUpdate configures the "one update intent per call" flow used by
 	// APIs (e.g. AWS MSK) that accept a single discrete update at a time —
 	// identified by a discriminator field plus one target value — and require the
