@@ -201,6 +201,7 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `updatePath` | string | Override for PUT (update) body. Falls back to `requestPath`, then `apiPath`. |
 | `createOnly` | bool | Send this field in POST (create) only; never in PUT (update). Useful for fields immutable after creation that do not trigger replacement. |
 | `noSend` | bool | Read from the response but never sent in requests. Use for computed-only output fields. |
+| `normalizeCsvOrder` | bool | For a `string` field, sort its comma-separated tokens into a canonical (lexical) order before storing in state. Use for order-insensitive values the backend returns non-deterministically (e.g. AWS MSK bootstrap broker strings) to prevent perpetual refresh drift. |
 | `attributes` | array | Nested `AttributeSpec` entries. Required when `type` is an object form. Recurses to any depth. |
 
 ### Supported types

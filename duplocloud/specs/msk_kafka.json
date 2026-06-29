@@ -1,0 +1,280 @@
+{
+  "name": "msk_kafka",
+  "description": "Manages a DuploCloud AI Helpdesk AWS MSK (Managed Streaming for Apache Kafka) provisioned cluster, in which you size the brokers, provisioned within an environment and resource group.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AwsMsks",
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this MSK cluster."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Cluster name. Letters, numbers, and hyphens. Cannot be changed after creation."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment in which the cluster is provisioned."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group in which the cluster is provisioned."
+    },
+    {
+      "name": "kafka_version",
+      "type": "string",
+      "required": true,
+      "createPath": "spec.createRequest.provisioned.kafkaVersion",
+      "responsePath": "result.cloudDetails.provisioned.currentBrokerSoftwareInfo.kafkaVersion",
+      "updateIntent": {
+        "discriminatorValue": "KafkaVersion",
+        "valuePath": "spec.updateRequest.targetKafkaVersion"
+      },
+      "description": "Apache Kafka version for the cluster (e.g. 3.6.0). Can be upgraded in place."
+    },
+    {
+      "name": "instance_type",
+      "type": "string",
+      "required": true,
+      "createPath": "spec.createRequest.provisioned.brokerNodeGroupInfo.instanceType",
+      "responsePath": "result.cloudDetails.provisioned.brokerNodeGroupInfo.instanceType",
+      "updateIntent": {
+        "discriminatorValue": "BrokerType",
+        "valuePath": "spec.updateRequest.targetInstanceType"
+      },
+      "description": "Broker instance type (e.g. kafka.m5.large). Can be changed in place."
+    },
+    {
+      "name": "broker_volume_size_gb",
+      "type": "int",
+      "required": true,
+      "createPath": "spec.createRequest.provisioned.brokerNodeGroupInfo.storageInfo.ebsStorageInfo.volumeSize",
+      "responsePath": "result.cloudDetails.provisioned.brokerNodeGroupInfo.storageInfo.ebsStorageInfo.volumeSize",
+      "updateIntent": {
+        "discriminatorValue": "BrokerStorage",
+        "valuePath": "spec.updateRequest.targetVolumeSizeGB"
+      },
+      "description": "EBS storage per broker, in GiB. Can be increased in place."
+    },
+    {
+      "name": "number_of_broker_nodes",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "createPath": "spec.createRequest.provisioned.numberOfBrokerNodes",
+      "responsePath": "result.cloudDetails.provisioned.numberOfBrokerNodes",
+      "updateIntent": {
+        "discriminatorValue": "BrokerCount",
+        "valuePath": "spec.updateRequest.targetNumberOfBrokerNodes"
+      },
+      "description": "Number of broker nodes. Must be a multiple of the number of broker subnets (Availability Zones); rounded up server-side. Can be increased in place."
+    },
+    {
+      "name": "subnet_ids",
+      "type": "list(string)",
+      "optional": true,
+      "forceNew": true,
+      "createPath": "spec.subnetIds",
+      "description": "Private subnets (2-4, each in a distinct Availability Zone) to place brokers in. Leave unset to use all of the resource group's private subnets. Write-only at creation."
+    },
+    {
+      "name": "encryption",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "AwsManagedKey",
+      "forceNew": true,
+      "oneOf": ["NoEncryption", "AwsManagedKey", "ResourceGroupKmsKey"],
+      "apiPath": "spec.encryption",
+      "description": "Encryption at rest. AwsManagedKey uses the AWS-managed MSK key; ResourceGroupKmsKey uses the resource group's KMS key; NoEncryption disables it. Immutable after creation."
+    },
+    {
+      "name": "encryption_in_transit",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "TLS",
+      "forceNew": true,
+      "createOnly": true,
+      "oneOf": ["TLS", "TLS_PLAINTEXT", "PLAINTEXT"],
+      "requestPath": "spec.createRequest.provisioned.encryptionInfo.encryptionInTransit.clientBroker.value",
+      "description": "How clients connect: TLS (encrypted), TLS_PLAINTEXT (both), or PLAINTEXT (unencrypted)."
+    },
+    {
+      "name": "configuration_arn",
+      "type": "string",
+      "optional": true,
+      "forceNew": true,
+      "createOnly": true,
+      "requestPath": "spec.createRequest.provisioned.configurationInfo.arn",
+      "description": "ARN of a saved MSK (Kafka broker) configuration to apply. Leave unset for the AWS default."
+    },
+    {
+      "name": "configuration_revision",
+      "type": "int",
+      "optional": true,
+      "forceNew": true,
+      "createOnly": true,
+      "requestPath": "spec.createRequest.provisioned.configurationInfo.revision",
+      "description": "Revision of the MSK configuration referenced by configuration_arn."
+    },
+    {
+      "name": "scope_ids",
+      "type": "set(string)",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "IDs of the scopes attached to this cluster."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type. Defaults to DirectApiCall for MSK."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+    {
+      "name": "tags",
+      "type": "map(string)",
+      "optional": true,
+      "createOnly": true,
+      "requestPath": "spec.createRequest.tags",
+      "description": "Tags applied to the cluster at creation. Platform ownership tags are added automatically."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status of the cluster."
+    },
+    {
+      "name": "security_group_ids",
+      "type": "list(string)",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "spec.securityGroupIds",
+      "description": "Security groups attached to the cluster (assigned by the platform)."
+    },
+    {
+      "name": "cluster_arn",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.cloudDetails.clusterArn",
+      "description": "ARN of the provisioned MSK cluster."
+    },
+    {
+      "name": "bootstrap_brokers",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "normalizeCsvOrder": true,
+      "apiPath": "result.bootstrapBrokers.bootstrapBrokerString",
+      "description": "Plaintext bootstrap broker connection string."
+    },
+    {
+      "name": "bootstrap_brokers_tls",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "normalizeCsvOrder": true,
+      "apiPath": "result.bootstrapBrokers.bootstrapBrokerStringTls",
+      "description": "TLS bootstrap broker connection string."
+    },
+    {
+      "name": "bootstrap_brokers_sasl_scram",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "normalizeCsvOrder": true,
+      "apiPath": "result.bootstrapBrokers.bootstrapBrokerStringSaslScram",
+      "description": "SASL/SCRAM bootstrap broker connection string."
+    },
+    {
+      "name": "bootstrap_brokers_sasl_iam",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "normalizeCsvOrder": true,
+      "apiPath": "result.bootstrapBrokers.bootstrapBrokerStringSaslIam",
+      "description": "SASL/IAM bootstrap broker connection string."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the cluster was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the cluster was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ],
+  "createConstants": [
+    {
+      "path": "spec.mode",
+      "value": "Create"
+    }
+  ],
+  "singleIntentUpdate": {
+    "discriminatorPath": "spec.updateRequest.updateType",
+    "readyPath": "result.cloudDetails.state",
+    "readyState": "ACTIVE",
+    "readyFailureStates": {
+      "FAILED": "the cluster entered a FAILED state during the update"
+    }
+  },
+  "waiter": {
+    "deprovisionedState": "DeProvisioned",
+    "readyPath": "result.cloudDetails.state",
+    "readyState": "ACTIVE",
+    "failureRetries": 3,
+    "createTimeoutMinutes": 60,
+    "updateTimeoutMinutes": 120,
+    "deleteTimeoutMinutes": 60
+  }
+}

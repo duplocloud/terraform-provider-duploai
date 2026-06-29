@@ -209,6 +209,18 @@ func apiBodyEqual(a, b map[string]any) bool {
 	return string(ja) == string(jb)
 }
 
+// jsonEqual reports whether two Go values (scalars or slices from
+// readPlanGoValue) are equal by JSON encoding — handles strings, numbers, bools,
+// and string lists without per-type comparison.
+func jsonEqual(a, b any) bool {
+	ja, errA := json.Marshal(a)
+	jb, errB := json.Marshal(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return string(ja) == string(jb)
+}
+
 // ModifyPlan suppresses the no-op churn that otherwise appears when a resource
 // is updated without changing anything the API cares about — most commonly the
 // first plan after `terraform import`, where the config carries a `timeouts`
@@ -231,6 +243,23 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	}
 	if !apiBodyEqual(planBody, stateBody) {
 		return // a real update — let computed outputs recompute normally
+	}
+
+	// Single-intent updates carry their change in createPath fields that are
+	// absent from the update body above, so apiBodyEqual misses them. Check the
+	// updateIntent attributes directly: if one changed it IS a real update, so
+	// don't pin computed outputs (let them recompute / stay known-after-apply).
+	if r.spec.SingleIntentUpdate != nil {
+		for _, a := range r.spec.Attributes {
+			if a.UpdateIntent == nil {
+				continue
+			}
+			pv, pok := readPlanGoValue(ctx, req.Plan, a, &resp.Diagnostics)
+			sv, _ := readPlanGoValue(ctx, req.State, a, &resp.Diagnostics)
+			if pok && !jsonEqual(pv, sv) {
+				return
+			}
+		}
 	}
 
 	var planTop, stateTop map[string]tftypes.Value
@@ -350,6 +379,14 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
+	// Single-intent update: mutate each changed attribute in its own PUT, waiting
+	// for the ready state between updates (e.g. AWS MSK broker count / storage /
+	// instance type / kafka version).
+	if r.spec.SingleIntentUpdate != nil {
+		r.singleIntentUpdate(ctx, req, resp, scope, objID, id)
+		return
+	}
+
 	body := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -404,6 +441,108 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 	resp.State.Raw = state
 	log.Printf("[TRACE] dynamic %s Update(%s): end", r.spec.Name, id)
+}
+
+// singleIntentUpdate applies each changed UpdateIntent attribute as its own PUT
+// (discriminator + one target value), waiting for the resource to reach the
+// configured ready state before and after each update. Used by APIs (e.g. AWS
+// MSK) that accept one discrete update at a time.
+func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse, scope map[string]string, objID, id string) {
+	si := r.spec.SingleIntentUpdate
+
+	// Collect the intent attributes whose value changed plan-vs-state.
+	type change struct {
+		intent *UpdateIntentSpec
+		value  any
+	}
+	var changes []change
+	for i := range r.spec.Attributes {
+		a := r.spec.Attributes[i]
+		if a.UpdateIntent == nil {
+			continue
+		}
+		planVal, planOK := readPlanGoValue(ctx, req.Plan, a, &resp.Diagnostics)
+		stateVal, _ := readPlanGoValue(ctx, req.State, a, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if !planOK || jsonEqual(planVal, stateVal) {
+			continue
+		}
+		changes = append(changes, change{intent: a.UpdateIntent, value: planVal})
+	}
+
+	// No update-intent change (e.g. only the timeouts block differs) — persist
+	// the plan without any API call.
+	if len(changes) == 0 {
+		resp.State.Raw = req.Plan.Raw
+		log.Printf("[TRACE] dynamic %s Update(%s): no update-intent change, skipped", r.spec.Name, id)
+		return
+	}
+
+	retries := r.failureRetries(ctx, req.Plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	api := r.api(scope, retries)
+	timeout := r.timeout(ctx, req.Plan, "update", &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	readySegs := strings.Split(si.ReadyPath, ".")
+	readyWaiter := &duplosdk.Waiter[map[string]any]{
+		PollInterval:  defaultPollInterval,
+		SuccessState:  si.ReadyState,
+		FailureStates: si.ReadyFailureStates,
+		StatusFn:      func(m *map[string]any) string { return toStringValue(extractPath(*m, readySegs)) },
+	}
+	waitReady := func() bool {
+		if _, clientErr := readyWaiter.Wait(ctx, id, timeout, func() (*map[string]any, duplosdk.ClientError) {
+			return api.Get(objID)
+		}); clientErr != nil {
+			resp.Diagnostics.AddError("Error waiting for "+r.spec.Name+" to be ready for update", clientErr.Error())
+			return false
+		}
+		return true
+	}
+
+	discSegs := strings.Split(si.DiscriminatorPath, ".")
+	for _, c := range changes {
+		if !waitReady() { // must be ready before each single-intent update
+			return
+		}
+		// Start from the normal update body so identity/context fields (name,
+		// environment_id, resource_group_id, …) the backend needs to resolve the
+		// resource are present, then overlay this one update intent. Create-only
+		// and other update-intent fields are excluded by bodyFromRaw.
+		body := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		setPath(body, discSegs, c.intent.DiscriminatorValue)
+		setPath(body, strings.Split(c.intent.ValuePath, "."), c.value)
+		log.Printf("[TRACE] dynamic %s Update(%s): single-intent %s", r.spec.Name, id, c.intent.DiscriminatorValue)
+		if _, clientErr := api.Update(objID, &body); clientErr != nil {
+			resp.Diagnostics.AddError("Error updating "+r.spec.Name+" ("+c.intent.DiscriminatorValue+")", clientErr.Error())
+			return
+		}
+		if !waitReady() { // wait for this update to complete before the next
+			return
+		}
+	}
+
+	final, clientErr := api.Get(objID)
+	if clientErr != nil {
+		resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after update", clientErr.Error())
+		return
+	}
+	state := r.stateFromResponse(ctx, req.Plan.Raw, *final, scope, id, false, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.State.Raw = state
+	log.Printf("[TRACE] dynamic %s Update(%s): single-intent updates complete (%d)", r.spec.Name, id, len(changes))
 }
 
 func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

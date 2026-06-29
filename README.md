@@ -75,6 +75,8 @@ provider "duploai" {
 | [`duploai_k8s_secret`](docs/resources/k8s_secret.md) | Manages a DuploCloud AI Helpdesk Kubernetes Secret |
 | [`duploai_k8s_storage_class`](docs/resources/k8s_storage_class.md) | Manages a DuploCloud AI Helpdesk Kubernetes StorageClass. A StorageClass is a cluster-scoped object that describes how a volume is dynamically provisioned; PersistentVolumeClaims reference it by name |
 | [`duploai_mcp_server`](docs/resources/mcp_server.md) | Manages a DuploCloud AI Helpdesk MCP (Model Context Protocol) server registration — a tool/data provider that AI agents can connect to over HTTP, SSE, or a raw configuration |
+| [`duploai_msk_kafka`](docs/resources/msk_kafka.md) | Manages a DuploCloud AI Helpdesk AWS MSK (Managed Streaming for Apache Kafka) provisioned cluster, in which you size the brokers, provisioned within an environment and resource group |
+| [`duploai_msk_kafka_serverless`](docs/resources/msk_kafka_serverless.md) | Manages a DuploCloud AI Helpdesk AWS MSK (Managed Streaming for Apache Kafka) serverless cluster, in which AWS manages broker capacity automatically. Networking (private subnets and security group) and IAM client authentication are configured server-side |
 | [`duploai_native_host`](docs/resources/native_host.md) | Manages a DuploCloud native host — an AWS EC2 instance provisioned inside a workspace environment |
 | [`duploai_network_baseline`](docs/resources/network_baseline.md) | Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways) |
 | [`duploai_node_group`](docs/resources/node_group.md) | Manages a DuploCloud AI Helpdesk AWS EKS managed node group |
@@ -120,6 +122,8 @@ provider "duploai" {
 | [`duploai_k8s_secret`](docs/data-sources/k8s_secret.md) | Manages a DuploCloud AI Helpdesk Kubernetes Secret |
 | [`duploai_k8s_storage_class`](docs/data-sources/k8s_storage_class.md) | Manages a DuploCloud AI Helpdesk Kubernetes StorageClass. A StorageClass is a cluster-scoped object that describes how a volume is dynamically provisioned; PersistentVolumeClaims reference it by name |
 | [`duploai_mcp_server`](docs/data-sources/mcp_server.md) | Manages a DuploCloud AI Helpdesk MCP (Model Context Protocol) server registration — a tool/data provider that AI agents can connect to over HTTP, SSE, or a raw configuration |
+| [`duploai_msk_kafka`](docs/data-sources/msk_kafka.md) | Manages a DuploCloud AI Helpdesk AWS MSK (Managed Streaming for Apache Kafka) provisioned cluster, in which you size the brokers, provisioned within an environment and resource group |
+| [`duploai_msk_kafka_serverless`](docs/data-sources/msk_kafka_serverless.md) | Manages a DuploCloud AI Helpdesk AWS MSK (Managed Streaming for Apache Kafka) serverless cluster, in which AWS manages broker capacity automatically. Networking (private subnets and security group) and IAM client authentication are configured server-side |
 | [`duploai_native_host`](docs/data-sources/native_host.md) | Manages a DuploCloud native host — an AWS EC2 instance provisioned inside a workspace environment |
 | [`duploai_network_baseline`](docs/data-sources/network_baseline.md) | Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways) |
 | [`duploai_node_group`](docs/data-sources/node_group.md) | Manages a DuploCloud AI Helpdesk AWS EKS managed node group |
