@@ -83,6 +83,44 @@ type ResourceSpec struct {
 	// Use this for APIs that are purely read-only and have no create/update/delete
 	// operations. Implies DataSource semantics; DataSource need not also be set.
 	DataSourceOnly bool `json:"dataSourceOnly,omitempty"`
+
+	// SingleIntentUpdate configures the "one update intent per call" flow used by
+	// APIs (e.g. AWS MSK) that accept a single discrete update at a time —
+	// identified by a discriminator field plus one target value — and require the
+	// resource to reach a ready state between updates. When set, attributes that
+	// declare an UpdateIntent are mutated in place: for each changed one the engine
+	// waits for the ready state, issues a PUT carrying only the discriminator and
+	// that attribute's target value, then waits for the ready state again before
+	// the next. Attributes without an UpdateIntent should be forceNew/createOnly.
+	SingleIntentUpdate *SingleIntentUpdateSpec `json:"singleIntentUpdate,omitempty"`
+}
+
+// SingleIntentUpdateSpec configures resource-level single-intent updates.
+type SingleIntentUpdateSpec struct {
+	// DiscriminatorPath is the request body dot-path that names which update is
+	// being performed, e.g. "spec.updateRequest.updateType".
+	DiscriminatorPath string `json:"discriminatorPath"`
+	// ReadyPath is the read-response dot-path whose value must equal ReadyState
+	// before and after each update, e.g. "result.cloudDetails.state".
+	ReadyPath string `json:"readyPath"`
+	// ReadyState is the terminal-ready value at ReadyPath, e.g. "ACTIVE".
+	ReadyState string `json:"readyState"`
+	// ReadyFailureStates maps values at ReadyPath that mean the update failed (so
+	// the wait aborts immediately instead of polling to timeout) to a reason,
+	// e.g. {"FAILED": "cluster entered a FAILED state"}.
+	ReadyFailureStates map[string]string `json:"readyFailureStates,omitempty"`
+}
+
+// UpdateIntentSpec maps one mutable attribute to a single-intent update: when the
+// attribute changes, the engine sends DiscriminatorValue at the resource's
+// DiscriminatorPath and the new value at ValuePath.
+type UpdateIntentSpec struct {
+	// DiscriminatorValue is the discriminator value for this attribute's update,
+	// e.g. "BrokerCount".
+	DiscriminatorValue string `json:"discriminatorValue"`
+	// ValuePath is the request body dot-path the new value is written to,
+	// e.g. "spec.updateRequest.targetNumberOfBrokerNodes".
+	ValuePath string `json:"valuePath"`
 }
 
 // OperationSpec overrides the HTTP verb and/or path for one CRUD operation.
@@ -231,6 +269,19 @@ type AttributeSpec struct {
 	// NoSend marks an attribute that maps from the response but is never sent in
 	// the request (computed-only fields like status, vpc_id).
 	NoSend bool `json:"noSend,omitempty"`
+
+	// NormalizeCsvOrder, for a string attribute, sorts the comma-separated tokens
+	// of the response value into a canonical (lexical) order before storing it in
+	// state. Use for backend fields whose elements are order-insensitive but
+	// returned in a non-deterministic order (e.g. AWS MSK bootstrap broker
+	// strings), which would otherwise show perpetual drift on refresh.
+	NormalizeCsvOrder bool `json:"normalizeCsvOrder,omitempty"`
+
+	// UpdateIntent, when set (and the resource has SingleIntentUpdate), makes this
+	// attribute mutable via a single-intent update: a change issues a dedicated
+	// PUT carrying the discriminator + this attribute's new value. Requires the
+	// resource-level SingleIntentUpdate config.
+	UpdateIntent *UpdateIntentSpec `json:"updateIntent,omitempty"`
 
 	// Attributes holds the nested fields when Type is an object form
 	// ("object", "list(object)", "set(object)", "map(object)"). Each nested
@@ -502,6 +553,34 @@ func (s *ResourceSpec) validate() error {
 				return fmt.Errorf("conflictsWith references unknown attribute %q", name)
 			}
 		}
+	}
+	if err := validateSingleIntentUpdate(s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateSingleIntentUpdate checks the single-intent update configuration: any
+// attribute with an UpdateIntent requires the resource-level SingleIntentUpdate
+// block (with all three paths set) and a complete UpdateIntent.
+func validateSingleIntentUpdate(s *ResourceSpec) error {
+	var intents int
+	for _, a := range s.Attributes {
+		if a.UpdateIntent == nil {
+			continue
+		}
+		intents++
+		if a.UpdateIntent.DiscriminatorValue == "" || a.UpdateIntent.ValuePath == "" {
+			return fmt.Errorf("attribute %q: updateIntent requires discriminatorValue and valuePath", a.Name)
+		}
+	}
+	if s.SingleIntentUpdate != nil {
+		si := s.SingleIntentUpdate
+		if si.DiscriminatorPath == "" || si.ReadyPath == "" || si.ReadyState == "" {
+			return fmt.Errorf("singleIntentUpdate requires discriminatorPath, readyPath, and readyState")
+		}
+	} else if intents > 0 {
+		return fmt.Errorf("updateIntent on an attribute requires a resource-level singleIntentUpdate block")
 	}
 	return nil
 }

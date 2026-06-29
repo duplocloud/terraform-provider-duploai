@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
@@ -509,12 +510,30 @@ func objectToRequest(attrs []AttributeSpec, v tftypes.Value) map[string]any {
 
 // attrFromResponse converts a response value into a framework value of type t,
 // honoring the per-field response paths of nested objects.
+// normalizeCsvOrder sorts the comma-separated tokens of s into a stable lexical
+// order. Used for order-insensitive backend fields (e.g. bootstrap broker
+// strings) that the API returns in non-deterministic order. An empty string is
+// returned unchanged.
+func normalizeCsvOrder(s string) string {
+	if s == "" {
+		return s
+	}
+	parts := strings.Split(s, ",")
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
 func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 	if data == nil {
 		return tftypes.NewValue(t, nil)
 	}
 	info, _ := parseType(a.Type)
 	if info.elem != "object" {
+		if a.NormalizeCsvOrder {
+			if s, ok := data.(string); ok {
+				data = normalizeCsvOrder(s)
+			}
+		}
 		return goToTftypesValue(t, data)
 	}
 	if info.coll == "" {
