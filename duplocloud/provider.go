@@ -3,9 +3,12 @@ package duplocloud
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -31,21 +34,21 @@ func (p *duploaiProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"duplo_host": schema.StringAttribute{
-				Required:    true,
-				Description: "Base URL of the DuploCloud AI API (e.g. http://localhost:60021).",
+				Optional:    true,
+				Description: "Base URL of the DuploCloud AI API (e.g. http://localhost:60021). Required unless set via the DUPLO_HOST or duplo_host env var.",
 			},
 			"duplo_token": schema.StringAttribute{
-				Required:    true,
+				Optional:    true,
 				Sensitive:   true,
-				Description: "Bearer token for DuploCloud API authentication.",
+				Description: "Bearer token for DuploCloud API authentication. Required unless set via the DUPLO_TOKEN or duplo_token env var.",
 			},
 			"ssl_no_verify": schema.BoolAttribute{
 				Optional:    true,
-				Description: "Disable TLS certificate verification (development only).",
+				Description: "Disable TLS certificate verification (development only). May also be set via the SSL_NO_VERIFY or ssl_no_verify env var. Accepted values: 1/t/T/TRUE/true/True/0/f/F/FALSE/false/False.",
 			},
 			"http_timeout": schema.Int64Attribute{
 				Optional:    true,
-				Description: "HTTP client timeout in seconds for DuploCloud API calls (default 60).",
+				Description: "HTTP client timeout in seconds for DuploCloud API calls (default 60). May also be set via the HTTP_TIMEOUT or http_timeout env var (integer seconds only).",
 			},
 		},
 	}
@@ -61,6 +64,59 @@ type providerModel struct {
 func (p *duploaiProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var config providerModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if config.DuploHost.IsNull() || config.DuploHost.ValueString() == "" {
+		config.DuploHost = types.StringValue(envFallback("DUPLO_HOST", "duplo_host"))
+	}
+	if config.DuploToken.IsNull() || config.DuploToken.ValueString() == "" {
+		config.DuploToken = types.StringValue(envFallback("DUPLO_TOKEN", "duplo_token"))
+	}
+	if config.SSLNoVerify.IsNull() {
+		if v := envFallback("SSL_NO_VERIFY", "ssl_no_verify"); v != "" {
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				resp.Diagnostics.AddAttributeError(
+					path.Root("ssl_no_verify"),
+					"Invalid SSL_NO_VERIFY value",
+					fmt.Sprintf("Cannot parse %q as a boolean. Accepted values: 1/t/T/TRUE/true/True/0/f/F/FALSE/false/False.", v),
+				)
+			} else {
+				config.SSLNoVerify = types.BoolValue(b)
+			}
+		}
+	}
+	if config.HTTPTimeout.IsNull() {
+		if v := envFallback("HTTP_TIMEOUT", "http_timeout"); v != "" {
+			n, err := strconv.ParseInt(v, 10, 64)
+			if err != nil {
+				resp.Diagnostics.AddAttributeError(
+					path.Root("http_timeout"),
+					"Invalid HTTP_TIMEOUT value",
+					fmt.Sprintf("Cannot parse %q as an integer number of seconds.", v),
+				)
+			} else {
+				config.HTTPTimeout = types.Int64Value(n)
+			}
+		}
+	}
+
+	if config.DuploHost.ValueString() == "" {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("duplo_host"),
+			"Missing duplo_host",
+			"Set duplo_host in the provider block or the DUPLO_HOST (or duplo_host) env var.",
+		)
+	}
+	if config.DuploToken.ValueString() == "" {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("duplo_token"),
+			"Missing duplo_token",
+			"Set duplo_token in the provider block or the DUPLO_TOKEN (or duplo_token) env var.",
+		)
+	}
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -83,6 +139,13 @@ func (p *duploaiProvider) Configure(ctx context.Context, req provider.ConfigureR
 
 	resp.DataSourceData = client
 	resp.ResourceData = client
+}
+
+func envFallback(upper, lower string) string {
+	if v := os.Getenv(upper); v != "" {
+		return v
+	}
+	return os.Getenv(lower)
 }
 
 func (p *duploaiProvider) Resources(_ context.Context) []func() resource.Resource {
