@@ -35,20 +35,20 @@ func (p *duploaiProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 		Attributes: map[string]schema.Attribute{
 			"duplo_host": schema.StringAttribute{
 				Optional:    true,
-				Description: "Base URL of the DuploCloud AI API (e.g. http://localhost:60021). May also be set via DUPLO_HOST or duplo_host env var.",
+				Description: "Base URL of the DuploCloud AI API (e.g. http://localhost:60021). Required unless set via the DUPLO_HOST or duplo_host env var.",
 			},
 			"duplo_token": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "Bearer token for DuploCloud API authentication. May also be set via DUPLO_TOKEN or duplo_token env var.",
+				Description: "Bearer token for DuploCloud API authentication. Required unless set via the DUPLO_TOKEN or duplo_token env var.",
 			},
 			"ssl_no_verify": schema.BoolAttribute{
 				Optional:    true,
-				Description: "Disable TLS certificate verification (development only). May also be set via SSL_NO_VERIFY or ssl_no_verify env var.",
+				Description: "Disable TLS certificate verification (development only). May also be set via the SSL_NO_VERIFY or ssl_no_verify env var. Accepted values: 1/t/T/TRUE/true/True/0/f/F/FALSE/false/False.",
 			},
 			"http_timeout": schema.Int64Attribute{
 				Optional:    true,
-				Description: "HTTP client timeout in seconds for DuploCloud API calls (default 60). May also be set via HTTP_TIMEOUT or http_timeout env var.",
+				Description: "HTTP client timeout in seconds for DuploCloud API calls (default 60). May also be set via the HTTP_TIMEOUT or http_timeout env var (integer seconds only).",
 			},
 		},
 	}
@@ -76,14 +76,30 @@ func (p *duploaiProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 	if config.SSLNoVerify.IsNull() {
 		if v := envFallback("SSL_NO_VERIFY", "ssl_no_verify"); v != "" {
-			b, _ := strconv.ParseBool(v)
-			config.SSLNoVerify = types.BoolValue(b)
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				resp.Diagnostics.AddAttributeError(
+					path.Root("ssl_no_verify"),
+					"Invalid SSL_NO_VERIFY value",
+					fmt.Sprintf("Cannot parse %q as a boolean. Accepted values: 1/t/T/TRUE/true/True/0/f/F/FALSE/false/False.", v),
+				)
+			} else {
+				config.SSLNoVerify = types.BoolValue(b)
+			}
 		}
 	}
 	if config.HTTPTimeout.IsNull() {
 		if v := envFallback("HTTP_TIMEOUT", "http_timeout"); v != "" {
-			n, _ := strconv.ParseInt(v, 10, 64)
-			config.HTTPTimeout = types.Int64Value(n)
+			n, err := strconv.ParseInt(v, 10, 64)
+			if err != nil {
+				resp.Diagnostics.AddAttributeError(
+					path.Root("http_timeout"),
+					"Invalid HTTP_TIMEOUT value",
+					fmt.Sprintf("Cannot parse %q as an integer number of seconds.", v),
+				)
+			} else {
+				config.HTTPTimeout = types.Int64Value(n)
+			}
 		}
 	}
 
