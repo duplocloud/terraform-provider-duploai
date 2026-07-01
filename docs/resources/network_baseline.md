@@ -55,13 +55,14 @@ resource "duploai_network_baseline" "with_nat_and_logs" {
 - `az_count` (Number) Number of availability zones (1-4).
 - `cidr` (String) VPC CIDR block (e.g. 10.0.0.0/16).
 - `name` (String) Name of the network baseline.
-- `region` (String) AWS region (e.g. us-east-1).
+- `region` (String) Cloud region (e.g. us-east-1).
 - `scope_ids` (List of String) Scope IDs that link this network to a cloud provider account.
 - `subnet_prefix` (Number) Subnet prefix length (e.g. 24).
 - `workspace_id` (String) ID of the workspace that owns this network baseline.
 
 ### Optional
 
+- `cloud` (String) Cloud provider the network is provisioned in. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
 - `description` (String) Optional description.
 - `enable_dns` (Boolean) Enable DNS support in the VPC.
 - `enable_flow_logs` (Boolean) Enable VPC flow logs.
