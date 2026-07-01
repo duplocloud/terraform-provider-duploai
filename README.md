@@ -60,7 +60,7 @@ provider "duploai" {
 | [`duploai_aws_lambda`](docs/resources/aws_lambda.md) | Manages a DuploCloud AI Helpdesk AWS Lambda function — a serverless compute resource that runs code in response to events within an environment and resource group |
 | [`duploai_aws_secret`](docs/resources/aws_secret.md) | Manages a DuploCloud AI Helpdesk AWS Secrets Manager secret |
 | [`duploai_cluster_attributes`](docs/resources/cluster_attributes.md) | Manages DuploCloud AI Helpdesk cluster attributes — add-ons and components installed onto an existing EKS cluster (autoscaler, ALB controller, EFS, external-dns, and more) |
-| [`duploai_cluster_baseline`](docs/resources/cluster_baseline.md) | Manages a DuploCloud AI Helpdesk EKS cluster baseline (control plane, networking, and optional system node group) |
+| [`duploai_cluster_baseline`](docs/resources/cluster_baseline.md) | Manages a DuploCloud AI Helpdesk Kubernetes cluster baseline (control plane, networking, and optional system node group), provisionable across any supported cloud. The target cloud is selected via the `cloud` attribute — AWS (EKS), Azure (AKS), GCP (GKE), or bare Kubernetes (K8S_ONLY) — and defaults to AWS |
 | [`duploai_elasticache`](docs/resources/elasticache.md) | Manages a DuploCloud AI Helpdesk AWS ElastiCache cluster (Redis, Valkey, or Memcached) |
 | [`duploai_environment`](docs/resources/environment.md) | Manages a DuploCloud AI environment within a workspace |
 | [`duploai_helm_release`](docs/resources/helm_release.md) | Manages a DuploCloud AI Helpdesk Kubernetes Helm release (Flux HelmRelease) |
@@ -108,7 +108,7 @@ provider "duploai" {
 | [`duploai_aws_lambda`](docs/data-sources/aws_lambda.md) | Manages a DuploCloud AI Helpdesk AWS Lambda function — a serverless compute resource that runs code in response to events within an environment and resource group |
 | [`duploai_aws_secret`](docs/data-sources/aws_secret.md) | Manages a DuploCloud AI Helpdesk AWS Secrets Manager secret |
 | [`duploai_cluster_attributes`](docs/data-sources/cluster_attributes.md) | Manages DuploCloud AI Helpdesk cluster attributes — add-ons and components installed onto an existing EKS cluster (autoscaler, ALB controller, EFS, external-dns, and more) |
-| [`duploai_cluster_baseline`](docs/data-sources/cluster_baseline.md) | Manages a DuploCloud AI Helpdesk EKS cluster baseline (control plane, networking, and optional system node group) |
+| [`duploai_cluster_baseline`](docs/data-sources/cluster_baseline.md) | Manages a DuploCloud AI Helpdesk Kubernetes cluster baseline (control plane, networking, and optional system node group), provisionable across any supported cloud. The target cloud is selected via the `cloud` attribute — AWS (EKS), Azure (AKS), GCP (GKE), or bare Kubernetes (K8S_ONLY) — and defaults to AWS |
 | [`duploai_elasticache`](docs/data-sources/elasticache.md) | Manages a DuploCloud AI Helpdesk AWS ElastiCache cluster (Redis, Valkey, or Memcached) |
 | [`duploai_environment`](docs/data-sources/environment.md) | Manages a DuploCloud AI environment within a workspace |
 | [`duploai_helm_release`](docs/data-sources/helm_release.md) | Manages a DuploCloud AI Helpdesk Kubernetes Helm release (Flux HelmRelease) |

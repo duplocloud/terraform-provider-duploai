@@ -128,6 +128,14 @@ type UpdateIntentSpec struct {
 type OperationSpec struct {
 	Verb string `json:"verb,omitempty"`
 	Path string `json:"path,omitempty"`
+
+	// SkipWhen applies to the deprovision operation only: when all listed
+	// conditions match the prior state (logical AND), the engine skips the
+	// pre-delete deprovision step and issues the delete directly. Use for modes
+	// with no cloud infrastructure to tear down (e.g. cloud=K8S_ONLY, which
+	// registers an existing cluster and provisions nothing). Ignored on
+	// create/read/update/delete.
+	SkipWhen []RequiredIfCondition `json:"skipWhen,omitempty"`
 }
 
 // EndpointSpec configures the API URIs and HTTP verbs for a resource's CRUD
@@ -205,6 +213,12 @@ func (s *ResourceSpec) BuildEndpoint() (duplosdk.Endpoint, error) {
 type AttributeSpec struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
+
+	// Deprecated, when set, marks the attribute deprecated: the message is wired
+	// to the framework's DeprecationMessage and shown as a warning whenever the
+	// attribute is set in config. Use when renaming an attribute — keep the old
+	// one with a deprecation message pointing at the replacement.
+	Deprecated string `json:"deprecated,omitempty"`
 
 	// Type is one of: string, bool, int, list(string).
 	Type string `json:"type"`
