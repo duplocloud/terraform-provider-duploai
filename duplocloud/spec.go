@@ -206,6 +206,12 @@ type AttributeSpec struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 
+	// Deprecated, when set, marks the attribute deprecated: the message is wired
+	// to the framework's DeprecationMessage and shown as a warning whenever the
+	// attribute is set in config. Use when renaming an attribute — keep the old
+	// one with a deprecation message pointing at the replacement.
+	Deprecated string `json:"deprecated,omitempty"`
+
 	// Type is one of: string, bool, int, list(string).
 	Type string `json:"type"`
 

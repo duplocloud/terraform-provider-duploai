@@ -3,12 +3,12 @@
 page_title: "duploai_cluster_baseline Resource - duploai"
 subcategory: ""
 description: |-
-  Manages a DuploCloud AI Helpdesk EKS cluster baseline (control plane, networking, and optional system node group).
+  Manages a DuploCloud AI Helpdesk Kubernetes cluster baseline (control plane, networking, and optional system node group), provisionable across any supported cloud. The target cloud is selected via the cloud attribute — AWS (EKS), Azure (AKS), GCP (GKE), or bare Kubernetes (K8S_ONLY) — and defaults to AWS.
 ---
 
 # duploai_cluster_baseline (Resource)
 
-Manages a DuploCloud AI Helpdesk EKS cluster baseline (control plane, networking, and optional system node group).
+Manages a DuploCloud AI Helpdesk Kubernetes cluster baseline (control plane, networking, and optional system node group), provisionable across any supported cloud. The target cloud is selected via the `cloud` attribute — AWS (EKS), Azure (AKS), GCP (GKE), or bare Kubernetes (K8S_ONLY) — and defaults to AWS.
 
 ## Example Usage
 
@@ -19,7 +19,7 @@ resource "duploai_cluster_baseline" "basic" {
   workspace_id = "<workspace-id>"
   name         = "prod-cluster"
   network_id   = "<network-baseline-id>"
-  eks_version  = "1.34"
+  version      = "1.34"
 }
 
 # Cluster referencing a managed network baseline, with a system node group and
@@ -40,7 +40,7 @@ resource "duploai_cluster_baseline" "full" {
   name         = "prod-cluster-full"
   network_id   = duploai_network_baseline.this.network_id
 
-  eks_version           = "1.34"
+  version               = "1.34"
   cluster_type          = "Standard"
   api_server_visibility = "PublicAndPrivate"
   control_plane_logging = ["api", "audit", "authenticator"]
@@ -66,35 +66,37 @@ resource "duploai_cluster_baseline" "full" {
 
 ### Required
 
-- `eks_version` (String) Kubernetes version for the EKS cluster (e.g. "1.34").
 - `name` (String) Name of the cluster baseline.
 - `network_id` (String) ID of the network baseline whose VPC and subnets this cluster will use. The cluster inherits its region, VPC, subnets, and scope from this network.
 - `workspace_id` (String) ID of the workspace that owns this cluster baseline.
 
 ### Optional
 
-- `api_server_visibility` (String) Visibility of the EKS API server endpoint.
-- `cluster_ip_cidr` (String) CIDR block for the Kubernetes service IP range (e.g. 172.20.0.0/16). Defaults to the AWS default when unset.
-- `cluster_type` (String) Cluster mode: Standard (self-managed/managed node groups) or Auto (EKS Auto Mode).
+- `api_server_visibility` (String) Visibility of the Kubernetes API server endpoint.
+- `cloud` (String) Cloud provider the cluster targets. Immutable after creation. Defaults to Aws.
+- `cluster_ip_cidr` (String) CIDR block for the Kubernetes service IP range (e.g. 172.20.0.0/16). Defaults to the cloud provider's default when unset.
+- `cluster_type` (String) Cluster mode: Standard (self-managed/managed node groups) or Auto (cloud-managed node lifecycle, e.g. EKS Auto Mode on AWS).
 - `control_plane_logging` (List of String) Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler). When unset, defaults to none (server-assigned; list attributes take no static default).
 - `description` (String) Optional description.
 - `domain_name_filter` (String) Comma-joined list of Route53 hosted-zone names that external-dns should manage for this cluster.
+- `eks_version` (String, Deprecated) Deprecated: use `version` instead. Kubernetes version for the cluster (e.g. "1.34").
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
+- `version` (String) Kubernetes version for the cluster (e.g. "1.34").
 
 ### Read-Only
 
 - `certificate_authority` (String) Base64-encoded cluster certificate authority data.
 - `cluster_all_host_sg_id` (String) Security group ID applied to all cluster hosts.
-- `cluster_arn` (String) Provisioned EKS cluster ARN.
-- `cluster_endpoint` (String) EKS API server endpoint URL.
-- `cluster_sg_id` (String) EKS cluster security group ID.
+- `cluster_arn` (String) ARN of the provisioned cluster (AWS only).
+- `cluster_endpoint` (String) Kubernetes API server endpoint URL.
+- `cluster_sg_id` (String) Cluster security group ID (AWS only).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `oidc_issuer_url` (String) OIDC issuer URL for IRSA.
-- `region` (String) AWS region (e.g. us-east-1). Inherited from the linked network (network_id); computed, not user-settable.
+- `region` (String) Cloud region (e.g. us-east-1). Inherited from the linked network (network_id); computed, not user-settable.
 - `scope_ids` (List of String) Scope IDs linking this cluster to a cloud provider account. Inherited from the linked network (network_id); computed, not user-settable.
 - `stack_id` (String) Provisioned infrastructure stack ID.
 - `status` (String) Current provisioning status.

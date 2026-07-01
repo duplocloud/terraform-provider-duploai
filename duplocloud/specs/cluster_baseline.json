@@ -1,6 +1,6 @@
 {
   "name": "cluster_baseline",
-  "description": "Manages a DuploCloud AI Helpdesk EKS cluster baseline (control plane, networking, and optional system node group).",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes cluster baseline (control plane, networking, and optional system node group), provisionable across any supported cloud. The target cloud is selected via the `cloud` attribute — AWS (EKS), Azure (AKS), GCP (GKE), or bare Kubernetes (K8S_ONLY) — and defaults to AWS.",
   "idPath": "id",
   "dataSource": true,
   "endpoint": {
@@ -54,7 +54,7 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.region",
-      "description": "AWS region (e.g. us-east-1). Inherited from the linked network (network_id); computed, not user-settable."
+      "description": "Cloud region (e.g. us-east-1). Inherited from the linked network (network_id); computed, not user-settable."
     },
     {
       "name": "vpc_id",
@@ -84,14 +84,40 @@
         "Auto"
       ],
       "apiPath": "spec.clusterType",
-      "description": "Cluster mode: Standard (self-managed/managed node groups) or Auto (EKS Auto Mode)."
+      "description": "Cluster mode: Standard (self-managed/managed node groups) or Auto (cloud-managed node lifecycle, e.g. EKS Auto Mode on AWS)."
+    },
+    {
+      "name": "cloud",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Aws",
+      "forceNew": true,
+      "oneOf": [
+        "Aws",
+        "Azure",
+        "Gcp",
+        "K8S_ONLY"
+      ],
+      "apiPath": "spec.cloud",
+      "description": "Cloud provider the cluster targets. Immutable after creation. Defaults to Aws."
     },
     {
       "name": "eks_version",
       "type": "string",
-      "required": true,
-      "apiPath": "spec.eksVersion",
-      "description": "Kubernetes version for the EKS cluster (e.g. \"1.34\")."
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.version",
+      "deprecated": "eks_version is deprecated and will be removed in a future release; use version instead.",
+      "description": "Deprecated: use `version` instead. Kubernetes version for the cluster (e.g. \"1.34\")."
+    },
+    {
+      "name": "version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.version",
+      "description": "Kubernetes version for the cluster (e.g. \"1.34\")."
     },
     {
       "name": "api_server_visibility",
@@ -105,7 +131,7 @@
         "PublicAndPrivate"
       ],
       "apiPath": "spec.apiServerVisibility",
-      "description": "Visibility of the EKS API server endpoint."
+      "description": "Visibility of the Kubernetes API server endpoint."
     },
     {
       "name": "control_plane_logging",
@@ -121,7 +147,7 @@
       "optional": true,
       "forceNew": true,
       "apiPath": "spec.clusterIpCidr",
-      "description": "CIDR block for the Kubernetes service IP range (e.g. 172.20.0.0/16). Defaults to the AWS default when unset."
+      "description": "CIDR block for the Kubernetes service IP range (e.g. 172.20.0.0/16). Defaults to the cloud provider's default when unset."
     },
     {
       "name": "domain_name_filter",
@@ -212,14 +238,14 @@
       "type": "string",
       "computed": true,
       "apiPath": "result.clusterArn",
-      "description": "Provisioned EKS cluster ARN."
+      "description": "ARN of the provisioned cluster (AWS only)."
     },
     {
       "name": "cluster_endpoint",
       "type": "string",
       "computed": true,
       "apiPath": "result.clusterEndpoint",
-      "description": "EKS API server endpoint URL."
+      "description": "Kubernetes API server endpoint URL."
     },
     {
       "name": "oidc_issuer_url",
@@ -240,7 +266,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "result.clusterSgId",
-      "description": "EKS cluster security group ID."
+      "description": "Cluster security group ID (AWS only)."
     },
     {
       "name": "cluster_all_host_sg_id",
@@ -261,6 +287,17 @@
     {
       "path": "spec.mode",
       "value": "Create"
+    }
+  ],
+  "conflictsWith": [["eks_version", "version"]],
+  "requiredIf": [
+    {
+      "attribute": "version",
+      "when": [{ "attribute": "eks_version", "isEmpty": true }]
+    },
+    {
+      "attribute": "eks_version",
+      "when": [{ "attribute": "version", "isEmpty": true }]
     }
   ],
   "waiter": {
