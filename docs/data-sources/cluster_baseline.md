@@ -52,7 +52,7 @@ output "status" {
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `region` (String) Cloud region (e.g. us-east-1). Inherited from the linked network (network_id); computed, not user-settable.
-- `scope_ids` (List of String) Scope IDs linking this cluster to a cloud provider account. Inherited from the linked network (network_id); computed, not user-settable.
+- `scope_ids` (List of String) Scope IDs for the cluster. For cloud clusters leave unset — inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from.
 - `stack_id` (String) Provisioned infrastructure stack ID.
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) Subnet IDs for the cluster. Inherited from the linked network (network_id); computed, not user-settable.

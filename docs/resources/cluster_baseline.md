@@ -83,6 +83,7 @@ resource "duploai_cluster_baseline" "full" {
 - `network_id` (String) ID of the network baseline whose VPC and subnets this cluster will use. The cluster inherits its region, VPC, subnets, and scope from this network. Required unless cloud is K8S_ONLY (which provisions no cloud network).
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
+- `scope_ids` (List of String) Scope IDs for the cluster. For cloud clusters leave unset — inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from.
 - `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
@@ -96,7 +97,6 @@ resource "duploai_cluster_baseline" "full" {
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `oidc_issuer_url` (String) OIDC issuer URL for IRSA.
 - `region` (String) Cloud region (e.g. us-east-1). Inherited from the linked network (network_id); computed, not user-settable.
-- `scope_ids` (List of String) Scope IDs linking this cluster to a cloud provider account. Inherited from the linked network (network_id); computed, not user-settable.
 - `stack_id` (String) Provisioned infrastructure stack ID.
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) Subnet IDs for the cluster. Inherited from the linked network (network_id); computed, not user-settable.

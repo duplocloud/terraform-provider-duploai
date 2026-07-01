@@ -37,10 +37,11 @@
     {
       "name": "scope_ids",
       "type": "list(string)",
+      "optional": true,
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.scopeIds",
-      "description": "Scope IDs linking this cluster to a cloud provider account. Inherited from the linked network (network_id); computed, not user-settable."
+      "description": "Scope IDs for the cluster. For cloud clusters leave unset — inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from."
     },
     {
       "name": "network_id",
