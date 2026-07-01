@@ -566,8 +566,10 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 
 	// Resources the API refuses to delete while live declare a Deprovision
 	// operation: tear down the underlying cloud resources and wait for the
-	// deprovisioned state before issuing the delete call.
-	if r.endpoint.HasDeprovision() {
+	// deprovisioned state before issuing the delete call. A deprovision
+	// "skipWhen" condition (e.g. cloud=K8S_ONLY, which provisions no cloud infra)
+	// bypasses this step and deletes directly.
+	if r.endpoint.HasDeprovision() && !r.deprovisionSkipped(ctx, req.State) {
 		if clientErr := api.Deprovision(objID); clientErr != nil {
 			resp.Diagnostics.AddError("Error deprovisioning "+r.spec.Name, clientErr.Error())
 			return
@@ -594,6 +596,43 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 		}
 	}
 	log.Printf("[TRACE] dynamic %s Delete(%s): end", r.spec.Name, id)
+}
+
+// deprovisionSkipped reports whether the pre-delete deprovision step should be
+// bypassed for this delete, based on the deprovision operation's SkipWhen
+// conditions evaluated against prior state (all must hold — logical AND). Use for
+// modes with no cloud infra to tear down (e.g. cloud=K8S_ONLY): the engine then
+// deletes directly. Returns false when no SkipWhen is configured.
+func (r *dynamicResource) deprovisionSkipped(ctx context.Context, state attrReader) bool {
+	dp := r.spec.Endpoint.Deprovision
+	if dp == nil || len(dp.SkipWhen) == 0 {
+		return false
+	}
+	for _, c := range dp.SkipWhen {
+		a := r.spec.attr(c.Attribute)
+		if a == nil {
+			return false
+		}
+		val := readConfigString(ctx, state, *a)
+		if val == "" {
+			val = defaultString(*a) // attribute omitted — fall back to its spec default
+		}
+		switch {
+		case c.IsEmpty:
+			if val != "" {
+				return false
+			}
+		case c.NotEquals != "":
+			if val == c.NotEquals {
+				return false
+			}
+		default:
+			if val != c.Equals {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (r *dynamicResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

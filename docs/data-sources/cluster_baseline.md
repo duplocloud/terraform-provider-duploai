@@ -36,7 +36,7 @@ output "status" {
 
 - `api_server_visibility` (String) Visibility of the Kubernetes API server endpoint.
 - `certificate_authority` (String) Base64-encoded cluster certificate authority data.
-- `cloud` (String) Cloud provider the cluster targets. Immutable after creation. Defaults to Aws.
+- `cloud` (String) Cloud provider the cluster targets. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
 - `cluster_all_host_sg_id` (String) Security group ID applied to all cluster hosts.
 - `cluster_arn` (String) ARN of the provisioned cluster (AWS only).
 - `cluster_endpoint` (String) Kubernetes API server endpoint URL.
@@ -46,9 +46,8 @@ output "status" {
 - `control_plane_logging` (List of String) Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler). When unset, defaults to none (server-assigned; list attributes take no static default).
 - `description` (String) Optional description.
 - `domain_name_filter` (String) Comma-joined list of Route53 hosted-zone names that external-dns should manage for this cluster.
-- `eks_version` (String, Deprecated) Deprecated: use `version` instead. Kubernetes version for the cluster (e.g. "1.34").
 - `name` (String) Name of the cluster baseline.
-- `network_id` (String) ID of the network baseline whose VPC and subnets this cluster will use. The cluster inherits its region, VPC, subnets, and scope from this network.
+- `network_id` (String) ID of the network baseline whose VPC and subnets this cluster will use. The cluster inherits its region, VPC, subnets, and scope from this network. Required unless cloud is K8S_ONLY (which provisions no cloud network).
 - `oidc_issuer_url` (String) OIDC issuer URL for IRSA.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
@@ -58,7 +57,7 @@ output "status" {
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) Subnet IDs for the cluster. Inherited from the linked network (network_id); computed, not user-settable.
 - `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))
-- `version` (String) Kubernetes version for the cluster (e.g. "1.34").
+- `version` (String) Kubernetes version for the cluster (e.g. "1.34"). Immutable after creation.
 - `vpc_id` (String) VPC ID for the cluster. Inherited from the linked network (network_id); computed, not user-settable.
 
 <a id="nestedatt--system_node_group"></a>

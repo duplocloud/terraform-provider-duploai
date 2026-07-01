@@ -67,25 +67,24 @@ resource "duploai_cluster_baseline" "full" {
 ### Required
 
 - `name` (String) Name of the cluster baseline.
-- `network_id` (String) ID of the network baseline whose VPC and subnets this cluster will use. The cluster inherits its region, VPC, subnets, and scope from this network.
+- `version` (String) Kubernetes version for the cluster (e.g. "1.34"). Immutable after creation.
 - `workspace_id` (String) ID of the workspace that owns this cluster baseline.
 
 ### Optional
 
 - `api_server_visibility` (String) Visibility of the Kubernetes API server endpoint.
-- `cloud` (String) Cloud provider the cluster targets. Immutable after creation. Defaults to Aws.
+- `cloud` (String) Cloud provider the cluster targets. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
 - `cluster_ip_cidr` (String) CIDR block for the Kubernetes service IP range (e.g. 172.20.0.0/16). Defaults to the cloud provider's default when unset.
 - `cluster_type` (String) Cluster mode: Standard (self-managed/managed node groups) or Auto (cloud-managed node lifecycle, e.g. EKS Auto Mode on AWS).
 - `control_plane_logging` (List of String) Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler). When unset, defaults to none (server-assigned; list attributes take no static default).
 - `description` (String) Optional description.
 - `domain_name_filter` (String) Comma-joined list of Route53 hosted-zone names that external-dns should manage for this cluster.
-- `eks_version` (String, Deprecated) Deprecated: use `version` instead. Kubernetes version for the cluster (e.g. "1.34").
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `network_id` (String) ID of the network baseline whose VPC and subnets this cluster will use. The cluster inherits its region, VPC, subnets, and scope from this network. Required unless cloud is K8S_ONLY (which provisions no cloud network).
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `version` (String) Kubernetes version for the cluster (e.g. "1.34").
 
 ### Read-Only
 

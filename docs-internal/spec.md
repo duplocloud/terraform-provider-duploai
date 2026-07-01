@@ -90,6 +90,7 @@ have been replaced by this block.
 |-------|---------|-------------|
 | `verb` | see table below | HTTP method (e.g. `"POST"`, `"PUT"`, `"DELETE"`). |
 | `path` | see table below | Path suffix appended to `uriBase`. May contain `{id}`. |
+| `skipWhen` | absent | **Deprovision only.** Array of conditions (`attribute` + one of `equals`/`notEquals`/`isEmpty`) evaluated against prior state at delete time. When **all** hold (logical AND), the engine skips the pre-delete deprovision step and deletes directly. Use for modes with no cloud infrastructure to tear down, e.g. `"skipWhen": [{"attribute": "cloud", "equals": "K8S_ONLY"}]`. Ignored on create/read/update/delete. |
 
 ### Default REST conventions
 
@@ -203,6 +204,7 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `createOnly` | bool | Send this field in POST (create) only; never in PUT (update). Useful for fields immutable after creation that do not trigger replacement. |
 | `noSend` | bool | Read from the response but never sent in requests. Use for computed-only output fields. |
 | `normalizeCsvOrder` | bool | For a `string` field, sort its comma-separated tokens into a canonical (lexical) order before storing in state. Use for order-insensitive values the backend returns non-deterministically (e.g. AWS MSK bootstrap broker strings) to prevent perpetual refresh drift. |
+| `deprecated` | string | Marks the attribute deprecated: the message is wired to the framework's `DeprecationMessage` and shown as a warning whenever the attribute is set in config. Use when renaming an attribute — keep the old one with a deprecation message pointing at the replacement (pair with `conflictsWith` + `requiredIf`/`isEmpty` for a backwards-compatible rename). |
 | `attributes` | array | Nested `AttributeSpec` entries. Required when `type` is an object form. Recurses to any depth. |
 
 ### Supported types
