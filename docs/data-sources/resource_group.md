@@ -44,6 +44,7 @@ output "iam_role_arn" {
 
 - `alb_security_group_id` (String) Provisioned ALB security group ID.
 - `aws_resource_name` (String) AWS resource name prefix for provisioned resources.
+- `cloud` (String) Cloud provider the resource group targets. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
 - `cluster_id` (String) Cluster ID to associate with this resource group.
 - `description` (String) Optional description.
 - `environment_id` (String) Environment ID to associate with this resource group.
@@ -55,7 +56,7 @@ output "iam_role_arn" {
 - `network_id` (String) ID of the network baseline this resource group is linked to. At least one of network_id or vpc_id is required.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
-- `region` (String) AWS region (e.g. us-east-1).
+- `region` (String) Cloud region (e.g. us-east-1).
 - `scope_ids` (List of String) Scope IDs linking this resource group to a cloud provider account.
 - `security_group_id` (String) Provisioned main security group ID.
 - `security_group_name` (String) Provisioned main security group name.
