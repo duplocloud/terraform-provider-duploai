@@ -46,7 +46,23 @@
       "optional": true,
       "forceNew": true,
       "apiPath": "spec.region",
-      "description": "AWS region (e.g. us-east-1)."
+      "description": "Cloud region (e.g. us-east-1)."
+    },
+    {
+      "name": "cloud",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Aws",
+      "forceNew": true,
+      "oneOf": [
+        "Aws",
+        "Azure",
+        "Gcp",
+        "K8S_ONLY"
+      ],
+      "apiPath": "spec.cloud",
+      "description": "Cloud provider the resource group targets. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws."
     },
     {
       "name": "network_id",
