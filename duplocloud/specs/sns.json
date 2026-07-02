@@ -104,11 +104,27 @@
     },
     {
       "name": "tags",
-      "type": "map(string)",
+      "type": "list(object)",
       "optional": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.tags",
-      "description": "Tags applied to the topic at creation. Platform ownership tags are added automatically."
+      "attributes": [
+        {
+          "name": "key",
+          "type": "string",
+          "required": true,
+          "apiPath": "key",
+          "description": "Tag key."
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "required": true,
+          "apiPath": "value",
+          "description": "Tag value."
+        }
+      ],
+      "description": "Tags applied to the topic at creation, as a list of key/value pairs. Platform ownership tags are added automatically."
     },
     {
       "name": "provisioner_type",

@@ -22,7 +22,7 @@ resource "duploai_sns" "fifo" {
   encryption_mode   = "SseKms"
   kms_master_key_id = "alias/aws/sns"
 
-  tags = {
-    team = "payments"
-  }
+  tags = [
+    { key = "team", value = "payments" }
+  ]
 }

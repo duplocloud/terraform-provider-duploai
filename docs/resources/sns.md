@@ -37,9 +37,9 @@ resource "duploai_sns" "fifo" {
   encryption_mode   = "SseKms"
   kms_master_key_id = "alias/aws/sns"
 
-  tags = {
-    team = "payments"
-  }
+  tags = [
+    { key = "team", value = "payments" }
+  ]
 }
 ```
 
@@ -64,7 +64,7 @@ resource "duploai_sns" "fifo" {
 - `provisioner_type` (String) Provisioner type. Defaults to DirectApiCall for SNS.
 - `provisioner_version` (String) Optional provisioner version.
 - `scope_ids` (List of String) Scope IDs that link this topic to a cloud provider account.
-- `tags` (Map of String) Tags applied to the topic at creation. Platform ownership tags are added automatically.
+- `tags` (Attributes List) Tags applied to the topic at creation, as a list of key/value pairs. Platform ownership tags are added automatically. (see [below for nested schema](#nestedatt--tags))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `topic_type` (String) Topic type: Standard (best-effort ordering, at-least-once delivery) or Fifo (strict ordering, exactly-once). Immutable after creation.
 
@@ -76,6 +76,15 @@ resource "duploai_sns" "fifo" {
 - `topic_arn` (String) ARN of the provisioned SNS topic.
 - `updated_at` (String) Timestamp when the topic was last updated (RFC 3339).
 - `version` (Number) Version counter, incremented on each update.
+
+<a id="nestedatt--tags"></a>
+### Nested Schema for `tags`
+
+Required:
+
+- `key` (String) Tag key.
+- `value` (String) Tag value.
+
 
 <a id="nestedblock--timeouts"></a>
 ### Nested Schema for `timeouts`
