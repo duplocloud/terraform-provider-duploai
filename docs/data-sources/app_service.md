@@ -49,6 +49,7 @@ output "ingress_name" {
 - `environment_id` (String) ID of the environment that owns the resource group.
 - `hpa` (Attributes) Optional HorizontalPodAutoscaler that scales the deployment between min and max replicas based on metrics. Requires replication_type = "Hpa". The platform sets the autoscaler's name and scale target to this app service's workload automatically. Omit to create no autoscaler. (see [below for nested schema](#nestedatt--hpa))
 - `hpa_name` (String) Name of the provisioned HorizontalPodAutoscaler (set when replication_type is Hpa).
+- `image_pull_secrets` (Attributes List) Image pull secrets referenced by the pods, for pulling container images from private registries. (see [below for nested schema](#nestedatt--image_pull_secrets))
 - `ingress` (Attributes) Optional Kubernetes Ingress exposing the Service over HTTP(S). Omit to create no Ingress. (see [below for nested schema](#nestedatt--ingress))
 - `ingress_name` (String) Name of the provisioned Ingress (if any).
 - `labels` (Map of String) Kubernetes labels applied to the Deployment object.
@@ -208,6 +209,14 @@ Read-Only:
 
 
 
+
+
+<a id="nestedatt--image_pull_secrets"></a>
+### Nested Schema for `image_pull_secrets`
+
+Read-Only:
+
+- `name` (String) Name of a Kubernetes Secret (type kubernetes.io/dockerconfigjson) in the same namespace used to pull images from a private registry.
 
 
 <a id="nestedatt--ingress"></a>

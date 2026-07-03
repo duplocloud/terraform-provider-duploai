@@ -115,6 +115,7 @@ resource "duploai_app_service" "nginx" {
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `hpa` (Attributes) Optional HorizontalPodAutoscaler that scales the deployment between min and max replicas based on metrics. Requires replication_type = "Hpa". The platform sets the autoscaler's name and scale target to this app service's workload automatically. Omit to create no autoscaler. (see [below for nested schema](#nestedatt--hpa))
+- `image_pull_secrets` (Attributes List) Image pull secrets referenced by the pods, for pulling container images from private registries. (see [below for nested schema](#nestedatt--image_pull_secrets))
 - `ingress` (Attributes) Optional Kubernetes Ingress exposing the Service over HTTP(S). Omit to create no Ingress. (see [below for nested schema](#nestedatt--ingress))
 - `labels` (Map of String) Kubernetes labels applied to the Deployment object.
 - `match_labels` (Map of String) Deployment selector matchLabels. Must match pod_labels.
@@ -303,6 +304,14 @@ Optional:
 
 
 
+
+
+<a id="nestedatt--image_pull_secrets"></a>
+### Nested Schema for `image_pull_secrets`
+
+Required:
+
+- `name` (String) Name of a Kubernetes Secret (type kubernetes.io/dockerconfigjson) in the same namespace used to pull images from a private registry.
 
 
 <a id="nestedatt--ingress"></a>
