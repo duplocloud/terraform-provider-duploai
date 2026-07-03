@@ -3,12 +3,12 @@
 page_title: "duploai_cluster_baseline Data Source - duploai"
 subcategory: ""
 description: |-
-  Manages a DuploCloud AI Helpdesk EKS cluster baseline (control plane, networking, and optional system node group).
+  Manages a DuploCloud AI Helpdesk Kubernetes cluster baseline (control plane, networking, and optional system node group), provisionable across any supported cloud. The target cloud is selected via the cloud attribute — AWS (EKS), Azure (AKS), GCP (GKE), or bare Kubernetes (K8S_ONLY) — and defaults to AWS.
 ---
 
 # duploai_cluster_baseline (Data Source)
 
-Manages a DuploCloud AI Helpdesk EKS cluster baseline (control plane, networking, and optional system node group).
+Manages a DuploCloud AI Helpdesk Kubernetes cluster baseline (control plane, networking, and optional system node group), provisionable across any supported cloud. The target cloud is selected via the `cloud` attribute — AWS (EKS), Azure (AKS), GCP (GKE), or bare Kubernetes (K8S_ONLY) — and defaults to AWS.
 
 ## Example Usage
 
@@ -34,29 +34,30 @@ output "status" {
 
 ### Read-Only
 
-- `api_server_visibility` (String) Visibility of the EKS API server endpoint.
+- `api_server_visibility` (String) Visibility of the Kubernetes API server endpoint.
 - `certificate_authority` (String) Base64-encoded cluster certificate authority data.
+- `cloud` (String) Cloud provider the cluster targets. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
 - `cluster_all_host_sg_id` (String) Security group ID applied to all cluster hosts.
-- `cluster_arn` (String) Provisioned EKS cluster ARN.
-- `cluster_endpoint` (String) EKS API server endpoint URL.
-- `cluster_ip_cidr` (String) CIDR block for the Kubernetes service IP range (e.g. 172.20.0.0/16). Defaults to the AWS default when unset.
-- `cluster_sg_id` (String) EKS cluster security group ID.
-- `cluster_type` (String) Cluster mode: Standard (self-managed/managed node groups) or Auto (EKS Auto Mode).
+- `cluster_arn` (String) ARN of the provisioned cluster (AWS only).
+- `cluster_endpoint` (String) Kubernetes API server endpoint URL.
+- `cluster_ip_cidr` (String) CIDR block for the Kubernetes service IP range (e.g. 172.20.0.0/16). Defaults to the cloud provider's default when unset.
+- `cluster_sg_id` (String) Cluster security group ID (AWS only).
+- `cluster_type` (String) Cluster mode: Standard (self-managed/managed node groups) or Auto (cloud-managed node lifecycle, e.g. EKS Auto Mode on AWS).
 - `control_plane_logging` (List of String) Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler). When unset, defaults to none (server-assigned; list attributes take no static default).
 - `description` (String) Optional description.
 - `domain_name_filter` (String) Comma-joined list of Route53 hosted-zone names that external-dns should manage for this cluster.
-- `eks_version` (String) Kubernetes version for the EKS cluster (e.g. "1.34").
 - `name` (String) Name of the cluster baseline.
-- `network_id` (String) ID of the network baseline whose VPC and subnets this cluster will use. The cluster inherits its region, VPC, subnets, and scope from this network.
+- `network_id` (String) ID of the network baseline whose VPC and subnets this cluster will use. The cluster inherits its region, VPC, subnets, and scope from this network. Required unless cloud is K8S_ONLY (which provisions no cloud network).
 - `oidc_issuer_url` (String) OIDC issuer URL for IRSA.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
-- `region` (String) AWS region (e.g. us-east-1). Inherited from the linked network (network_id); computed, not user-settable.
-- `scope_ids` (List of String) Scope IDs linking this cluster to a cloud provider account. Inherited from the linked network (network_id); computed, not user-settable.
+- `region` (String) Cloud region (e.g. us-east-1). Inherited from the linked network (network_id); computed, not user-settable.
+- `scope_ids` (List of String) Scope IDs for the cluster. For cloud clusters leave unset — inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from.
 - `stack_id` (String) Provisioned infrastructure stack ID.
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) Subnet IDs for the cluster. Inherited from the linked network (network_id); computed, not user-settable.
 - `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))
+- `version` (String) Kubernetes version for the cluster (e.g. "1.34"). Immutable after creation.
 - `vpc_id` (String) VPC ID for the cluster. Inherited from the linked network (network_id); computed, not user-settable.
 
 <a id="nestedatt--system_node_group"></a>

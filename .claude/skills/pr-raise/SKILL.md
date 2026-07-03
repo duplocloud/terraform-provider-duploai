@@ -25,9 +25,13 @@ the full conventions this skill enforces.
   the PR.
 - **One approval gate.** Show the full preview once; user clicks **Raise PR** or
   **Cancel**. If they request a change, update and re-show once — no further loops.
-- **Never invent content.** Fill only what was provided. Always use
+- **Never invent hard inputs.** ClickUp ID, title, and target branch must come
+  from the user — never guess them. Always use
   [`.github/pull_request_template.md`](../../../.github/pull_request_template.md)
   as the body structure — never inline a copy.
+- **Synthesise Overview and Summary from session context.** When the user does
+  not explicitly provide these, derive them from the conversation history, staged
+  diff, and PR title (see Step 4). Do not leave them blank or as placeholders.
 
 ---
 
@@ -54,8 +58,8 @@ Parse from the invocation phrase first. Ask for anything missing in **one**
 
 | Input | Behaviour if absent |
 |---|---|
-| **Overview** | Section header included but left empty |
-| **Summary of changes** | Section header + "This PR does the following:" included but bullet left as `- ...` |
+| **Overview** | Auto-synthesised: one sentence derived from the PR title and session context (see Step 4). |
+| **Summary of changes** | Auto-synthesised: 2–5 bullet points derived from the staged diff and session context (see Step 4). |
 
 ### Validation
 
@@ -72,17 +76,15 @@ Target is master  → "master is CI/CD-only. Target develop, hotfix/<ver>, or re
 
 ### Derive branch name
 
-1. Slugify title: lowercase → spaces to `-` → strip non-alphanumeric/hyphen →
-   collapse `-` → truncate at last `-` before 40 chars.
-2. Base: `<DUPLOAI-ID>-<slug>`
-3. If taken locally or on remote, try `-01` → `-02` → `-03`. If all taken, ask
+1. Base: `<DUPLOAI-ID>` (the ClickUp ticket ID alone — e.g. `DUPLOAI-2034`).
+2. If taken locally or on remote, try `-01` → `-02` → `-03`. If all taken, ask
    for a custom suffix.
 
 ```bash
 branch_exists() {
   git branch --list "$1" | grep -q "$1" || git ls-remote --heads origin "$1" | grep -q "$1"
 }
-base="DUPLOAI-<id>-<slug>"; name="$base"; counter=1
+base="DUPLOAI-<id>"; name="$base"; counter=1
 while branch_exists "$name" && [ $counter -le 3 ]; do
   name=$(printf "%s-%02d" "$base" $counter); counter=$((counter + 1))
 done
@@ -127,9 +129,21 @@ and use it as the exact PR body structure. Fill in the collected values:
 
 - `**ClickUp Ticket ID:**` → `<id>`
 - Check `[x]` on the matching type; leave the rest `[ ]`
-- `## Overview` → overview text if provided, otherwise leave the section empty
-- `## Summary of changes` → fill bullets if provided; otherwise keep the
-  placeholder (`- ...`) that is already in the template
+- `## Overview` → use the user-provided text if given; otherwise write one
+  sentence synthesised from the PR title and the session context. The sentence
+  should state *what* the PR delivers and *why* it matters. Example pattern:
+  *"Introduces `<feature>` so that `<capability>`."* Keep it under 120 chars.
+- `## Summary of changes` → use the user-provided bullets if given; otherwise
+  write 2–5 concise bullets synthesised from the staged diff (`git diff --stat`
+  and the actual hunks) and the session context. Each bullet should describe a
+  distinct logical change (e.g. new file, modified engine, updated docs), not
+  just list file names. Example:
+  - *"Add `dataSourceOnly` flag to `ResourceSpec` — skips managed-resource
+    registration while still registering a data source."*
+  - *"New spec `admin_workspace.json` — data-source-only lookup for workspaces
+    by ID."*
+  - *"Update `gen_readme` to emit data-source-only specs in the Data Sources
+    table, not the Resources table."*
 - `## Describe any breaking changes` → `None.` unless breaking changes were described
 
 Show the full PR in one `AskUserQuestion` preview, options: **Raise PR** /

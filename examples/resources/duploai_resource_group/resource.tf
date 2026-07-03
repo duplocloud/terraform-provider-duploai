@@ -4,7 +4,6 @@ resource "duploai_resource_group" "basic" {
   workspace_id   = "<workspace-id>"
   name           = "<resource-group-name>"
   environment_id = "<environment-id>"
-  scope_ids      = ["<scope-id>"]
   region         = ""
   network_id     = "<network-id>"
 }
@@ -15,7 +14,6 @@ resource "duploai_resource_group" "from_vpc" {
   workspace_id   = "<workspace-id>"
   name           = "<resource-group-name>"
   environment_id = "<environment-id>"
-  scope_ids      = ["<scope-id>"]
   region         = ""
   vpc_id         = "<vpc-id>"
 }
@@ -26,7 +24,6 @@ resource "duploai_resource_group" "custom" {
   name              = "<resource-group-name>"
   environment_id    = "<environment-id>"
   description       = "Production resource group with IaC-native provisioner"
-  scope_ids         = ["<scope-id>"]
   region            = ""
   network_id        = "<network-id>"
   provisioner_type  = "IacNativeTf"

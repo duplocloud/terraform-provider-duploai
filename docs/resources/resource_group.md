@@ -19,7 +19,6 @@ resource "duploai_resource_group" "basic" {
   workspace_id   = "<workspace-id>"
   name           = "<resource-group-name>"
   environment_id = "<environment-id>"
-  scope_ids      = ["<scope-id>"]
   region         = ""
   network_id     = "<network-id>"
 }
@@ -30,7 +29,6 @@ resource "duploai_resource_group" "from_vpc" {
   workspace_id   = "<workspace-id>"
   name           = "<resource-group-name>"
   environment_id = "<environment-id>"
-  scope_ids      = ["<scope-id>"]
   region         = ""
   vpc_id         = "<vpc-id>"
 }
@@ -41,7 +39,6 @@ resource "duploai_resource_group" "custom" {
   name              = "<resource-group-name>"
   environment_id    = "<environment-id>"
   description       = "Production resource group with IaC-native provisioner"
-  scope_ids         = ["<scope-id>"]
   region            = ""
   network_id        = "<network-id>"
   provisioner_type  = "IacNativeTf"
@@ -62,19 +59,19 @@ resource "duploai_resource_group" "custom" {
 
 - `environment_id` (String) Environment ID to associate with this resource group.
 - `name` (String) Name of the resource group.
-- `scope_ids` (List of String) Scope IDs linking this resource group to a cloud provider account.
 - `workspace_id` (String) ID of the workspace that owns this resource group.
 
 ### Optional
 
 - `aws_resource_name` (String) AWS resource name prefix for provisioned resources.
+- `cloud` (String) Cloud provider the resource group targets. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
 - `cluster_id` (String) Cluster ID to associate with this resource group.
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `network_id` (String) ID of the network baseline this resource group is linked to. At least one of network_id or vpc_id is required.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
-- `region` (String) AWS region (e.g. us-east-1).
+- `region` (String) Cloud region (e.g. us-east-1).
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `vpc_id` (String) VPC ID to associate with this resource group. At least one of vpc_id or network_id is required. The API derives this automatically when network_id is set.
 
@@ -86,6 +83,7 @@ resource "duploai_resource_group" "custom" {
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `kms_key_alias` (String) Provisioned KMS key alias.
 - `kms_key_arn` (String) Provisioned KMS key ARN.
+- `scope_ids` (List of String) Scope IDs linking this resource group to a cloud provider account. Inherited from the linked network; computed, not user-settable.
 - `security_group_id` (String) Provisioned main security group ID.
 - `security_group_name` (String) Provisioned main security group name.
 - `status` (String) Current provisioning status.

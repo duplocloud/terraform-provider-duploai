@@ -44,6 +44,7 @@ output "subnet_ids" {
 
 - `az_count` (Number) Number of availability zones (1-4).
 - `cidr` (String) VPC CIDR block (e.g. 10.0.0.0/16).
+- `cloud` (String) Cloud provider the network is provisioned in. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
 - `description` (String) Optional description.
 - `enable_dns` (Boolean) Enable DNS support in the VPC.
 - `enable_flow_logs` (Boolean) Enable VPC flow logs.
@@ -55,7 +56,7 @@ output "subnet_ids" {
 - `network_id` (String) UUID of this network baseline, for reference by dependent resources (e.g. a cluster baseline).
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
-- `region` (String) AWS region (e.g. us-east-1).
+- `region` (String) Cloud region (e.g. us-east-1).
 - `scope_ids` (List of String) Scope IDs that link this network to a cloud provider account.
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) Provisioned subnet IDs.

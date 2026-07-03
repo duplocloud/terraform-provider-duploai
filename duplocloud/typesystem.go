@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
@@ -116,7 +117,7 @@ func attrSchema(a AttributeSpec) schema.Attribute {
 func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 	switch elem {
 	case "string":
-		o := schema.StringAttribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		o := schema.StringAttribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
 		if a.Default != nil {
 			var s string
 			_ = json.Unmarshal(*a.Default, &s)
@@ -133,7 +134,7 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 		}
 		return o
 	case "bool":
-		o := schema.BoolAttribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		o := schema.BoolAttribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
 		if a.Default != nil {
 			var b bool
 			_ = json.Unmarshal(*a.Default, &b)
@@ -147,7 +148,7 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 		}
 		return o
 	case "int":
-		o := schema.Int64Attribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		o := schema.Int64Attribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
 		if a.Default != nil {
 			var i int64
 			_ = json.Unmarshal(*a.Default, &i)
@@ -167,7 +168,7 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 		}
 		return o
 	default: // number
-		o := schema.Float64Attribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		o := schema.Float64Attribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
 		if a.Default != nil {
 			var f float64
 			_ = json.Unmarshal(*a.Default, &f)
@@ -227,7 +228,7 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 	et := primitiveAttrType(info.elem)
 	switch info.coll {
 	case "set":
-		o := schema.SetAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		o := schema.SetAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
 		if a.Default != nil {
 			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = setdefault.StaticValue(v.(types.Set))
@@ -244,7 +245,7 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 		}
 		return o
 	case "map":
-		o := schema.MapAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		o := schema.MapAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
 		if a.Default != nil {
 			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = mapdefault.StaticValue(v.(types.Map))
@@ -258,7 +259,7 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 		}
 		return o
 	default: // list
-		o := schema.ListAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		o := schema.ListAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
 		if a.Default != nil {
 			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = listdefault.StaticValue(v.(types.List))
@@ -289,7 +290,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 	nested := nestedAttrMap(a.Attributes)
 	switch info.coll {
 	case "list":
-		o := schema.ListNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		o := schema.ListNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
 		if a.Default != nil {
 			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = listdefault.StaticValue(v.(types.List))
@@ -306,7 +307,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		}
 		return o
 	case "set":
-		o := schema.SetNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		o := schema.SetNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
 		if a.Default != nil {
 			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = setdefault.StaticValue(v.(types.Set))
@@ -323,7 +324,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		}
 		return o
 	case "map":
-		o := schema.MapNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		o := schema.MapNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
 		if a.Default != nil {
 			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = mapdefault.StaticValue(v.(types.Map))
@@ -337,7 +338,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		}
 		return o
 	default: // single object
-		o := schema.SingleNestedAttribute{Attributes: nested, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description}
+		o := schema.SingleNestedAttribute{Attributes: nested, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
 		if a.Default != nil {
 			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = objectdefault.StaticValue(v.(types.Object))
@@ -509,12 +510,30 @@ func objectToRequest(attrs []AttributeSpec, v tftypes.Value) map[string]any {
 
 // attrFromResponse converts a response value into a framework value of type t,
 // honoring the per-field response paths of nested objects.
+// normalizeCsvOrder sorts the comma-separated tokens of s into a stable lexical
+// order. Used for order-insensitive backend fields (e.g. bootstrap broker
+// strings) that the API returns in non-deterministic order. An empty string is
+// returned unchanged.
+func normalizeCsvOrder(s string) string {
+	if s == "" {
+		return s
+	}
+	parts := strings.Split(s, ",")
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
 func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 	if data == nil {
 		return tftypes.NewValue(t, nil)
 	}
 	info, _ := parseType(a.Type)
 	if info.elem != "object" {
+		if a.NormalizeCsvOrder {
+			if s, ok := data.(string); ok {
+				data = normalizeCsvOrder(s)
+			}
+		}
 		return goToTftypesValue(t, data)
 	}
 	if info.coll == "" {
@@ -644,7 +663,7 @@ func dsPrimitiveSchema(a AttributeSpec, elem string) dsschema.Attribute {
 	case "string":
 		o := dsschema.StringAttribute{
 			Required: a.Required, Optional: a.Optional, Computed: a.Computed,
-			Sensitive: a.Sensitive, Description: a.Description,
+			Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
 		if len(a.OneOf) > 0 {
 			o.Validators = []validator.String{stringvalidator.OneOf(a.OneOf...)}
@@ -653,17 +672,17 @@ func dsPrimitiveSchema(a AttributeSpec, elem string) dsschema.Attribute {
 	case "bool":
 		return dsschema.BoolAttribute{
 			Required: a.Required, Optional: a.Optional, Computed: a.Computed,
-			Sensitive: a.Sensitive, Description: a.Description,
+			Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
 	case "int":
 		return dsschema.Int64Attribute{
 			Required: a.Required, Optional: a.Optional, Computed: a.Computed,
-			Sensitive: a.Sensitive, Description: a.Description,
+			Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
 	default: // number
 		return dsschema.Float64Attribute{
 			Required: a.Required, Optional: a.Optional, Computed: a.Computed,
-			Sensitive: a.Sensitive, Description: a.Description,
+			Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
 	}
 }
@@ -674,17 +693,17 @@ func dsPrimitiveCollectionSchema(a AttributeSpec, info typeInfo) dsschema.Attrib
 	case "set":
 		return dsschema.SetAttribute{
 			ElementType: et, Required: a.Required, Optional: a.Optional,
-			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description,
+			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
 	case "map":
 		return dsschema.MapAttribute{
 			ElementType: et, Required: a.Required, Optional: a.Optional,
-			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description,
+			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
 	default: // list
 		return dsschema.ListAttribute{
 			ElementType: et, Required: a.Required, Optional: a.Optional,
-			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description,
+			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
 	}
 }
@@ -711,24 +730,24 @@ func dsObjectSchema(a AttributeSpec, info typeInfo) dsschema.Attribute {
 		return dsschema.ListNestedAttribute{
 			NestedObject: dsschema.NestedAttributeObject{Attributes: nested},
 			Required:     a.Required, Optional: a.Optional, Computed: a.Computed,
-			Sensitive: a.Sensitive, Description: a.Description,
+			Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
 	case "set":
 		return dsschema.SetNestedAttribute{
 			NestedObject: dsschema.NestedAttributeObject{Attributes: nested},
 			Required:     a.Required, Optional: a.Optional, Computed: a.Computed,
-			Sensitive: a.Sensitive, Description: a.Description,
+			Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
 	case "map":
 		return dsschema.MapNestedAttribute{
 			NestedObject: dsschema.NestedAttributeObject{Attributes: nested},
 			Required:     a.Required, Optional: a.Optional, Computed: a.Computed,
-			Sensitive: a.Sensitive, Description: a.Description,
+			Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
 	default: // single object
 		return dsschema.SingleNestedAttribute{
 			Attributes: nested, Required: a.Required, Optional: a.Optional,
-			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description,
+			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
 	}
 }

@@ -1,0 +1,201 @@
+{
+  "name": "sns",
+  "description": "Manages a DuploCloud AI Helpdesk AWS SNS (Simple Notification Service) topic, provisioned within an environment and resource group.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AwsSnsTopics",
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this SNS topic."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Topic name. Letters, numbers, hyphens, and underscores. For a FIFO topic (topic_type = Fifo) the platform appends the required \".fifo\" suffix automatically. Cannot be changed after creation."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment in which the topic is provisioned."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group in which the topic is provisioned."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this topic to a cloud provider account."
+    },
+    {
+      "name": "topic_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Standard",
+      "forceNew": true,
+      "oneOf": ["Standard", "Fifo"],
+      "apiPath": "spec.topicType",
+      "description": "Topic type: Standard (best-effort ordering, at-least-once delivery) or Fifo (strict ordering, exactly-once). Immutable after creation."
+    },
+    {
+      "name": "display_name",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.displayName",
+      "description": "Human-readable name shown as the sender for SMS/email subscriptions. Can be changed in place."
+    },
+    {
+      "name": "content_based_deduplication",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.contentBasedDeduplication",
+      "description": "Enable content-based deduplication (FIFO topics only; ignored for Standard). Can be changed in place."
+    },
+    {
+      "name": "delivery_policy",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.deliveryPolicy",
+      "description": "SNS delivery policy document (JSON) controlling retry behavior for HTTP/S subscriptions. Can be changed in place."
+    },
+    {
+      "name": "encryption_mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "None",
+      "oneOf": ["None", "SseKms"],
+      "apiPath": "spec.encryption.mode",
+      "description": "Server-side encryption mode: None (unencrypted) or SseKms (AWS KMS). Can be changed in place."
+    },
+    {
+      "name": "kms_master_key_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.encryption.kmsMasterKeyId",
+      "description": "KMS key ID or ARN used when encryption_mode is SseKms. Required when encryption_mode is SseKms. Can be changed in place."
+    },
+    {
+      "name": "tags",
+      "type": "list(object)",
+      "optional": true,
+      "createOnly": true,
+      "requestPath": "spec.createRequest.tags",
+      "attributes": [
+        {
+          "name": "key",
+          "type": "string",
+          "required": true,
+          "apiPath": "key",
+          "description": "Tag key."
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "required": true,
+          "apiPath": "value",
+          "description": "Tag value."
+        }
+      ],
+      "description": "Tags applied to the topic at creation, as a list of key/value pairs. Platform ownership tags are added automatically."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type. Defaults to DirectApiCall for SNS."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status of the topic."
+    },
+    {
+      "name": "topic_arn",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.cloudDetails.TopicArn",
+      "description": "ARN of the provisioned SNS topic."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the topic was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the topic was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ],
+  "createConstants": [
+    {
+      "path": "spec.mode",
+      "value": "Create"
+    }
+  ],
+  "requiredIf": [
+    {
+      "attribute": "kms_master_key_id",
+      "whenAttribute": "encryption_mode",
+      "whenEquals": "SseKms"
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned"
+  }
+}

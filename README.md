@@ -60,7 +60,7 @@ provider "duploai" {
 | [`duploai_aws_lambda`](docs/resources/aws_lambda.md) | Manages a DuploCloud AI Helpdesk AWS Lambda function — a serverless compute resource that runs code in response to events within an environment and resource group |
 | [`duploai_aws_secret`](docs/resources/aws_secret.md) | Manages a DuploCloud AI Helpdesk AWS Secrets Manager secret |
 | [`duploai_cluster_attributes`](docs/resources/cluster_attributes.md) | Manages DuploCloud AI Helpdesk cluster attributes — add-ons and components installed onto an existing EKS cluster (autoscaler, ALB controller, EFS, external-dns, and more) |
-| [`duploai_cluster_baseline`](docs/resources/cluster_baseline.md) | Manages a DuploCloud AI Helpdesk EKS cluster baseline (control plane, networking, and optional system node group) |
+| [`duploai_cluster_baseline`](docs/resources/cluster_baseline.md) | Manages a DuploCloud AI Helpdesk Kubernetes cluster baseline (control plane, networking, and optional system node group), provisionable across any supported cloud. The target cloud is selected via the `cloud` attribute — AWS (EKS), Azure (AKS), GCP (GKE), or bare Kubernetes (K8S_ONLY) — and defaults to AWS |
 | [`duploai_elasticache`](docs/resources/elasticache.md) | Manages a DuploCloud AI Helpdesk AWS ElastiCache cluster (Redis, Valkey, or Memcached) |
 | [`duploai_environment`](docs/resources/environment.md) | Manages a DuploCloud AI environment within a workspace |
 | [`duploai_helm_release`](docs/resources/helm_release.md) | Manages a DuploCloud AI Helpdesk Kubernetes Helm release (Flux HelmRelease) |
@@ -75,6 +75,8 @@ provider "duploai" {
 | [`duploai_k8s_secret`](docs/resources/k8s_secret.md) | Manages a DuploCloud AI Helpdesk Kubernetes Secret |
 | [`duploai_k8s_storage_class`](docs/resources/k8s_storage_class.md) | Manages a DuploCloud AI Helpdesk Kubernetes StorageClass. A StorageClass is a cluster-scoped object that describes how a volume is dynamically provisioned; PersistentVolumeClaims reference it by name |
 | [`duploai_mcp_server`](docs/resources/mcp_server.md) | Manages a DuploCloud AI Helpdesk MCP (Model Context Protocol) server registration — a tool/data provider that AI agents can connect to over HTTP, SSE, or a raw configuration |
+| [`duploai_msk_kafka`](docs/resources/msk_kafka.md) | Manages a DuploCloud AI Helpdesk AWS MSK (Managed Streaming for Apache Kafka) provisioned cluster, in which you size the brokers, provisioned within an environment and resource group |
+| [`duploai_msk_kafka_serverless`](docs/resources/msk_kafka_serverless.md) | Manages a DuploCloud AI Helpdesk AWS MSK (Managed Streaming for Apache Kafka) serverless cluster, in which AWS manages broker capacity automatically. Networking (private subnets and security group) and IAM client authentication are configured server-side |
 | [`duploai_native_host`](docs/resources/native_host.md) | Manages a DuploCloud native host — an AWS EC2 instance provisioned inside a workspace environment |
 | [`duploai_network_baseline`](docs/resources/network_baseline.md) | Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways) |
 | [`duploai_node_group`](docs/resources/node_group.md) | Manages a DuploCloud AI Helpdesk AWS EKS managed node group |
@@ -84,6 +86,7 @@ provider "duploai" {
 | [`duploai_rds_instance`](docs/resources/rds_instance.md) | Manages a DuploCloud AI Helpdesk standalone AWS RDS instance |
 | [`duploai_resource_group`](docs/resources/resource_group.md) | Manages a DuploCloud AI Helpdesk resource group (shared security groups, IAM role, KMS key) |
 | [`duploai_s3_bucket`](docs/resources/s3_bucket.md) | Manages a DuploCloud AI Helpdesk AWS S3 bucket |
+| [`duploai_sns`](docs/resources/sns.md) | Manages a DuploCloud AI Helpdesk AWS SNS (Simple Notification Service) topic, provisioned within an environment and resource group |
 <!-- resources-end -->
 
 ## Data Sources
@@ -100,12 +103,13 @@ provider "duploai" {
 | [`duploai_admin_scope`](docs/data-sources/admin_scope.md) | Manages a DuploCloud AI scope: a credentialed view over a provider's resources, filtered by AWS, Kubernetes, and Git rules |
 | [`duploai_admin_skill`](docs/data-sources/admin_skill.md) | Manages a DuploCloud AI Helpdesk skill — a reusable capability (Markdown docs, a package, or a private Git repo) that is assigned to personas |
 | [`duploai_admin_user`](docs/data-sources/admin_user.md) | Manages a DuploCloud AI user account, including identity, roles, and metadata |
+| [`duploai_admin_workspace`](docs/data-sources/admin_workspace.md) | Fetches a DuploCloud AI Helpdesk workspace by ID |
 | [`duploai_app_service`](docs/data-sources/app_service.md) | Manages a DuploCloud AI Helpdesk app service (Kubernetes Deployment) |
 | [`duploai_aws_efs`](docs/data-sources/aws_efs.md) | Manages a DuploCloud AI Helpdesk AWS EFS file system — an elastic, managed NFS file system provisioned within an environment and resource group |
 | [`duploai_aws_lambda`](docs/data-sources/aws_lambda.md) | Manages a DuploCloud AI Helpdesk AWS Lambda function — a serverless compute resource that runs code in response to events within an environment and resource group |
 | [`duploai_aws_secret`](docs/data-sources/aws_secret.md) | Manages a DuploCloud AI Helpdesk AWS Secrets Manager secret |
 | [`duploai_cluster_attributes`](docs/data-sources/cluster_attributes.md) | Manages DuploCloud AI Helpdesk cluster attributes — add-ons and components installed onto an existing EKS cluster (autoscaler, ALB controller, EFS, external-dns, and more) |
-| [`duploai_cluster_baseline`](docs/data-sources/cluster_baseline.md) | Manages a DuploCloud AI Helpdesk EKS cluster baseline (control plane, networking, and optional system node group) |
+| [`duploai_cluster_baseline`](docs/data-sources/cluster_baseline.md) | Manages a DuploCloud AI Helpdesk Kubernetes cluster baseline (control plane, networking, and optional system node group), provisionable across any supported cloud. The target cloud is selected via the `cloud` attribute — AWS (EKS), Azure (AKS), GCP (GKE), or bare Kubernetes (K8S_ONLY) — and defaults to AWS |
 | [`duploai_elasticache`](docs/data-sources/elasticache.md) | Manages a DuploCloud AI Helpdesk AWS ElastiCache cluster (Redis, Valkey, or Memcached) |
 | [`duploai_environment`](docs/data-sources/environment.md) | Manages a DuploCloud AI environment within a workspace |
 | [`duploai_helm_release`](docs/data-sources/helm_release.md) | Manages a DuploCloud AI Helpdesk Kubernetes Helm release (Flux HelmRelease) |
@@ -120,6 +124,8 @@ provider "duploai" {
 | [`duploai_k8s_secret`](docs/data-sources/k8s_secret.md) | Manages a DuploCloud AI Helpdesk Kubernetes Secret |
 | [`duploai_k8s_storage_class`](docs/data-sources/k8s_storage_class.md) | Manages a DuploCloud AI Helpdesk Kubernetes StorageClass. A StorageClass is a cluster-scoped object that describes how a volume is dynamically provisioned; PersistentVolumeClaims reference it by name |
 | [`duploai_mcp_server`](docs/data-sources/mcp_server.md) | Manages a DuploCloud AI Helpdesk MCP (Model Context Protocol) server registration — a tool/data provider that AI agents can connect to over HTTP, SSE, or a raw configuration |
+| [`duploai_msk_kafka`](docs/data-sources/msk_kafka.md) | Manages a DuploCloud AI Helpdesk AWS MSK (Managed Streaming for Apache Kafka) provisioned cluster, in which you size the brokers, provisioned within an environment and resource group |
+| [`duploai_msk_kafka_serverless`](docs/data-sources/msk_kafka_serverless.md) | Manages a DuploCloud AI Helpdesk AWS MSK (Managed Streaming for Apache Kafka) serverless cluster, in which AWS manages broker capacity automatically. Networking (private subnets and security group) and IAM client authentication are configured server-side |
 | [`duploai_native_host`](docs/data-sources/native_host.md) | Manages a DuploCloud native host — an AWS EC2 instance provisioned inside a workspace environment |
 | [`duploai_network_baseline`](docs/data-sources/network_baseline.md) | Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways) |
 | [`duploai_node_group`](docs/data-sources/node_group.md) | Manages a DuploCloud AI Helpdesk AWS EKS managed node group |
@@ -129,6 +135,7 @@ provider "duploai" {
 | [`duploai_rds_instance`](docs/data-sources/rds_instance.md) | Manages a DuploCloud AI Helpdesk standalone AWS RDS instance |
 | [`duploai_resource_group`](docs/data-sources/resource_group.md) | Manages a DuploCloud AI Helpdesk resource group (shared security groups, IAM role, KMS key) |
 | [`duploai_s3_bucket`](docs/data-sources/s3_bucket.md) | Manages a DuploCloud AI Helpdesk AWS S3 bucket |
+| [`duploai_sns`](docs/data-sources/sns.md) | Manages a DuploCloud AI Helpdesk AWS SNS (Simple Notification Service) topic, provisioned within an environment and resource group |
 <!-- data-sources-end -->
 
 ## Release Process

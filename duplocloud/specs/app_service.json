@@ -100,6 +100,22 @@
       "description": "Service account the pods run as."
     },
     {
+      "name": "image_pull_secrets",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.imagePullSecrets",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "Name of a Kubernetes Secret (type kubernetes.io/dockerconfigjson) in the same namespace used to pull images from a private registry."
+        }
+      ],
+      "description": "Image pull secrets referenced by the pods, for pulling container images from private registries."
+    },
+    {
       "name": "match_labels",
       "type": "map(string)",
       "optional": true,
