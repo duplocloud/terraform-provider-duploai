@@ -668,7 +668,7 @@ func (v conflictsWithValidator) ValidateResource(ctx context.Context, req resour
 		set := make([]string, 0, len(group))
 		for _, name := range group {
 			a := v.spec.attr(name)
-			if a != nil && !configAttrNull(ctx, req.Config, *a) {
+			if a != nil && !configAttrNull(req.Config.Raw, a.Name) {
 				set = append(set, name)
 			}
 		}
@@ -699,7 +699,7 @@ func (v requiredIfValidator) ValidateResource(ctx context.Context, req resource.
 		if target == nil || !v.conditionsHold(ctx, req.Config, rule.conditions()) {
 			continue
 		}
-		if configAttrNull(ctx, req.Config, *target) {
+		if configAttrNull(req.Config.Raw, target.Name) {
 			resp.Diagnostics.AddAttributeError(
 				path.Root(rule.Attribute),
 				"Missing required attribute",
@@ -970,10 +970,27 @@ func readConfigString(ctx context.Context, cfg attrReader, a AttributeSpec) stri
 	return toStringValue(v)
 }
 
-// configAttrNull reports whether an attribute is unset in config.
-func configAttrNull(ctx context.Context, cfg attrReader, a AttributeSpec) bool {
-	_, ok := readPlanGoValue(ctx, cfg, a, &diag.Diagnostics{})
-	return !ok
+// configAttrNull reports whether a top-level attribute is genuinely unset (null)
+// in the raw config. An UNKNOWN value — e.g. a reference to another resource
+// created in the same apply (network_id = duploai_network_baseline.x.network_id)
+// — is treated as SET (returns false): it is configured, just not yet resolved,
+// so config-time validators must not flag it as missing.
+func configAttrNull(raw tftypes.Value, name string) bool {
+	if !raw.IsKnown() || raw.IsNull() {
+		return false // whole config unknown/null — don't flag individual attrs
+	}
+	obj := map[string]tftypes.Value{}
+	if err := raw.As(&obj); err != nil {
+		return false
+	}
+	v, ok := obj[name]
+	if !ok {
+		return true // attribute absent from config → null
+	}
+	if !v.IsKnown() {
+		return false // unknown (unresolved reference) → treat as set
+	}
+	return v.IsNull()
 }
 
 // buildStateRaw builds a tftypes.Value state from a base raw value overlaid
