@@ -252,6 +252,7 @@
       "name": "parameters",
       "type": "list(object)",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.parameters",
       "description": "DB parameter group overrides.",
       "attributes": [
@@ -297,6 +298,22 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "endpoint",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.details.Endpoint.Address",
+      "description": "Connection endpoint (DNS address) of the RDS instance."
+    },
+    {
+      "name": "port",
+      "type": "int",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.details.Endpoint.Port",
+      "description": "Port the RDS instance listens on."
     },
     {
       "name": "stack_id",

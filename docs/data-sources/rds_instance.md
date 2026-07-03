@@ -51,6 +51,7 @@ output "stack_id" {
 - `description` (String) Optional description.
 - `enable_iam_database_authentication` (Boolean) Enable IAM database authentication.
 - `enable_performance_insights` (Boolean) Enable Performance Insights.
+- `endpoint` (String) Connection endpoint (DNS address) of the RDS instance.
 - `engine` (String) Database engine (e.g. postgres, mysql, mariadb, oracle-se2, sqlserver-ex).
 - `engine_version` (String) Engine version. Changing this in place triggers an engine upgrade.
 - `environment_id` (String) ID of the environment that owns the resource group.
@@ -60,6 +61,7 @@ output "stack_id" {
 - `multi_az` (Boolean) Deploy the instance across multiple availability zones.
 - `name` (String) Name of the RDS instance.
 - `parameters` (Attributes List) DB parameter group overrides. (see [below for nested schema](#nestedatt--parameters))
+- `port` (Number) Port the RDS instance listens on.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `resource_group_id` (String) ID of the resource group (under an environment) this instance belongs to.
