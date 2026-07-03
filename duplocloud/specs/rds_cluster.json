@@ -308,6 +308,7 @@
       "name": "cluster_parameters",
       "type": "list(object)",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.clusterParameters",
       "description": "Cluster parameter group overrides.",
       "attributes": [
@@ -359,6 +360,7 @@
           "name": "promotion_tier",
           "type": "int",
           "optional": true,
+          "computed": true,
           "apiPath": "promotionTier",
           "description": "Failover promotion tier (0-15; lower is promoted first)."
         },
