@@ -85,23 +85,44 @@
     {
       "name": "primary_hosted_zone_id",
       "type": "string",
+      "optional": true,
       "computed": true,
       "apiPath": "result.primaryHostedZone.hostedZoneId",
-      "description": "ID of the primary Route 53 hosted zone provisioned by the plan."
+      "description": "ID of the primary Route 53 hosted zone. Set to bring an existing hosted zone; leave unset to have the platform provision one."
     },
     {
       "name": "primary_hosted_zone_domain",
       "type": "string",
+      "optional": true,
       "computed": true,
       "apiPath": "result.primaryHostedZone.domainName",
-      "description": "Domain name of the primary hosted zone."
+      "description": "Domain name of the primary hosted zone. Set to bring an existing domain; leave unset to have the platform provision one."
     },
     {
-      "name": "certificate_arns",
-      "type": "list(string)",
+      "name": "certificates",
+      "type": "list(object)",
+      "optional": true,
       "computed": true,
-      "apiPath": "result.certificates[].certificateArn",
-      "description": "ARNs of certificates provisioned by the plan."
+      "apiPath": "result.certificates",
+      "description": "ACM certificates for the plan. Set to bring existing certificates; leave unset to have the platform provision them.",
+      "attributes": [
+        {
+          "name": "certificate_arn",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "certificateArn",
+          "description": "ARN of the ACM certificate."
+        },
+        {
+          "name": "domain",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "domainName",
+          "description": "Domain the certificate covers."
+        }
+      ]
     },
     {
       "name": "ami_ids",
