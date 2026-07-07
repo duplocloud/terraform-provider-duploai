@@ -80,6 +80,15 @@ func (r *dynamicResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 			Optional:    true,
 			Description: "Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.",
 		}
+		// Optional user-gated "wait until a response path is populated" control
+		// (e.g. wait_for_load_balancer). When true, create/update keep polling
+		// after the normal ready gate until waiter.populatedPath is non-empty.
+		if r.spec.Waiter.PopulatedPath != "" && r.spec.Waiter.PopulatedPathAttribute != "" {
+			attrs[r.spec.Waiter.PopulatedPathAttribute] = schema.BoolAttribute{
+				Optional:    true,
+				Description: "When true, wait during create and update until the backend reports a value at " + r.spec.Waiter.PopulatedPath + " (e.g. a provisioned load balancer address), or the operation times out. Defaults to false.",
+			}
+		}
 	}
 
 	out := schema.Schema{
@@ -99,6 +108,73 @@ func (r *dynamicResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 // api binds an SDK client to this resource's endpoint and resolved scope.
 func (r *dynamicResource) api(scope map[string]string, failureRetries int) *duplosdk.RESTResource[map[string]any] {
 	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, r.waiter(failureRetries))
+}
+
+// apiWaitingForPopulated is like api but, when waitForPopulated is true, extends
+// the waiter with a secondary gate that holds success until waiter.populatedPath
+// is non-empty — e.g. keep polling after an Ingress is Complete until the cloud
+// controller assigns a load balancer address. Composes with any existing
+// readyPath/readyState gate (both must hold). No-op when the resource declares no
+// populatedPath, so callers can use it unconditionally.
+func (r *dynamicResource) apiWaitingForPopulated(scope map[string]string, failureRetries int, waitForPopulated bool) *duplosdk.RESTResource[map[string]any] {
+	w := r.waiter(failureRetries)
+	if w != nil && waitForPopulated && r.spec.Waiter.PopulatedPath != "" {
+		applyPopulatedGate(w, r.spec.Waiter.PopulatedPath)
+	}
+	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, w)
+}
+
+// applyPopulatedGate extends waiter w with a secondary success gate that holds
+// until the value at populatedPath is non-empty, composing with any existing
+// readyPath/readyState gate (both must hold).
+func applyPopulatedGate(w *duplosdk.Waiter[map[string]any], populatedPath string) {
+	segs := strings.Split(populatedPath, ".")
+	const populated = "\x00populated"
+	prevFn, prevState := w.ReadyFn, w.ReadyState
+	w.ReadyState = populated
+	w.ReadyFn = func(m *map[string]any) string {
+		if prevFn != nil && prevFn(m) != prevState {
+			return "" // an existing ready gate is not yet met
+		}
+		if isNonEmptyValue(extractPath(*m, segs)) {
+			return populated
+		}
+		return ""
+	}
+}
+
+// waitForPopulated reads the optional boolean control attribute
+// (waiter.populatedPathAttribute, e.g. wait_for_load_balancer) from the plan.
+// Returns false when the resource declares no such control or it is unset.
+func (r *dynamicResource) waitForPopulated(ctx context.Context, cfg attrReader, diags *diag.Diagnostics) bool {
+	if r.spec.Waiter == nil || r.spec.Waiter.PopulatedPathAttribute == "" {
+		return false
+	}
+	var v types.Bool
+	diags.Append(cfg.GetAttribute(ctx, path.Root(r.spec.Waiter.PopulatedPathAttribute), &v)...)
+	if diags.HasError() || v.IsNull() || v.IsUnknown() {
+		return false
+	}
+	return v.ValueBool()
+}
+
+// isNonEmptyValue reports whether a decoded JSON value carries content: a
+// non-empty string/slice/map, a true bool, or any non-nil scalar.
+func isNonEmptyValue(v any) bool {
+	switch t := v.(type) {
+	case nil:
+		return false
+	case string:
+		return t != ""
+	case []any:
+		return len(t) > 0
+	case map[string]any:
+		return len(t) > 0
+	case bool:
+		return t
+	default:
+		return true
+	}
 }
 
 // readPathParamScope reads every path-parameter attribute declared by endpoint
@@ -291,10 +367,11 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	log.Printf("[TRACE] dynamic %s Create(%s): start", r.spec.Name, strings.Join(scopeVals, "/"))
 
 	retries := r.failureRetries(ctx, req.Plan, &resp.Diagnostics)
+	waitPopulated := r.waitForPopulated(ctx, req.Plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	api := r.api(scope, retries)
+	api := r.apiWaitingForPopulated(scope, retries, waitPopulated)
 	created, err := api.Create(&body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating "+r.spec.Name, err.Error())
@@ -409,10 +486,11 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	retries := r.failureRetries(ctx, req.Plan, &resp.Diagnostics)
+	waitPopulated := r.waitForPopulated(ctx, req.Plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	api := r.api(scope, retries)
+	api := r.apiWaitingForPopulated(scope, retries, waitPopulated)
 	updated, clientErr := api.Update(objID, &body)
 	if clientErr != nil {
 		resp.Diagnostics.AddError("Error updating "+r.spec.Name, clientErr.Error())

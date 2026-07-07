@@ -263,6 +263,61 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status of the Ingress resource."
+    },
+    {
+      "name": "load_balancer",
+      "type": "object",
+      "computed": true,
+      "responsePath": "result.k8sResource.status.loadBalancer",
+      "description": "Load balancer status assigned by the cloud ingress controller after provisioning. The address is populated asynchronously — set wait_for_load_balancer = true to have create/update wait until it is available.",
+      "attributes": [
+        {
+          "name": "ingress",
+          "type": "list(object)",
+          "computed": true,
+          "description": "Addresses through which the ingress is reachable.",
+          "attributes": [
+            {
+              "name": "hostname",
+              "type": "string",
+              "computed": true,
+              "description": "Hostname of the load balancer (e.g. the ALB/NLB DNS name)."
+            },
+            {
+              "name": "ip",
+              "type": "string",
+              "computed": true,
+              "description": "IP address of the load balancer, when assigned instead of a hostname."
+            },
+            {
+              "name": "ports",
+              "type": "list(object)",
+              "computed": true,
+              "description": "Per-port status for the load balancer address.",
+              "attributes": [
+                {
+                  "name": "port",
+                  "type": "int",
+                  "computed": true,
+                  "description": "Port number."
+                },
+                {
+                  "name": "protocol",
+                  "type": "string",
+                  "computed": true,
+                  "description": "Protocol (TCP, UDP, SCTP)."
+                },
+                {
+                  "name": "error",
+                  "type": "string",
+                  "computed": true,
+                  "description": "Error reported for this port, if any."
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ],
   "requestConstants": [
@@ -283,6 +338,8 @@
     "deprovisionedState": "DeProvisioned",
     "failureRetries": 3,
     "createTimeoutMinutes": 15,
-    "deleteTimeoutMinutes": 10
+    "deleteTimeoutMinutes": 10,
+    "populatedPath": "result.k8sResource.status.loadBalancer.ingress",
+    "populatedPathAttribute": "wait_for_load_balancer"
   }
 }

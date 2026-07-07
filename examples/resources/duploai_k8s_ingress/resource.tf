@@ -6,6 +6,12 @@ resource "duploai_k8s_ingress" "example" {
   namespace_name     = "default"
   ingress_class_name = "nginx"
 
+  # Wait during apply until the cloud controller assigns a load balancer address
+  # (exposed via the load_balancer attribute). Defaults to false, in which case
+  # apply returns as soon as the ingress is created and the address populates on a
+  # later refresh.
+  wait_for_load_balancer = true
+
   annotations = {
     "nginx.ingress.kubernetes.io/rewrite-target" = "/"
   }
