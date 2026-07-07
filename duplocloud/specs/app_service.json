@@ -35,10 +35,11 @@
     {
       "name": "scope_ids",
       "type": "list(string)",
-      "required": true,
+      "optional": true,
+      "computed": true,
       "forceNew": true,
       "apiPath": "spec.scopeIds",
-      "description": "Scope IDs that link this app service to a cloud provider account."
+      "description": "Scope IDs that link this app service to a cloud provider account. Leave unset to inherit from the environment/resource group; set explicitly to override."
     },
     {
       "name": "resource_group_id",
@@ -237,7 +238,7 @@
           "type": "list(object)",
           "optional": true,
           "apiPath": "env",
-          "description": "Environment variables (literal values).",
+          "description": "Environment variables. Set value for a literal, or value_from to source from a Secret/ConfigMap key or pod field.",
           "attributes": [
             {
               "name": "name",
@@ -251,7 +252,101 @@
               "type": "string",
               "optional": true,
               "apiPath": "value",
-              "description": "Variable value."
+              "description": "Literal variable value. Mutually exclusive with value_from."
+            },
+            {
+              "name": "value_from",
+              "type": "object",
+              "optional": true,
+              "apiPath": "valueFrom",
+              "description": "Source the value from a Secret/ConfigMap key or pod/container field. Mutually exclusive with value.",
+              "attributes": [
+                {
+                  "name": "secret_key_ref",
+                  "type": "object",
+                  "optional": true,
+                  "apiPath": "secretKeyRef",
+                  "description": "Reference a key in a Secret.",
+                  "attributes": [
+                    { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Name of the Secret." },
+                    { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "Key within the Secret." },
+                    { "name": "optional", "type": "bool", "optional": true, "apiPath": "optional", "description": "Whether the Secret or key must exist." }
+                  ]
+                },
+                {
+                  "name": "config_map_key_ref",
+                  "type": "object",
+                  "optional": true,
+                  "apiPath": "configMapKeyRef",
+                  "description": "Reference a key in a ConfigMap.",
+                  "attributes": [
+                    { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Name of the ConfigMap." },
+                    { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "Key within the ConfigMap." },
+                    { "name": "optional", "type": "bool", "optional": true, "apiPath": "optional", "description": "Whether the ConfigMap or key must exist." }
+                  ]
+                },
+                {
+                  "name": "field_ref",
+                  "type": "object",
+                  "optional": true,
+                  "apiPath": "fieldRef",
+                  "description": "Reference a field of the pod (e.g. metadata.name, status.podIP).",
+                  "attributes": [
+                    { "name": "field_path", "type": "string", "required": true, "apiPath": "fieldPath", "description": "Path of the field, e.g. metadata.namespace." },
+                    { "name": "api_version", "type": "string", "optional": true, "apiPath": "apiVersion", "description": "API version the field path is evaluated against (default v1)." }
+                  ]
+                },
+                {
+                  "name": "resource_field_ref",
+                  "type": "object",
+                  "optional": true,
+                  "apiPath": "resourceFieldRef",
+                  "description": "Reference a container resource (e.g. limits.cpu, requests.memory).",
+                  "attributes": [
+                    { "name": "resource", "type": "string", "required": true, "apiPath": "resource", "description": "Resource to expose, e.g. limits.cpu." },
+                    { "name": "container_name", "type": "string", "optional": true, "apiPath": "containerName", "description": "Container to read the resource from (defaults to this container)." },
+                    { "name": "divisor", "type": "string", "optional": true, "apiPath": "divisor", "description": "Output format divisor, e.g. 1m or 1Mi." }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "env_from",
+          "type": "list(object)",
+          "optional": true,
+          "apiPath": "envFrom",
+          "description": "Populate environment variables in bulk from entire ConfigMaps or Secrets.",
+          "attributes": [
+            {
+              "name": "prefix",
+              "type": "string",
+              "optional": true,
+              "apiPath": "prefix",
+              "description": "Prefix prepended to each key's environment variable name."
+            },
+            {
+              "name": "config_map_ref",
+              "type": "object",
+              "optional": true,
+              "apiPath": "configMapRef",
+              "description": "Load all keys from a ConfigMap.",
+              "attributes": [
+                { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Name of the ConfigMap." },
+                { "name": "optional", "type": "bool", "optional": true, "apiPath": "optional", "description": "Whether the ConfigMap must exist." }
+              ]
+            },
+            {
+              "name": "secret_ref",
+              "type": "object",
+              "optional": true,
+              "apiPath": "secretRef",
+              "description": "Load all keys from a Secret.",
+              "attributes": [
+                { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Name of the Secret." },
+                { "name": "optional", "type": "bool", "optional": true, "apiPath": "optional", "description": "Whether the Secret must exist." }
+              ]
             }
           ]
         },
@@ -268,8 +363,778 @@
           "optional": true,
           "apiPath": "resources.requests",
           "description": "Resource requests, e.g. { cpu = \"250m\", memory = \"256Mi\" }."
+        },
+        {
+          "name": "liveness_probe",
+          "type": "object",
+          "optional": true,
+          "apiPath": "livenessProbe",
+          "description": "Probe that restarts the container when it fails.",
+          "attributes": [
+            { "name": "initial_delay_seconds", "type": "int", "optional": true, "apiPath": "initialDelaySeconds", "description": "Seconds after container start before the first probe." },
+            { "name": "period_seconds", "type": "int", "optional": true, "apiPath": "periodSeconds", "description": "How often to run the probe (seconds)." },
+            { "name": "timeout_seconds", "type": "int", "optional": true, "apiPath": "timeoutSeconds", "description": "Probe timeout (seconds)." },
+            { "name": "success_threshold", "type": "int", "optional": true, "apiPath": "successThreshold", "description": "Consecutive successes to be considered healthy." },
+            { "name": "failure_threshold", "type": "int", "optional": true, "apiPath": "failureThreshold", "description": "Consecutive failures before acting." },
+            { "name": "termination_grace_period_seconds", "type": "int", "optional": true, "apiPath": "terminationGracePeriodSeconds", "description": "Grace period on probe-triggered termination (seconds)." },
+            {
+              "name": "http_get", "type": "object", "optional": true, "apiPath": "httpGet", "description": "HTTP GET probe action.",
+              "attributes": [
+                { "name": "path", "type": "string", "optional": true, "apiPath": "path", "description": "URL path to request." },
+                { "name": "port", "type": "string", "required": true, "apiPath": "port", "description": "Port number or named port." },
+                { "name": "host", "type": "string", "optional": true, "apiPath": "host", "description": "Host header (defaults to pod IP)." },
+                { "name": "scheme", "type": "string", "optional": true, "oneOf": ["HTTP", "HTTPS"], "apiPath": "scheme", "description": "HTTP or HTTPS." },
+                { "name": "http_headers", "type": "list(object)", "optional": true, "apiPath": "httpHeaders", "description": "Custom request headers.", "attributes": [
+                  { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Header name." },
+                  { "name": "value", "type": "string", "required": true, "apiPath": "value", "description": "Header value." }
+                ] }
+              ]
+            },
+            {
+              "name": "tcp_socket", "type": "object", "optional": true, "apiPath": "tcpSocket", "description": "TCP socket probe action.",
+              "attributes": [
+                { "name": "port", "type": "string", "required": true, "apiPath": "port", "description": "Port number or named port." },
+                { "name": "host", "type": "string", "optional": true, "apiPath": "host", "description": "Host to connect to (defaults to pod IP)." }
+              ]
+            },
+            {
+              "name": "exec", "type": "object", "optional": true, "apiPath": "exec", "description": "Exec probe action.",
+              "attributes": [
+                { "name": "command", "type": "list(string)", "optional": true, "apiPath": "command", "description": "Command to run inside the container." }
+              ]
+            },
+            {
+              "name": "grpc", "type": "object", "optional": true, "apiPath": "grpc", "description": "gRPC probe action.",
+              "attributes": [
+                { "name": "port", "type": "int", "required": true, "apiPath": "port", "description": "gRPC port." },
+                { "name": "service", "type": "string", "optional": true, "apiPath": "service", "description": "gRPC service name for the health check." }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "readiness_probe",
+          "type": "object",
+          "optional": true,
+          "apiPath": "readinessProbe",
+          "description": "Probe that removes the pod from Service endpoints when it fails.",
+          "attributes": [
+            { "name": "initial_delay_seconds", "type": "int", "optional": true, "apiPath": "initialDelaySeconds", "description": "Seconds after container start before the first probe." },
+            { "name": "period_seconds", "type": "int", "optional": true, "apiPath": "periodSeconds", "description": "How often to run the probe (seconds)." },
+            { "name": "timeout_seconds", "type": "int", "optional": true, "apiPath": "timeoutSeconds", "description": "Probe timeout (seconds)." },
+            { "name": "success_threshold", "type": "int", "optional": true, "apiPath": "successThreshold", "description": "Consecutive successes to be considered ready." },
+            { "name": "failure_threshold", "type": "int", "optional": true, "apiPath": "failureThreshold", "description": "Consecutive failures before acting." },
+            { "name": "termination_grace_period_seconds", "type": "int", "optional": true, "apiPath": "terminationGracePeriodSeconds", "description": "Grace period on probe-triggered termination (seconds)." },
+            {
+              "name": "http_get", "type": "object", "optional": true, "apiPath": "httpGet", "description": "HTTP GET probe action.",
+              "attributes": [
+                { "name": "path", "type": "string", "optional": true, "apiPath": "path", "description": "URL path to request." },
+                { "name": "port", "type": "string", "required": true, "apiPath": "port", "description": "Port number or named port." },
+                { "name": "host", "type": "string", "optional": true, "apiPath": "host", "description": "Host header (defaults to pod IP)." },
+                { "name": "scheme", "type": "string", "optional": true, "oneOf": ["HTTP", "HTTPS"], "apiPath": "scheme", "description": "HTTP or HTTPS." },
+                { "name": "http_headers", "type": "list(object)", "optional": true, "apiPath": "httpHeaders", "description": "Custom request headers.", "attributes": [
+                  { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Header name." },
+                  { "name": "value", "type": "string", "required": true, "apiPath": "value", "description": "Header value." }
+                ] }
+              ]
+            },
+            {
+              "name": "tcp_socket", "type": "object", "optional": true, "apiPath": "tcpSocket", "description": "TCP socket probe action.",
+              "attributes": [
+                { "name": "port", "type": "string", "required": true, "apiPath": "port", "description": "Port number or named port." },
+                { "name": "host", "type": "string", "optional": true, "apiPath": "host", "description": "Host to connect to (defaults to pod IP)." }
+              ]
+            },
+            {
+              "name": "exec", "type": "object", "optional": true, "apiPath": "exec", "description": "Exec probe action.",
+              "attributes": [
+                { "name": "command", "type": "list(string)", "optional": true, "apiPath": "command", "description": "Command to run inside the container." }
+              ]
+            },
+            {
+              "name": "grpc", "type": "object", "optional": true, "apiPath": "grpc", "description": "gRPC probe action.",
+              "attributes": [
+                { "name": "port", "type": "int", "required": true, "apiPath": "port", "description": "gRPC port." },
+                { "name": "service", "type": "string", "optional": true, "apiPath": "service", "description": "gRPC service name for the health check." }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "startup_probe",
+          "type": "object",
+          "optional": true,
+          "apiPath": "startupProbe",
+          "description": "Probe that gates liveness/readiness until the container has started.",
+          "attributes": [
+            { "name": "initial_delay_seconds", "type": "int", "optional": true, "apiPath": "initialDelaySeconds", "description": "Seconds after container start before the first probe." },
+            { "name": "period_seconds", "type": "int", "optional": true, "apiPath": "periodSeconds", "description": "How often to run the probe (seconds)." },
+            { "name": "timeout_seconds", "type": "int", "optional": true, "apiPath": "timeoutSeconds", "description": "Probe timeout (seconds)." },
+            { "name": "success_threshold", "type": "int", "optional": true, "apiPath": "successThreshold", "description": "Consecutive successes to be considered started." },
+            { "name": "failure_threshold", "type": "int", "optional": true, "apiPath": "failureThreshold", "description": "Consecutive failures before acting." },
+            { "name": "termination_grace_period_seconds", "type": "int", "optional": true, "apiPath": "terminationGracePeriodSeconds", "description": "Grace period on probe-triggered termination (seconds)." },
+            {
+              "name": "http_get", "type": "object", "optional": true, "apiPath": "httpGet", "description": "HTTP GET probe action.",
+              "attributes": [
+                { "name": "path", "type": "string", "optional": true, "apiPath": "path", "description": "URL path to request." },
+                { "name": "port", "type": "string", "required": true, "apiPath": "port", "description": "Port number or named port." },
+                { "name": "host", "type": "string", "optional": true, "apiPath": "host", "description": "Host header (defaults to pod IP)." },
+                { "name": "scheme", "type": "string", "optional": true, "oneOf": ["HTTP", "HTTPS"], "apiPath": "scheme", "description": "HTTP or HTTPS." },
+                { "name": "http_headers", "type": "list(object)", "optional": true, "apiPath": "httpHeaders", "description": "Custom request headers.", "attributes": [
+                  { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Header name." },
+                  { "name": "value", "type": "string", "required": true, "apiPath": "value", "description": "Header value." }
+                ] }
+              ]
+            },
+            {
+              "name": "tcp_socket", "type": "object", "optional": true, "apiPath": "tcpSocket", "description": "TCP socket probe action.",
+              "attributes": [
+                { "name": "port", "type": "string", "required": true, "apiPath": "port", "description": "Port number or named port." },
+                { "name": "host", "type": "string", "optional": true, "apiPath": "host", "description": "Host to connect to (defaults to pod IP)." }
+              ]
+            },
+            {
+              "name": "exec", "type": "object", "optional": true, "apiPath": "exec", "description": "Exec probe action.",
+              "attributes": [
+                { "name": "command", "type": "list(string)", "optional": true, "apiPath": "command", "description": "Command to run inside the container." }
+              ]
+            },
+            {
+              "name": "grpc", "type": "object", "optional": true, "apiPath": "grpc", "description": "gRPC probe action.",
+              "attributes": [
+                { "name": "port", "type": "int", "required": true, "apiPath": "port", "description": "gRPC port." },
+                { "name": "service", "type": "string", "optional": true, "apiPath": "service", "description": "gRPC service name for the health check." }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "volume_mounts",
+          "type": "list(object)",
+          "optional": true,
+          "apiPath": "volumeMounts",
+          "description": "Mount pod volumes into the container filesystem.",
+          "attributes": [
+            { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Name of the pod volume to mount." },
+            { "name": "mount_path", "type": "string", "required": true, "apiPath": "mountPath", "description": "Path inside the container to mount at." },
+            { "name": "sub_path", "type": "string", "optional": true, "apiPath": "subPath", "description": "Mount a sub-path of the volume instead of its root." },
+            { "name": "sub_path_expr", "type": "string", "optional": true, "apiPath": "subPathExpr", "description": "Like sub_path but expanded with environment variables." },
+            { "name": "read_only", "type": "bool", "optional": true, "apiPath": "readOnly", "description": "Mount read-only." },
+            { "name": "mount_propagation", "type": "string", "optional": true, "oneOf": ["None", "HostToContainer", "Bidirectional"], "apiPath": "mountPropagation", "description": "Mount propagation mode." }
+          ]
+        },
+        {
+          "name": "volume_devices",
+          "type": "list(object)",
+          "optional": true,
+          "apiPath": "volumeDevices",
+          "description": "Raw block devices to map into the container.",
+          "attributes": [
+            { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Name of the persistentVolumeClaim volume." },
+            { "name": "device_path", "type": "string", "required": true, "apiPath": "devicePath", "description": "Path inside the container to map the device to." }
+          ]
+        },
+        {
+          "name": "security_context",
+          "type": "object",
+          "optional": true,
+          "apiPath": "securityContext",
+          "description": "Container-level security settings.",
+          "attributes": [
+            { "name": "run_as_user", "type": "int", "optional": true, "apiPath": "runAsUser", "description": "UID to run the entrypoint as." },
+            { "name": "run_as_group", "type": "int", "optional": true, "apiPath": "runAsGroup", "description": "GID to run the entrypoint as." },
+            { "name": "run_as_non_root", "type": "bool", "optional": true, "apiPath": "runAsNonRoot", "description": "Require the container to run as a non-root user." },
+            { "name": "read_only_root_filesystem", "type": "bool", "optional": true, "apiPath": "readOnlyRootFilesystem", "description": "Mount the root filesystem read-only." },
+            { "name": "allow_privilege_escalation", "type": "bool", "optional": true, "apiPath": "allowPrivilegeEscalation", "description": "Allow a process to gain more privileges than its parent." },
+            { "name": "privileged", "type": "bool", "optional": true, "apiPath": "privileged", "description": "Run in privileged mode." },
+            { "name": "proc_mount", "type": "string", "optional": true, "apiPath": "procMount", "description": "proc mount type (Default or Unmasked)." },
+            {
+              "name": "capabilities", "type": "object", "optional": true, "apiPath": "capabilities", "description": "Linux capabilities to add or drop.",
+              "attributes": [
+                { "name": "add", "type": "list(string)", "optional": true, "apiPath": "add", "description": "Capabilities to add (e.g. NET_ADMIN)." },
+                { "name": "drop", "type": "list(string)", "optional": true, "apiPath": "drop", "description": "Capabilities to drop (e.g. ALL)." }
+              ]
+            },
+            {
+              "name": "se_linux_options", "type": "object", "optional": true, "apiPath": "seLinuxOptions", "description": "SELinux context to apply.",
+              "attributes": [
+                { "name": "user", "type": "string", "optional": true, "apiPath": "user", "description": "SELinux user label." },
+                { "name": "role", "type": "string", "optional": true, "apiPath": "role", "description": "SELinux role label." },
+                { "name": "type", "type": "string", "optional": true, "apiPath": "type", "description": "SELinux type label." },
+                { "name": "level", "type": "string", "optional": true, "apiPath": "level", "description": "SELinux level label." }
+              ]
+            },
+            {
+              "name": "seccomp_profile", "type": "object", "optional": true, "apiPath": "seccompProfile", "description": "Seccomp profile settings.",
+              "attributes": [
+                { "name": "type", "type": "string", "required": true, "oneOf": ["Unconfined", "RuntimeDefault", "Localhost"], "apiPath": "type", "description": "Profile type." },
+                { "name": "localhost_profile", "type": "string", "optional": true, "apiPath": "localhostProfile", "description": "Profile file path (used when type is Localhost)." }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "lifecycle",
+          "type": "object",
+          "optional": true,
+          "apiPath": "lifecycle",
+          "description": "Container lifecycle hooks.",
+          "attributes": [
+            {
+              "name": "post_start", "type": "object", "optional": true, "apiPath": "postStart", "description": "Hook run immediately after the container starts.",
+              "attributes": [
+                { "name": "exec", "type": "object", "optional": true, "apiPath": "exec", "description": "Exec action.", "attributes": [
+                  { "name": "command", "type": "list(string)", "optional": true, "apiPath": "command", "description": "Command to run." }
+                ] },
+                { "name": "http_get", "type": "object", "optional": true, "apiPath": "httpGet", "description": "HTTP GET action.", "attributes": [
+                  { "name": "path", "type": "string", "optional": true, "apiPath": "path", "description": "URL path." },
+                  { "name": "port", "type": "string", "required": true, "apiPath": "port", "description": "Port number or named port." },
+                  { "name": "host", "type": "string", "optional": true, "apiPath": "host", "description": "Host header." },
+                  { "name": "scheme", "type": "string", "optional": true, "oneOf": ["HTTP", "HTTPS"], "apiPath": "scheme", "description": "HTTP or HTTPS." }
+                ] },
+                { "name": "tcp_socket", "type": "object", "optional": true, "apiPath": "tcpSocket", "description": "TCP socket action.", "attributes": [
+                  { "name": "port", "type": "string", "required": true, "apiPath": "port", "description": "Port number or named port." },
+                  { "name": "host", "type": "string", "optional": true, "apiPath": "host", "description": "Host to connect to." }
+                ] }
+              ]
+            },
+            {
+              "name": "pre_stop", "type": "object", "optional": true, "apiPath": "preStop", "description": "Hook run immediately before the container is stopped.",
+              "attributes": [
+                { "name": "exec", "type": "object", "optional": true, "apiPath": "exec", "description": "Exec action.", "attributes": [
+                  { "name": "command", "type": "list(string)", "optional": true, "apiPath": "command", "description": "Command to run." }
+                ] },
+                { "name": "http_get", "type": "object", "optional": true, "apiPath": "httpGet", "description": "HTTP GET action.", "attributes": [
+                  { "name": "path", "type": "string", "optional": true, "apiPath": "path", "description": "URL path." },
+                  { "name": "port", "type": "string", "required": true, "apiPath": "port", "description": "Port number or named port." },
+                  { "name": "host", "type": "string", "optional": true, "apiPath": "host", "description": "Host header." },
+                  { "name": "scheme", "type": "string", "optional": true, "oneOf": ["HTTP", "HTTPS"], "apiPath": "scheme", "description": "HTTP or HTTPS." }
+                ] },
+                { "name": "tcp_socket", "type": "object", "optional": true, "apiPath": "tcpSocket", "description": "TCP socket action.", "attributes": [
+                  { "name": "port", "type": "string", "required": true, "apiPath": "port", "description": "Port number or named port." },
+                  { "name": "host", "type": "string", "optional": true, "apiPath": "host", "description": "Host to connect to." }
+                ] }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "termination_message_path",
+          "type": "string",
+          "optional": true,
+          "apiPath": "terminationMessagePath",
+          "description": "File from which the container's termination message is read."
+        },
+        {
+          "name": "termination_message_policy",
+          "type": "string",
+          "optional": true,
+          "oneOf": ["File", "FallbackToLogsOnError"],
+          "apiPath": "terminationMessagePolicy",
+          "description": "How the termination message is populated."
+        },
+        {
+          "name": "stdin",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "stdin",
+          "description": "Allocate a buffer for stdin in the container."
+        },
+        {
+          "name": "stdin_once",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "stdinOnce",
+          "description": "Close the stdin channel after the first attach disconnects."
+        },
+        {
+          "name": "tty",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "tty",
+          "description": "Allocate a TTY for the container."
         }
       ]
+    },
+    {
+      "name": "init_containers",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.initContainers",
+      "description": "Init containers that run to completion, in order, before the main containers start.",
+      "attributes": [
+        { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Init container name." },
+        { "name": "image", "type": "string", "required": true, "apiPath": "image", "description": "Container image." },
+        { "name": "command", "type": "list(string)", "optional": true, "apiPath": "command", "description": "Entrypoint override." },
+        { "name": "args", "type": "list(string)", "optional": true, "apiPath": "args", "description": "Arguments to the entrypoint." },
+        { "name": "working_dir", "type": "string", "optional": true, "apiPath": "workingDir", "description": "Working directory." },
+        { "name": "image_pull_policy", "type": "string", "optional": true, "oneOf": ["Always", "IfNotPresent", "Never"], "apiPath": "imagePullPolicy", "description": "Image pull policy." },
+        {
+          "name": "env", "type": "list(object)", "optional": true, "apiPath": "env", "description": "Environment variables.",
+          "attributes": [
+            { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Variable name." },
+            { "name": "value", "type": "string", "optional": true, "apiPath": "value", "description": "Literal value." },
+            {
+              "name": "value_from", "type": "object", "optional": true, "apiPath": "valueFrom", "description": "Source the value from a Secret/ConfigMap key or pod field.",
+              "attributes": [
+                { "name": "secret_key_ref", "type": "object", "optional": true, "apiPath": "secretKeyRef", "description": "Reference a Secret key.", "attributes": [
+                  { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Secret name." },
+                  { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "Key in the Secret." },
+                  { "name": "optional", "type": "bool", "optional": true, "apiPath": "optional", "description": "Whether the Secret or key must exist." }
+                ] },
+                { "name": "config_map_key_ref", "type": "object", "optional": true, "apiPath": "configMapKeyRef", "description": "Reference a ConfigMap key.", "attributes": [
+                  { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "ConfigMap name." },
+                  { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "Key in the ConfigMap." },
+                  { "name": "optional", "type": "bool", "optional": true, "apiPath": "optional", "description": "Whether the ConfigMap or key must exist." }
+                ] },
+                { "name": "field_ref", "type": "object", "optional": true, "apiPath": "fieldRef", "description": "Reference a pod field.", "attributes": [
+                  { "name": "field_path", "type": "string", "required": true, "apiPath": "fieldPath", "description": "Field path, e.g. metadata.name." },
+                  { "name": "api_version", "type": "string", "optional": true, "apiPath": "apiVersion", "description": "API version for the field path." }
+                ] }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "env_from", "type": "list(object)", "optional": true, "apiPath": "envFrom", "description": "Bulk environment from ConfigMaps/Secrets.",
+          "attributes": [
+            { "name": "prefix", "type": "string", "optional": true, "apiPath": "prefix", "description": "Prefix for each variable name." },
+            { "name": "config_map_ref", "type": "object", "optional": true, "apiPath": "configMapRef", "description": "Load all keys from a ConfigMap.", "attributes": [
+              { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "ConfigMap name." },
+              { "name": "optional", "type": "bool", "optional": true, "apiPath": "optional", "description": "Whether the ConfigMap must exist." }
+            ] },
+            { "name": "secret_ref", "type": "object", "optional": true, "apiPath": "secretRef", "description": "Load all keys from a Secret.", "attributes": [
+              { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Secret name." },
+              { "name": "optional", "type": "bool", "optional": true, "apiPath": "optional", "description": "Whether the Secret must exist." }
+            ] }
+          ]
+        },
+        {
+          "name": "ports", "type": "list(object)", "optional": true, "apiPath": "ports", "description": "Ports the init container exposes.",
+          "attributes": [
+            { "name": "container_port", "type": "int", "required": true, "apiPath": "containerPort", "description": "Port number." },
+            { "name": "name", "type": "string", "optional": true, "apiPath": "name", "description": "Named port." },
+            { "name": "protocol", "type": "string", "optional": true, "oneOf": ["TCP", "UDP", "SCTP"], "apiPath": "protocol", "description": "Protocol." }
+          ]
+        },
+        { "name": "resources_limits", "type": "map(string)", "optional": true, "apiPath": "resources.limits", "description": "Resource limits." },
+        { "name": "resources_requests", "type": "map(string)", "optional": true, "apiPath": "resources.requests", "description": "Resource requests." },
+        {
+          "name": "volume_mounts", "type": "list(object)", "optional": true, "apiPath": "volumeMounts", "description": "Volume mounts.",
+          "attributes": [
+            { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Pod volume name." },
+            { "name": "mount_path", "type": "string", "required": true, "apiPath": "mountPath", "description": "Mount path in the container." },
+            { "name": "sub_path", "type": "string", "optional": true, "apiPath": "subPath", "description": "Sub-path of the volume." },
+            { "name": "read_only", "type": "bool", "optional": true, "apiPath": "readOnly", "description": "Mount read-only." }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "volumes",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.volumes",
+      "description": "Pod volumes that containers can mount via volume_mounts.",
+      "attributes": [
+        { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Volume name (referenced by volume_mounts)." },
+        {
+          "name": "config_map", "type": "object", "optional": true, "apiPath": "configMap", "description": "Populate the volume from a ConfigMap.",
+          "attributes": [
+            { "name": "name", "type": "string", "optional": true, "apiPath": "name", "description": "ConfigMap name." },
+            { "name": "default_mode", "type": "int", "optional": true, "apiPath": "defaultMode", "description": "Default file permission mode (e.g. 420)." },
+            { "name": "optional", "type": "bool", "optional": true, "apiPath": "optional", "description": "Whether the ConfigMap must exist." },
+            { "name": "items", "type": "list(object)", "optional": true, "apiPath": "items", "description": "Specific keys to project to paths.", "attributes": [
+              { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "ConfigMap key." },
+              { "name": "path", "type": "string", "required": true, "apiPath": "path", "description": "Relative file path." },
+              { "name": "mode", "type": "int", "optional": true, "apiPath": "mode", "description": "File permission mode." }
+            ] }
+          ]
+        },
+        {
+          "name": "secret", "type": "object", "optional": true, "apiPath": "secret", "description": "Populate the volume from a Secret.",
+          "attributes": [
+            { "name": "secret_name", "type": "string", "optional": true, "apiPath": "secretName", "description": "Secret name." },
+            { "name": "default_mode", "type": "int", "optional": true, "apiPath": "defaultMode", "description": "Default file permission mode." },
+            { "name": "optional", "type": "bool", "optional": true, "apiPath": "optional", "description": "Whether the Secret must exist." },
+            { "name": "items", "type": "list(object)", "optional": true, "apiPath": "items", "description": "Specific keys to project to paths.", "attributes": [
+              { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "Secret key." },
+              { "name": "path", "type": "string", "required": true, "apiPath": "path", "description": "Relative file path." },
+              { "name": "mode", "type": "int", "optional": true, "apiPath": "mode", "description": "File permission mode." }
+            ] }
+          ]
+        },
+        {
+          "name": "empty_dir", "type": "object", "optional": true, "apiPath": "emptyDir", "description": "Ephemeral scratch volume tied to the pod lifetime.",
+          "attributes": [
+            { "name": "medium", "type": "string", "optional": true, "apiPath": "medium", "description": "Storage medium: \"\" (node disk) or Memory." },
+            { "name": "size_limit", "type": "string", "optional": true, "apiPath": "sizeLimit", "description": "Total size limit, e.g. 1Gi." }
+          ]
+        },
+        {
+          "name": "persistent_volume_claim", "type": "object", "optional": true, "apiPath": "persistentVolumeClaim", "description": "Mount an existing PersistentVolumeClaim.",
+          "attributes": [
+            { "name": "claim_name", "type": "string", "required": true, "apiPath": "claimName", "description": "Name of the PersistentVolumeClaim." },
+            { "name": "read_only", "type": "bool", "optional": true, "apiPath": "readOnly", "description": "Mount read-only." }
+          ]
+        },
+        {
+          "name": "host_path", "type": "object", "optional": true, "apiPath": "hostPath", "description": "Mount a file or directory from the host node.",
+          "attributes": [
+            { "name": "path", "type": "string", "required": true, "apiPath": "path", "description": "Path on the host." },
+            { "name": "type", "type": "string", "optional": true, "apiPath": "type", "description": "Host path type (e.g. Directory, DirectoryOrCreate, File)." }
+          ]
+        },
+        {
+          "name": "nfs", "type": "object", "optional": true, "apiPath": "nfs", "description": "Mount an NFS share.",
+          "attributes": [
+            { "name": "server", "type": "string", "required": true, "apiPath": "server", "description": "NFS server hostname or IP." },
+            { "name": "path", "type": "string", "required": true, "apiPath": "path", "description": "Exported path on the server." },
+            { "name": "read_only", "type": "bool", "optional": true, "apiPath": "readOnly", "description": "Mount read-only." }
+          ]
+        },
+        {
+          "name": "csi", "type": "object", "optional": true, "apiPath": "csi", "description": "Mount a volume via a CSI driver.",
+          "attributes": [
+            { "name": "driver", "type": "string", "required": true, "apiPath": "driver", "description": "CSI driver name." },
+            { "name": "read_only", "type": "bool", "optional": true, "apiPath": "readOnly", "description": "Mount read-only." },
+            { "name": "fs_type", "type": "string", "optional": true, "apiPath": "fsType", "description": "Filesystem type." },
+            { "name": "volume_attributes", "type": "map(string)", "optional": true, "apiPath": "volumeAttributes", "description": "Driver-specific attributes." }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "node_selector",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.nodeSelector",
+      "description": "Node labels a node must have for the pod to be scheduled onto it."
+    },
+    {
+      "name": "tolerations",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.tolerations",
+      "description": "Tolerations that allow the pod onto tainted nodes.",
+      "attributes": [
+        { "name": "key", "type": "string", "optional": true, "apiPath": "key", "description": "Taint key to tolerate." },
+        { "name": "operator", "type": "string", "optional": true, "oneOf": ["Exists", "Equal"], "apiPath": "operator", "description": "Exists or Equal." },
+        { "name": "value", "type": "string", "optional": true, "apiPath": "value", "description": "Taint value (used with Equal)." },
+        { "name": "effect", "type": "string", "optional": true, "oneOf": ["NoSchedule", "PreferNoSchedule", "NoExecute"], "apiPath": "effect", "description": "Taint effect to match (empty matches all)." },
+        { "name": "toleration_seconds", "type": "int", "optional": true, "apiPath": "tolerationSeconds", "description": "How long to tolerate a NoExecute taint before eviction." }
+      ]
+    },
+    {
+      "name": "topology_spread_constraints",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.topologySpreadConstraints",
+      "description": "Rules for spreading pods across topology domains (zones, nodes).",
+      "attributes": [
+        { "name": "max_skew", "type": "int", "required": true, "apiPath": "maxSkew", "description": "Maximum permitted difference in pod count between domains." },
+        { "name": "topology_key", "type": "string", "required": true, "apiPath": "topologyKey", "description": "Node label defining the topology domain (e.g. topology.kubernetes.io/zone)." },
+        { "name": "when_unsatisfiable", "type": "string", "required": true, "oneOf": ["DoNotSchedule", "ScheduleAnyway"], "apiPath": "whenUnsatisfiable", "description": "Action when the constraint cannot be met." },
+        { "name": "min_domains", "type": "int", "optional": true, "apiPath": "minDomains", "description": "Minimum number of eligible domains." },
+        {
+          "name": "label_selector", "type": "object", "optional": true, "apiPath": "labelSelector", "description": "Pods to count for spreading.",
+          "attributes": [
+            { "name": "match_labels", "type": "map(string)", "optional": true, "apiPath": "matchLabels", "description": "Equality label matchers." },
+            { "name": "match_expressions", "type": "list(object)", "optional": true, "apiPath": "matchExpressions", "description": "Set-based label matchers.", "attributes": [
+              { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "Label key." },
+              { "name": "operator", "type": "string", "required": true, "oneOf": ["In", "NotIn", "Exists", "DoesNotExist"], "apiPath": "operator", "description": "Set operator." },
+              { "name": "values", "type": "list(string)", "optional": true, "apiPath": "values", "description": "Values (for In/NotIn)." }
+            ] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "affinity",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.affinity",
+      "description": "Node/pod affinity and anti-affinity scheduling rules.",
+      "attributes": [
+        {
+          "name": "node_affinity", "type": "object", "optional": true, "apiPath": "nodeAffinity", "description": "Constrain scheduling by node labels.",
+          "attributes": [
+            {
+              "name": "required", "type": "object", "optional": true, "apiPath": "requiredDuringSchedulingIgnoredDuringExecution", "description": "Hard node requirements.",
+              "attributes": [
+                { "name": "node_selector_terms", "type": "list(object)", "required": true, "apiPath": "nodeSelectorTerms", "description": "Node selector terms (ORed).", "attributes": [
+                  { "name": "match_expressions", "type": "list(object)", "optional": true, "apiPath": "matchExpressions", "description": "Node label matchers.", "attributes": [
+                    { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "Node label key." },
+                    { "name": "operator", "type": "string", "required": true, "oneOf": ["In", "NotIn", "Exists", "DoesNotExist", "Gt", "Lt"], "apiPath": "operator", "description": "Operator." },
+                    { "name": "values", "type": "list(string)", "optional": true, "apiPath": "values", "description": "Values." }
+                  ] },
+                  { "name": "match_fields", "type": "list(object)", "optional": true, "apiPath": "matchFields", "description": "Node field matchers.", "attributes": [
+                    { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "Node field key." },
+                    { "name": "operator", "type": "string", "required": true, "oneOf": ["In", "NotIn", "Exists", "DoesNotExist", "Gt", "Lt"], "apiPath": "operator", "description": "Operator." },
+                    { "name": "values", "type": "list(string)", "optional": true, "apiPath": "values", "description": "Values." }
+                  ] }
+                ] }
+              ]
+            },
+            {
+              "name": "preferred", "type": "list(object)", "optional": true, "apiPath": "preferredDuringSchedulingIgnoredDuringExecution", "description": "Soft node preferences.",
+              "attributes": [
+                { "name": "weight", "type": "int", "required": true, "apiPath": "weight", "description": "Preference weight (1-100)." },
+                { "name": "preference", "type": "object", "required": true, "apiPath": "preference", "description": "Node selector term.", "attributes": [
+                  { "name": "match_expressions", "type": "list(object)", "optional": true, "apiPath": "matchExpressions", "description": "Node label matchers.", "attributes": [
+                    { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "Node label key." },
+                    { "name": "operator", "type": "string", "required": true, "oneOf": ["In", "NotIn", "Exists", "DoesNotExist", "Gt", "Lt"], "apiPath": "operator", "description": "Operator." },
+                    { "name": "values", "type": "list(string)", "optional": true, "apiPath": "values", "description": "Values." }
+                  ] },
+                  { "name": "match_fields", "type": "list(object)", "optional": true, "apiPath": "matchFields", "description": "Node field matchers.", "attributes": [
+                    { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "Node field key." },
+                    { "name": "operator", "type": "string", "required": true, "oneOf": ["In", "NotIn", "Exists", "DoesNotExist", "Gt", "Lt"], "apiPath": "operator", "description": "Operator." },
+                    { "name": "values", "type": "list(string)", "optional": true, "apiPath": "values", "description": "Values." }
+                  ] }
+                ] }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "pod_affinity", "type": "object", "optional": true, "apiPath": "podAffinity", "description": "Co-locate with pods matching a label selector.",
+          "attributes": [
+            {
+              "name": "required", "type": "list(object)", "optional": true, "apiPath": "requiredDuringSchedulingIgnoredDuringExecution", "description": "Hard co-location requirements.",
+              "attributes": [
+                { "name": "topology_key", "type": "string", "required": true, "apiPath": "topologyKey", "description": "Node label defining the topology domain." },
+                { "name": "namespaces", "type": "list(string)", "optional": true, "apiPath": "namespaces", "description": "Namespaces to match pods in." },
+                { "name": "label_selector", "type": "object", "optional": true, "apiPath": "labelSelector", "description": "Pod label selector.", "attributes": [
+                  { "name": "match_labels", "type": "map(string)", "optional": true, "apiPath": "matchLabels", "description": "Equality matchers." },
+                  { "name": "match_expressions", "type": "list(object)", "optional": true, "apiPath": "matchExpressions", "description": "Set matchers.", "attributes": [
+                    { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "Label key." },
+                    { "name": "operator", "type": "string", "required": true, "oneOf": ["In", "NotIn", "Exists", "DoesNotExist"], "apiPath": "operator", "description": "Operator." },
+                    { "name": "values", "type": "list(string)", "optional": true, "apiPath": "values", "description": "Values." }
+                  ] }
+                ] }
+              ]
+            },
+            {
+              "name": "preferred", "type": "list(object)", "optional": true, "apiPath": "preferredDuringSchedulingIgnoredDuringExecution", "description": "Soft co-location preferences.",
+              "attributes": [
+                { "name": "weight", "type": "int", "required": true, "apiPath": "weight", "description": "Preference weight (1-100)." },
+                { "name": "pod_affinity_term", "type": "object", "required": true, "apiPath": "podAffinityTerm", "description": "Affinity term.", "attributes": [
+                  { "name": "topology_key", "type": "string", "required": true, "apiPath": "topologyKey", "description": "Topology domain node label." },
+                  { "name": "namespaces", "type": "list(string)", "optional": true, "apiPath": "namespaces", "description": "Namespaces to match pods in." },
+                  { "name": "label_selector", "type": "object", "optional": true, "apiPath": "labelSelector", "description": "Pod label selector.", "attributes": [
+                    { "name": "match_labels", "type": "map(string)", "optional": true, "apiPath": "matchLabels", "description": "Equality matchers." },
+                    { "name": "match_expressions", "type": "list(object)", "optional": true, "apiPath": "matchExpressions", "description": "Set matchers.", "attributes": [
+                      { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "Label key." },
+                      { "name": "operator", "type": "string", "required": true, "oneOf": ["In", "NotIn", "Exists", "DoesNotExist"], "apiPath": "operator", "description": "Operator." },
+                      { "name": "values", "type": "list(string)", "optional": true, "apiPath": "values", "description": "Values." }
+                    ] }
+                  ] }
+                ] }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "pod_anti_affinity", "type": "object", "optional": true, "apiPath": "podAntiAffinity", "description": "Avoid scheduling near pods matching a label selector.",
+          "attributes": [
+            {
+              "name": "required", "type": "list(object)", "optional": true, "apiPath": "requiredDuringSchedulingIgnoredDuringExecution", "description": "Hard anti-affinity requirements.",
+              "attributes": [
+                { "name": "topology_key", "type": "string", "required": true, "apiPath": "topologyKey", "description": "Node label defining the topology domain." },
+                { "name": "namespaces", "type": "list(string)", "optional": true, "apiPath": "namespaces", "description": "Namespaces to match pods in." },
+                { "name": "label_selector", "type": "object", "optional": true, "apiPath": "labelSelector", "description": "Pod label selector.", "attributes": [
+                  { "name": "match_labels", "type": "map(string)", "optional": true, "apiPath": "matchLabels", "description": "Equality matchers." },
+                  { "name": "match_expressions", "type": "list(object)", "optional": true, "apiPath": "matchExpressions", "description": "Set matchers.", "attributes": [
+                    { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "Label key." },
+                    { "name": "operator", "type": "string", "required": true, "oneOf": ["In", "NotIn", "Exists", "DoesNotExist"], "apiPath": "operator", "description": "Operator." },
+                    { "name": "values", "type": "list(string)", "optional": true, "apiPath": "values", "description": "Values." }
+                  ] }
+                ] }
+              ]
+            },
+            {
+              "name": "preferred", "type": "list(object)", "optional": true, "apiPath": "preferredDuringSchedulingIgnoredDuringExecution", "description": "Soft anti-affinity preferences.",
+              "attributes": [
+                { "name": "weight", "type": "int", "required": true, "apiPath": "weight", "description": "Preference weight (1-100)." },
+                { "name": "pod_affinity_term", "type": "object", "required": true, "apiPath": "podAffinityTerm", "description": "Anti-affinity term.", "attributes": [
+                  { "name": "topology_key", "type": "string", "required": true, "apiPath": "topologyKey", "description": "Topology domain node label." },
+                  { "name": "namespaces", "type": "list(string)", "optional": true, "apiPath": "namespaces", "description": "Namespaces to match pods in." },
+                  { "name": "label_selector", "type": "object", "optional": true, "apiPath": "labelSelector", "description": "Pod label selector.", "attributes": [
+                    { "name": "match_labels", "type": "map(string)", "optional": true, "apiPath": "matchLabels", "description": "Equality matchers." },
+                    { "name": "match_expressions", "type": "list(object)", "optional": true, "apiPath": "matchExpressions", "description": "Set matchers.", "attributes": [
+                      { "name": "key", "type": "string", "required": true, "apiPath": "key", "description": "Label key." },
+                      { "name": "operator", "type": "string", "required": true, "oneOf": ["In", "NotIn", "Exists", "DoesNotExist"], "apiPath": "operator", "description": "Operator." },
+                      { "name": "values", "type": "list(string)", "optional": true, "apiPath": "values", "description": "Values." }
+                    ] }
+                  ] }
+                ] }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "pod_security_context",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.securityContext",
+      "description": "Pod-level security settings applied to all containers.",
+      "attributes": [
+        { "name": "run_as_user", "type": "int", "optional": true, "apiPath": "runAsUser", "description": "UID for all containers." },
+        { "name": "run_as_group", "type": "int", "optional": true, "apiPath": "runAsGroup", "description": "GID for all containers." },
+        { "name": "run_as_non_root", "type": "bool", "optional": true, "apiPath": "runAsNonRoot", "description": "Require containers to run as non-root." },
+        { "name": "fs_group", "type": "int", "optional": true, "apiPath": "fsGroup", "description": "Supplemental group applied to mounted volumes." },
+        { "name": "fs_group_change_policy", "type": "string", "optional": true, "oneOf": ["OnRootMismatch", "Always"], "apiPath": "fsGroupChangePolicy", "description": "When to change volume ownership to fs_group." },
+        { "name": "supplemental_groups", "type": "list(string)", "optional": true, "apiPath": "supplementalGroups", "description": "Additional GIDs for the first container process." },
+        { "name": "sysctls", "type": "list(object)", "optional": true, "apiPath": "sysctls", "description": "Namespaced sysctls to set.", "attributes": [
+          { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Sysctl name." },
+          { "name": "value", "type": "string", "required": true, "apiPath": "value", "description": "Sysctl value." }
+        ] },
+        { "name": "seccomp_profile", "type": "object", "optional": true, "apiPath": "seccompProfile", "description": "Seccomp profile for all containers.", "attributes": [
+          { "name": "type", "type": "string", "required": true, "oneOf": ["Unconfined", "RuntimeDefault", "Localhost"], "apiPath": "type", "description": "Profile type." },
+          { "name": "localhost_profile", "type": "string", "optional": true, "apiPath": "localhostProfile", "description": "Profile path (used with Localhost)." }
+        ] },
+        { "name": "se_linux_options", "type": "object", "optional": true, "apiPath": "seLinuxOptions", "description": "SELinux context.", "attributes": [
+          { "name": "user", "type": "string", "optional": true, "apiPath": "user", "description": "SELinux user." },
+          { "name": "role", "type": "string", "optional": true, "apiPath": "role", "description": "SELinux role." },
+          { "name": "type", "type": "string", "optional": true, "apiPath": "type", "description": "SELinux type." },
+          { "name": "level", "type": "string", "optional": true, "apiPath": "level", "description": "SELinux level." }
+        ] }
+      ]
+    },
+    {
+      "name": "termination_grace_period_seconds",
+      "type": "int",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.terminationGracePeriodSeconds",
+      "description": "Seconds the pod is given to shut down gracefully before being force-killed."
+    },
+    {
+      "name": "restart_policy",
+      "type": "string",
+      "optional": true,
+      "oneOf": ["Always", "OnFailure", "Never"],
+      "apiPath": "spec.deployment.spec.template.spec.restartPolicy",
+      "description": "Pod restart policy. Deployments require Always."
+    },
+    {
+      "name": "dns_policy",
+      "type": "string",
+      "optional": true,
+      "oneOf": ["ClusterFirst", "ClusterFirstWithHostNet", "Default", "None"],
+      "apiPath": "spec.deployment.spec.template.spec.dnsPolicy",
+      "description": "Pod DNS policy."
+    },
+    {
+      "name": "dns_config",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.dnsConfig",
+      "description": "Custom DNS settings, merged per dns_policy.",
+      "attributes": [
+        { "name": "nameservers", "type": "list(string)", "optional": true, "apiPath": "nameservers", "description": "DNS server IPs." },
+        { "name": "searches", "type": "list(string)", "optional": true, "apiPath": "searches", "description": "DNS search domains." },
+        { "name": "options", "type": "list(object)", "optional": true, "apiPath": "options", "description": "Resolver options.", "attributes": [
+          { "name": "name", "type": "string", "required": true, "apiPath": "name", "description": "Option name." },
+          { "name": "value", "type": "string", "optional": true, "apiPath": "value", "description": "Option value." }
+        ] }
+      ]
+    },
+    {
+      "name": "host_aliases",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.hostAliases",
+      "description": "Additional /etc/hosts entries injected into the pod.",
+      "attributes": [
+        { "name": "ip", "type": "string", "required": true, "apiPath": "ip", "description": "IP address." },
+        { "name": "hostnames", "type": "list(string)", "required": true, "apiPath": "hostnames", "description": "Hostnames mapped to the IP." }
+      ]
+    },
+    {
+      "name": "host_network",
+      "type": "bool",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.hostNetwork",
+      "description": "Use the host network namespace."
+    },
+    {
+      "name": "host_pid",
+      "type": "bool",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.hostPID",
+      "description": "Use the host PID namespace."
+    },
+    {
+      "name": "host_ipc",
+      "type": "bool",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.hostIPC",
+      "description": "Use the host IPC namespace."
+    },
+    {
+      "name": "share_process_namespace",
+      "type": "bool",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.shareProcessNamespace",
+      "description": "Share a single process namespace between all containers in the pod."
+    },
+    {
+      "name": "priority_class_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.priorityClassName",
+      "description": "PriorityClass name used to set the pod's scheduling priority."
+    },
+    {
+      "name": "scheduler_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.schedulerName",
+      "description": "Name of the scheduler that dispatches the pod."
+    },
+    {
+      "name": "runtime_class_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.runtimeClassName",
+      "description": "RuntimeClass to use for the pod (e.g. gvisor)."
+    },
+    {
+      "name": "hostname",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.hostname",
+      "description": "Pod hostname (defaults to the pod name)."
+    },
+    {
+      "name": "subdomain",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.subdomain",
+      "description": "Pod subdomain, used with a headless Service for stable DNS."
+    },
+    {
+      "name": "automount_service_account_token",
+      "type": "bool",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.automountServiceAccountToken",
+      "description": "Whether to automount the service account token into the pod."
+    },
+    {
+      "name": "enable_service_links",
+      "type": "bool",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.enableServiceLinks",
+      "description": "Inject service discovery environment variables for services in the namespace."
+    },
+    {
+      "name": "set_hostname_as_fqdn",
+      "type": "bool",
+      "optional": true,
+      "apiPath": "spec.deployment.spec.template.spec.setHostnameAsFQDN",
+      "description": "Set the pod's hostname to its fully qualified domain name."
     },
     {
       "name": "service",
@@ -304,9 +1169,25 @@
           "description": "Name of the Service object."
         },
         {
+          "name": "labels",
+          "type": "map(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "metadata.labels",
+          "description": "Labels applied to the Service object. The platform also stamps its own labels, so the effective set is computed."
+        },
+        {
+          "name": "annotations",
+          "type": "map(string)",
+          "optional": true,
+          "apiPath": "metadata.annotations",
+          "description": "Annotations applied to the Service object (e.g. cloud load-balancer controller settings)."
+        },
+        {
           "name": "type",
           "type": "string",
           "optional": true,
+          "computed": true,
           "oneOf": [
             "ClusterIP",
             "NodePort",
@@ -314,7 +1195,7 @@
             "ExternalName"
           ],
           "apiPath": "spec.type",
-          "description": "Service type. LoadBalancer provisions an external endpoint."
+          "description": "Service type. LoadBalancer provisions an external endpoint. Defaults to ClusterIP (server-assigned)."
         },
         {
           "name": "ports",
@@ -350,11 +1231,19 @@
               "description": "Protocol."
             },
             {
+              "name": "app_protocol",
+              "type": "string",
+              "optional": true,
+              "apiPath": "appProtocol",
+              "description": "Application protocol hint for this port (e.g. http, https, grpc)."
+            },
+            {
               "name": "node_port",
               "type": "int",
               "optional": true,
+              "computed": true,
               "apiPath": "nodePort",
-              "description": "Static node port (NodePort/LoadBalancer)."
+              "description": "Static node port (NodePort/LoadBalancer). Server-assigned when unset."
             },
             {
               "name": "name",
@@ -364,6 +1253,171 @@
               "description": "Named port."
             }
           ]
+        },
+        {
+          "name": "cluster_ip",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "spec.clusterIP",
+          "description": "ClusterIP address. Leave unset to have the cluster assign one; set to \"None\" for a headless Service."
+        },
+        {
+          "name": "cluster_ips",
+          "type": "list(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "spec.clusterIPs",
+          "description": "ClusterIP addresses (dual-stack). Server-assigned when unset."
+        },
+        {
+          "name": "ip_families",
+          "type": "list(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "spec.ipFamilies",
+          "description": "IP families assigned to the Service (IPv4 and/or IPv6). Server-assigned when unset."
+        },
+        {
+          "name": "ip_family_policy",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "oneOf": [
+            "SingleStack",
+            "PreferDualStack",
+            "RequireDualStack"
+          ],
+          "apiPath": "spec.ipFamilyPolicy",
+          "description": "Dual-stack policy: SingleStack, PreferDualStack, or RequireDualStack."
+        },
+        {
+          "name": "session_affinity",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "oneOf": [
+            "ClientIP",
+            "None"
+          ],
+          "apiPath": "spec.sessionAffinity",
+          "description": "Session affinity: ClientIP or None. Defaults to None."
+        },
+        {
+          "name": "session_affinity_config",
+          "type": "object",
+          "optional": true,
+          "apiPath": "spec.sessionAffinityConfig",
+          "description": "Session affinity configuration (used when session_affinity is ClientIP).",
+          "attributes": [
+            {
+              "name": "client_ip",
+              "type": "object",
+              "optional": true,
+              "apiPath": "clientIP",
+              "description": "ClientIP-based session affinity settings.",
+              "attributes": [
+                {
+                  "name": "timeout_seconds",
+                  "type": "int",
+                  "optional": true,
+                  "computed": true,
+                  "apiPath": "timeoutSeconds",
+                  "description": "Sticky session timeout in seconds (1–86400). Defaults to 10800."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "external_ips",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "spec.externalIPs",
+          "description": "External IPs on which nodes accept traffic for this Service."
+        },
+        {
+          "name": "external_name",
+          "type": "string",
+          "optional": true,
+          "apiPath": "spec.externalName",
+          "description": "External DNS name to alias (required when type is ExternalName)."
+        },
+        {
+          "name": "external_traffic_policy",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "oneOf": [
+            "Cluster",
+            "Local"
+          ],
+          "apiPath": "spec.externalTrafficPolicy",
+          "description": "How external traffic is routed: Cluster (spread across nodes) or Local (preserve client source IP). Applies to NodePort/LoadBalancer."
+        },
+        {
+          "name": "internal_traffic_policy",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "oneOf": [
+            "Cluster",
+            "Local"
+          ],
+          "apiPath": "spec.internalTrafficPolicy",
+          "description": "How internal (in-cluster) traffic is routed: Cluster or Local. Defaults to Cluster."
+        },
+        {
+          "name": "health_check_node_port",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "apiPath": "spec.healthCheckNodePort",
+          "description": "Node port for the LoadBalancer health check (only when type is LoadBalancer and external_traffic_policy is Local). Server-assigned when unset."
+        },
+        {
+          "name": "load_balancer_ip",
+          "type": "string",
+          "optional": true,
+          "apiPath": "spec.loadBalancerIP",
+          "description": "Requested load-balancer IP (deprecated in Kubernetes; prefer a cloud-specific annotation)."
+        },
+        {
+          "name": "load_balancer_class",
+          "type": "string",
+          "optional": true,
+          "apiPath": "spec.loadBalancerClass",
+          "description": "Load-balancer implementation class (for type LoadBalancer)."
+        },
+        {
+          "name": "load_balancer_source_ranges",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "spec.loadBalancerSourceRanges",
+          "description": "CIDR ranges allowed to reach the load balancer."
+        },
+        {
+          "name": "publish_not_ready_addresses",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "apiPath": "spec.publishNotReadyAddresses",
+          "description": "Publish endpoints for pods that are not yet ready (used by headless Services for stateful workloads)."
+        },
+        {
+          "name": "allocate_load_balancer_node_ports",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "apiPath": "spec.allocateLoadBalancerNodePorts",
+          "description": "Whether node ports are allocated for a LoadBalancer Service. Defaults to true."
+        },
+        {
+          "name": "traffic_distribution",
+          "type": "string",
+          "optional": true,
+          "apiPath": "spec.trafficDistribution",
+          "description": "Traffic distribution preference (e.g. PreferClose to keep traffic in-zone)."
         }
       ]
     },

@@ -26,10 +26,25 @@ resource "duploai_app_service" "nginx" {
   # Expose the pods inside the cluster (the platform manages the selector).
   service = {
     name = "nginx"
-    type = "ClusterIP"
+    type = "LoadBalancer"
+    annotations = {
+      "service.beta.kubernetes.io/aws-load-balancer-type" = "nlb"
+    }
     ports = [
-      { port = 80, target_port = 80 }
+      { port = 80, target_port = 80, app_protocol = "http" }
     ]
+
+    # Preserve the client source IP and restrict who can reach the load balancer.
+    external_traffic_policy     = "Local"
+    load_balancer_source_ranges = ["10.0.0.0/8"]
+
+    # Sticky sessions for one hour.
+    session_affinity = "ClientIP"
+    session_affinity_config = {
+      client_ip = {
+        timeout_seconds = 3600
+      }
+    }
   }
 
   # Route external traffic to the service.
