@@ -106,6 +106,15 @@
       "description": "Cloud provider the cluster targets. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws."
     },
     {
+      "name": "skip_attribute_auto_creation",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": true,
+      "apiPath": "spec.skipAttributeAutoCreation",
+      "description": "Skip automatic creation of cluster attributes (add-ons/managed components) during provisioning. Defaults to true."
+    },
+    {
       "name": "version",
       "type": "string",
       "required": true,
