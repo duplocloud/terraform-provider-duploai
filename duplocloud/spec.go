@@ -401,6 +401,18 @@ type WaiterSpec struct {
 	// to enable the gate; failure detection still uses StatusPath/FailureStates.
 	ReadyPath  string `json:"readyPath,omitempty"`
 	ReadyState string `json:"readyState,omitempty"`
+	// PopulatedPath / PopulatedPathAttribute add an optional, user-gated wait: the
+	// engine adds a boolean control attribute named PopulatedPathAttribute (e.g.
+	// "wait_for_load_balancer") to the resource. When the user sets it true, Create
+	// and Update keep polling — after the normal status/ready gate is met — until
+	// the value at PopulatedPath (a read-response dot-path, e.g.
+	// "result.k8sResource.status.loadBalancer.ingress") becomes non-empty, or the
+	// operation timeout elapses. Used for async cloud side effects the API fills in
+	// after the resource itself is Complete (e.g. a load balancer address assigned
+	// by the cloud controller). Ignored when the control attribute is false/unset.
+	// Both fields must be set together.
+	PopulatedPath          string `json:"populatedPath,omitempty"`
+	PopulatedPathAttribute string `json:"populatedPathAttribute,omitempty"`
 	// FailureStates maps terminal failure values to human-readable reasons.
 	FailureStates map[string]string `json:"failureStates"`
 	// FailureRetries is how many extra polls to tolerate after first seeing a
@@ -570,6 +582,20 @@ func (s *ResourceSpec) validate() error {
 	}
 	if err := validateSingleIntentUpdate(s); err != nil {
 		return err
+	}
+	if s.Waiter != nil {
+		pp, pa := s.Waiter.PopulatedPath, s.Waiter.PopulatedPathAttribute
+		if (pp == "") != (pa == "") {
+			return fmt.Errorf("waiter.populatedPath and waiter.populatedPathAttribute must be set together")
+		}
+		if pa != "" {
+			if pa == "id" || pa == "failure_retries" || pa == "timeouts" {
+				return fmt.Errorf("waiter.populatedPathAttribute %q collides with a reserved attribute", pa)
+			}
+			if seen[pa] {
+				return fmt.Errorf("waiter.populatedPathAttribute %q collides with a declared attribute", pa)
+			}
+		}
 	}
 	return nil
 }
