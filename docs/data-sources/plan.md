@@ -39,14 +39,22 @@ output "primary_hosted_zone_domain" {
 ### Read-Only
 
 - `ami_ids` (List of String) IDs of AMIs registered by the plan.
-- `certificate_arns` (List of String) ARNs of certificates provisioned by the plan.
+- `certificates` (Attributes List) ACM certificates for the plan. Set to bring existing certificates; leave unset to have the platform provision them. (see [below for nested schema](#nestedatt--certificates))
 - `description` (String) Optional description.
 - `name` (String) Name of the plan.
 - `network_baseline_id` (String) ID of the network baseline this plan is built on.
-- `primary_hosted_zone_domain` (String) Domain name of the primary hosted zone.
-- `primary_hosted_zone_id` (String) ID of the primary Route 53 hosted zone provisioned by the plan.
+- `primary_hosted_zone_domain` (String) Domain name of the primary hosted zone. Set to bring an existing domain; leave unset to have the platform provision one.
+- `primary_hosted_zone_id` (String) ID of the primary Route 53 hosted zone. Set to bring an existing hosted zone; leave unset to have the platform provision one.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `region` (String) AWS region (e.g. us-east-1).
 - `scope_ids` (List of String) Scope IDs that link this plan to a cloud provider account.
 - `status` (String) Current provisioning status.
+
+<a id="nestedatt--certificates"></a>
+### Nested Schema for `certificates`
+
+Read-Only:
+
+- `certificate_arn` (String) ARN of the ACM certificate.
+- `domain` (String) Domain the certificate covers.

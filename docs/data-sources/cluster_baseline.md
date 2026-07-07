@@ -53,6 +53,7 @@ output "status" {
 - `provisioner_version` (String) Optional provisioner version.
 - `region` (String) Cloud region (e.g. us-east-1). Inherited from the linked network (network_id); computed, not user-settable.
 - `scope_ids` (List of String) Scope IDs for the cluster. For cloud clusters leave unset — inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from.
+- `skip_attribute_auto_creation` (Boolean) Skip automatic creation of cluster attributes (add-ons/managed components) during provisioning. Defaults to true.
 - `stack_id` (String) Provisioned infrastructure stack ID.
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) Subnet IDs for the cluster. Inherited from the linked network (network_id); computed, not user-settable.

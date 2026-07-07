@@ -95,6 +95,7 @@ resource "duploai_cluster_baseline" "onprem" {
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `scope_ids` (List of String) Scope IDs for the cluster. For cloud clusters leave unset — inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from.
+- `skip_attribute_auto_creation` (Boolean) Skip automatic creation of cluster attributes (add-ons/managed components) during provisioning. Defaults to true.
 - `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
