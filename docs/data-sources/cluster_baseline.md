@@ -46,19 +46,20 @@ output "status" {
 - `control_plane_logging` (List of String) Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler). When unset, defaults to none (server-assigned; list attributes take no static default).
 - `description` (String) Optional description.
 - `domain_name_filter` (String) Comma-joined list of Route53 hosted-zone names that external-dns should manage for this cluster.
+- `mode` (String) Provisioning mode: Create (provision a new cluster) or Import (adopt an existing cluster, identified by name + region + cloud; version, VPC, and subnets are auto-discovered). Immutable after creation.
 - `name` (String) Name of the cluster baseline.
 - `network_id` (String) ID of the network baseline whose VPC and subnets this cluster will use. The cluster inherits its region, VPC, subnets, and scope from this network. Required unless cloud is K8S_ONLY (which provisions no cloud network).
 - `oidc_issuer_url` (String) OIDC issuer URL for IRSA.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
-- `region` (String) Cloud region (e.g. us-east-1). Inherited from the linked network (network_id); computed, not user-settable.
+- `region` (String) Cloud region (e.g. us-east-1). For Create, inherited from the linked network (network_id) — leave unset. Required for Import (identifies where the existing cluster runs).
 - `scope_ids` (List of String) Scope IDs for the cluster. For cloud clusters leave unset — inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from.
-- `skip_attribute_auto_creation` (Boolean) Skip automatic creation of cluster attributes (add-ons/managed components) during provisioning. Defaults to true.
+- `skip_attribute_auto_creation` (Boolean) Skip automatic creation of cluster attributes (add-ons/managed components) during provisioning. When unset, follows the server default; set true to fully self-manage cluster attributes.
 - `stack_id` (String) Provisioned infrastructure stack ID.
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) Subnet IDs for the cluster. Inherited from the linked network (network_id); computed, not user-settable.
 - `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))
-- `version` (String) Kubernetes version for the cluster (e.g. "1.34"). Immutable after creation.
+- `version` (String) Kubernetes version for the cluster (e.g. "1.34"). Required when mode is Create; auto-discovered when mode is Import. Read from the live cluster (authoritative over the create-time value). Immutable after creation.
 - `vpc_id` (String) VPC ID for the cluster. Inherited from the linked network (network_id); computed, not user-settable.
 
 <a id="nestedatt--system_node_group"></a>

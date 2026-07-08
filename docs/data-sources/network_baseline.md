@@ -43,13 +43,14 @@ output "subnet_ids" {
 ### Read-Only
 
 - `az_count` (Number) Number of availability zones (1-4).
-- `cidr` (String) VPC CIDR block (e.g. 10.0.0.0/16).
+- `cidr` (String) VPC CIDR block (e.g. 10.0.0.0/16). Required when the platform provisions a new VPC; leave unset when importing an existing VPC (vpc_id) — it is read from the imported VPC.
 - `cloud` (String) Cloud provider the network is provisioned in. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
 - `description` (String) Optional description.
 - `enable_dns` (Boolean) Enable DNS support in the VPC.
 - `enable_flow_logs` (Boolean) Enable VPC flow logs.
 - `env_tag` (String) Environment tag applied to provisioned resources.
 - `flow_logs_retention_days` (Number) Flow logs retention in days. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default).
+- `mode` (String) Provisioning mode: Create (the platform provisions a new VPC) or Import (adopt an existing VPC not provisioned by the platform — set vpc_id to the VPC to adopt). Immutable after creation.
 - `name` (String) Name of the network baseline.
 - `nat_gateway_ids` (List of String) Provisioned NAT gateway IDs.
 - `nat_mode` (String) NAT gateway mode: None, SingleAz, or MultiAz.
@@ -61,4 +62,4 @@ output "subnet_ids" {
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) Provisioned subnet IDs.
 - `subnet_prefix` (Number) Subnet prefix length (e.g. 24).
-- `vpc_id` (String) Provisioned VPC ID.
+- `vpc_id` (String) ID of the VPC. Set this to import an existing VPC that was not provisioned by the platform (the baseline adopts the given VPC instead of creating one); leave unset to have the platform provision a new VPC. Computed to the provisioned or adopted VPC ID.

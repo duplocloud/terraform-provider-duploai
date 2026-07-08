@@ -55,3 +55,18 @@ resource "duploai_cluster_baseline" "onprem" {
   scope_ids    = ["<k8s-scope-id>"]
   version      = "1.34"
 }
+
+# Import an existing EKS cluster (mode = "Import") — adopts a cluster the platform
+# did not provision. `name` must match the existing cluster's name; the platform
+# finds it by name + region + cloud and auto-discovers version, VPC, and subnets.
+# Provide either network_id (which supplies the region) or region directly.
+resource "duploai_cluster_baseline" "imported" {
+  workspace_id = "<workspace-id>"
+  mode         = "Import"
+  cloud        = "Aws"
+  name         = "existing-eks-cluster" # name of the EKS cluster to adopt
+  network_id   = "<network-baseline-id>"
+  scope_ids    = ["<scope-id>"]
+
+  # version / region / vpc / subnets are auto-discovered — leave unset.
+}
