@@ -53,7 +53,6 @@ resource "duploai_network_baseline" "with_nat_and_logs" {
 ### Required
 
 - `az_count` (Number) Number of availability zones (1-4).
-- `cidr` (String) VPC CIDR block (e.g. 10.0.0.0/16).
 - `name` (String) Name of the network baseline.
 - `region` (String) Cloud region (e.g. us-east-1).
 - `scope_ids` (List of String) Scope IDs that link this network to a cloud provider account.
@@ -62,6 +61,7 @@ resource "duploai_network_baseline" "with_nat_and_logs" {
 
 ### Optional
 
+- `cidr` (String) VPC CIDR block (e.g. 10.0.0.0/16). Required when the platform provisions a new VPC; leave unset when importing an existing VPC (vpc_id) — it is read from the imported VPC.
 - `cloud` (String) Cloud provider the network is provisioned in. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
 - `description` (String) Optional description.
 - `enable_dns` (Boolean) Enable DNS support in the VPC.
@@ -69,10 +69,12 @@ resource "duploai_network_baseline" "with_nat_and_logs" {
 - `env_tag` (String) Environment tag applied to provisioned resources.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `flow_logs_retention_days` (Number) Flow logs retention in days. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default).
+- `mode` (String) Provisioning mode: Create (the platform provisions a new VPC) or Import (adopt an existing VPC not provisioned by the platform — set vpc_id to the VPC to adopt). Immutable after creation.
 - `nat_mode` (String) NAT gateway mode: None, SingleAz, or MultiAz.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
+- `vpc_id` (String) ID of the VPC. Set this to import an existing VPC that was not provisioned by the platform (the baseline adopts the given VPC instead of creating one); leave unset to have the platform provision a new VPC. Computed to the provisioned or adopted VPC ID.
 
 ### Read-Only
 
@@ -81,7 +83,6 @@ resource "duploai_network_baseline" "with_nat_and_logs" {
 - `network_id` (String) UUID of this network baseline, for reference by dependent resources (e.g. a cluster baseline).
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) Provisioned subnet IDs.
-- `vpc_id` (String) Provisioned VPC ID.
 
 <a id="nestedblock--timeouts"></a>
 ### Nested Schema for `timeouts`
