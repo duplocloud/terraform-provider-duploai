@@ -1,0 +1,225 @@
+{
+  "name": "sqs",
+  "description": "Manages a DuploCloud AI Helpdesk AWS SQS (Simple Queue Service) queue, provisioned within an environment and resource group.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AwsSqsQueues",
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this queue."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Queue name. For a FIFO queue (queue_type = Fifo) the platform appends the required \".fifo\" suffix automatically. Cannot be changed after creation."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment in which the queue is provisioned."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group in which the queue is provisioned."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this queue to a cloud provider account."
+    },
+    {
+      "name": "queue_type",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "oneOf": [
+        "Standard",
+        "Fifo"
+      ],
+      "apiPath": "spec.queueType",
+      "description": "Queue type: Standard (best-effort ordering, at-least-once delivery) or Fifo (strict ordering, exactly-once). Immutable after creation."
+    },
+    {
+      "name": "visibility_timeout_seconds",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.visibilityTimeout",
+      "description": "Time (seconds, 0-43200) a message is hidden after a consumer receives it. Defaults to 30 when unset. Can be changed in place."
+    },
+    {
+      "name": "message_retention_seconds",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.messageRetentionPeriod",
+      "description": "How long (seconds, 60-1209600) messages are retained. Defaults to 345600 (4 days) when unset. Can be changed in place."
+    },
+    {
+      "name": "receive_message_wait_seconds",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.receiveMessageWaitTimeSeconds",
+      "description": "Long-poll wait time (seconds, 0-20) for ReceiveMessage. Defaults to 0 (short polling) when unset. Can be changed in place."
+    },
+    {
+      "name": "maximum_message_size_bytes",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.maximumMessageSize",
+      "description": "Maximum message size in bytes (1024-262144). Defaults to 262144 (256 KiB) when unset. Can be changed in place."
+    },
+    {
+      "name": "delay_seconds",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.delaySeconds",
+      "description": "Delivery delay for new messages (seconds, 0-900). Defaults to 0 when unset. Can be changed in place."
+    },
+    {
+      "name": "content_based_deduplication",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.contentBasedDeduplication",
+      "description": "Enable content-based deduplication (FIFO queues only; ignored for Standard). Can be changed in place."
+    },
+    {
+      "name": "encryption_mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "oneOf": [
+        "None",
+        "SseS3",
+        "SseKms"
+      ],
+      "apiPath": "spec.encryption.mode",
+      "description": "Server-side encryption mode: None (unencrypted), SseS3 (SQS-managed keys), or SseKms (AWS KMS). Can be changed in place."
+    },
+    {
+      "name": "kms_master_key_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.encryption.kmsMasterKeyId",
+      "description": "KMS key ID, ARN, or alias used when encryption_mode is SseKms. Defaults to alias/aws/sqs when SseKms and unset. Can be changed in place."
+    },
+    {
+      "name": "kms_data_key_reuse_seconds",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.encryption.kmsDataKeyReusePeriodSeconds",
+      "description": "How long (seconds, 60-86400) SQS reuses a KMS data key before calling KMS again (SseKms only). Can be changed in place."
+    },
+    {
+      "name": "tags",
+      "type": "map(string)",
+      "optional": true,
+      "createOnly": true,
+      "requestPath": "spec.createRequest.tags",
+      "description": "Tags applied to the queue at creation, as key/value pairs. Platform ownership tags are added automatically. Set only at creation (SQS has no tag-update API)."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "oneOf": [
+        "Cli",
+        "IacNativeTf",
+        "IacDuploTf",
+        "DirectApiCall"
+      ],
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type. Defaults to DirectApiCall for SQS."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status of the queue."
+    },
+    {
+      "name": "queue_url",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.queueUrl",
+      "description": "URL of the provisioned SQS queue (used for send/receive/delete operations)."
+    },
+    {
+      "name": "queue_arn",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "spec.uniqueCloudResourceId",
+      "description": "ARN of the provisioned SQS queue."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the queue was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the queue was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ],
+  "createConstants": [
+    {
+      "path": "spec.mode",
+      "value": "Create"
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned"
+  }
+}
