@@ -275,6 +275,15 @@ type AttributeSpec struct {
 	CreatePath string `json:"createPath,omitempty"`
 	UpdatePath string `json:"updatePath,omitempty"`
 
+	// UpdateBoolTrueValue, for a string attribute, makes the update (PUT) body
+	// carry a BOOLEAN at UpdatePath instead of the string: true when the value
+	// equals UpdateBoolTrueValue, else false. Use when create and update take
+	// different shapes for the same setting — e.g. AWS ECR create takes
+	// imageTagMutability="IMMUTABLE" (string) while update takes
+	// enableTagImmutability=true (bool). Only applies to the update body (create
+	// still writes the raw string via CreatePath). Requires UpdatePath.
+	UpdateBoolTrueValue string `json:"updateBoolTrueValue,omitempty"`
+
 	// CreateOnly marks an attribute that is only sent in the POST (create)
 	// body and never in the PUT (update) body. Useful for fields that are
 	// immutable after creation but not forceNew (e.g. code source for Lambda).
@@ -644,6 +653,14 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 		}
 		if !a.Required && !a.Optional && !a.Computed {
 			return nil, fmt.Errorf("attribute %q must be one of required/optional/computed", a.Name)
+		}
+		if a.UpdateBoolTrueValue != "" {
+			if a.Type != "string" {
+				return nil, fmt.Errorf("attribute %q: updateBoolTrueValue requires a string type", a.Name)
+			}
+			if a.UpdatePath == "" {
+				return nil, fmt.Errorf("attribute %q: updateBoolTrueValue requires updatePath", a.Name)
+			}
 		}
 		if info.elem == "object" {
 			if len(a.Attributes) == 0 {

@@ -1,0 +1,211 @@
+{
+  "name": "ecr",
+  "description": "Manages a DuploCloud AI Helpdesk AWS ECR (Elastic Container Registry) repository, provisioned within an environment and resource group.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AwsEcrs",
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this ECR repository."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "DuploCloud resource name for this repository. Distinct from repository_name (the AWS ECR name); use a simple identifier here. Cannot be changed after creation."
+    },
+    {
+      "name": "repository_name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.repositoryName",
+      "description": "Name of the AWS ECR repository (may contain path separators, e.g. \"team/backend\"). Immutable — AWS has no rename API."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment in which the repository is provisioned."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group in which the repository is provisioned."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs linking this repository to a cloud provider account. Derived from the resource group; not user-settable."
+    },
+    {
+      "name": "encryption",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "AwsManagedKey",
+      "forceNew": true,
+      "oneOf": [
+        "NoEncryption",
+        "AwsManagedKey",
+        "ResourceGroupKmsKey"
+      ],
+      "apiPath": "spec.encryption",
+      "description": "Server-side encryption for the repository: NoEncryption / AwsManagedKey (AWS-managed AES256) / ResourceGroupKmsKey (the resource group's KMS key). ResourceGroupKmsKey requires the resource group to have a provisioned KMS key. Immutable after creation."
+    },
+    {
+      "name": "scan_on_push",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "createPath": "spec.createRequest.imageScanningConfiguration.scanOnPush",
+      "updatePath": "spec.updateRequest.enableScanImageOnPush",
+      "responsePath": "result.cloudDetails.imageScanningConfiguration.scanOnPush",
+      "description": "Scan images for vulnerabilities automatically when pushed. Can be changed in place."
+    },
+    {
+      "name": "image_tag_mutability",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "MUTABLE",
+      "oneOf": [
+        "MUTABLE",
+        "IMMUTABLE"
+      ],
+      "createPath": "spec.createRequest.imageTagMutability",
+      "updatePath": "spec.updateRequest.enableTagImmutability",
+      "updateBoolTrueValue": "IMMUTABLE",
+      "responsePath": "result.cloudDetails.imageTagMutability",
+      "description": "Whether image tags can be overwritten: MUTABLE (tags may be overwritten) or IMMUTABLE (tags are write-once). Can be changed in place."
+    },
+    {
+      "name": "tags",
+      "type": "list(object)",
+      "optional": true,
+      "createOnly": true,
+      "requestPath": "spec.createRequest.tags",
+      "attributes": [
+        {
+          "name": "key",
+          "type": "string",
+          "required": true,
+          "apiPath": "key",
+          "description": "Tag key."
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "required": true,
+          "apiPath": "value",
+          "description": "Tag value."
+        }
+      ],
+      "description": "Tags applied to the repository at creation, as a list of key/value pairs. Platform ownership tags are added automatically."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "DirectApiCall",
+      "forceNew": true,
+      "oneOf": [
+        "Cli",
+        "IacNativeTf",
+        "IacDuploTf",
+        "DirectApiCall"
+      ],
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type. Defaults to DirectApiCall for ECR."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status of the repository."
+    },
+    {
+      "name": "repository_arn",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.cloudDetails.repositoryArn",
+      "description": "ARN of the provisioned ECR repository."
+    },
+    {
+      "name": "repository_uri",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.cloudDetails.repositoryUri",
+      "description": "URI of the repository (used as the image push/pull target)."
+    },
+    {
+      "name": "registry_id",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.cloudDetails.registryId",
+      "description": "AWS account ID of the registry that hosts the repository."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the repository was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the repository was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ],
+  "createConstants": [
+    {
+      "path": "spec.mode",
+      "value": "Create"
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned"
+  }
+}
