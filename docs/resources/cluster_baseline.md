@@ -81,6 +81,7 @@ resource "duploai_cluster_baseline" "imported" {
   cloud        = "Aws"
   name         = "existing-eks-cluster" # name of the EKS cluster to adopt
   network_id   = "<network-baseline-id>"
+  scope_ids    = ["<scope-id>"]
 
   # version / region / vpc / subnets are auto-discovered — leave unset.
 }
