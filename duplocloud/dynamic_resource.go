@@ -885,6 +885,12 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *dia
 		if !ok {
 			continue
 		}
+		// String-enum → bool on update: e.g. image_tag_mutability "IMMUTABLE"
+		// (create string) maps to enableTagImmutability true (update bool).
+		if verb == "update" && a.UpdateBoolTrueValue != "" {
+			s, _ := val.(string)
+			val = s == a.UpdateBoolTrueValue
+		}
 		setPath(body, strings.Split(reqPath, "."), val)
 	}
 	applyConstants(body, r.spec.RequestConstants, diags)
