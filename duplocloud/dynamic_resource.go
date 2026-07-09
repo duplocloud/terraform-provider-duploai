@@ -1124,6 +1124,9 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 			continue
 		}
 		goVal := extractPath(resp, strings.Split(respPath, "."))
+		if len(a.FilterResponseKeys) > 0 {
+			goVal = filterMapKeys(goVal, a.FilterResponseKeys)
+		}
 		if !computedOnly && !refreshInputs {
 			// Preserve the user's configured (known) leaves and fill only the
 			// still-unknown ones from the response, so we never replace a
@@ -1205,6 +1208,29 @@ func extractPath(cur any, segs []string) any {
 		return out
 	}
 	return extractPath(mapIndex(cur, seg), segs[1:])
+}
+
+// filterMapKeys returns cur with the given keys removed, when cur is a decoded
+// JSON object (map[string]any). Used to drop backend-injected map entries (e.g.
+// ALB annotations) that the user does not manage, preventing perpetual drift.
+// Non-map values pass through unchanged.
+func filterMapKeys(cur any, keys []string) any {
+	m, ok := cur.(map[string]any)
+	if !ok {
+		return cur
+	}
+	drop := make(map[string]struct{}, len(keys))
+	for _, k := range keys {
+		drop[k] = struct{}{}
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		if _, skip := drop[k]; skip {
+			continue
+		}
+		out[k] = v
+	}
+	return out
 }
 
 func mapIndex(cur any, key string) any {
