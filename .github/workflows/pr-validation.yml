@@ -41,13 +41,13 @@ jobs:
               prTitle = cleanTitle;
             }
 
-            // Title length: 20–72 chars (titles become changelog entries)
+            // Title length: 20–100 chars (titles become changelog entries)
             if (prTitle.length < 20) {
               core.setFailed(`❌ PR title too short (${prTitle.length} chars, min 20). Write a descriptive title — it becomes the changelog entry.`);
               return;
             }
-            if (prTitle.length > 72) {
-              core.setFailed(`❌ PR title too long (${prTitle.length} chars, max 72). Shorten it to keep the changelog readable.`);
+            if (prTitle.length > 100) {
+              core.setFailed(`❌ PR title too long (${prTitle.length} chars, max 100). Shorten it to keep the changelog readable.`);
               return;
             }
 
