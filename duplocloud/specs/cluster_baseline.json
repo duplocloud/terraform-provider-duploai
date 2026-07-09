@@ -6,7 +6,10 @@
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Clusters",
     "deprovision": {
-      "skipWhen": [{ "attribute": "cloud", "equals": "K8S_ONLY" }]
+      "skipWhen": [
+        { "attribute": "cloud", "equals": "K8S_ONLY" },
+        { "attribute": "mode", "equals": "Import" }
+      ]
     }
   },
   "attributes": [
@@ -54,10 +57,11 @@
     {
       "name": "region",
       "type": "string",
+      "optional": true,
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.region",
-      "description": "Cloud region (e.g. us-east-1). Inherited from the linked network (network_id); computed, not user-settable."
+      "description": "Cloud region (e.g. us-east-1). For Create, inherited from the linked network (network_id) — leave unset. Required for Import (identifies where the existing cluster runs)."
     },
     {
       "name": "vpc_id",
@@ -110,17 +114,32 @@
       "type": "bool",
       "optional": true,
       "computed": true,
-      "default": true,
       "apiPath": "spec.skipAttributeAutoCreation",
-      "description": "Skip automatic creation of cluster attributes (add-ons/managed components) during provisioning. Defaults to true."
+      "description": "Skip automatic creation of cluster attributes (add-ons/managed components) during provisioning. When unset, follows the server default; set true to fully self-manage cluster attributes."
+    },
+    {
+      "name": "mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Create",
+      "forceNew": true,
+      "oneOf": [
+        "Create",
+        "Import"
+      ],
+      "apiPath": "spec.mode",
+      "description": "Provisioning mode: Create (provision a new cluster) or Import (adopt an existing cluster, identified by name + region + cloud; version, VPC, and subnets are auto-discovered). Immutable after creation."
     },
     {
       "name": "version",
       "type": "string",
-      "required": true,
+      "optional": true,
+      "computed": true,
       "forceNew": true,
-      "apiPath": "spec.version",
-      "description": "Kubernetes version for the cluster (e.g. \"1.34\"). Immutable after creation."
+      "requestPath": "spec.version",
+      "responsePath": "result.version",
+      "description": "Kubernetes version for the cluster (e.g. \"1.34\"). Required when mode is Create; auto-discovered when mode is Import. Read from the live cluster (authoritative over the create-time value). Immutable after creation."
     },
     {
       "name": "api_server_visibility",
@@ -286,16 +305,24 @@
       "description": "Provisioned infrastructure stack ID."
     }
   ],
-  "requestConstants": [
-    {
-      "path": "spec.mode",
-      "value": "Create"
-    }
-  ],
   "requiredIf": [
     {
       "attribute": "network_id",
-      "when": [{ "attribute": "cloud", "notEquals": "K8S_ONLY" }]
+      "when": [
+        { "attribute": "cloud", "notEquals": "K8S_ONLY" },
+        { "attribute": "mode", "equals": "Create" }
+      ]
+    },
+    {
+      "attribute": "version",
+      "when": [{ "attribute": "mode", "equals": "Create" }]
+    },
+    {
+      "attribute": "region",
+      "when": [
+        { "attribute": "mode", "equals": "Import" },
+        { "attribute": "network_id", "isEmpty": true }
+      ]
     }
   ],
   "waiter": {

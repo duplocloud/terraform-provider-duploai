@@ -29,7 +29,7 @@ data "duploai_k8s_ingress" "example" {
 
 ### Read-Only
 
-- `annotations` (Map of String) Kubernetes annotations applied to the Ingress (e.g. nginx.ingress.kubernetes.io/rewrite-target).
+- `annotations` (Map of String) Kubernetes annotations applied to the Ingress (e.g. nginx.ingress.kubernetes.io/rewrite-target). ALB annotations the platform injects (security-groups, subnets, certificate-arn, ssl-policy, target-node-labels, tags) are managed server-side and not tracked here.
 - `default_backend` (Attributes) Default backend to forward traffic to when no rule matches. (see [below for nested schema](#nestedatt--default_backend))
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment in which the Ingress is created.
