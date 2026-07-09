@@ -30,3 +30,17 @@ resource "duploai_network_baseline" "with_nat_and_logs" {
     delete = "15m"
   }
 }
+
+# Import an existing VPC (mode = "Import") — adopts a VPC the platform did not
+# provision instead of creating one. Set vpc_id to the existing VPC; cidr and the
+# other VPC details are read from it, so cidr is omitted.
+resource "duploai_network_baseline" "imported" {
+  workspace_id  = "<workspace-id>"
+  name          = "imported-network"
+  mode          = "Import"
+  scope_ids     = ["<scope-id>"]
+  region        = "us-east-1"
+  vpc_id        = "vpc-0a1b2c3d4e5f67890"
+  az_count      = 2
+  subnet_prefix = 24
+}
