@@ -72,7 +72,15 @@
       "computed": true,
       "requestPath": "spec.k8sResource.metadata.annotations",
       "responsePath": "result.k8sResource.metadata.annotations",
-      "description": "Kubernetes annotations applied to the Ingress (e.g. nginx.ingress.kubernetes.io/rewrite-target)."
+      "filterResponseKeys": [
+        "alb.ingress.kubernetes.io/security-groups",
+        "alb.ingress.kubernetes.io/subnets",
+        "alb.ingress.kubernetes.io/certificate-arn",
+        "alb.ingress.kubernetes.io/ssl-policy",
+        "alb.ingress.kubernetes.io/target-node-labels",
+        "alb.ingress.kubernetes.io/tags"
+      ],
+      "description": "Kubernetes annotations applied to the Ingress (e.g. nginx.ingress.kubernetes.io/rewrite-target). ALB annotations the platform injects (security-groups, subnets, certificate-arn, ssl-policy, target-node-labels, tags) are managed server-side and not tracked here."
     },
     {
       "name": "ingress_class_name",

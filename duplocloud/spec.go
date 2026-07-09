@@ -284,6 +284,15 @@ type AttributeSpec struct {
 	// the request (computed-only fields like status, vpc_id).
 	NoSend bool `json:"noSend,omitempty"`
 
+	// FilterResponseKeys, for a map(string) attribute, drops these exact keys from
+	// the response map before it is stored in state. Use when the backend injects
+	// its own entries into a map the user only partially manages (e.g. the ALB
+	// controller adds alb.ingress.kubernetes.io/{security-groups,subnets,...}
+	// annotations), which would otherwise show perpetual drift as Terraform tries
+	// to remove the server-added keys. Keys the user sets (not in this list) are
+	// preserved, so there is no "cannot remove a key" limitation for those.
+	FilterResponseKeys []string `json:"filterResponseKeys,omitempty"`
+
 	// NormalizeCsvOrder, for a string attribute, sorts the comma-separated tokens
 	// of the response value into a canonical (lexical) order before storing it in
 	// state. Use for backend fields whose elements are order-insensitive but
