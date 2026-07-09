@@ -61,8 +61,10 @@ resource "duploai_k8s_job" "parallel" {
   ]
 }
 
-# Full example — custom service account, node selector, labels, annotations,
-# deadline, and extended timeouts.
+# Full example — Indexed completions, pod failure policy, private-registry pull
+# secret, volumes + mounts, secret/configMap-sourced env, resource limits, probes,
+# init container, and scheduling. Note: restart_policy must be "Never" when
+# pod_failure_policy is set, and k8s_job is immutable (no "update" timeout).
 resource "duploai_k8s_job" "full" {
   workspace_id      = "<workspace-id>"
   name              = "nightly-report"
@@ -72,42 +74,100 @@ resource "duploai_k8s_job" "full" {
 
   provisioner_type = "IacNativeTf"
 
-  backoff_limit              = 1
+  # ---- Job spec ----
+  completions                = 5
+  parallelism                = 2
+  completion_mode            = "Indexed"
+  backoff_limit              = 2
+  backoff_limit_per_index    = 1
   active_deadline_seconds    = 3600
   ttl_seconds_after_finished = 86400
-  restart_policy             = "Never"
-  service_account_name       = "report-runner"
 
-  node_selector = {
-    "node-role" = "batch"
+  pod_failure_policy = {
+    rules = [
+      { action = "FailJob", on_exit_codes = { operator = "In", values = [1, 42] } },
+      { action = "Ignore", on_pod_conditions = [{ type = "DisruptionTarget", status = "True" }] },
+    ]
   }
 
-  labels = {
-    "app"  = "nightly-report"
-    "team" = "data-platform"
-    "env"  = "prod"
+  # ---- Pod spec ----
+  restart_policy       = "Never" # required when pod_failure_policy is set
+  service_account_name = "report-runner"
+  node_selector        = { "node-role" = "batch" }
+  labels               = { app = "nightly-report", team = "data-platform" }
+
+  image_pull_secrets = [{ name = "regcred" }]
+
+  tolerations = [
+    { key = "dedicated", operator = "Equal", value = "batch", effect = "NoSchedule" }
+  ]
+
+  pod_security_context = {
+    run_as_non_root = true
+    fs_group        = 2000
+    seccomp_profile = { type = "RuntimeDefault" }
   }
 
-  annotations = {
-    "prometheus.io/scrape" = "false"
-  }
+  volumes = [
+    { name = "scratch", empty_dir = { medium = "Memory", size_limit = "64Mi" } },
+    { name = "config", config_map = { name = "report-config", optional = true } },
+    { name = "creds", secret = { secret_name = "report-secret", optional = true } },
+  ]
+
+  init_containers = [
+    {
+      name               = "init"
+      image              = "busybox:1.36"
+      command            = ["sh", "-c", "echo preparing"]
+      volume_mounts      = [{ name = "scratch", mount_path = "/data" }]
+      resources_requests = { cpu = "50m", memory = "32Mi" }
+    }
+  ]
 
   containers = [
     {
-      name  = "reporter"
-      image = "my-repo/report-generator:2.0.1"
-      args  = ["--output=s3://my-bucket/reports/", "--date=yesterday"]
+      name              = "reporter"
+      image             = "my-repo/report-generator:2.0.1"
+      image_pull_policy = "IfNotPresent"
+      args              = ["--output=s3://my-bucket/reports/", "--date=yesterday"]
+
       env = [
         { name = "AWS_REGION", value = "us-east-1" },
-        { name = "REPORT_FORMAT", value = "pdf" },
-        { name = "NOTIFY_SLACK", value = "true" },
+        { name = "DB_PASSWORD", value_from = { secret_key_ref = { name = "report-secret", key = "password" } } },
+        { name = "FLAGS", value_from = { config_map_key_ref = { name = "report-config", key = "flags", optional = true } } },
+        { name = "POD_IP", value_from = { field_ref = { field_path = "status.podIP" } } },
       ]
+      env_from = [
+        { config_map_ref = { name = "report-config", optional = true } },
+      ]
+
+      resources_requests = { cpu = "250m", memory = "256Mi" }
+      resources_limits   = { cpu = "1", memory = "512Mi" }
+
+      volume_mounts = [
+        { name = "scratch", mount_path = "/data" },
+        { name = "config", mount_path = "/etc/config", read_only = true },
+        { name = "creds", mount_path = "/etc/creds", read_only = true },
+      ]
+
+      liveness_probe = {
+        exec           = { command = ["sh", "-c", "test -f /data/alive"] }
+        period_seconds = 30
+      }
+
+      security_context = {
+        run_as_user                = 1000
+        run_as_non_root            = true
+        read_only_root_filesystem  = true
+        allow_privilege_escalation = false
+        capabilities               = { drop = ["ALL"] }
+        seccomp_profile            = { type = "RuntimeDefault" }
+      }
     },
   ]
 
   timeouts {
     create = "40m"
-    update = "20m"
     delete = "15m"
   }
 }
@@ -126,23 +186,52 @@ resource "duploai_k8s_job" "full" {
 ### Optional
 
 - `active_deadline_seconds` (Number) Maximum duration in seconds the job may run before being terminated.
+- `affinity` (Attributes) Node/pod affinity and anti-affinity scheduling rules. (see [below for nested schema](#nestedatt--affinity))
 - `annotations` (Map of String) Annotations to apply to the Kubernetes Job object.
+- `automount_service_account_token` (Boolean) Whether to automount the service account token into the pod.
 - `backoff_limit` (Number) Number of retries before the job is marked as failed. Defaults to 6.
+- `backoff_limit_per_index` (Number) Per-index retry limit (Indexed jobs only).
+- `completion_mode` (String) Completion mode: NonIndexed (default) or Indexed.
 - `completions` (Number) Number of pods that must succeed for the job to be considered complete.
 - `containers` (Attributes List) List of containers to run in each job pod. (see [below for nested schema](#nestedatt--containers))
 - `description` (String) Optional description.
+- `dns_config` (Attributes) Custom DNS settings, merged per dns_policy. (see [below for nested schema](#nestedatt--dns_config))
+- `dns_policy` (String) Pod DNS policy.
+- `enable_service_links` (Boolean) Inject service discovery environment variables for services in the namespace.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `host_aliases` (Attributes List) Additional /etc/hosts entries injected into the pod. (see [below for nested schema](#nestedatt--host_aliases))
+- `host_ipc` (Boolean) Use the host IPC namespace.
+- `host_network` (Boolean) Use the host network namespace.
+- `host_pid` (Boolean) Use the host PID namespace.
+- `hostname` (String) Pod hostname (defaults to the pod name).
+- `image_pull_secrets` (Attributes List) Image pull secrets referenced by the pods, for pulling container images from private registries. (see [below for nested schema](#nestedatt--image_pull_secrets))
+- `init_containers` (Attributes List) Init containers that run to completion, in order, before the main containers start. (see [below for nested schema](#nestedatt--init_containers))
 - `labels` (Map of String) Labels to apply to the Kubernetes Job object.
+- `manual_selector` (Boolean) Allow a manually-specified pod selector (advanced).
+- `max_failed_indexes` (Number) Max number of failed indexes before the job is failed (Indexed jobs only).
 - `namespace_name` (String) Kubernetes namespace to run the job in.
 - `node_selector` (Map of String) Node label selector constraints for pod scheduling.
 - `parallelism` (Number) Maximum number of pods running in parallel at any time.
+- `pod_failure_policy` (Attributes) Rules that determine how pod failures are handled. (see [below for nested schema](#nestedatt--pod_failure_policy))
+- `pod_replacement_policy` (String) When to create replacement pods: TerminatingOrFailed or Failed.
+- `pod_security_context` (Attributes) Pod-level security settings applied to all containers. (see [below for nested schema](#nestedatt--pod_security_context))
+- `priority_class_name` (String) PriorityClass name used to set the pod's scheduling priority.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `restart_policy` (String) Pod restart policy. Use Never (default) or OnFailure for batch jobs.
+- `runtime_class_name` (String) RuntimeClass to use for the pod (e.g. gvisor).
+- `scheduler_name` (String) Name of the scheduler that dispatches the pod.
 - `service_account_name` (String) Kubernetes service account to run the pod as.
+- `set_hostname_as_fqdn` (Boolean) Set the pod's hostname to its fully qualified domain name.
+- `share_process_namespace` (Boolean) Share a single process namespace between all containers in the pod.
+- `subdomain` (String) Pod subdomain, used with a headless Service for stable DNS.
 - `suspend` (Boolean) When true, the job is suspended and no new pods are created.
+- `termination_grace_period_seconds` (Number) Seconds the pod is given to shut down gracefully before being force-killed.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
+- `tolerations` (Attributes List) Tolerations that allow the pod onto tainted nodes. (see [below for nested schema](#nestedatt--tolerations))
+- `topology_spread_constraints` (Attributes List) Rules for spreading pods across topology domains (zones, nodes). (see [below for nested schema](#nestedatt--topology_spread_constraints))
 - `ttl_seconds_after_finished` (Number) Seconds after the job finishes before it is automatically deleted. Omit to disable automatic cleanup.
+- `volumes` (Attributes List) Pod volumes that containers can mount via volume_mounts. (see [below for nested schema](#nestedatt--volumes))
 
 ### Read-Only
 
@@ -153,19 +242,318 @@ resource "duploai_k8s_job" "full" {
 - `scope_ids` (List of String) Scope IDs inherited from the linked environment or resource group.
 - `status` (String) Current provisioning status of the job resource.
 
+<a id="nestedatt--affinity"></a>
+### Nested Schema for `affinity`
+
+Optional:
+
+- `node_affinity` (Attributes) Constrain scheduling by node labels. (see [below for nested schema](#nestedatt--affinity--node_affinity))
+- `pod_affinity` (Attributes) Co-locate with pods matching a label selector. (see [below for nested schema](#nestedatt--affinity--pod_affinity))
+- `pod_anti_affinity` (Attributes) Avoid scheduling near pods matching a label selector. (see [below for nested schema](#nestedatt--affinity--pod_anti_affinity))
+
+<a id="nestedatt--affinity--node_affinity"></a>
+### Nested Schema for `affinity.node_affinity`
+
+Optional:
+
+- `preferred` (Attributes List) Soft node preferences. (see [below for nested schema](#nestedatt--affinity--node_affinity--preferred))
+- `required` (Attributes) Hard node requirements. (see [below for nested schema](#nestedatt--affinity--node_affinity--required))
+
+<a id="nestedatt--affinity--node_affinity--preferred"></a>
+### Nested Schema for `affinity.node_affinity.preferred`
+
+Required:
+
+- `preference` (Attributes) Node selector term. (see [below for nested schema](#nestedatt--affinity--node_affinity--preferred--preference))
+- `weight` (Number) Preference weight (1-100).
+
+<a id="nestedatt--affinity--node_affinity--preferred--preference"></a>
+### Nested Schema for `affinity.node_affinity.preferred.preference`
+
+Optional:
+
+- `match_expressions` (Attributes List) Node label matchers. (see [below for nested schema](#nestedatt--affinity--node_affinity--preferred--preference--match_expressions))
+- `match_fields` (Attributes List) Node field matchers. (see [below for nested schema](#nestedatt--affinity--node_affinity--preferred--preference--match_fields))
+
+<a id="nestedatt--affinity--node_affinity--preferred--preference--match_expressions"></a>
+### Nested Schema for `affinity.node_affinity.preferred.preference.match_expressions`
+
+Required:
+
+- `key` (String) Node label key.
+- `operator` (String) Operator.
+
+Optional:
+
+- `values` (List of String) Values.
+
+
+<a id="nestedatt--affinity--node_affinity--preferred--preference--match_fields"></a>
+### Nested Schema for `affinity.node_affinity.preferred.preference.match_fields`
+
+Required:
+
+- `key` (String) Node field key.
+- `operator` (String) Operator.
+
+Optional:
+
+- `values` (List of String) Values.
+
+
+
+
+<a id="nestedatt--affinity--node_affinity--required"></a>
+### Nested Schema for `affinity.node_affinity.required`
+
+Required:
+
+- `node_selector_terms` (Attributes List) Node selector terms (ORed). (see [below for nested schema](#nestedatt--affinity--node_affinity--required--node_selector_terms))
+
+<a id="nestedatt--affinity--node_affinity--required--node_selector_terms"></a>
+### Nested Schema for `affinity.node_affinity.required.node_selector_terms`
+
+Optional:
+
+- `match_expressions` (Attributes List) Node label matchers. (see [below for nested schema](#nestedatt--affinity--node_affinity--required--node_selector_terms--match_expressions))
+- `match_fields` (Attributes List) Node field matchers. (see [below for nested schema](#nestedatt--affinity--node_affinity--required--node_selector_terms--match_fields))
+
+<a id="nestedatt--affinity--node_affinity--required--node_selector_terms--match_expressions"></a>
+### Nested Schema for `affinity.node_affinity.required.node_selector_terms.match_expressions`
+
+Required:
+
+- `key` (String) Node label key.
+- `operator` (String) Operator.
+
+Optional:
+
+- `values` (List of String) Values.
+
+
+<a id="nestedatt--affinity--node_affinity--required--node_selector_terms--match_fields"></a>
+### Nested Schema for `affinity.node_affinity.required.node_selector_terms.match_fields`
+
+Required:
+
+- `key` (String) Node field key.
+- `operator` (String) Operator.
+
+Optional:
+
+- `values` (List of String) Values.
+
+
+
+
+
+<a id="nestedatt--affinity--pod_affinity"></a>
+### Nested Schema for `affinity.pod_affinity`
+
+Optional:
+
+- `preferred` (Attributes List) Soft co-location preferences. (see [below for nested schema](#nestedatt--affinity--pod_affinity--preferred))
+- `required` (Attributes List) Hard co-location requirements. (see [below for nested schema](#nestedatt--affinity--pod_affinity--required))
+
+<a id="nestedatt--affinity--pod_affinity--preferred"></a>
+### Nested Schema for `affinity.pod_affinity.preferred`
+
+Required:
+
+- `pod_affinity_term` (Attributes) Affinity term. (see [below for nested schema](#nestedatt--affinity--pod_affinity--preferred--pod_affinity_term))
+- `weight` (Number) Preference weight (1-100).
+
+<a id="nestedatt--affinity--pod_affinity--preferred--pod_affinity_term"></a>
+### Nested Schema for `affinity.pod_affinity.preferred.pod_affinity_term`
+
+Required:
+
+- `topology_key` (String) Topology domain node label.
+
+Optional:
+
+- `label_selector` (Attributes) Pod label selector. (see [below for nested schema](#nestedatt--affinity--pod_affinity--preferred--pod_affinity_term--label_selector))
+- `namespaces` (List of String) Namespaces to match pods in.
+
+<a id="nestedatt--affinity--pod_affinity--preferred--pod_affinity_term--label_selector"></a>
+### Nested Schema for `affinity.pod_affinity.preferred.pod_affinity_term.label_selector`
+
+Optional:
+
+- `match_expressions` (Attributes List) Set matchers. (see [below for nested schema](#nestedatt--affinity--pod_affinity--preferred--pod_affinity_term--label_selector--match_expressions))
+- `match_labels` (Map of String) Equality matchers.
+
+<a id="nestedatt--affinity--pod_affinity--preferred--pod_affinity_term--label_selector--match_expressions"></a>
+### Nested Schema for `affinity.pod_affinity.preferred.pod_affinity_term.label_selector.match_expressions`
+
+Required:
+
+- `key` (String) Label key.
+- `operator` (String) Operator.
+
+Optional:
+
+- `values` (List of String) Values.
+
+
+
+
+
+<a id="nestedatt--affinity--pod_affinity--required"></a>
+### Nested Schema for `affinity.pod_affinity.required`
+
+Required:
+
+- `topology_key` (String) Node label defining the topology domain.
+
+Optional:
+
+- `label_selector` (Attributes) Pod label selector. (see [below for nested schema](#nestedatt--affinity--pod_affinity--required--label_selector))
+- `namespaces` (List of String) Namespaces to match pods in.
+
+<a id="nestedatt--affinity--pod_affinity--required--label_selector"></a>
+### Nested Schema for `affinity.pod_affinity.required.label_selector`
+
+Optional:
+
+- `match_expressions` (Attributes List) Set matchers. (see [below for nested schema](#nestedatt--affinity--pod_affinity--required--label_selector--match_expressions))
+- `match_labels` (Map of String) Equality matchers.
+
+<a id="nestedatt--affinity--pod_affinity--required--label_selector--match_expressions"></a>
+### Nested Schema for `affinity.pod_affinity.required.label_selector.match_expressions`
+
+Required:
+
+- `key` (String) Label key.
+- `operator` (String) Operator.
+
+Optional:
+
+- `values` (List of String) Values.
+
+
+
+
+
+<a id="nestedatt--affinity--pod_anti_affinity"></a>
+### Nested Schema for `affinity.pod_anti_affinity`
+
+Optional:
+
+- `preferred` (Attributes List) Soft anti-affinity preferences. (see [below for nested schema](#nestedatt--affinity--pod_anti_affinity--preferred))
+- `required` (Attributes List) Hard anti-affinity requirements. (see [below for nested schema](#nestedatt--affinity--pod_anti_affinity--required))
+
+<a id="nestedatt--affinity--pod_anti_affinity--preferred"></a>
+### Nested Schema for `affinity.pod_anti_affinity.preferred`
+
+Required:
+
+- `pod_affinity_term` (Attributes) Anti-affinity term. (see [below for nested schema](#nestedatt--affinity--pod_anti_affinity--preferred--pod_affinity_term))
+- `weight` (Number) Preference weight (1-100).
+
+<a id="nestedatt--affinity--pod_anti_affinity--preferred--pod_affinity_term"></a>
+### Nested Schema for `affinity.pod_anti_affinity.preferred.pod_affinity_term`
+
+Required:
+
+- `topology_key` (String) Topology domain node label.
+
+Optional:
+
+- `label_selector` (Attributes) Pod label selector. (see [below for nested schema](#nestedatt--affinity--pod_anti_affinity--preferred--pod_affinity_term--label_selector))
+- `namespaces` (List of String) Namespaces to match pods in.
+
+<a id="nestedatt--affinity--pod_anti_affinity--preferred--pod_affinity_term--label_selector"></a>
+### Nested Schema for `affinity.pod_anti_affinity.preferred.pod_affinity_term.label_selector`
+
+Optional:
+
+- `match_expressions` (Attributes List) Set matchers. (see [below for nested schema](#nestedatt--affinity--pod_anti_affinity--preferred--pod_affinity_term--label_selector--match_expressions))
+- `match_labels` (Map of String) Equality matchers.
+
+<a id="nestedatt--affinity--pod_anti_affinity--preferred--pod_affinity_term--label_selector--match_expressions"></a>
+### Nested Schema for `affinity.pod_anti_affinity.preferred.pod_affinity_term.label_selector.match_expressions`
+
+Required:
+
+- `key` (String) Label key.
+- `operator` (String) Operator.
+
+Optional:
+
+- `values` (List of String) Values.
+
+
+
+
+
+<a id="nestedatt--affinity--pod_anti_affinity--required"></a>
+### Nested Schema for `affinity.pod_anti_affinity.required`
+
+Required:
+
+- `topology_key` (String) Node label defining the topology domain.
+
+Optional:
+
+- `label_selector` (Attributes) Pod label selector. (see [below for nested schema](#nestedatt--affinity--pod_anti_affinity--required--label_selector))
+- `namespaces` (List of String) Namespaces to match pods in.
+
+<a id="nestedatt--affinity--pod_anti_affinity--required--label_selector"></a>
+### Nested Schema for `affinity.pod_anti_affinity.required.label_selector`
+
+Optional:
+
+- `match_expressions` (Attributes List) Set matchers. (see [below for nested schema](#nestedatt--affinity--pod_anti_affinity--required--label_selector--match_expressions))
+- `match_labels` (Map of String) Equality matchers.
+
+<a id="nestedatt--affinity--pod_anti_affinity--required--label_selector--match_expressions"></a>
+### Nested Schema for `affinity.pod_anti_affinity.required.label_selector.match_expressions`
+
+Required:
+
+- `key` (String) Label key.
+- `operator` (String) Operator.
+
+Optional:
+
+- `values` (List of String) Values.
+
+
+
+
+
+
 <a id="nestedatt--containers"></a>
 ### Nested Schema for `containers`
 
 Required:
 
-- `image` (String) Container image (e.g. my-repo/my-image:latest).
+- `image` (String) Container image (e.g. nginx:1.27).
 - `name` (String) Container name.
 
 Optional:
 
-- `args` (List of String) Arguments to the entrypoint command (overrides the image CMD).
-- `command` (List of String) Entrypoint command array (overrides the image ENTRYPOINT).
-- `env` (Attributes List) Environment variables to set in the container. (see [below for nested schema](#nestedatt--containers--env))
+- `args` (List of String) Arguments to the entrypoint.
+- `command` (List of String) Entrypoint override.
+- `env` (Attributes List) Environment variables. Set value for a literal, or value_from to source from a Secret/ConfigMap key or pod field. (see [below for nested schema](#nestedatt--containers--env))
+- `env_from` (Attributes List) Populate environment variables in bulk from entire ConfigMaps or Secrets. (see [below for nested schema](#nestedatt--containers--env_from))
+- `image_pull_policy` (String) Image pull policy: Always, IfNotPresent, or Never.
+- `lifecycle` (Attributes) Container lifecycle hooks. (see [below for nested schema](#nestedatt--containers--lifecycle))
+- `liveness_probe` (Attributes) Probe that restarts the container when it fails. (see [below for nested schema](#nestedatt--containers--liveness_probe))
+- `ports` (Attributes List) Ports the container exposes. (see [below for nested schema](#nestedatt--containers--ports))
+- `readiness_probe` (Attributes) Probe that removes the pod from Service endpoints when it fails. (see [below for nested schema](#nestedatt--containers--readiness_probe))
+- `resources_limits` (Map of String) Resource limits, e.g. { cpu = "500m", memory = "512Mi" }.
+- `resources_requests` (Map of String) Resource requests, e.g. { cpu = "250m", memory = "256Mi" }.
+- `security_context` (Attributes) Container-level security settings. (see [below for nested schema](#nestedatt--containers--security_context))
+- `startup_probe` (Attributes) Probe that gates liveness/readiness until the container has started. (see [below for nested schema](#nestedatt--containers--startup_probe))
+- `stdin` (Boolean) Allocate a buffer for stdin in the container.
+- `stdin_once` (Boolean) Close the stdin channel after the first attach disconnects.
+- `termination_message_path` (String) File from which the container's termination message is read.
+- `termination_message_policy` (String) How the termination message is populated.
+- `tty` (Boolean) Allocate a TTY for the container.
+- `volume_devices` (Attributes List) Raw block devices to map into the container. (see [below for nested schema](#nestedatt--containers--volume_devices))
+- `volume_mounts` (Attributes List) Mount pod volumes into the container filesystem. (see [below for nested schema](#nestedatt--containers--volume_mounts))
 - `working_dir` (String) Container working directory.
 
 <a id="nestedatt--containers--env"></a>
@@ -173,11 +561,785 @@ Optional:
 
 Required:
 
-- `name` (String) Environment variable name.
+- `name` (String) Variable name.
 
 Optional:
 
-- `value` (String, Sensitive) Environment variable value.
+- `value` (String) Literal variable value. Mutually exclusive with value_from.
+- `value_from` (Attributes) Source the value from a Secret/ConfigMap key or pod/container field. Mutually exclusive with value. (see [below for nested schema](#nestedatt--containers--env--value_from))
+
+<a id="nestedatt--containers--env--value_from"></a>
+### Nested Schema for `containers.env.value_from`
+
+Optional:
+
+- `config_map_key_ref` (Attributes) Reference a key in a ConfigMap. (see [below for nested schema](#nestedatt--containers--env--value_from--config_map_key_ref))
+- `field_ref` (Attributes) Reference a field of the pod (e.g. metadata.name, status.podIP). (see [below for nested schema](#nestedatt--containers--env--value_from--field_ref))
+- `resource_field_ref` (Attributes) Reference a container resource (e.g. limits.cpu, requests.memory). (see [below for nested schema](#nestedatt--containers--env--value_from--resource_field_ref))
+- `secret_key_ref` (Attributes) Reference a key in a Secret. (see [below for nested schema](#nestedatt--containers--env--value_from--secret_key_ref))
+
+<a id="nestedatt--containers--env--value_from--config_map_key_ref"></a>
+### Nested Schema for `containers.env.value_from.config_map_key_ref`
+
+Required:
+
+- `key` (String) Key within the ConfigMap.
+- `name` (String) Name of the ConfigMap.
+
+Optional:
+
+- `optional` (Boolean) Whether the ConfigMap or key must exist.
+
+
+<a id="nestedatt--containers--env--value_from--field_ref"></a>
+### Nested Schema for `containers.env.value_from.field_ref`
+
+Required:
+
+- `field_path` (String) Path of the field, e.g. metadata.namespace.
+
+Optional:
+
+- `api_version` (String) API version the field path is evaluated against (default v1).
+
+
+<a id="nestedatt--containers--env--value_from--resource_field_ref"></a>
+### Nested Schema for `containers.env.value_from.resource_field_ref`
+
+Required:
+
+- `resource` (String) Resource to expose, e.g. limits.cpu.
+
+Optional:
+
+- `container_name` (String) Container to read the resource from (defaults to this container).
+- `divisor` (String) Output format divisor, e.g. 1m or 1Mi.
+
+
+<a id="nestedatt--containers--env--value_from--secret_key_ref"></a>
+### Nested Schema for `containers.env.value_from.secret_key_ref`
+
+Required:
+
+- `key` (String) Key within the Secret.
+- `name` (String) Name of the Secret.
+
+Optional:
+
+- `optional` (Boolean) Whether the Secret or key must exist.
+
+
+
+
+<a id="nestedatt--containers--env_from"></a>
+### Nested Schema for `containers.env_from`
+
+Optional:
+
+- `config_map_ref` (Attributes) Load all keys from a ConfigMap. (see [below for nested schema](#nestedatt--containers--env_from--config_map_ref))
+- `prefix` (String) Prefix prepended to each key's environment variable name.
+- `secret_ref` (Attributes) Load all keys from a Secret. (see [below for nested schema](#nestedatt--containers--env_from--secret_ref))
+
+<a id="nestedatt--containers--env_from--config_map_ref"></a>
+### Nested Schema for `containers.env_from.config_map_ref`
+
+Required:
+
+- `name` (String) Name of the ConfigMap.
+
+Optional:
+
+- `optional` (Boolean) Whether the ConfigMap must exist.
+
+
+<a id="nestedatt--containers--env_from--secret_ref"></a>
+### Nested Schema for `containers.env_from.secret_ref`
+
+Required:
+
+- `name` (String) Name of the Secret.
+
+Optional:
+
+- `optional` (Boolean) Whether the Secret must exist.
+
+
+
+<a id="nestedatt--containers--lifecycle"></a>
+### Nested Schema for `containers.lifecycle`
+
+Optional:
+
+- `post_start` (Attributes) Hook run immediately after the container starts. (see [below for nested schema](#nestedatt--containers--lifecycle--post_start))
+- `pre_stop` (Attributes) Hook run immediately before the container is stopped. (see [below for nested schema](#nestedatt--containers--lifecycle--pre_stop))
+
+<a id="nestedatt--containers--lifecycle--post_start"></a>
+### Nested Schema for `containers.lifecycle.post_start`
+
+Optional:
+
+- `exec` (Attributes) Exec action. (see [below for nested schema](#nestedatt--containers--lifecycle--post_start--exec))
+- `http_get` (Attributes) HTTP GET action. (see [below for nested schema](#nestedatt--containers--lifecycle--post_start--http_get))
+- `tcp_socket` (Attributes) TCP socket action. (see [below for nested schema](#nestedatt--containers--lifecycle--post_start--tcp_socket))
+
+<a id="nestedatt--containers--lifecycle--post_start--exec"></a>
+### Nested Schema for `containers.lifecycle.post_start.exec`
+
+Optional:
+
+- `command` (List of String) Command to run.
+
+
+<a id="nestedatt--containers--lifecycle--post_start--http_get"></a>
+### Nested Schema for `containers.lifecycle.post_start.http_get`
+
+Required:
+
+- `port` (String) Port number or named port.
+
+Optional:
+
+- `host` (String) Host header.
+- `path` (String) URL path.
+- `scheme` (String) HTTP or HTTPS.
+
+
+<a id="nestedatt--containers--lifecycle--post_start--tcp_socket"></a>
+### Nested Schema for `containers.lifecycle.post_start.tcp_socket`
+
+Required:
+
+- `port` (String) Port number or named port.
+
+Optional:
+
+- `host` (String) Host to connect to.
+
+
+
+<a id="nestedatt--containers--lifecycle--pre_stop"></a>
+### Nested Schema for `containers.lifecycle.pre_stop`
+
+Optional:
+
+- `exec` (Attributes) Exec action. (see [below for nested schema](#nestedatt--containers--lifecycle--pre_stop--exec))
+- `http_get` (Attributes) HTTP GET action. (see [below for nested schema](#nestedatt--containers--lifecycle--pre_stop--http_get))
+- `tcp_socket` (Attributes) TCP socket action. (see [below for nested schema](#nestedatt--containers--lifecycle--pre_stop--tcp_socket))
+
+<a id="nestedatt--containers--lifecycle--pre_stop--exec"></a>
+### Nested Schema for `containers.lifecycle.pre_stop.exec`
+
+Optional:
+
+- `command` (List of String) Command to run.
+
+
+<a id="nestedatt--containers--lifecycle--pre_stop--http_get"></a>
+### Nested Schema for `containers.lifecycle.pre_stop.http_get`
+
+Required:
+
+- `port` (String) Port number or named port.
+
+Optional:
+
+- `host` (String) Host header.
+- `path` (String) URL path.
+- `scheme` (String) HTTP or HTTPS.
+
+
+<a id="nestedatt--containers--lifecycle--pre_stop--tcp_socket"></a>
+### Nested Schema for `containers.lifecycle.pre_stop.tcp_socket`
+
+Required:
+
+- `port` (String) Port number or named port.
+
+Optional:
+
+- `host` (String) Host to connect to.
+
+
+
+
+<a id="nestedatt--containers--liveness_probe"></a>
+### Nested Schema for `containers.liveness_probe`
+
+Optional:
+
+- `exec` (Attributes) Exec probe action. (see [below for nested schema](#nestedatt--containers--liveness_probe--exec))
+- `failure_threshold` (Number) Consecutive failures before acting.
+- `grpc` (Attributes) gRPC probe action. (see [below for nested schema](#nestedatt--containers--liveness_probe--grpc))
+- `http_get` (Attributes) HTTP GET probe action. (see [below for nested schema](#nestedatt--containers--liveness_probe--http_get))
+- `initial_delay_seconds` (Number) Seconds after container start before the first probe.
+- `period_seconds` (Number) How often to run the probe (seconds).
+- `success_threshold` (Number) Consecutive successes to be considered healthy.
+- `tcp_socket` (Attributes) TCP socket probe action. (see [below for nested schema](#nestedatt--containers--liveness_probe--tcp_socket))
+- `termination_grace_period_seconds` (Number) Grace period on probe-triggered termination (seconds).
+- `timeout_seconds` (Number) Probe timeout (seconds).
+
+<a id="nestedatt--containers--liveness_probe--exec"></a>
+### Nested Schema for `containers.liveness_probe.exec`
+
+Optional:
+
+- `command` (List of String) Command to run inside the container.
+
+
+<a id="nestedatt--containers--liveness_probe--grpc"></a>
+### Nested Schema for `containers.liveness_probe.grpc`
+
+Required:
+
+- `port` (Number) gRPC port.
+
+Optional:
+
+- `service` (String) gRPC service name for the health check.
+
+
+<a id="nestedatt--containers--liveness_probe--http_get"></a>
+### Nested Schema for `containers.liveness_probe.http_get`
+
+Required:
+
+- `port` (String) Port number or named port.
+
+Optional:
+
+- `host` (String) Host header (defaults to pod IP).
+- `http_headers` (Attributes List) Custom request headers. (see [below for nested schema](#nestedatt--containers--liveness_probe--http_get--http_headers))
+- `path` (String) URL path to request.
+- `scheme` (String) HTTP or HTTPS.
+
+<a id="nestedatt--containers--liveness_probe--http_get--http_headers"></a>
+### Nested Schema for `containers.liveness_probe.http_get.http_headers`
+
+Required:
+
+- `name` (String) Header name.
+- `value` (String) Header value.
+
+
+
+<a id="nestedatt--containers--liveness_probe--tcp_socket"></a>
+### Nested Schema for `containers.liveness_probe.tcp_socket`
+
+Required:
+
+- `port` (String) Port number or named port.
+
+Optional:
+
+- `host` (String) Host to connect to (defaults to pod IP).
+
+
+
+<a id="nestedatt--containers--ports"></a>
+### Nested Schema for `containers.ports`
+
+Required:
+
+- `container_port` (Number) Port number the container listens on.
+
+Optional:
+
+- `name` (String) Named port.
+- `protocol` (String) Protocol: TCP, UDP, or SCTP.
+
+
+<a id="nestedatt--containers--readiness_probe"></a>
+### Nested Schema for `containers.readiness_probe`
+
+Optional:
+
+- `exec` (Attributes) Exec probe action. (see [below for nested schema](#nestedatt--containers--readiness_probe--exec))
+- `failure_threshold` (Number) Consecutive failures before acting.
+- `grpc` (Attributes) gRPC probe action. (see [below for nested schema](#nestedatt--containers--readiness_probe--grpc))
+- `http_get` (Attributes) HTTP GET probe action. (see [below for nested schema](#nestedatt--containers--readiness_probe--http_get))
+- `initial_delay_seconds` (Number) Seconds after container start before the first probe.
+- `period_seconds` (Number) How often to run the probe (seconds).
+- `success_threshold` (Number) Consecutive successes to be considered ready.
+- `tcp_socket` (Attributes) TCP socket probe action. (see [below for nested schema](#nestedatt--containers--readiness_probe--tcp_socket))
+- `termination_grace_period_seconds` (Number) Grace period on probe-triggered termination (seconds).
+- `timeout_seconds` (Number) Probe timeout (seconds).
+
+<a id="nestedatt--containers--readiness_probe--exec"></a>
+### Nested Schema for `containers.readiness_probe.exec`
+
+Optional:
+
+- `command` (List of String) Command to run inside the container.
+
+
+<a id="nestedatt--containers--readiness_probe--grpc"></a>
+### Nested Schema for `containers.readiness_probe.grpc`
+
+Required:
+
+- `port` (Number) gRPC port.
+
+Optional:
+
+- `service` (String) gRPC service name for the health check.
+
+
+<a id="nestedatt--containers--readiness_probe--http_get"></a>
+### Nested Schema for `containers.readiness_probe.http_get`
+
+Required:
+
+- `port` (String) Port number or named port.
+
+Optional:
+
+- `host` (String) Host header (defaults to pod IP).
+- `http_headers` (Attributes List) Custom request headers. (see [below for nested schema](#nestedatt--containers--readiness_probe--http_get--http_headers))
+- `path` (String) URL path to request.
+- `scheme` (String) HTTP or HTTPS.
+
+<a id="nestedatt--containers--readiness_probe--http_get--http_headers"></a>
+### Nested Schema for `containers.readiness_probe.http_get.http_headers`
+
+Required:
+
+- `name` (String) Header name.
+- `value` (String) Header value.
+
+
+
+<a id="nestedatt--containers--readiness_probe--tcp_socket"></a>
+### Nested Schema for `containers.readiness_probe.tcp_socket`
+
+Required:
+
+- `port` (String) Port number or named port.
+
+Optional:
+
+- `host` (String) Host to connect to (defaults to pod IP).
+
+
+
+<a id="nestedatt--containers--security_context"></a>
+### Nested Schema for `containers.security_context`
+
+Optional:
+
+- `allow_privilege_escalation` (Boolean) Allow a process to gain more privileges than its parent.
+- `capabilities` (Attributes) Linux capabilities to add or drop. (see [below for nested schema](#nestedatt--containers--security_context--capabilities))
+- `privileged` (Boolean) Run in privileged mode.
+- `proc_mount` (String) proc mount type (Default or Unmasked).
+- `read_only_root_filesystem` (Boolean) Mount the root filesystem read-only.
+- `run_as_group` (Number) GID to run the entrypoint as.
+- `run_as_non_root` (Boolean) Require the container to run as a non-root user.
+- `run_as_user` (Number) UID to run the entrypoint as.
+- `se_linux_options` (Attributes) SELinux context to apply. (see [below for nested schema](#nestedatt--containers--security_context--se_linux_options))
+- `seccomp_profile` (Attributes) Seccomp profile settings. (see [below for nested schema](#nestedatt--containers--security_context--seccomp_profile))
+
+<a id="nestedatt--containers--security_context--capabilities"></a>
+### Nested Schema for `containers.security_context.capabilities`
+
+Optional:
+
+- `add` (List of String) Capabilities to add (e.g. NET_ADMIN).
+- `drop` (List of String) Capabilities to drop (e.g. ALL).
+
+
+<a id="nestedatt--containers--security_context--se_linux_options"></a>
+### Nested Schema for `containers.security_context.se_linux_options`
+
+Optional:
+
+- `level` (String) SELinux level label.
+- `role` (String) SELinux role label.
+- `type` (String) SELinux type label.
+- `user` (String) SELinux user label.
+
+
+<a id="nestedatt--containers--security_context--seccomp_profile"></a>
+### Nested Schema for `containers.security_context.seccomp_profile`
+
+Required:
+
+- `type` (String) Profile type.
+
+Optional:
+
+- `localhost_profile` (String) Profile file path (used when type is Localhost).
+
+
+
+<a id="nestedatt--containers--startup_probe"></a>
+### Nested Schema for `containers.startup_probe`
+
+Optional:
+
+- `exec` (Attributes) Exec probe action. (see [below for nested schema](#nestedatt--containers--startup_probe--exec))
+- `failure_threshold` (Number) Consecutive failures before acting.
+- `grpc` (Attributes) gRPC probe action. (see [below for nested schema](#nestedatt--containers--startup_probe--grpc))
+- `http_get` (Attributes) HTTP GET probe action. (see [below for nested schema](#nestedatt--containers--startup_probe--http_get))
+- `initial_delay_seconds` (Number) Seconds after container start before the first probe.
+- `period_seconds` (Number) How often to run the probe (seconds).
+- `success_threshold` (Number) Consecutive successes to be considered started.
+- `tcp_socket` (Attributes) TCP socket probe action. (see [below for nested schema](#nestedatt--containers--startup_probe--tcp_socket))
+- `termination_grace_period_seconds` (Number) Grace period on probe-triggered termination (seconds).
+- `timeout_seconds` (Number) Probe timeout (seconds).
+
+<a id="nestedatt--containers--startup_probe--exec"></a>
+### Nested Schema for `containers.startup_probe.exec`
+
+Optional:
+
+- `command` (List of String) Command to run inside the container.
+
+
+<a id="nestedatt--containers--startup_probe--grpc"></a>
+### Nested Schema for `containers.startup_probe.grpc`
+
+Required:
+
+- `port` (Number) gRPC port.
+
+Optional:
+
+- `service` (String) gRPC service name for the health check.
+
+
+<a id="nestedatt--containers--startup_probe--http_get"></a>
+### Nested Schema for `containers.startup_probe.http_get`
+
+Required:
+
+- `port` (String) Port number or named port.
+
+Optional:
+
+- `host` (String) Host header (defaults to pod IP).
+- `http_headers` (Attributes List) Custom request headers. (see [below for nested schema](#nestedatt--containers--startup_probe--http_get--http_headers))
+- `path` (String) URL path to request.
+- `scheme` (String) HTTP or HTTPS.
+
+<a id="nestedatt--containers--startup_probe--http_get--http_headers"></a>
+### Nested Schema for `containers.startup_probe.http_get.http_headers`
+
+Required:
+
+- `name` (String) Header name.
+- `value` (String) Header value.
+
+
+
+<a id="nestedatt--containers--startup_probe--tcp_socket"></a>
+### Nested Schema for `containers.startup_probe.tcp_socket`
+
+Required:
+
+- `port` (String) Port number or named port.
+
+Optional:
+
+- `host` (String) Host to connect to (defaults to pod IP).
+
+
+
+<a id="nestedatt--containers--volume_devices"></a>
+### Nested Schema for `containers.volume_devices`
+
+Required:
+
+- `device_path` (String) Path inside the container to map the device to.
+- `name` (String) Name of the persistentVolumeClaim volume.
+
+
+<a id="nestedatt--containers--volume_mounts"></a>
+### Nested Schema for `containers.volume_mounts`
+
+Required:
+
+- `mount_path` (String) Path inside the container to mount at.
+- `name` (String) Name of the pod volume to mount.
+
+Optional:
+
+- `mount_propagation` (String) Mount propagation mode.
+- `read_only` (Boolean) Mount read-only.
+- `sub_path` (String) Mount a sub-path of the volume instead of its root.
+- `sub_path_expr` (String) Like sub_path but expanded with environment variables.
+
+
+
+<a id="nestedatt--dns_config"></a>
+### Nested Schema for `dns_config`
+
+Optional:
+
+- `nameservers` (List of String) DNS server IPs.
+- `options` (Attributes List) Resolver options. (see [below for nested schema](#nestedatt--dns_config--options))
+- `searches` (List of String) DNS search domains.
+
+<a id="nestedatt--dns_config--options"></a>
+### Nested Schema for `dns_config.options`
+
+Required:
+
+- `name` (String) Option name.
+
+Optional:
+
+- `value` (String) Option value.
+
+
+
+<a id="nestedatt--host_aliases"></a>
+### Nested Schema for `host_aliases`
+
+Required:
+
+- `hostnames` (List of String) Hostnames mapped to the IP.
+- `ip` (String) IP address.
+
+
+<a id="nestedatt--image_pull_secrets"></a>
+### Nested Schema for `image_pull_secrets`
+
+Required:
+
+- `name` (String) Name of a Kubernetes Secret (type kubernetes.io/dockerconfigjson) in the same namespace used to pull images from a private registry.
+
+
+<a id="nestedatt--init_containers"></a>
+### Nested Schema for `init_containers`
+
+Required:
+
+- `image` (String) Container image.
+- `name` (String) Init container name.
+
+Optional:
+
+- `args` (List of String) Arguments to the entrypoint.
+- `command` (List of String) Entrypoint override.
+- `env` (Attributes List) Environment variables. (see [below for nested schema](#nestedatt--init_containers--env))
+- `env_from` (Attributes List) Bulk environment from ConfigMaps/Secrets. (see [below for nested schema](#nestedatt--init_containers--env_from))
+- `image_pull_policy` (String) Image pull policy.
+- `ports` (Attributes List) Ports the init container exposes. (see [below for nested schema](#nestedatt--init_containers--ports))
+- `resources_limits` (Map of String) Resource limits.
+- `resources_requests` (Map of String) Resource requests.
+- `volume_mounts` (Attributes List) Volume mounts. (see [below for nested schema](#nestedatt--init_containers--volume_mounts))
+- `working_dir` (String) Working directory.
+
+<a id="nestedatt--init_containers--env"></a>
+### Nested Schema for `init_containers.env`
+
+Required:
+
+- `name` (String) Variable name.
+
+Optional:
+
+- `value` (String) Literal value.
+- `value_from` (Attributes) Source the value from a Secret/ConfigMap key or pod field. (see [below for nested schema](#nestedatt--init_containers--env--value_from))
+
+<a id="nestedatt--init_containers--env--value_from"></a>
+### Nested Schema for `init_containers.env.value_from`
+
+Optional:
+
+- `config_map_key_ref` (Attributes) Reference a ConfigMap key. (see [below for nested schema](#nestedatt--init_containers--env--value_from--config_map_key_ref))
+- `field_ref` (Attributes) Reference a pod field. (see [below for nested schema](#nestedatt--init_containers--env--value_from--field_ref))
+- `secret_key_ref` (Attributes) Reference a Secret key. (see [below for nested schema](#nestedatt--init_containers--env--value_from--secret_key_ref))
+
+<a id="nestedatt--init_containers--env--value_from--config_map_key_ref"></a>
+### Nested Schema for `init_containers.env.value_from.config_map_key_ref`
+
+Required:
+
+- `key` (String) Key in the ConfigMap.
+- `name` (String) ConfigMap name.
+
+Optional:
+
+- `optional` (Boolean) Whether the ConfigMap or key must exist.
+
+
+<a id="nestedatt--init_containers--env--value_from--field_ref"></a>
+### Nested Schema for `init_containers.env.value_from.field_ref`
+
+Required:
+
+- `field_path` (String) Field path, e.g. metadata.name.
+
+Optional:
+
+- `api_version` (String) API version for the field path.
+
+
+<a id="nestedatt--init_containers--env--value_from--secret_key_ref"></a>
+### Nested Schema for `init_containers.env.value_from.secret_key_ref`
+
+Required:
+
+- `key` (String) Key in the Secret.
+- `name` (String) Secret name.
+
+Optional:
+
+- `optional` (Boolean) Whether the Secret or key must exist.
+
+
+
+
+<a id="nestedatt--init_containers--env_from"></a>
+### Nested Schema for `init_containers.env_from`
+
+Optional:
+
+- `config_map_ref` (Attributes) Load all keys from a ConfigMap. (see [below for nested schema](#nestedatt--init_containers--env_from--config_map_ref))
+- `prefix` (String) Prefix for each variable name.
+- `secret_ref` (Attributes) Load all keys from a Secret. (see [below for nested schema](#nestedatt--init_containers--env_from--secret_ref))
+
+<a id="nestedatt--init_containers--env_from--config_map_ref"></a>
+### Nested Schema for `init_containers.env_from.config_map_ref`
+
+Required:
+
+- `name` (String) ConfigMap name.
+
+Optional:
+
+- `optional` (Boolean) Whether the ConfigMap must exist.
+
+
+<a id="nestedatt--init_containers--env_from--secret_ref"></a>
+### Nested Schema for `init_containers.env_from.secret_ref`
+
+Required:
+
+- `name` (String) Secret name.
+
+Optional:
+
+- `optional` (Boolean) Whether the Secret must exist.
+
+
+
+<a id="nestedatt--init_containers--ports"></a>
+### Nested Schema for `init_containers.ports`
+
+Required:
+
+- `container_port` (Number) Port number.
+
+Optional:
+
+- `name` (String) Named port.
+- `protocol` (String) Protocol.
+
+
+<a id="nestedatt--init_containers--volume_mounts"></a>
+### Nested Schema for `init_containers.volume_mounts`
+
+Required:
+
+- `mount_path` (String) Mount path in the container.
+- `name` (String) Pod volume name.
+
+Optional:
+
+- `read_only` (Boolean) Mount read-only.
+- `sub_path` (String) Sub-path of the volume.
+
+
+
+<a id="nestedatt--pod_failure_policy"></a>
+### Nested Schema for `pod_failure_policy`
+
+Required:
+
+- `rules` (Attributes List) Ordered failure-handling rules. (see [below for nested schema](#nestedatt--pod_failure_policy--rules))
+
+<a id="nestedatt--pod_failure_policy--rules"></a>
+### Nested Schema for `pod_failure_policy.rules`
+
+Required:
+
+- `action` (String) Action taken when the rule matches.
+
+Optional:
+
+- `on_exit_codes` (Attributes) Match on container exit codes. (see [below for nested schema](#nestedatt--pod_failure_policy--rules--on_exit_codes))
+- `on_pod_conditions` (Attributes List) Match on pod conditions. (see [below for nested schema](#nestedatt--pod_failure_policy--rules--on_pod_conditions))
+
+<a id="nestedatt--pod_failure_policy--rules--on_exit_codes"></a>
+### Nested Schema for `pod_failure_policy.rules.on_exit_codes`
+
+Required:
+
+- `operator` (String) In or NotIn.
+- `values` (List of Number) Exit codes to match.
+
+Optional:
+
+- `container_name` (String) Restrict to this container (defaults to all).
+
+
+<a id="nestedatt--pod_failure_policy--rules--on_pod_conditions"></a>
+### Nested Schema for `pod_failure_policy.rules.on_pod_conditions`
+
+Required:
+
+- `status` (String) Condition status (True/False/Unknown).
+- `type` (String) Pod condition type.
+
+
+
+
+<a id="nestedatt--pod_security_context"></a>
+### Nested Schema for `pod_security_context`
+
+Optional:
+
+- `fs_group` (Number) Supplemental group applied to mounted volumes.
+- `fs_group_change_policy` (String) When to change volume ownership to fs_group.
+- `run_as_group` (Number) GID for all containers.
+- `run_as_non_root` (Boolean) Require containers to run as non-root.
+- `run_as_user` (Number) UID for all containers.
+- `se_linux_options` (Attributes) SELinux context. (see [below for nested schema](#nestedatt--pod_security_context--se_linux_options))
+- `seccomp_profile` (Attributes) Seccomp profile for all containers. (see [below for nested schema](#nestedatt--pod_security_context--seccomp_profile))
+- `supplemental_groups` (List of String) Additional GIDs for the first container process.
+- `sysctls` (Attributes List) Namespaced sysctls to set. (see [below for nested schema](#nestedatt--pod_security_context--sysctls))
+
+<a id="nestedatt--pod_security_context--se_linux_options"></a>
+### Nested Schema for `pod_security_context.se_linux_options`
+
+Optional:
+
+- `level` (String) SELinux level.
+- `role` (String) SELinux role.
+- `type` (String) SELinux type.
+- `user` (String) SELinux user.
+
+
+<a id="nestedatt--pod_security_context--seccomp_profile"></a>
+### Nested Schema for `pod_security_context.seccomp_profile`
+
+Required:
+
+- `type` (String) Profile type.
+
+Optional:
+
+- `localhost_profile` (String) Profile path (used with Localhost).
+
+
+<a id="nestedatt--pod_security_context--sysctls"></a>
+### Nested Schema for `pod_security_context.sysctls`
+
+Required:
+
+- `name` (String) Sysctl name.
+- `value` (String) Sysctl value.
 
 
 
@@ -188,6 +1350,179 @@ Optional:
 
 - `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 - `delete` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours). Setting a timeout for a Delete operation is only applicable if changes are saved into state before the destroy operation occurs.
+
+
+<a id="nestedatt--tolerations"></a>
+### Nested Schema for `tolerations`
+
+Optional:
+
+- `effect` (String) Taint effect to match (empty matches all).
+- `key` (String) Taint key to tolerate.
+- `operator` (String) Exists or Equal.
+- `toleration_seconds` (Number) How long to tolerate a NoExecute taint before eviction.
+- `value` (String) Taint value (used with Equal).
+
+
+<a id="nestedatt--topology_spread_constraints"></a>
+### Nested Schema for `topology_spread_constraints`
+
+Required:
+
+- `max_skew` (Number) Maximum permitted difference in pod count between domains.
+- `topology_key` (String) Node label defining the topology domain (e.g. topology.kubernetes.io/zone).
+- `when_unsatisfiable` (String) Action when the constraint cannot be met.
+
+Optional:
+
+- `label_selector` (Attributes) Pods to count for spreading. (see [below for nested schema](#nestedatt--topology_spread_constraints--label_selector))
+- `min_domains` (Number) Minimum number of eligible domains.
+
+<a id="nestedatt--topology_spread_constraints--label_selector"></a>
+### Nested Schema for `topology_spread_constraints.label_selector`
+
+Optional:
+
+- `match_expressions` (Attributes List) Set-based label matchers. (see [below for nested schema](#nestedatt--topology_spread_constraints--label_selector--match_expressions))
+- `match_labels` (Map of String) Equality label matchers.
+
+<a id="nestedatt--topology_spread_constraints--label_selector--match_expressions"></a>
+### Nested Schema for `topology_spread_constraints.label_selector.match_expressions`
+
+Required:
+
+- `key` (String) Label key.
+- `operator` (String) Set operator.
+
+Optional:
+
+- `values` (List of String) Values (for In/NotIn).
+
+
+
+
+<a id="nestedatt--volumes"></a>
+### Nested Schema for `volumes`
+
+Required:
+
+- `name` (String) Volume name (referenced by volume_mounts).
+
+Optional:
+
+- `config_map` (Attributes) Populate the volume from a ConfigMap. (see [below for nested schema](#nestedatt--volumes--config_map))
+- `csi` (Attributes) Mount a volume via a CSI driver. (see [below for nested schema](#nestedatt--volumes--csi))
+- `empty_dir` (Attributes) Ephemeral scratch volume tied to the pod lifetime. (see [below for nested schema](#nestedatt--volumes--empty_dir))
+- `host_path` (Attributes) Mount a file or directory from the host node. (see [below for nested schema](#nestedatt--volumes--host_path))
+- `nfs` (Attributes) Mount an NFS share. (see [below for nested schema](#nestedatt--volumes--nfs))
+- `persistent_volume_claim` (Attributes) Mount an existing PersistentVolumeClaim. (see [below for nested schema](#nestedatt--volumes--persistent_volume_claim))
+- `secret` (Attributes) Populate the volume from a Secret. (see [below for nested schema](#nestedatt--volumes--secret))
+
+<a id="nestedatt--volumes--config_map"></a>
+### Nested Schema for `volumes.config_map`
+
+Optional:
+
+- `default_mode` (Number) Default file permission mode (e.g. 420).
+- `items` (Attributes List) Specific keys to project to paths. (see [below for nested schema](#nestedatt--volumes--config_map--items))
+- `name` (String) ConfigMap name.
+- `optional` (Boolean) Whether the ConfigMap must exist.
+
+<a id="nestedatt--volumes--config_map--items"></a>
+### Nested Schema for `volumes.config_map.items`
+
+Required:
+
+- `key` (String) ConfigMap key.
+- `path` (String) Relative file path.
+
+Optional:
+
+- `mode` (Number) File permission mode.
+
+
+
+<a id="nestedatt--volumes--csi"></a>
+### Nested Schema for `volumes.csi`
+
+Required:
+
+- `driver` (String) CSI driver name.
+
+Optional:
+
+- `fs_type` (String) Filesystem type.
+- `read_only` (Boolean) Mount read-only.
+- `volume_attributes` (Map of String) Driver-specific attributes.
+
+
+<a id="nestedatt--volumes--empty_dir"></a>
+### Nested Schema for `volumes.empty_dir`
+
+Optional:
+
+- `medium` (String) Storage medium: "" (node disk) or Memory.
+- `size_limit` (String) Total size limit, e.g. 1Gi.
+
+
+<a id="nestedatt--volumes--host_path"></a>
+### Nested Schema for `volumes.host_path`
+
+Required:
+
+- `path` (String) Path on the host.
+
+Optional:
+
+- `type` (String) Host path type (e.g. Directory, DirectoryOrCreate, File).
+
+
+<a id="nestedatt--volumes--nfs"></a>
+### Nested Schema for `volumes.nfs`
+
+Required:
+
+- `path` (String) Exported path on the server.
+- `server` (String) NFS server hostname or IP.
+
+Optional:
+
+- `read_only` (Boolean) Mount read-only.
+
+
+<a id="nestedatt--volumes--persistent_volume_claim"></a>
+### Nested Schema for `volumes.persistent_volume_claim`
+
+Required:
+
+- `claim_name` (String) Name of the PersistentVolumeClaim.
+
+Optional:
+
+- `read_only` (Boolean) Mount read-only.
+
+
+<a id="nestedatt--volumes--secret"></a>
+### Nested Schema for `volumes.secret`
+
+Optional:
+
+- `default_mode` (Number) Default file permission mode.
+- `items` (Attributes List) Specific keys to project to paths. (see [below for nested schema](#nestedatt--volumes--secret--items))
+- `optional` (Boolean) Whether the Secret must exist.
+- `secret_name` (String) Secret name.
+
+<a id="nestedatt--volumes--secret--items"></a>
+### Nested Schema for `volumes.secret.items`
+
+Required:
+
+- `key` (String) Secret key.
+- `path` (String) Relative file path.
+
+Optional:
+
+- `mode` (Number) File permission mode.
 
 ## Import
 

@@ -52,3 +52,17 @@ func TestFilterMapKeys(t *testing.T) {
 		t.Errorf("nil keys should not drop anything")
 	}
 }
+
+// Wildcard (prefix) filtering — "duplocloud.ai/*" drops all platform-stamped keys.
+func TestFilterMapKeys_Wildcard(t *testing.T) {
+	in := map[string]any{
+		"app":                        "x",      // user key, kept
+		"duplocloud.ai/workspace":    "w",      // dropped
+		"duplocloud.ai/environment":  "e",      // dropped
+		"duplocloud.ai/resourcetype": "K8sJob", // dropped
+	}
+	out, _ := filterMapKeys(in, []string{"duplocloud.ai/*", "resourcegroup"}).(map[string]any)
+	if len(out) != 1 || out["app"] != "x" {
+		t.Errorf("wildcard filter should keep only user keys, got %v", out)
+	}
+}
