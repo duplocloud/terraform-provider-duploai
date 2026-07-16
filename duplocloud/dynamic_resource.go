@@ -860,6 +860,84 @@ type attrReader interface {
 // (createPath vs updatePath; see AttributeSpec). Working from the raw tftypes
 // lets one code path serialize attributes of any type — scalars, collections,
 // and arbitrarily nested objects — without per-type plan reads.
+// findAttr returns the attribute with the given name, or nil.
+func findAttr(attrs []AttributeSpec, name string) *AttributeSpec {
+	for i := range attrs {
+		if attrs[i].Name == name {
+			return &attrs[i]
+		}
+	}
+	return nil
+}
+
+// anyToStringSlice coerces a decoded JSON value (or tftypesToGo output) into a
+// []string, ignoring non-string elements.
+func anyToStringSlice(v any) []string {
+	out := []string{}
+	arr, ok := v.([]any)
+	if !ok {
+		return out
+	}
+	for _, e := range arr {
+		if s, ok := e.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// rawStringSet decodes a tftypes list/set of strings into a membership set,
+// returning an empty set for null/unknown values.
+func rawStringSet(v tftypes.Value) map[string]bool {
+	out := map[string]bool{}
+	if v.IsNull() || !v.IsKnown() {
+		return out
+	}
+	var elems []tftypes.Value
+	if err := v.As(&elems); err != nil {
+		return out
+	}
+	for _, e := range elems {
+		if e.IsNull() || !e.IsKnown() {
+			continue
+		}
+		var s string
+		if err := e.As(&s); err == nil {
+			out[s] = true
+		}
+	}
+	return out
+}
+
+// preserveUnion returns the de-duplicated union of a PreserveUnmanagedInto
+// attribute's own values and those of its computed sibling, as a []any of
+// strings ready for the request body. Either side may be null/unknown.
+func preserveUnion(a AttributeSpec, attrs []AttributeSpec, top map[string]tftypes.Value) []any {
+	seen := map[string]bool{}
+	out := []any{}
+	add := func(spec AttributeSpec) {
+		v, ok := top[spec.Name]
+		if !ok {
+			return
+		}
+		g, ok := attrToRequest(spec, v)
+		if !ok {
+			return
+		}
+		for _, s := range anyToStringSlice(g) {
+			if !seen[s] {
+				seen[s] = true
+				out = append(out, s)
+			}
+		}
+	}
+	add(a)
+	if sib := findAttr(attrs, a.PreserveUnmanagedInto); sib != nil {
+		add(*sib)
+	}
+	return out
+}
+
 func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *diag.Diagnostics) map[string]any {
 	var top map[string]tftypes.Value
 	if err := raw.As(&top); err != nil {
@@ -875,6 +953,15 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *dia
 			reqPath = a.effectiveCreatePath()
 		}
 		if reqPath == "" || a.NoSend || (!a.Required && !a.Optional) {
+			continue
+		}
+		if a.PreserveUnmanagedInto != "" {
+			// Send the union of this attribute and its computed sibling so the
+			// server-managed entries the sibling holds survive a full-document
+			// update instead of being cleared.
+			if union := preserveUnion(a, r.spec.Attributes, top); len(union) > 0 {
+				setPath(body, strings.Split(reqPath, "."), union)
+			}
 			continue
 		}
 		child, ok := top[a.Name]
@@ -1084,7 +1171,7 @@ func configAttrNull(raw tftypes.Value, name string) bool {
 // computed-only and still-unknown fields from the response.
 // refreshInputs=true (Read / data source): replace all API-mapped attributes
 // with live response values.
-func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string]any, scope map[string]string, id string, refreshInputs bool, diags *diag.Diagnostics) tftypes.Value {
+func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string]any, scope map[string]string, id string, refreshInputs, applyPreserveSplit bool, diags *diag.Diagnostics) tftypes.Value {
 	objType, ok := baseRaw.Type().(tftypes.Object)
 	if !ok {
 		diags.AddError("Internal error", "state is not an object")
@@ -1110,6 +1197,34 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 	}
 
 	for _, a := range attrs {
+		if applyPreserveSplit && a.PreserveUnmanagedInto != "" {
+			// Split the server's full list into the user-managed set (this
+			// attribute) and the server-managed remainder (the computed
+			// sibling). The managed set is whatever is already in baseRaw — the
+			// plan on create/update, prior state on read.
+			attrType, hasType := objType.AttributeTypes[a.Name]
+			sib := findAttr(attrs, a.PreserveUnmanagedInto)
+			if hasType && sib != nil {
+				managed := rawStringSet(next[a.Name])
+				server := anyToStringSlice(extractPath(resp, strings.Split(a.responsePath(), ".")))
+				scopeSlice, otherSlice := []any{}, []any{}
+				for _, s := range server {
+					if managed[s] {
+						scopeSlice = append(scopeSlice, s)
+					} else {
+						otherSlice = append(otherSlice, s)
+					}
+				}
+				// Keep the configured plan value when fully known (avoids
+				// "inconsistent result after apply"); otherwise fill from the
+				// response. On read, always reflect the server intersection.
+				if refreshInputs || !next[a.Name].IsFullyKnown() {
+					next[a.Name] = attrFromResponse(a, attrType, scopeSlice)
+				}
+				next[sib.Name] = attrFromResponse(*sib, objType.AttributeTypes[sib.Name], otherSlice)
+			}
+			continue
+		}
 		respPath := a.responsePath()
 		if respPath == "" {
 			continue
@@ -1147,7 +1262,7 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 }
 
 func (r *dynamicResource) stateFromResponse(_ context.Context, baseRaw tftypes.Value, resp map[string]any, scope map[string]string, id string, refreshInputs bool, diags *diag.Diagnostics) tftypes.Value {
-	return buildStateRaw(r.spec.Attributes, baseRaw, resp, scope, id, refreshInputs, diags)
+	return buildStateRaw(r.spec.Attributes, baseRaw, resp, scope, id, refreshInputs, true, diags)
 }
 
 // ── value conversion helpers ──────────────────────────────────────────────────

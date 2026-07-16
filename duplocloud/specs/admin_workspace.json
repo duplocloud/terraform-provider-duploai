@@ -1,67 +1,131 @@
 {
   "name": "admin_workspace",
-  "description": "Fetches a DuploCloud AI Helpdesk workspace by ID.",
+  "description": "Manages a DuploCloud AI Helpdesk workspace — the top-level container that groups personas, scopes, a quota, and configuration for a team or tenant.",
   "idPath": "id",
-  "dataSourceOnly": true,
+  "dataSource": true,
   "endpoint": {
-    "uriBase": "/v1/aiservicedesk/admin/data/workspaces"
+    "uriBase": "/v1/aiservicedesk/admin/data/Workspaces"
   },
   "attributes": [
     {
       "name": "name",
       "type": "string",
-      "computed": true,
+      "required": true,
+      "forceNew": true,
       "apiPath": "name",
-      "description": "Name of the workspace."
+      "description": "Unique name of the workspace. The server stores the name in lowercase, so supply a lowercase value to avoid configuration drift. Changing the name forces a new resource."
     },
     {
       "name": "short_name",
       "type": "string",
+      "optional": true,
       "computed": true,
       "apiPath": "shortName",
-      "description": "Short identifier for the workspace."
+      "description": "Short identifier used as a prefix for tickets. Up to 10 characters, must start with a letter and contain only letters, digits, hyphens, or underscores. Must be unique across workspaces; when omitted, one is derived from the name."
     },
     {
       "name": "description",
       "type": "string",
+      "optional": true,
       "computed": true,
       "apiPath": "description",
-      "description": "Description of the workspace."
+      "description": "Human-readable description of the workspace."
     },
     {
-      "name": "is_active",
-      "type": "bool",
+      "name": "email",
+      "type": "string",
+      "optional": true,
       "computed": true,
-      "apiPath": "isActive",
-      "description": "Whether the workspace is active."
+      "apiPath": "email",
+      "description": "Contact email address for the workspace. Must be a valid email address when set."
     },
     {
-      "name": "version",
-      "type": "int",
+      "name": "role",
+      "type": "string",
+      "optional": true,
       "computed": true,
-      "apiPath": "version",
-      "description": "Version counter, incremented on each update."
+      "apiPath": "role",
+      "description": "Role label associated with the workspace."
+    },
+    {
+      "name": "team",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "team",
+      "description": "Team label associated with the workspace."
+    },
+    {
+      "name": "prompt_md",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "promptMd",
+      "description": "Markdown system prompt applied to interactions within this workspace."
+    },
+    {
+      "name": "analytics_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "analyticsId",
+      "description": "ID of an analytics record associated with this workspace."
+    },
+    {
+      "name": "quota_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "quotaId",
+      "description": "ID of the quota definition that limits this workspace's usage."
+    },
+    {
+      "name": "guardrail_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "guardrailId",
+      "description": "ID of an optional guardrail that constrains this workspace's capabilities."
+    },
+    {
+      "name": "meta_data",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "description": "Free-form key/value metadata associated with the workspace."
     },
     {
       "name": "persona_ids",
-      "type": "list(string)",
+      "type": "set(string)",
+      "optional": true,
       "computed": true,
       "apiPath": "personaIds",
-      "description": "IDs of the personas assigned to this workspace."
-    },
-    {
-      "name": "knowledge_ids",
-      "type": "list(string)",
-      "computed": true,
-      "apiPath": "knowledgeIds",
-      "description": "IDs of the knowledge bases assigned to this workspace."
+      "description": "IDs of the personas available in this workspace. Provide the complete set; on update the full list replaces the previous one."
     },
     {
       "name": "scope_ids",
-      "type": "list(string)",
+      "type": "set(string)",
+      "optional": true,
       "computed": true,
       "apiPath": "scopeIds",
-      "description": "IDs of the scopes assigned to this workspace."
+      "preserveUnmanagedInto": "system_scope_ids",
+      "description": "IDs of the scopes you manage on this workspace. Scopes the backend attaches automatically (for example a Kubernetes scope created with a cluster) are not included here — they appear in system_scope_ids and are preserved across updates."
+    },
+    {
+      "name": "system_scope_ids",
+      "type": "set(string)",
+      "computed": true,
+      "noSend": true,
+      "description": "IDs of scopes attached to this workspace by the backend (not managed in Terraform configuration), e.g. a Kubernetes scope created when a cluster is provisioned."
+    },
+    {
+      "name": "knowledge_ids",
+      "type": "set(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "knowledgeIds",
+      "description": "IDs of the knowledge bases assigned to this workspace. Provide the complete set; on update the full list replaces the previous one."
     },
     {
       "name": "agent_ids",
@@ -104,6 +168,20 @@
       "computed": true,
       "apiPath": "updatedAt",
       "description": "Timestamp when the workspace was last updated (RFC 3339)."
+    },
+    {
+      "name": "is_active",
+      "type": "bool",
+      "computed": true,
+      "apiPath": "isActive",
+      "description": "Whether the workspace is active."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
     }
   ]
 }

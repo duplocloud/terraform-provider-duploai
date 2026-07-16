@@ -3,12 +3,12 @@
 page_title: "duploai_admin_workspace Data Source - duploai"
 subcategory: ""
 description: |-
-  Fetches a DuploCloud AI Helpdesk workspace by ID.
+  Manages a DuploCloud AI Helpdesk workspace — the top-level container that groups personas, scopes, a quota, and configuration for a team or tenant.
 ---
 
 # duploai_admin_workspace (Data Source)
 
-Fetches a DuploCloud AI Helpdesk workspace by ID.
+Manages a DuploCloud AI Helpdesk workspace — the top-level container that groups personas, scopes, a quota, and configuration for a team or tenant.
 
 ## Example Usage
 
@@ -45,16 +45,24 @@ output "scope_ids" {
 ### Read-Only
 
 - `agent_ids` (List of String) IDs of the agents assigned to this workspace.
+- `analytics_id` (String) ID of an analytics record associated with this workspace.
 - `created_at` (String) Timestamp when the workspace was created (RFC 3339).
-- `description` (String) Description of the workspace.
+- `description` (String) Human-readable description of the workspace.
+- `email` (String) Contact email address for the workspace. Must be a valid email address when set.
+- `guardrail_id` (String) ID of an optional guardrail that constrains this workspace's capabilities.
 - `incident_ids` (List of String) IDs of the incidents assigned to this workspace.
 - `is_active` (Boolean) Whether the workspace is active.
-- `knowledge_ids` (List of String) IDs of the knowledge bases assigned to this workspace.
-- `name` (String) Name of the workspace.
-- `persona_ids` (List of String) IDs of the personas assigned to this workspace.
+- `knowledge_ids` (Set of String) IDs of the knowledge bases assigned to this workspace. Provide the complete set; on update the full list replaces the previous one.
+- `meta_data` (Map of String) Free-form key/value metadata associated with the workspace.
+- `name` (String) Unique name of the workspace. The server stores the name in lowercase, so supply a lowercase value to avoid configuration drift. Changing the name forces a new resource.
+- `persona_ids` (Set of String) IDs of the personas available in this workspace. Provide the complete set; on update the full list replaces the previous one.
 - `project_ids` (List of String) IDs of the projects assigned to this workspace.
-- `scope_ids` (List of String) IDs of the scopes assigned to this workspace.
-- `short_name` (String) Short identifier for the workspace.
+- `prompt_md` (String) Markdown system prompt applied to interactions within this workspace.
+- `quota_id` (String) ID of the quota definition that limits this workspace's usage.
+- `role` (String) Role label associated with the workspace.
+- `scope_ids` (Set of String) IDs of the scopes you manage on this workspace. Scopes the backend attaches automatically (for example a Kubernetes scope created with a cluster) are not included here — they appear in system_scope_ids and are preserved across updates.
+- `short_name` (String) Short identifier used as a prefix for tickets. Up to 10 characters, must start with a letter and contain only letters, digits, hyphens, or underscores. Must be unique across workspaces; when omitted, one is derived from the name.
+- `team` (String) Team label associated with the workspace.
 - `ticket_ids` (List of String) IDs of the tickets assigned to this workspace.
 - `updated_at` (String) Timestamp when the workspace was last updated (RFC 3339).
 - `version` (Number) Version counter, incremented on each update.

@@ -205,7 +205,7 @@ func TestBuildStateRaw_RefreshInputsReplacesValues(t *testing.T) {
 	var diags diag.Diagnostics
 	out := buildStateRaw(attrs, base,
 		map[string]any{"name": "live-name", "status": "Complete"},
-		map[string]string{}, "obj-1", true, &diags)
+		map[string]string{}, "obj-1", true, true, &diags)
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
@@ -250,7 +250,7 @@ func TestBuildStateRaw_SkipsAttrsAbsentFromType(t *testing.T) {
 	var diags diag.Diagnostics
 	out := buildStateRaw(attrs, base,
 		map[string]any{"name": "n", "spec": map[string]any{"password": "hunter2"}},
-		map[string]string{}, "obj-1", true, &diags)
+		map[string]string{}, "obj-1", true, true, &diags)
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
