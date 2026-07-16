@@ -28,13 +28,13 @@ resource "duploai_admin_workspace" "full" {
   team        = "platform"
   prompt_md   = "You are a DevOps assistant for the platform team. Help users manage infrastructure safely."
 
-  quota_id = "6a2258e94703bc957a1b824e"
+  quota_id = "<quota-id>"
 
   persona_ids = [
-    "69f1bc7e527b7c8f48e321a9",
+    "<persona-id>",
   ]
   scope_ids = [
-    "6a25105705686d697e0da225",
+    "<scope-id>",
   ]
 
   meta_data = {
@@ -56,7 +56,7 @@ resource "duploai_admin_workspace" "with_prompts" {
     prompt_suggestions = jsonencode([
       {
         text     = "Show error rate for the payments service"
-        scopeIds = ["6a25105705686d697e0da225"]
+        scopeIds = ["<scope-id>"]
         permission = {
           approvedCmdRegEx = [".*"]
           rejectedCmdRegEx = ["kubectl delete .*"]
@@ -69,7 +69,7 @@ resource "duploai_admin_workspace" "with_prompts" {
         name        = "incident-summary"
         content     = "Summarize the incident, list impacted services, and propose remediation steps."
         description = "Standard incident triage template"
-        scopeIds    = ["6a25105705686d697e0da225"]
+        scopeIds    = ["<scope-id>"]
         permission = {
           approvedCmdRegEx = ["kubectl get .*", "kubectl describe .*"]
           rejectedCmdRegEx = [".*delete.*"]
