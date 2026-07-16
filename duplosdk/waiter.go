@@ -32,6 +32,22 @@ type Waiter[T any] struct {
 	FailurePollInterval time.Duration
 	StatusFn            func(*T) string
 	FailureDetailFn     func(*T) string // optional: extra context appended to the error message
+	// ReadyFn / ReadyState add an optional secondary success gate: when ReadyFn
+	// is set, the resource is only considered done once StatusFn == SuccessState
+	// AND ReadyFn == ReadyState. Use it when the provisioning status reports
+	// "complete" before a downstream signal is ready (e.g. an EC2 host whose
+	// status is Complete but whose live_state is not yet "running"). Failure
+	// detection still keys off StatusFn/FailureStates.
+	ReadyFn    func(*T) string
+	ReadyState string
+}
+
+// ready reports whether the optional secondary readiness gate is satisfied.
+func (w *Waiter[T]) ready(obj *T) bool {
+	if w.ReadyFn == nil {
+		return true
+	}
+	return w.ReadyFn(obj) == w.ReadyState
 }
 
 // failureMsg builds the terminal-failure error text for a status, appending any
@@ -61,7 +77,10 @@ func (w *Waiter[T]) Wait(ctx context.Context, name string, timeout time.Duration
 		log.Printf("[TRACE] waiter(%s): status=%s", name, status)
 
 		if status == w.SuccessState {
-			return obj, nil
+			if w.ready(obj) {
+				return obj, nil
+			}
+			log.Printf("[TRACE] waiter(%s): status reached %q but readiness gate not met (want %q), still polling", name, status, w.ReadyState)
 		}
 		if reason, bad := w.FailureStates[status]; bad {
 			failCount++

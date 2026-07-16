@@ -17,9 +17,10 @@ import (
 )
 
 type specMeta struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	DataSource  bool   `json:"dataSource,omitempty"`
+	Name           string `json:"name"`
+	Description    string `json:"description"`
+	DataSource     bool   `json:"dataSource,omitempty"`
+	DataSourceOnly bool   `json:"dataSourceOnly,omitempty"`
 }
 
 func main() {
@@ -41,13 +42,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	resourceCount := 0
 	dsCount := 0
 	for _, s := range specs {
-		if s.DataSource {
+		if !s.DataSourceOnly {
+			resourceCount++
+		}
+		if s.DataSource || s.DataSourceOnly {
 			dsCount++
 		}
 	}
-	fmt.Printf("gen_readme: wrote %d resources and %d data sources to README.md\n", len(specs), dsCount)
+	fmt.Printf("gen_readme: wrote %d resources and %d data sources to README.md\n", resourceCount, dsCount)
 }
 
 func loadSpecs(dir string) ([]specMeta, error) {
@@ -81,6 +86,9 @@ func buildResourceTable(specs []specMeta) string {
 	sb.WriteString("| Resource | Description |\n")
 	sb.WriteString("|---|---|\n")
 	for _, s := range specs {
+		if s.DataSourceOnly {
+			continue
+		}
 		desc := strings.TrimRight(s.Description, ".")
 		fmt.Fprintf(&sb, "| [`duploai_%s`](docs/resources/%s.md) | %s |\n", s.Name, s.Name, desc)
 	}
@@ -92,7 +100,7 @@ func buildDataSourceTable(specs []specMeta) string {
 	sb.WriteString("| Data Source | Description |\n")
 	sb.WriteString("|---|---|\n")
 	for _, s := range specs {
-		if !s.DataSource {
+		if !s.DataSource && !s.DataSourceOnly {
 			continue
 		}
 		desc := strings.TrimRight(s.Description, ".")

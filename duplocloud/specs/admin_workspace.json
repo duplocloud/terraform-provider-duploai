@@ -80,6 +80,14 @@
       "description": "ID of the quota definition that limits this workspace's usage."
     },
     {
+      "name": "guardrail_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "guardrailId",
+      "description": "ID of an optional guardrail that constrains this workspace's capabilities."
+    },
+    {
       "name": "meta_data",
       "type": "map(string)",
       "optional": true,
@@ -110,6 +118,42 @@
       "computed": true,
       "noSend": true,
       "description": "IDs of scopes attached to this workspace by the backend (not managed in Terraform configuration), e.g. a Kubernetes scope created when a cluster is provisioned."
+    },
+    {
+      "name": "knowledge_ids",
+      "type": "set(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "knowledgeIds",
+      "description": "IDs of the knowledge bases assigned to this workspace. Provide the complete set; on update the full list replaces the previous one."
+    },
+    {
+      "name": "agent_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "agentIds",
+      "description": "IDs of the agents assigned to this workspace."
+    },
+    {
+      "name": "project_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "projectIds",
+      "description": "IDs of the projects assigned to this workspace."
+    },
+    {
+      "name": "ticket_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "ticketIds",
+      "description": "IDs of the tickets assigned to this workspace."
+    },
+    {
+      "name": "incident_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "incidentIds",
+      "description": "IDs of the incidents assigned to this workspace."
     },
     {
       "name": "created_at",

@@ -14,3 +14,7 @@ output "short_name" {
 output "persona_ids" {
   value = data.duploai_admin_workspace.example.persona_ids
 }
+
+output "scope_ids" {
+  value = data.duploai_admin_workspace.example.scope_ids
+}

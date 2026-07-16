@@ -27,3 +27,39 @@ resource "duploai_admin_workspace" "full" {
     region = "us-east-1"
   }
 }
+
+# Workspace with prompt suggestions and prompt templates. These are stored as
+# workspace metadata: each is a list of objects that the platform persists as a
+# JSON-encoded string, so author them as native HCL and wrap with jsonencode().
+# scopeIds reference existing scopes; permission scopes which commands the prompt
+# may run (approved/rejected command regexes).
+resource "duploai_admin_workspace" "with_prompts" {
+  name        = "prompt-workspace"
+  description = "Workspace with curated prompt suggestions and templates"
+
+  meta_data = {
+    prompt_suggestions = jsonencode([
+      {
+        text     = "Show error rate for the payments service"
+        scopeIds = ["6a25105705686d697e0da225"]
+        permission = {
+          approvedCmdRegEx = [".*"]
+          rejectedCmdRegEx = ["kubectl delete .*"]
+        }
+      },
+    ])
+
+    prompt_templates = jsonencode([
+      {
+        name        = "incident-summary"
+        content     = "Summarize the incident, list impacted services, and propose remediation steps."
+        description = "Standard incident triage template"
+        scopeIds    = ["6a25105705686d697e0da225"]
+        permission = {
+          approvedCmdRegEx = ["kubectl get .*", "kubectl describe .*"]
+          rejectedCmdRegEx = [".*delete.*"]
+        }
+      },
+    ])
+  }
+}

@@ -29,12 +29,13 @@ data "duploai_k8s_ingress" "example" {
 
 ### Read-Only
 
-- `annotations` (Map of String) Kubernetes annotations applied to the Ingress (e.g. nginx.ingress.kubernetes.io/rewrite-target).
+- `annotations` (Map of String) Kubernetes annotations applied to the Ingress (e.g. nginx.ingress.kubernetes.io/rewrite-target). ALB annotations the platform injects (security-groups, subnets, certificate-arn, ssl-policy, target-node-labels, tags) are managed server-side and not tracked here.
 - `default_backend` (Attributes) Default backend to forward traffic to when no rule matches. (see [below for nested schema](#nestedatt--default_backend))
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment in which the Ingress is created.
 - `ingress_class_name` (String) Name of the IngressClass cluster resource (e.g. nginx, alb).
 - `labels` (Map of String) Kubernetes labels applied to the Ingress.
+- `load_balancer` (Attributes) Load balancer status assigned by the cloud ingress controller after provisioning. The address is populated asynchronously — set wait_for_load_balancer = true to have create/update wait until it is available. (see [below for nested schema](#nestedatt--load_balancer))
 - `name` (String) Name of the Kubernetes Ingress resource.
 - `namespace_name` (String) Kubernetes namespace the Ingress is created in.
 - `resource_group_id` (String) ID of the resource group (Kubernetes cluster) this Ingress belongs to.
@@ -64,6 +65,34 @@ Read-Only:
 
 - `name` (String) Named port on the service.
 - `number` (Number) Numeric port on the service.
+
+
+
+
+<a id="nestedatt--load_balancer"></a>
+### Nested Schema for `load_balancer`
+
+Read-Only:
+
+- `ingress` (Attributes List) Addresses through which the ingress is reachable. (see [below for nested schema](#nestedatt--load_balancer--ingress))
+
+<a id="nestedatt--load_balancer--ingress"></a>
+### Nested Schema for `load_balancer.ingress`
+
+Read-Only:
+
+- `hostname` (String) Hostname of the load balancer (e.g. the ALB/NLB DNS name).
+- `ip` (String) IP address of the load balancer, when assigned instead of a hostname.
+- `ports` (Attributes List) Per-port status for the load balancer address. (see [below for nested schema](#nestedatt--load_balancer--ingress--ports))
+
+<a id="nestedatt--load_balancer--ingress--ports"></a>
+### Nested Schema for `load_balancer.ingress.ports`
+
+Read-Only:
+
+- `error` (String) Error reported for this port, if any.
+- `port` (Number) Port number.
+- `protocol` (String) Protocol (TCP, UDP, SCTP).
 
 
 

@@ -21,6 +21,12 @@ resource "duploai_k8s_ingress" "example" {
   namespace_name     = "default"
   ingress_class_name = "nginx"
 
+  # Wait during apply until the cloud controller assigns a load balancer address
+  # (exposed via the load_balancer attribute). Defaults to false, in which case
+  # apply returns as soon as the ingress is created and the address populates on a
+  # later refresh.
+  wait_for_load_balancer = true
+
   annotations = {
     "nginx.ingress.kubernetes.io/rewrite-target" = "/"
   }
@@ -69,7 +75,7 @@ resource "duploai_k8s_ingress" "example" {
 
 ### Optional
 
-- `annotations` (Map of String) Kubernetes annotations applied to the Ingress (e.g. nginx.ingress.kubernetes.io/rewrite-target).
+- `annotations` (Map of String) Kubernetes annotations applied to the Ingress (e.g. nginx.ingress.kubernetes.io/rewrite-target). ALB annotations the platform injects (security-groups, subnets, certificate-arn, ssl-policy, target-node-labels, tags) are managed server-side and not tracked here.
 - `default_backend` (Attributes) Default backend to forward traffic to when no rule matches. (see [below for nested schema](#nestedatt--default_backend))
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
@@ -78,10 +84,12 @@ resource "duploai_k8s_ingress" "example" {
 - `rules` (Attributes List) List of host rules that define how traffic is routed to backend services. (see [below for nested schema](#nestedatt--rules))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `tls` (Attributes List) TLS configuration blocks, each pairing a list of hosts with a certificate secret. (see [below for nested schema](#nestedatt--tls))
+- `wait_for_load_balancer` (Boolean) When true, wait during create and update until the backend reports a value at result.k8sResource.status.loadBalancer.ingress (e.g. a provisioned load balancer address), or the operation times out. Defaults to false.
 
 ### Read-Only
 
 - `id` (String) Composite resource identifier (workspace_id/id).
+- `load_balancer` (Attributes) Load balancer status assigned by the cloud ingress controller after provisioning. The address is populated asynchronously — set wait_for_load_balancer = true to have create/update wait until it is available. (see [below for nested schema](#nestedatt--load_balancer))
 - `status` (String) Current provisioning status of the Ingress resource.
 
 <a id="nestedatt--default_backend"></a>
@@ -183,6 +191,32 @@ Optional:
 
 - `hosts` (List of String) Hostnames covered by this TLS certificate.
 - `secret_name` (String) Name of the Kubernetes Secret containing the TLS certificate and key.
+
+
+<a id="nestedatt--load_balancer"></a>
+### Nested Schema for `load_balancer`
+
+Read-Only:
+
+- `ingress` (Attributes List) Addresses through which the ingress is reachable. (see [below for nested schema](#nestedatt--load_balancer--ingress))
+
+<a id="nestedatt--load_balancer--ingress"></a>
+### Nested Schema for `load_balancer.ingress`
+
+Read-Only:
+
+- `hostname` (String) Hostname of the load balancer (e.g. the ALB/NLB DNS name).
+- `ip` (String) IP address of the load balancer, when assigned instead of a hostname.
+- `ports` (Attributes List) Per-port status for the load balancer address. (see [below for nested schema](#nestedatt--load_balancer--ingress--ports))
+
+<a id="nestedatt--load_balancer--ingress--ports"></a>
+### Nested Schema for `load_balancer.ingress.ports`
+
+Read-Only:
+
+- `error` (String) Error reported for this port, if any.
+- `port` (Number) Port number.
+- `protocol` (String) Protocol (TCP, UDP, SCTP).
 
 ## Import
 

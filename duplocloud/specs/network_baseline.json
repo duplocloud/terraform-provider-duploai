@@ -33,20 +33,50 @@
       "description": "Optional description."
     },
     {
+      "name": "mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Create",
+      "forceNew": true,
+      "oneOf": [
+        "Create",
+        "Import"
+      ],
+      "apiPath": "spec.mode",
+      "description": "Provisioning mode: Create (the platform provisions a new VPC) or Import (adopt an existing VPC not provisioned by the platform — set vpc_id to the VPC to adopt). Immutable after creation."
+    },
+    {
       "name": "region",
       "type": "string",
       "required": true,
       "forceNew": true,
       "apiPath": "spec.region",
-      "description": "AWS region (e.g. us-east-1)."
+      "description": "Cloud region (e.g. us-east-1)."
+    },
+    {
+      "name": "cloud",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Aws",
+      "forceNew": true,
+      "oneOf": [
+        "Aws",
+        "Azure",
+        "Gcp",
+        "K8S_ONLY"
+      ],
+      "apiPath": "spec.cloud",
+      "description": "Cloud provider the network is provisioned in. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws."
     },
     {
       "name": "cidr",
       "type": "string",
-      "required": true,
-      "forceNew": true,
+      "optional": true,
+      "computed": true,
       "apiPath": "spec.cidr",
-      "description": "VPC CIDR block (e.g. 10.0.0.0/16)."
+      "description": "VPC CIDR block (e.g. 10.0.0.0/16). Required when the platform provisions a new VPC; leave unset when importing an existing VPC (vpc_id) — it is read from the imported VPC."
     },
     {
       "name": "az_count",
@@ -156,9 +186,11 @@
     {
       "name": "vpc_id",
       "type": "string",
+      "optional": true,
       "computed": true,
-      "apiPath": "result.id",
-      "description": "Provisioned VPC ID."
+      "requestPath": "spec.importVpcId",
+      "responsePath": "result.id",
+      "description": "ID of the VPC. Set this to import an existing VPC that was not provisioned by the platform (the baseline adopts the given VPC instead of creating one); leave unset to have the platform provision a new VPC. Computed to the provisioned or adopted VPC ID."
     },
     {
       "name": "subnet_ids",

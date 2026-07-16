@@ -80,6 +80,15 @@ func (r *dynamicResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 			Optional:    true,
 			Description: "Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.",
 		}
+		// Optional user-gated "wait until a response path is populated" control
+		// (e.g. wait_for_load_balancer). When true, create/update keep polling
+		// after the normal ready gate until waiter.populatedPath is non-empty.
+		if r.spec.Waiter.PopulatedPath != "" && r.spec.Waiter.PopulatedPathAttribute != "" {
+			attrs[r.spec.Waiter.PopulatedPathAttribute] = schema.BoolAttribute{
+				Optional:    true,
+				Description: "When true, wait during create and update until the backend reports a value at " + r.spec.Waiter.PopulatedPath + " (e.g. a provisioned load balancer address), or the operation times out. Defaults to false.",
+			}
+		}
 	}
 
 	out := schema.Schema{
@@ -99,6 +108,73 @@ func (r *dynamicResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 // api binds an SDK client to this resource's endpoint and resolved scope.
 func (r *dynamicResource) api(scope map[string]string, failureRetries int) *duplosdk.RESTResource[map[string]any] {
 	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, r.waiter(failureRetries))
+}
+
+// apiWaitingForPopulated is like api but, when waitForPopulated is true, extends
+// the waiter with a secondary gate that holds success until waiter.populatedPath
+// is non-empty — e.g. keep polling after an Ingress is Complete until the cloud
+// controller assigns a load balancer address. Composes with any existing
+// readyPath/readyState gate (both must hold). No-op when the resource declares no
+// populatedPath, so callers can use it unconditionally.
+func (r *dynamicResource) apiWaitingForPopulated(scope map[string]string, failureRetries int, waitForPopulated bool) *duplosdk.RESTResource[map[string]any] {
+	w := r.waiter(failureRetries)
+	if w != nil && waitForPopulated && r.spec.Waiter.PopulatedPath != "" {
+		applyPopulatedGate(w, r.spec.Waiter.PopulatedPath)
+	}
+	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, w)
+}
+
+// applyPopulatedGate extends waiter w with a secondary success gate that holds
+// until the value at populatedPath is non-empty, composing with any existing
+// readyPath/readyState gate (both must hold).
+func applyPopulatedGate(w *duplosdk.Waiter[map[string]any], populatedPath string) {
+	segs := strings.Split(populatedPath, ".")
+	const populated = "\x00populated"
+	prevFn, prevState := w.ReadyFn, w.ReadyState
+	w.ReadyState = populated
+	w.ReadyFn = func(m *map[string]any) string {
+		if prevFn != nil && prevFn(m) != prevState {
+			return "" // an existing ready gate is not yet met
+		}
+		if isNonEmptyValue(extractPath(*m, segs)) {
+			return populated
+		}
+		return ""
+	}
+}
+
+// waitForPopulated reads the optional boolean control attribute
+// (waiter.populatedPathAttribute, e.g. wait_for_load_balancer) from the plan.
+// Returns false when the resource declares no such control or it is unset.
+func (r *dynamicResource) waitForPopulated(ctx context.Context, cfg attrReader, diags *diag.Diagnostics) bool {
+	if r.spec.Waiter == nil || r.spec.Waiter.PopulatedPathAttribute == "" {
+		return false
+	}
+	var v types.Bool
+	diags.Append(cfg.GetAttribute(ctx, path.Root(r.spec.Waiter.PopulatedPathAttribute), &v)...)
+	if diags.HasError() || v.IsNull() || v.IsUnknown() {
+		return false
+	}
+	return v.ValueBool()
+}
+
+// isNonEmptyValue reports whether a decoded JSON value carries content: a
+// non-empty string/slice/map, a true bool, or any non-nil scalar.
+func isNonEmptyValue(v any) bool {
+	switch t := v.(type) {
+	case nil:
+		return false
+	case string:
+		return t != ""
+	case []any:
+		return len(t) > 0
+	case map[string]any:
+		return len(t) > 0
+	case bool:
+		return t
+	default:
+		return true
+	}
 }
 
 // readPathParamScope reads every path-parameter attribute declared by endpoint
@@ -171,7 +247,7 @@ func (r *dynamicResource) waiter(failureRetries int) *duplosdk.Waiter[map[string
 		failureInterval = time.Duration(w.FailurePollIntervalSeconds) * time.Second
 	}
 	statusSegs := strings.Split(w.StatusPath, ".")
-	return &duplosdk.Waiter[map[string]any]{
+	waiter := &duplosdk.Waiter[map[string]any]{
 		PollInterval:        interval,
 		FailurePollInterval: failureInterval,
 		SuccessState:        w.SuccessState,
@@ -187,12 +263,32 @@ func (r *dynamicResource) waiter(failureRetries int) *duplosdk.Waiter[map[string
 			return toStringValue(extractPath(*m, strings.Split(w.FailureDetailPath, ".")))
 		},
 	}
+	if w.ReadyPath != "" && w.ReadyState != "" {
+		readySegs := strings.Split(w.ReadyPath, ".")
+		waiter.ReadyState = w.ReadyState
+		waiter.ReadyFn = func(m *map[string]any) string {
+			return toStringValue(extractPath(*m, readySegs))
+		}
+	}
+	return waiter
 }
 
 // apiBodyEqual reports whether two request bodies are identical (same API-mapped
 // inputs). Map key order is normalized by json.Marshal, so the comparison is
 // stable.
 func apiBodyEqual(a, b map[string]any) bool {
+	ja, errA := json.Marshal(a)
+	jb, errB := json.Marshal(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return string(ja) == string(jb)
+}
+
+// jsonEqual reports whether two Go values (scalars or slices from
+// readPlanGoValue) are equal by JSON encoding — handles strings, numbers, bools,
+// and string lists without per-type comparison.
+func jsonEqual(a, b any) bool {
 	ja, errA := json.Marshal(a)
 	jb, errB := json.Marshal(b)
 	if errA != nil || errB != nil {
@@ -225,6 +321,23 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 		return // a real update — let computed outputs recompute normally
 	}
 
+	// Single-intent updates carry their change in createPath fields that are
+	// absent from the update body above, so apiBodyEqual misses them. Check the
+	// updateIntent attributes directly: if one changed it IS a real update, so
+	// don't pin computed outputs (let them recompute / stay known-after-apply).
+	if r.spec.SingleIntentUpdate != nil {
+		for _, a := range r.spec.Attributes {
+			if a.UpdateIntent == nil {
+				continue
+			}
+			pv, pok := readPlanGoValue(ctx, req.Plan, a, &resp.Diagnostics)
+			sv, _ := readPlanGoValue(ctx, req.State, a, &resp.Diagnostics)
+			if pok && !jsonEqual(pv, sv) {
+				return
+			}
+		}
+	}
+
 	var planTop, stateTop map[string]tftypes.Value
 	if err := req.Plan.Raw.As(&planTop); err != nil {
 		return
@@ -254,10 +367,11 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	log.Printf("[TRACE] dynamic %s Create(%s): start", r.spec.Name, strings.Join(scopeVals, "/"))
 
 	retries := r.failureRetries(ctx, req.Plan, &resp.Diagnostics)
+	waitPopulated := r.waitForPopulated(ctx, req.Plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	api := r.api(scope, retries)
+	api := r.apiWaitingForPopulated(scope, retries, waitPopulated)
 	created, err := api.Create(&body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating "+r.spec.Name, err.Error())
@@ -342,6 +456,14 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
+	// Single-intent update: mutate each changed attribute in its own PUT, waiting
+	// for the ready state between updates (e.g. AWS MSK broker count / storage /
+	// instance type / kafka version).
+	if r.spec.SingleIntentUpdate != nil {
+		r.singleIntentUpdate(ctx, req, resp, scope, objID, id)
+		return
+	}
+
 	body := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -364,10 +486,11 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	retries := r.failureRetries(ctx, req.Plan, &resp.Diagnostics)
+	waitPopulated := r.waitForPopulated(ctx, req.Plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	api := r.api(scope, retries)
+	api := r.apiWaitingForPopulated(scope, retries, waitPopulated)
 	updated, clientErr := api.Update(objID, &body)
 	if clientErr != nil {
 		resp.Diagnostics.AddError("Error updating "+r.spec.Name, clientErr.Error())
@@ -398,6 +521,108 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	log.Printf("[TRACE] dynamic %s Update(%s): end", r.spec.Name, id)
 }
 
+// singleIntentUpdate applies each changed UpdateIntent attribute as its own PUT
+// (discriminator + one target value), waiting for the resource to reach the
+// configured ready state before and after each update. Used by APIs (e.g. AWS
+// MSK) that accept one discrete update at a time.
+func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse, scope map[string]string, objID, id string) {
+	si := r.spec.SingleIntentUpdate
+
+	// Collect the intent attributes whose value changed plan-vs-state.
+	type change struct {
+		intent *UpdateIntentSpec
+		value  any
+	}
+	var changes []change
+	for i := range r.spec.Attributes {
+		a := r.spec.Attributes[i]
+		if a.UpdateIntent == nil {
+			continue
+		}
+		planVal, planOK := readPlanGoValue(ctx, req.Plan, a, &resp.Diagnostics)
+		stateVal, _ := readPlanGoValue(ctx, req.State, a, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if !planOK || jsonEqual(planVal, stateVal) {
+			continue
+		}
+		changes = append(changes, change{intent: a.UpdateIntent, value: planVal})
+	}
+
+	// No update-intent change (e.g. only the timeouts block differs) — persist
+	// the plan without any API call.
+	if len(changes) == 0 {
+		resp.State.Raw = req.Plan.Raw
+		log.Printf("[TRACE] dynamic %s Update(%s): no update-intent change, skipped", r.spec.Name, id)
+		return
+	}
+
+	retries := r.failureRetries(ctx, req.Plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	api := r.api(scope, retries)
+	timeout := r.timeout(ctx, req.Plan, "update", &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	readySegs := strings.Split(si.ReadyPath, ".")
+	readyWaiter := &duplosdk.Waiter[map[string]any]{
+		PollInterval:  defaultPollInterval,
+		SuccessState:  si.ReadyState,
+		FailureStates: si.ReadyFailureStates,
+		StatusFn:      func(m *map[string]any) string { return toStringValue(extractPath(*m, readySegs)) },
+	}
+	waitReady := func() bool {
+		if _, clientErr := readyWaiter.Wait(ctx, id, timeout, func() (*map[string]any, duplosdk.ClientError) {
+			return api.Get(objID)
+		}); clientErr != nil {
+			resp.Diagnostics.AddError("Error waiting for "+r.spec.Name+" to be ready for update", clientErr.Error())
+			return false
+		}
+		return true
+	}
+
+	discSegs := strings.Split(si.DiscriminatorPath, ".")
+	for _, c := range changes {
+		if !waitReady() { // must be ready before each single-intent update
+			return
+		}
+		// Start from the normal update body so identity/context fields (name,
+		// environment_id, resource_group_id, …) the backend needs to resolve the
+		// resource are present, then overlay this one update intent. Create-only
+		// and other update-intent fields are excluded by bodyFromRaw.
+		body := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		setPath(body, discSegs, c.intent.DiscriminatorValue)
+		setPath(body, strings.Split(c.intent.ValuePath, "."), c.value)
+		log.Printf("[TRACE] dynamic %s Update(%s): single-intent %s", r.spec.Name, id, c.intent.DiscriminatorValue)
+		if _, clientErr := api.Update(objID, &body); clientErr != nil {
+			resp.Diagnostics.AddError("Error updating "+r.spec.Name+" ("+c.intent.DiscriminatorValue+")", clientErr.Error())
+			return
+		}
+		if !waitReady() { // wait for this update to complete before the next
+			return
+		}
+	}
+
+	final, clientErr := api.Get(objID)
+	if clientErr != nil {
+		resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after update", clientErr.Error())
+		return
+	}
+	state := r.stateFromResponse(ctx, req.Plan.Raw, *final, scope, id, false, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.State.Raw = state
+	log.Printf("[TRACE] dynamic %s Update(%s): single-intent updates complete (%d)", r.spec.Name, id, len(changes))
+}
+
 func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	scope, objID, id, err := r.parseID(ctx, req.State, &resp.Diagnostics)
 	if err != nil || resp.Diagnostics.HasError() {
@@ -419,8 +644,10 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 
 	// Resources the API refuses to delete while live declare a Deprovision
 	// operation: tear down the underlying cloud resources and wait for the
-	// deprovisioned state before issuing the delete call.
-	if r.endpoint.HasDeprovision() {
+	// deprovisioned state before issuing the delete call. A deprovision
+	// "skipWhen" condition (e.g. cloud=K8S_ONLY, which provisions no cloud infra)
+	// bypasses this step and deletes directly.
+	if r.endpoint.HasDeprovision() && !r.deprovisionSkipped(ctx, req.State) {
 		if clientErr := api.Deprovision(objID); clientErr != nil {
 			resp.Diagnostics.AddError("Error deprovisioning "+r.spec.Name, clientErr.Error())
 			return
@@ -447,6 +674,43 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 		}
 	}
 	log.Printf("[TRACE] dynamic %s Delete(%s): end", r.spec.Name, id)
+}
+
+// deprovisionSkipped reports whether the pre-delete deprovision step should be
+// bypassed for this delete, based on the deprovision operation's SkipWhen
+// conditions evaluated against prior state (all must hold — logical AND). Use for
+// modes with no cloud infra to tear down (e.g. cloud=K8S_ONLY): the engine then
+// deletes directly. Returns false when no SkipWhen is configured.
+func (r *dynamicResource) deprovisionSkipped(ctx context.Context, state attrReader) bool {
+	dp := r.spec.Endpoint.Deprovision
+	if dp == nil || len(dp.SkipWhen) == 0 {
+		return false
+	}
+	for _, c := range dp.SkipWhen {
+		a := r.spec.attr(c.Attribute)
+		if a == nil {
+			return false
+		}
+		val := readConfigString(ctx, state, *a)
+		if val == "" {
+			val = defaultString(*a) // attribute omitted — fall back to its spec default
+		}
+		switch {
+		case c.IsEmpty:
+			if val != "" {
+				return false
+			}
+		case c.NotEquals != "":
+			if val == c.NotEquals {
+				return false
+			}
+		default:
+			if val != c.Equals {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (r *dynamicResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -482,7 +746,7 @@ func (v conflictsWithValidator) ValidateResource(ctx context.Context, req resour
 		set := make([]string, 0, len(group))
 		for _, name := range group {
 			a := v.spec.attr(name)
-			if a != nil && !configAttrNull(ctx, req.Config, *a) {
+			if a != nil && !configAttrNull(req.Config.Raw, a.Name) {
 				set = append(set, name)
 			}
 		}
@@ -513,7 +777,7 @@ func (v requiredIfValidator) ValidateResource(ctx context.Context, req resource.
 		if target == nil || !v.conditionsHold(ctx, req.Config, rule.conditions()) {
 			continue
 		}
-		if configAttrNull(ctx, req.Config, *target) {
+		if configAttrNull(req.Config.Raw, target.Name) {
 			resp.Diagnostics.AddAttributeError(
 				path.Root(rule.Attribute),
 				"Missing required attribute",
@@ -708,6 +972,12 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *dia
 		if !ok {
 			continue
 		}
+		// String-enum → bool on update: e.g. image_tag_mutability "IMMUTABLE"
+		// (create string) maps to enableTagImmutability true (update bool).
+		if verb == "update" && a.UpdateBoolTrueValue != "" {
+			s, _ := val.(string)
+			val = s == a.UpdateBoolTrueValue
+		}
 		setPath(body, strings.Split(reqPath, "."), val)
 	}
 	applyConstants(body, r.spec.RequestConstants, diags)
@@ -871,10 +1141,27 @@ func readConfigString(ctx context.Context, cfg attrReader, a AttributeSpec) stri
 	return toStringValue(v)
 }
 
-// configAttrNull reports whether an attribute is unset in config.
-func configAttrNull(ctx context.Context, cfg attrReader, a AttributeSpec) bool {
-	_, ok := readPlanGoValue(ctx, cfg, a, &diag.Diagnostics{})
-	return !ok
+// configAttrNull reports whether a top-level attribute is genuinely unset (null)
+// in the raw config. An UNKNOWN value — e.g. a reference to another resource
+// created in the same apply (network_id = duploai_network_baseline.x.network_id)
+// — is treated as SET (returns false): it is configured, just not yet resolved,
+// so config-time validators must not flag it as missing.
+func configAttrNull(raw tftypes.Value, name string) bool {
+	if !raw.IsKnown() || raw.IsNull() {
+		return false // whole config unknown/null — don't flag individual attrs
+	}
+	obj := map[string]tftypes.Value{}
+	if err := raw.As(&obj); err != nil {
+		return false
+	}
+	v, ok := obj[name]
+	if !ok {
+		return true // attribute absent from config → null
+	}
+	if !v.IsKnown() {
+		return false // unknown (unresolved reference) → treat as set
+	}
+	return v.IsNull()
 }
 
 // buildStateRaw builds a tftypes.Value state from a base raw value overlaid
@@ -958,6 +1245,9 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 			continue
 		}
 		goVal := extractPath(resp, strings.Split(respPath, "."))
+		if len(a.FilterResponseKeys) > 0 {
+			goVal = filterMapKeys(goVal, a.FilterResponseKeys)
+		}
 		if !computedOnly && !refreshInputs {
 			// Preserve the user's configured (known) leaves and fill only the
 			// still-unknown ones from the response, so we never replace a
@@ -1039,6 +1329,41 @@ func extractPath(cur any, segs []string) any {
 		return out
 	}
 	return extractPath(mapIndex(cur, seg), segs[1:])
+}
+
+// filterMapKeys returns cur with matching keys removed, when cur is a decoded
+// JSON object (map[string]any). Used to drop backend-injected map entries (e.g.
+// ALB annotations, platform duplocloud.ai/* labels) that the user does not
+// manage, preventing perpetual drift. A pattern ending in "*" is a prefix match
+// (e.g. "duplocloud.ai/*"); otherwise it's an exact-key match. Non-map values
+// pass through unchanged.
+func filterMapKeys(cur any, keys []string) any {
+	m, ok := cur.(map[string]any)
+	if !ok {
+		return cur
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		if !matchesFilterKey(k, keys) {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// matchesFilterKey reports whether key matches any pattern — exact, or prefix
+// when the pattern ends in "*".
+func matchesFilterKey(key string, patterns []string) bool {
+	for _, p := range patterns {
+		if strings.HasSuffix(p, "*") {
+			if strings.HasPrefix(key, strings.TrimSuffix(p, "*")) {
+				return true
+			}
+		} else if key == p {
+			return true
+		}
+	}
+	return false
 }
 
 func mapIndex(cur any, key string) any {

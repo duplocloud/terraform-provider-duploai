@@ -77,6 +77,50 @@ type ResourceSpec struct {
 	// readable attributes become Computed, and write-only attributes (those with no
 	// apiPath/responsePath) are excluded entirely.
 	DataSource bool `json:"dataSource,omitempty"`
+
+	// DataSourceOnly, when true, registers ONLY a read-only data source
+	// (data.duploai_<name>) from this spec — no managed resource is registered.
+	// Use this for APIs that are purely read-only and have no create/update/delete
+	// operations. Implies DataSource semantics; DataSource need not also be set.
+	DataSourceOnly bool `json:"dataSourceOnly,omitempty"`
+
+	// SingleIntentUpdate configures the "one update intent per call" flow used by
+	// APIs (e.g. AWS MSK) that accept a single discrete update at a time —
+	// identified by a discriminator field plus one target value — and require the
+	// resource to reach a ready state between updates. When set, attributes that
+	// declare an UpdateIntent are mutated in place: for each changed one the engine
+	// waits for the ready state, issues a PUT carrying only the discriminator and
+	// that attribute's target value, then waits for the ready state again before
+	// the next. Attributes without an UpdateIntent should be forceNew/createOnly.
+	SingleIntentUpdate *SingleIntentUpdateSpec `json:"singleIntentUpdate,omitempty"`
+}
+
+// SingleIntentUpdateSpec configures resource-level single-intent updates.
+type SingleIntentUpdateSpec struct {
+	// DiscriminatorPath is the request body dot-path that names which update is
+	// being performed, e.g. "spec.updateRequest.updateType".
+	DiscriminatorPath string `json:"discriminatorPath"`
+	// ReadyPath is the read-response dot-path whose value must equal ReadyState
+	// before and after each update, e.g. "result.cloudDetails.state".
+	ReadyPath string `json:"readyPath"`
+	// ReadyState is the terminal-ready value at ReadyPath, e.g. "ACTIVE".
+	ReadyState string `json:"readyState"`
+	// ReadyFailureStates maps values at ReadyPath that mean the update failed (so
+	// the wait aborts immediately instead of polling to timeout) to a reason,
+	// e.g. {"FAILED": "cluster entered a FAILED state"}.
+	ReadyFailureStates map[string]string `json:"readyFailureStates,omitempty"`
+}
+
+// UpdateIntentSpec maps one mutable attribute to a single-intent update: when the
+// attribute changes, the engine sends DiscriminatorValue at the resource's
+// DiscriminatorPath and the new value at ValuePath.
+type UpdateIntentSpec struct {
+	// DiscriminatorValue is the discriminator value for this attribute's update,
+	// e.g. "BrokerCount".
+	DiscriminatorValue string `json:"discriminatorValue"`
+	// ValuePath is the request body dot-path the new value is written to,
+	// e.g. "spec.updateRequest.targetNumberOfBrokerNodes".
+	ValuePath string `json:"valuePath"`
 }
 
 // OperationSpec overrides the HTTP verb and/or path for one CRUD operation.
@@ -84,6 +128,14 @@ type ResourceSpec struct {
 type OperationSpec struct {
 	Verb string `json:"verb,omitempty"`
 	Path string `json:"path,omitempty"`
+
+	// SkipWhen applies to the deprovision operation only: when all listed
+	// conditions match the prior state (logical AND), the engine skips the
+	// pre-delete deprovision step and issues the delete directly. Use for modes
+	// with no cloud infrastructure to tear down (e.g. cloud=K8S_ONLY, which
+	// registers an existing cluster and provisions nothing). Ignored on
+	// create/read/update/delete.
+	SkipWhen []RequiredIfCondition `json:"skipWhen,omitempty"`
 }
 
 // EndpointSpec configures the API URIs and HTTP verbs for a resource's CRUD
@@ -162,6 +214,12 @@ type AttributeSpec struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 
+	// Deprecated, when set, marks the attribute deprecated: the message is wired
+	// to the framework's DeprecationMessage and shown as a warning whenever the
+	// attribute is set in config. Use when renaming an attribute — keep the old
+	// one with a deprecation message pointing at the replacement.
+	Deprecated string `json:"deprecated,omitempty"`
+
 	// Type is one of: string, bool, int, list(string).
 	Type string `json:"type"`
 
@@ -217,6 +275,15 @@ type AttributeSpec struct {
 	CreatePath string `json:"createPath,omitempty"`
 	UpdatePath string `json:"updatePath,omitempty"`
 
+	// UpdateBoolTrueValue, for a string attribute, makes the update (PUT) body
+	// carry a BOOLEAN at UpdatePath instead of the string: true when the value
+	// equals UpdateBoolTrueValue, else false. Use when create and update take
+	// different shapes for the same setting — e.g. AWS ECR create takes
+	// imageTagMutability="IMMUTABLE" (string) while update takes
+	// enableTagImmutability=true (bool). Only applies to the update body (create
+	// still writes the raw string via CreatePath). Requires UpdatePath.
+	UpdateBoolTrueValue string `json:"updateBoolTrueValue,omitempty"`
+
 	// CreateOnly marks an attribute that is only sent in the POST (create)
 	// body and never in the PUT (update) body. Useful for fields that are
 	// immutable after creation but not forceNew (e.g. code source for Lambda).
@@ -225,6 +292,28 @@ type AttributeSpec struct {
 	// NoSend marks an attribute that maps from the response but is never sent in
 	// the request (computed-only fields like status, vpc_id).
 	NoSend bool `json:"noSend,omitempty"`
+
+	// FilterResponseKeys, for a map(string) attribute, drops these exact keys from
+	// the response map before it is stored in state. Use when the backend injects
+	// its own entries into a map the user only partially manages (e.g. the ALB
+	// controller adds alb.ingress.kubernetes.io/{security-groups,subnets,...}
+	// annotations), which would otherwise show perpetual drift as Terraform tries
+	// to remove the server-added keys. Keys the user sets (not in this list) are
+	// preserved, so there is no "cannot remove a key" limitation for those.
+	FilterResponseKeys []string `json:"filterResponseKeys,omitempty"`
+
+	// NormalizeCsvOrder, for a string attribute, sorts the comma-separated tokens
+	// of the response value into a canonical (lexical) order before storing it in
+	// state. Use for backend fields whose elements are order-insensitive but
+	// returned in a non-deterministic order (e.g. AWS MSK bootstrap broker
+	// strings), which would otherwise show perpetual drift on refresh.
+	NormalizeCsvOrder bool `json:"normalizeCsvOrder,omitempty"`
+
+	// UpdateIntent, when set (and the resource has SingleIntentUpdate), makes this
+	// attribute mutable via a single-intent update: a change issues a dedicated
+	// PUT carrying the discriminator + this attribute's new value. Requires the
+	// resource-level SingleIntentUpdate config.
+	UpdateIntent *UpdateIntentSpec `json:"updateIntent,omitempty"`
 
 	// Attributes holds the nested fields when Type is an object form
 	// ("object", "list(object)", "set(object)", "map(object)"). Each nested
@@ -339,6 +428,26 @@ type WaiterSpec struct {
 	StatusPath string `json:"statusPath"`
 	// SuccessState is the terminal success value.
 	SuccessState string `json:"successState"`
+	// ReadyPath / ReadyState add an optional secondary success gate: the resource
+	// is only considered provisioned once the status reaches SuccessState AND the
+	// value at ReadyPath equals ReadyState. Use for resources whose status flips
+	// to "complete" before a downstream signal is ready (e.g. an EC2 host whose
+	// status is Complete but live_state is not yet "running"). Both must be set
+	// to enable the gate; failure detection still uses StatusPath/FailureStates.
+	ReadyPath  string `json:"readyPath,omitempty"`
+	ReadyState string `json:"readyState,omitempty"`
+	// PopulatedPath / PopulatedPathAttribute add an optional, user-gated wait: the
+	// engine adds a boolean control attribute named PopulatedPathAttribute (e.g.
+	// "wait_for_load_balancer") to the resource. When the user sets it true, Create
+	// and Update keep polling — after the normal status/ready gate is met — until
+	// the value at PopulatedPath (a read-response dot-path, e.g.
+	// "result.k8sResource.status.loadBalancer.ingress") becomes non-empty, or the
+	// operation timeout elapses. Used for async cloud side effects the API fills in
+	// after the resource itself is Complete (e.g. a load balancer address assigned
+	// by the cloud controller). Ignored when the control attribute is false/unset.
+	// Both fields must be set together.
+	PopulatedPath          string `json:"populatedPath,omitempty"`
+	PopulatedPathAttribute string `json:"populatedPathAttribute,omitempty"`
 	// FailureStates maps terminal failure values to human-readable reasons.
 	FailureStates map[string]string `json:"failureStates"`
 	// FailureRetries is how many extra polls to tolerate after first seeing a
@@ -510,6 +619,48 @@ func (s *ResourceSpec) validate() error {
 	if err := validatePreservePairs(s.Attributes); err != nil {
 		return err
 	}
+	if err := validateSingleIntentUpdate(s); err != nil {
+		return err
+	}
+	if s.Waiter != nil {
+		pp, pa := s.Waiter.PopulatedPath, s.Waiter.PopulatedPathAttribute
+		if (pp == "") != (pa == "") {
+			return fmt.Errorf("waiter.populatedPath and waiter.populatedPathAttribute must be set together")
+		}
+		if pa != "" {
+			if pa == "id" || pa == "failure_retries" || pa == "timeouts" {
+				return fmt.Errorf("waiter.populatedPathAttribute %q collides with a reserved attribute", pa)
+			}
+			if seen[pa] {
+				return fmt.Errorf("waiter.populatedPathAttribute %q collides with a declared attribute", pa)
+			}
+		}
+	}
+	return nil
+}
+
+// validateSingleIntentUpdate checks the single-intent update configuration: any
+// attribute with an UpdateIntent requires the resource-level SingleIntentUpdate
+// block (with all three paths set) and a complete UpdateIntent.
+func validateSingleIntentUpdate(s *ResourceSpec) error {
+	var intents int
+	for _, a := range s.Attributes {
+		if a.UpdateIntent == nil {
+			continue
+		}
+		intents++
+		if a.UpdateIntent.DiscriminatorValue == "" || a.UpdateIntent.ValuePath == "" {
+			return fmt.Errorf("attribute %q: updateIntent requires discriminatorValue and valuePath", a.Name)
+		}
+	}
+	if s.SingleIntentUpdate != nil {
+		si := s.SingleIntentUpdate
+		if si.DiscriminatorPath == "" || si.ReadyPath == "" || si.ReadyState == "" {
+			return fmt.Errorf("singleIntentUpdate requires discriminatorPath, readyPath, and readyState")
+		}
+	} else if intents > 0 {
+		return fmt.Errorf("updateIntent on an attribute requires a resource-level singleIntentUpdate block")
+	}
 	return nil
 }
 
@@ -585,6 +736,14 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 		}
 		if !a.Required && !a.Optional && !a.Computed {
 			return nil, fmt.Errorf("attribute %q must be one of required/optional/computed", a.Name)
+		}
+		if a.UpdateBoolTrueValue != "" {
+			if a.Type != "string" {
+				return nil, fmt.Errorf("attribute %q: updateBoolTrueValue requires a string type", a.Name)
+			}
+			if a.UpdatePath == "" {
+				return nil, fmt.Errorf("attribute %q: updateBoolTrueValue requires updatePath", a.Name)
+			}
 		}
 		if info.elem == "object" {
 			if len(a.Attributes) == 0 {
