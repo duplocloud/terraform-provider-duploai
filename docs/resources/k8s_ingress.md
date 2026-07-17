@@ -89,7 +89,7 @@ resource "duploai_k8s_ingress" "example" {
 ### Read-Only
 
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `k8s_ingress_id` (String) UUID of this ingress, for reference by dependent resources.
+- `k8s_ingress_id` (String) ID of this ingress, for reference by dependent resources.
 - `load_balancer` (Attributes) Load balancer status assigned by the cloud ingress controller after provisioning. The address is populated asynchronously — set wait_for_load_balancer = true to have create/update wait until it is available. (see [below for nested schema](#nestedatt--load_balancer))
 - `status` (String) Current provisioning status of the Ingress resource.
 

@@ -101,7 +101,7 @@ resource "duploai_node_group" "spot" {
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `kubernetes_version` (String) Kubernetes version of the node group.
 - `node_group_arn` (String) ARN of the provisioned node group.
-- `node_group_id` (String) UUID of this node group, for reference by dependent resources.
+- `node_group_id` (String) ID of this node group, for reference by dependent resources.
 - `node_group_name` (String) Provisioned EKS node group name.
 - `release_version` (String) AMI release version of the node group.
 - `stack_id` (String) ID of the underlying provisioning stack.

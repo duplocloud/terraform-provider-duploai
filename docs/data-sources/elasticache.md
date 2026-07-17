@@ -33,7 +33,7 @@ Manages a DuploCloud AI Helpdesk AWS ElastiCache cluster (Redis, Valkey, or Memc
 - `configuration_endpoint` (String) Configuration endpoint (cluster-mode-enabled Redis/Valkey and Memcached).
 - `data_tiering_enabled` (Boolean) Enable data tiering (Redis/Valkey on r6gd.* node types only).
 - `description` (String) Optional description.
-- `elasticache_id` (String) UUID of this ElastiCache resource, for reference by dependent resources.
+- `elasticache_id` (String) ID of this ElastiCache resource, for reference by dependent resources.
 - `encryption_mode` (String) At-rest encryption mode: NoEncryption, ResourceGroupKmsKey (uses the resource group's KMS key), or AwsDefaultElastiCacheKey.
 - `engine` (String) Cache engine: Redis, Valkey, or Memcached.
 - `engine_version` (String) Engine version (e.g. 7.1). Required unless restoring from a snapshot; when unset and not restoring, the server selects a default.

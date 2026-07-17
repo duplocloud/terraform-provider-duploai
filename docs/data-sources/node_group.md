@@ -50,7 +50,7 @@ output "status" {
 - `min_size` (Number) Minimum number of nodes.
 - `name` (String) Name of the node group.
 - `node_group_arn` (String) ARN of the provisioned node group.
-- `node_group_id` (String) UUID of this node group, for reference by dependent resources.
+- `node_group_id` (String) ID of this node group, for reference by dependent resources.
 - `node_group_name` (String) Provisioned EKS node group name.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.

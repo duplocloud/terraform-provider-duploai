@@ -88,7 +88,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this MSK Kafka Serverless cluster, for reference by dependent resources."
+      "description": "ID of this MSK Kafka Serverless cluster, for reference by dependent resources."
     },
     {
       "name": "security_group_ids",

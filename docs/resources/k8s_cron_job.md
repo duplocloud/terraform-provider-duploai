@@ -250,7 +250,7 @@ resource "duploai_k8s_cron_job" "full" {
 
 - `active_job_names` (List of String) Names of job runs currently active for this cron job.
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `k8s_cron_job_id` (String) UUID of this cron job, for reference by dependent resources.
+- `k8s_cron_job_id` (String) ID of this cron job, for reference by dependent resources.
 - `last_schedule_time` (String) Time the cron job last scheduled a run.
 - `last_successful_time` (String) Time a run of the cron job last completed successfully.
 - `status` (String) Current provisioning status of the cron job resource.

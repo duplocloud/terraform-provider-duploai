@@ -3595,7 +3595,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this job, for reference by dependent resources."
+      "description": "ID of this job, for reference by dependent resources."
     },
     {
       "name": "job_active",

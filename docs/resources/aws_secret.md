@@ -68,7 +68,7 @@ resource "duploai_aws_secret" "app_config" {
 ### Read-Only
 
 - `arn` (String) ARN of the provisioned AWS Secrets Manager secret.
-- `aws_secret_id` (String) UUID of this secret, for reference by dependent resources.
+- `aws_secret_id` (String) ID of this secret, for reference by dependent resources.
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `status` (String) Current provisioning status.
 

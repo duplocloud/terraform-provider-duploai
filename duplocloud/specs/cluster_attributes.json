@@ -320,7 +320,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this cluster attributes resource, for reference by dependent resources."
+      "description": "ID of this cluster attributes resource, for reference by dependent resources."
     },
     {
       "name": "cf_stack_name",

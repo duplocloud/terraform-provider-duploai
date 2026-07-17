@@ -90,7 +90,7 @@ output "host_private_ip" {
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `instance_id` (String) AWS EC2 instance ID of the provisioned host.
 - `live_state` (String) Current live state of the EC2 instance (e.g. running, stopped).
-- `native_host_id` (String) UUID of this native host, for reference by dependent resources.
+- `native_host_id` (String) ID of this native host, for reference by dependent resources.
 - `private_ip_address` (String) Private IP address of the host.
 - `public_ip_address` (String) Public IP address of the host, if any.
 - `status` (String) Provisioning status of the host.

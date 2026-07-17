@@ -189,7 +189,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this Helm repository, for reference by dependent resources."
+      "description": "ID of this Helm repository, for reference by dependent resources."
     }
   ],
   "requestConstants": [

@@ -239,7 +239,7 @@ resource "duploai_k8s_job" "full" {
 - `job_active` (Number) Number of pods actively running for the job.
 - `job_failed` (Number) Number of pods that have failed.
 - `job_succeeded` (Number) Number of pods that have successfully completed.
-- `k8s_job_id` (String) UUID of this job, for reference by dependent resources.
+- `k8s_job_id` (String) ID of this job, for reference by dependent resources.
 - `scope_ids` (List of String) Scope IDs inherited from the linked environment or resource group.
 - `status` (String) Current provisioning status of the job resource.
 

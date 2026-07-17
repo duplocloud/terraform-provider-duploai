@@ -64,7 +64,7 @@ output "stack_id" {
 - `port` (Number) Port the RDS instance listens on.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
-- `rds_instance_id` (String) UUID of this RDS instance, for reference by dependent resources.
+- `rds_instance_id` (String) ID of this RDS instance, for reference by dependent resources.
 - `resource_group_id` (String) ID of the resource group (under an environment) this instance belongs to.
 - `scope_ids` (List of String) Scope IDs that link this instance to a cloud provider account.
 - `snapshot_identifier` (String) Identifier of a snapshot to restore the instance from.

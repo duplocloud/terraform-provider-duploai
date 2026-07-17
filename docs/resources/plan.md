@@ -91,7 +91,7 @@ resource "duploai_plan" "byo_dns" {
 
 - `ami_ids` (List of String) IDs of AMIs registered by the plan.
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `plan_id` (String) UUID of this plan, for reference by dependent resources.
+- `plan_id` (String) ID of this plan, for reference by dependent resources.
 - `status` (String) Current provisioning status.
 
 <a id="nestedatt--certificates"></a>

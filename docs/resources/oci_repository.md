@@ -95,7 +95,7 @@ resource "duploai_oci_repository" "internal" {
 ### Read-Only
 
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `oci_repository_id` (String) UUID of this OCI repository, for reference by dependent resources.
+- `oci_repository_id` (String) ID of this OCI repository, for reference by dependent resources.
 - `status` (String) Current provisioning status.
 
 <a id="nestedblock--timeouts"></a>

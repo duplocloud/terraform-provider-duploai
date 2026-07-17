@@ -69,7 +69,7 @@ resource "duploai_k8s_secret" "app" {
 ### Read-Only
 
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `k8s_secret_id` (String) UUID of this secret, for reference by dependent resources.
+- `k8s_secret_id` (String) ID of this secret, for reference by dependent resources.
 - `status` (String) Current provisioning status.
 
 <a id="nestedblock--timeouts"></a>

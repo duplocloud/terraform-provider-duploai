@@ -72,7 +72,7 @@ resource "duploai_sns" "fifo" {
 
 - `created_at` (String) Timestamp when the topic was created (RFC 3339).
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `sns_id` (String) UUID of this SNS topic, for reference by dependent resources.
+- `sns_id` (String) ID of this SNS topic, for reference by dependent resources.
 - `status` (String) Current provisioning status of the topic.
 - `topic_arn` (String) ARN of the provisioned SNS topic.
 - `updated_at` (String) Timestamp when the topic was last updated (RFC 3339).

@@ -100,7 +100,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this resource quota, for reference by dependent resources."
+      "description": "ID of this resource quota, for reference by dependent resources."
     }
   ],
   "requestConstants": [

@@ -40,7 +40,7 @@ output "status" {
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
 - `immutable` (Boolean) Mark the config map immutable (its data cannot be changed after creation).
-- `k8s_config_map_id` (String) UUID of this config map, for reference by dependent resources.
+- `k8s_config_map_id` (String) ID of this config map, for reference by dependent resources.
 - `labels` (Map of String) Kubernetes labels applied to the config map.
 - `name` (String) Name of the config map resource.
 - `namespace_name` (String) Kubernetes namespace the config map is created in.

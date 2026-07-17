@@ -70,7 +70,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this namespace, for reference by dependent resources."
+      "description": "ID of this namespace, for reference by dependent resources."
     }
   ],
   "waiter": {

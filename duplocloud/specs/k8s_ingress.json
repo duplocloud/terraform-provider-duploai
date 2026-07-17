@@ -277,7 +277,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this ingress, for reference by dependent resources."
+      "description": "ID of this ingress, for reference by dependent resources."
     },
     {
       "name": "load_balancer",

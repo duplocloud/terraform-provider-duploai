@@ -158,7 +158,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this ECR repository resource, for reference by dependent resources."
+      "description": "ID of this ECR repository resource, for reference by dependent resources."
     },
     {
       "name": "repository_arn",

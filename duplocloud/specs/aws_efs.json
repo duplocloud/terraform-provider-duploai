@@ -204,7 +204,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this EFS file system resource, for reference by dependent resources."
+      "description": "ID of this EFS file system resource, for reference by dependent resources."
     },
     {
       "name": "file_system_id",

@@ -51,7 +51,7 @@ output "status" {
 - `metadata_hop_limit` (Number) Maximum number of network hops for instance metadata service requests.
 - `metadata_service_option` (String) Instance metadata service mode. V2Only requires IMDSv2 and disables IMDSv1 (recommended).
 - `name` (String) Name of the host. Letters, numbers, and hyphens; must start with a letter or number. Cannot be changed after creation.
-- `native_host_id` (String) UUID of this native host, for reference by dependent resources.
+- `native_host_id` (String) ID of this native host, for reference by dependent resources.
 - `os_disk_encryption_key` (String) KMS key ARN used to encrypt the root volume. Leave unset to use the resource group's default key.
 - `os_platform` (Number) OS platform: 0 = Linux, 1 = Windows. Cannot be changed after creation.
 - `private_ip_address` (String) Private IP address of the host.

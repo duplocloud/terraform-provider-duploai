@@ -248,7 +248,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this Lambda function resource, for reference by dependent resources."
+      "description": "ID of this Lambda function resource, for reference by dependent resources."
     },
     {
       "name": "function_arn",

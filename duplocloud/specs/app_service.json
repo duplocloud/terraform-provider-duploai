@@ -1884,7 +1884,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this app service, for reference by dependent resources."
+      "description": "ID of this app service, for reference by dependent resources."
     },
     {
       "name": "service_name",

@@ -241,7 +241,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this Helm release, for reference by dependent resources."
+      "description": "ID of this Helm release, for reference by dependent resources."
     }
   ],
   "requestConstants": [

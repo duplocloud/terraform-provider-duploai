@@ -108,7 +108,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this environment, for reference by dependent resources."
+      "description": "ID of this environment, for reference by dependent resources."
     },
     {
       "name": "sub_status",

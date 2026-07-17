@@ -43,7 +43,7 @@ output "status" {
 - `cluster_arn` (String) ARN of the provisioned MSK cluster.
 - `created_at` (String) Timestamp when the cluster was created (RFC 3339).
 - `environment_id` (String) ID of the environment in which the cluster is provisioned.
-- `msk_kafka_serverless_id` (String) UUID of this MSK Kafka Serverless cluster, for reference by dependent resources.
+- `msk_kafka_serverless_id` (String) ID of this MSK Kafka Serverless cluster, for reference by dependent resources.
 - `name` (String) Cluster name. Letters, numbers, and hyphens. Cannot be changed after creation.
 - `provisioner_type` (String) Provisioner type. Defaults to DirectApiCall for MSK.
 - `provisioner_version` (String) Optional provisioner version.

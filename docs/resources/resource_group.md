@@ -83,7 +83,7 @@ resource "duploai_resource_group" "custom" {
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `kms_key_alias` (String) Provisioned KMS key alias.
 - `kms_key_arn` (String) Provisioned KMS key ARN.
-- `resource_group_id` (String) UUID of this resource group, for reference by dependent resources.
+- `resource_group_id` (String) ID of this resource group, for reference by dependent resources.
 - `scope_ids` (List of String) Scope IDs linking this resource group to a cloud provider account. Inherited from the linked network; computed, not user-settable.
 - `security_group_id` (String) Provisioned main security group ID.
 - `security_group_name` (String) Provisioned main security group name.

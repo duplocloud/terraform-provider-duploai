@@ -66,7 +66,7 @@ output "backend_repository_uri" {
 ### Read-Only
 
 - `created_at` (String) Timestamp when the repository was created (RFC 3339).
-- `ecr_id` (String) UUID of this ECR repository resource, for reference by dependent resources.
+- `ecr_id` (String) ID of this ECR repository resource, for reference by dependent resources.
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `registry_id` (String) AWS account ID of the registry that hosts the repository.
 - `repository_arn` (String) ARN of the provisioned ECR repository.

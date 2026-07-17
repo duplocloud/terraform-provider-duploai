@@ -136,7 +136,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this config map, for reference by dependent resources."
+      "description": "ID of this config map, for reference by dependent resources."
     }
   ],
   "requestConstants": [
