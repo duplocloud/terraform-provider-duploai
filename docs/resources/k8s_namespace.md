@@ -52,6 +52,7 @@ resource "duploai_k8s_namespace" "app" {
 ### Read-Only
 
 - `id` (String) Composite resource identifier (workspace_id/id).
+- `k8s_namespace_id` (String) UUID of this namespace, for reference by dependent resources.
 - `scope_ids` (List of String) Scope IDs that link this namespace to a cloud provider account. Inherited from the resource group.
 - `status` (String) Current provisioning status.
 

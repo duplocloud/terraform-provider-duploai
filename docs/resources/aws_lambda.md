@@ -132,6 +132,7 @@ resource "duploai_aws_lambda" "container" {
 
 ### Read-Only
 
+- `aws_lambda_id` (String) UUID of this Lambda function resource, for reference by dependent resources.
 - `code_sha256` (String) SHA-256 hash of the deployed function package.
 - `function_arn` (String) ARN of the deployed Lambda function.
 - `id` (String) Composite resource identifier (workspace_id/id).

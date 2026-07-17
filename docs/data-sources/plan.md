@@ -43,6 +43,7 @@ output "primary_hosted_zone_domain" {
 - `description` (String) Optional description.
 - `name` (String) Name of the plan.
 - `network_baseline_id` (String) ID of the network baseline this plan is built on.
+- `plan_id` (String) UUID of this plan, for reference by dependent resources.
 - `primary_hosted_zone_domain` (String) Domain name of the primary hosted zone. Set to bring an existing domain; leave unset to have the platform provision one.
 - `primary_hosted_zone_id` (String) ID of the primary Route 53 hosted zone. Set to bring an existing hosted zone; leave unset to have the platform provision one.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.

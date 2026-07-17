@@ -105,6 +105,7 @@ resource "duploai_helm_release" "app" {
 
 ### Read-Only
 
+- `helm_release_id` (String) UUID of this Helm release, for reference by dependent resources.
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `status` (String) Current provisioning status.
 

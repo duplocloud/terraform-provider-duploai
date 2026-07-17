@@ -3621,6 +3621,13 @@
       "description": "Current provisioning status of the cron job resource."
     },
     {
+      "name": "k8s_cron_job_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "UUID of this cron job, for reference by dependent resources."
+    },
+    {
       "name": "active_job_names",
       "type": "list(string)",
       "computed": true,

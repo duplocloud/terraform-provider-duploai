@@ -66,6 +66,7 @@ resource "duploai_k8s_config_map" "app" {
 ### Read-Only
 
 - `id` (String) Composite resource identifier (workspace_id/id).
+- `k8s_config_map_id` (String) UUID of this config map, for reference by dependent resources.
 - `status` (String) Current provisioning status.
 
 <a id="nestedblock--timeouts"></a>

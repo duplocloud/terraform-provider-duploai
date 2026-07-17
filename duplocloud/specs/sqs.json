@@ -176,6 +176,13 @@
       "description": "Current provisioning status of the queue."
     },
     {
+      "name": "sqs_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "UUID of this SQS queue, for reference by dependent resources."
+    },
+    {
       "name": "queue_url",
       "type": "string",
       "computed": true,

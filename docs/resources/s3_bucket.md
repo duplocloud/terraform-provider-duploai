@@ -88,6 +88,7 @@ resource "duploai_s3_bucket" "data" {
 - `bucket_arn` (String) ARN of the provisioned bucket.
 - `bucket_domain_name` (String) Domain name of the provisioned bucket.
 - `id` (String) Composite resource identifier (workspace_id/id).
+- `s3_bucket_id` (String) UUID of this S3 bucket, for reference by dependent resources.
 - `status` (String) Current provisioning status.
 
 <a id="nestedatt--block_public_access"></a>

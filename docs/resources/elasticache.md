@@ -205,6 +205,7 @@ resource "duploai_elasticache" "redis_from_snapshot" {
 - `automatic_failover_enabled` (Boolean) Whether automatic failover is enabled. Derived from the cluster topology.
 - `cache_subnet_group_name` (String) Cache subnet group. Derived from the resource group's network.
 - `configuration_endpoint` (String) Configuration endpoint (cluster-mode-enabled Redis/Valkey and Memcached).
+- `elasticache_id` (String) UUID of this ElastiCache resource, for reference by dependent resources.
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `kms_key_id` (String, Sensitive) KMS key ARN for at-rest encryption. Derived from the resource group when encryption_mode = ResourceGroupKmsKey.
 - `multi_az_enabled` (Boolean) Whether Multi-AZ is enabled. Derived from the cluster topology.

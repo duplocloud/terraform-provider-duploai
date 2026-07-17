@@ -300,6 +300,13 @@
       "description": "Current provisioning status."
     },
     {
+      "name": "rds_instance_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "UUID of this RDS instance, for reference by dependent resources."
+    },
+    {
       "name": "endpoint",
       "type": "string",
       "computed": true,

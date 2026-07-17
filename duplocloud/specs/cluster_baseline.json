@@ -256,6 +256,13 @@
       "description": "Current provisioning status."
     },
     {
+      "name": "cluster_baseline_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "UUID of this cluster baseline, for reference by dependent resources."
+    },
+    {
       "name": "cluster_arn",
       "type": "string",
       "computed": true,

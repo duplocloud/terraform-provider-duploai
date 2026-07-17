@@ -192,6 +192,13 @@
       "description": "Current provisioning status."
     },
     {
+      "name": "node_group_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "UUID of this node group, for reference by dependent resources."
+    },
+    {
       "name": "node_group_name",
       "type": "string",
       "computed": true,

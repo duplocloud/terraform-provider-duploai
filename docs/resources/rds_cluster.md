@@ -149,6 +149,7 @@ resource "duploai_rds_cluster" "serverless" {
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `master_user_secret_arn` (String) Secrets Manager ARN holding the master credentials (when manage_master_user_password is enabled).
 - `port` (Number) Port the cluster listens on.
+- `rds_cluster_id` (String) UUID of this RDS cluster, for reference by dependent resources.
 - `reader_endpoint` (String) Reader endpoint of the provisioned cluster.
 - `stack_id` (String) ID of the underlying provisioning stack.
 - `status` (String) Current provisioning status.

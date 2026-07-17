@@ -34,6 +34,7 @@ data "duploai_k8s_ingress" "example" {
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment in which the Ingress is created.
 - `ingress_class_name` (String) Name of the IngressClass cluster resource (e.g. nginx, alb).
+- `k8s_ingress_id` (String) UUID of this ingress, for reference by dependent resources.
 - `labels` (Map of String) Kubernetes labels applied to the Ingress.
 - `load_balancer` (Attributes) Load balancer status assigned by the cloud ingress controller after provisioning. The address is populated asynchronously — set wait_for_load_balancer = true to have create/update wait until it is available. (see [below for nested schema](#nestedatt--load_balancer))
 - `name` (String) Name of the Kubernetes Ingress resource.

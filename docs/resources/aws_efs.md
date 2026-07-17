@@ -69,6 +69,7 @@ resource "duploai_aws_efs" "db_backups" {
 
 ### Read-Only
 
+- `aws_efs_id` (String) UUID of this EFS file system resource, for reference by dependent resources.
 - `file_system_arn` (String) ARN of the provisioned file system.
 - `file_system_id` (String) AWS ID of the provisioned file system (e.g. fs-0123456789abcdef0).
 - `id` (String) Composite resource identifier (workspace_id/id).

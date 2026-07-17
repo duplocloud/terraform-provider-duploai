@@ -25,6 +25,7 @@ Manages a DuploCloud AI Helpdesk Kubernetes StorageClass. A StorageClass is a cl
 - `allow_volume_expansion` (Boolean) Whether PersistentVolumeClaims using this class may be expanded. Immutable.
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group (EKS cluster) this storage class belongs to.
+- `k8s_storage_class_id` (String) UUID of this storage class, for reference by dependent resources.
 - `mount_options` (List of String) Mount options for PersistentVolumes created from this class. Immutable.
 - `name` (String) Name of the storage class. Must be a DNS-1123 subdomain (lowercase alphanumeric, '-' and '.', starting and ending with an alphanumeric).
 - `parameters` (Map of String) Provisioner-specific parameters, e.g. {"type" = "gp3", "encrypted" = "true"}. Immutable in Kubernetes: changing it replaces the storage class.

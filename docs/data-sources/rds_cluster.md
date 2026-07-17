@@ -74,6 +74,7 @@ output "port" {
 - `preferred_maintenance_window` (String) Weekly time range (UTC) for maintenance, e.g. sun:05:00-sun:06:00.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
+- `rds_cluster_id` (String) UUID of this RDS cluster, for reference by dependent resources.
 - `reader_endpoint` (String) Reader endpoint of the provisioned cluster.
 - `resource_group_id` (String) ID of the resource group (under an environment) this cluster belongs to.
 - `scope_ids` (List of String) Scope IDs that link this cluster to a cloud provider account.

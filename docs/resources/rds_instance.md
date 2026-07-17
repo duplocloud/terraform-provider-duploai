@@ -118,6 +118,7 @@ resource "duploai_rds_instance" "mysql" {
 - `endpoint` (String) Connection endpoint (DNS address) of the RDS instance.
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `port` (Number) Port the RDS instance listens on.
+- `rds_instance_id` (String) UUID of this RDS instance, for reference by dependent resources.
 - `stack_id` (String) ID of the underlying provisioning stack.
 - `status` (String) Current provisioning status.
 

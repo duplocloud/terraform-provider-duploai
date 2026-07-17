@@ -43,6 +43,7 @@ output "vpc_id" {
 ### Read-Only
 
 - `cf_stack_name` (String) CloudFormation stack name for provisioned infrastructure.
+- `cluster_attributes_id` (String) UUID of this cluster attributes resource, for reference by dependent resources.
 - `cluster_id` (String) ID of the cluster baseline this resource configures.
 - `cluster_name` (String) Name of the cluster. Inherited from the linked cluster baseline.
 - `components` (Attributes) Cluster components to install. (see [below for nested schema](#nestedatt--components))

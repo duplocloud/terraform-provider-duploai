@@ -313,6 +313,13 @@
       "description": "Provisioning status of the host."
     },
     {
+      "name": "native_host_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "UUID of this native host, for reference by dependent resources."
+    },
+    {
       "name": "sub_status",
       "type": "string",
       "computed": true,

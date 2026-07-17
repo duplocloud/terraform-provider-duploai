@@ -70,6 +70,7 @@ resource "duploai_k8s_pvc" "data" {
 ### Read-Only
 
 - `id` (String) Composite resource identifier (workspace_id/id).
+- `k8s_pvc_id` (String) UUID of this persistent volume claim, for reference by dependent resources.
 - `scope_ids` (List of String) Scope IDs that link this claim to a cloud provider account. Inherited from the resource group.
 - `status` (String) Current provisioning status.
 

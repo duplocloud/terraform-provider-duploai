@@ -172,6 +172,7 @@ resource "duploai_cluster_attributes" "full" {
 ### Read-Only
 
 - `cf_stack_name` (String) CloudFormation stack name for provisioned infrastructure.
+- `cluster_attributes_id` (String) UUID of this cluster attributes resource, for reference by dependent resources.
 - `cluster_name` (String) Name of the cluster. Inherited from the linked cluster baseline.
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `installed_components` (Attributes List) Components currently installed on the cluster. (see [below for nested schema](#nestedatt--installed_components))

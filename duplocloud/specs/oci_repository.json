@@ -230,6 +230,13 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "oci_repository_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "UUID of this OCI repository, for reference by dependent resources."
     }
   ],
   "requestConstants": [

@@ -78,6 +78,7 @@ output "kafka_cluster_arn" {
 - `cluster_arn` (String) ARN of the provisioned MSK cluster.
 - `created_at` (String) Timestamp when the cluster was created (RFC 3339).
 - `id` (String) Composite resource identifier (workspace_id/id).
+- `msk_kafka_id` (String) UUID of this MSK Kafka cluster, for reference by dependent resources.
 - `security_group_ids` (List of String) Security groups attached to the cluster (assigned by the platform).
 - `status` (String) Current provisioning status of the cluster.
 - `updated_at` (String) Timestamp when the cluster was last updated (RFC 3339).
