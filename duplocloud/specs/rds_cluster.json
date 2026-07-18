@@ -408,6 +408,13 @@
       "description": "Current provisioning status."
     },
     {
+      "name": "rds_cluster_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this RDS cluster, for reference by dependent resources."
+    },
+    {
       "name": "cluster_endpoint",
       "type": "string",
       "computed": true,

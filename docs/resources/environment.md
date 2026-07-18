@@ -64,6 +64,7 @@ resource "duploai_environment" "full" {
 
 - `blocked_reason` (String) Reason the environment is blocked, when applicable.
 - `created_at` (String) Creation timestamp.
+- `environment_id` (String) ID of this environment, for reference by dependent resources.
 - `ever_completed` (Boolean) Whether the environment has ever reached the Complete state.
 - `faults` (List of String) Provisioning faults.
 - `id` (String) Composite resource identifier (workspace_id/id).

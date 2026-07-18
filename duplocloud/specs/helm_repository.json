@@ -183,6 +183,13 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "helm_repository_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this Helm repository, for reference by dependent resources."
     }
   ],
   "requestConstants": [

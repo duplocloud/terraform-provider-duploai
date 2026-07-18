@@ -154,6 +154,13 @@
       "description": "Current provisioning status of the repository."
     },
     {
+      "name": "ecr_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this ECR repository resource, for reference by dependent resources."
+    },
+    {
       "name": "repository_arn",
       "type": "string",
       "computed": true,

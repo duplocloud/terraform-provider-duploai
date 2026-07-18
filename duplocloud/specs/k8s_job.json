@@ -3591,6 +3591,13 @@
       "description": "Current provisioning status of the job resource."
     },
     {
+      "name": "k8s_job_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this job, for reference by dependent resources."
+    },
+    {
       "name": "job_active",
       "type": "int",
       "computed": true,

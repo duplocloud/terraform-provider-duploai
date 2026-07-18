@@ -146,6 +146,13 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "k8s_storage_class_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this storage class, for reference by dependent resources."
     }
   ],
   "requestConstants": [

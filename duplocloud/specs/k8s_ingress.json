@@ -273,6 +273,13 @@
       "description": "Current provisioning status of the Ingress resource."
     },
     {
+      "name": "k8s_ingress_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this ingress, for reference by dependent resources."
+    },
+    {
       "name": "load_balancer",
       "type": "object",
       "computed": true,

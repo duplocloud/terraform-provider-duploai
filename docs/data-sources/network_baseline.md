@@ -54,7 +54,7 @@ output "subnet_ids" {
 - `name` (String) Name of the network baseline.
 - `nat_gateway_ids` (List of String) Provisioned NAT gateway IDs.
 - `nat_mode` (String) NAT gateway mode: None, SingleAz, or MultiAz.
-- `network_id` (String) UUID of this network baseline, for reference by dependent resources (e.g. a cluster baseline).
+- `network_id` (String) ID of this network baseline, for reference by dependent resources (e.g. a cluster baseline).
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `region` (String) Cloud region (e.g. us-east-1).

@@ -39,6 +39,7 @@ output "arn" {
 ### Read-Only
 
 - `arn` (String) ARN of the provisioned AWS Secrets Manager secret.
+- `aws_secret_id` (String) ID of this secret, for reference by dependent resources.
 - `description` (String) Optional description of the resource.
 - `environment_id` (String) ID of the environment that owns the resource group.
 - `kms_key_id` (String) KMS key ID used to encrypt the secret. Defaults to the AWS-managed key when omitted.

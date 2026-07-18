@@ -244,6 +244,13 @@
       "description": "Current provisioning status of the Lambda function."
     },
     {
+      "name": "aws_lambda_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this Lambda function resource, for reference by dependent resources."
+    },
+    {
       "name": "function_arn",
       "type": "string",
       "computed": true,

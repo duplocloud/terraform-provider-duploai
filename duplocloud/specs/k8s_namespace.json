@@ -64,6 +64,13 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "k8s_namespace_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this namespace, for reference by dependent resources."
     }
   ],
   "waiter": {

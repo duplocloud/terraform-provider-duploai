@@ -235,6 +235,13 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "helm_release_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this Helm release, for reference by dependent resources."
     }
   ],
   "requestConstants": [

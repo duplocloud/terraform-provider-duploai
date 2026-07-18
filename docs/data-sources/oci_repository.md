@@ -48,6 +48,7 @@ output "status" {
 - `name` (String) Name of the OCI repository resource.
 - `namespace_name` (String) Kubernetes namespace the OCI repository is created in.
 - `oci_provider` (String) Provider used for authentication (e.g. generic, aws, azure, gcp).
+- `oci_repository_id` (String) ID of this OCI repository, for reference by dependent resources.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `proxy_secret_ref_name` (String) Name of a Kubernetes Secret holding proxy configuration.

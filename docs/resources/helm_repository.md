@@ -85,6 +85,7 @@ resource "duploai_helm_repository" "private_oci" {
 
 ### Read-Only
 
+- `helm_repository_id` (String) ID of this Helm repository, for reference by dependent resources.
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `status` (String) Current provisioning status.
 

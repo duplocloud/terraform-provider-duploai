@@ -37,6 +37,7 @@ output "status" {
 - `access_modes` (List of String) Access modes for the volume. One or more of: ReadWriteOnce, ReadOnlyMany, ReadWriteMany, ReadWriteOncePod.
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group (EKS cluster) this claim belongs to. Required: the backend does not derive it, and resources created without it cannot be loaded by env/RG-scoped lookups.
+- `k8s_pvc_id` (String) ID of this persistent volume claim, for reference by dependent resources.
 - `name` (String) Name of the persistent volume claim. Must be a DNS-1123 label (lowercase alphanumeric and '-', starting and ending with an alphanumeric).
 - `namespace_name` (String) Kubernetes namespace the claim is created in. Must reference an existing, fully provisioned namespace in the same resource group.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this persistent volume claim belongs to.

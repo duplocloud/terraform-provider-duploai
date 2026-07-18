@@ -39,6 +39,7 @@ output "status" {
 ### Read-Only
 
 - `availability_zone_name` (String) AWS Availability Zone to create a One Zone file system in (e.g. us-east-1a). Omit for a Regional (multi-AZ) file system. Immutable after creation.
+- `aws_efs_id` (String) ID of this EFS file system resource, for reference by dependent resources.
 - `creation_token` (String) Idempotency token used at creation. Defaults to the file system name if omitted. Immutable after creation.
 - `description` (String) Optional description of the EFS file system.
 - `encryption` (String) Encryption at rest mode. NoEncryption disables encryption; AwsManagedKey uses the AWS-managed EFS key; ResourceGroupKmsKey uses the resource group's KMS key. Immutable after creation.

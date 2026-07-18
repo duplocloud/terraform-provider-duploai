@@ -121,6 +121,7 @@ resource "duploai_cluster_baseline" "imported" {
 - `certificate_authority` (String) Base64-encoded cluster certificate authority data.
 - `cluster_all_host_sg_id` (String) Security group ID applied to all cluster hosts.
 - `cluster_arn` (String) ARN of the provisioned cluster (AWS only).
+- `cluster_baseline_id` (String) ID of this cluster baseline, for reference by dependent resources.
 - `cluster_endpoint` (String) Kubernetes API server endpoint URL.
 - `cluster_sg_id` (String) Cluster security group ID (AWS only).
 - `id` (String) Composite resource identifier (workspace_id/id).

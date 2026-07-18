@@ -200,6 +200,13 @@
       "description": "Current provisioning status of the file system."
     },
     {
+      "name": "aws_efs_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this EFS file system resource, for reference by dependent resources."
+    },
+    {
       "name": "file_system_id",
       "type": "string",
       "computed": true,

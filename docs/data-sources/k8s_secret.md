@@ -39,6 +39,7 @@ output "status" {
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
 - `immutable` (Boolean) Mark the secret immutable (its data cannot be changed after creation).
+- `k8s_secret_id` (String) ID of this secret, for reference by dependent resources.
 - `labels` (Map of String) Kubernetes labels applied to the secret.
 - `name` (String) Name of the secret resource.
 - `namespace_name` (String) Kubernetes namespace the secret is created in.

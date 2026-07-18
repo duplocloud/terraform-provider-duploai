@@ -56,6 +56,7 @@ output "queue_arn" {
 - `receive_message_wait_seconds` (Number) Long-poll wait time (seconds, 0-20) for ReceiveMessage. Defaults to 0 (short polling) when unset. Can be changed in place.
 - `resource_group_id` (String) ID of the resource group in which the queue is provisioned.
 - `scope_ids` (List of String) Scope IDs that link this queue to a cloud provider account.
+- `sqs_id` (String) ID of this SQS queue, for reference by dependent resources.
 - `status` (String) Current provisioning status of the queue.
 - `updated_at` (String) Timestamp when the queue was last updated (RFC 3339).
 - `version` (Number) Version counter, incremented on each update.

@@ -95,6 +95,7 @@ output "orders_queue_url" {
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `queue_arn` (String) ARN of the provisioned SQS queue.
 - `queue_url` (String) URL of the provisioned SQS queue (used for send/receive/delete operations).
+- `sqs_id` (String) ID of this SQS queue, for reference by dependent resources.
 - `status` (String) Current provisioning status of the queue.
 - `updated_at` (String) Timestamp when the queue was last updated (RFC 3339).
 - `version` (Number) Version counter, incremented on each update.

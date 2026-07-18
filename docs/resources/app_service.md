@@ -170,6 +170,7 @@ resource "duploai_app_service" "nginx" {
 
 ### Read-Only
 
+- `app_service_id` (String) ID of this app service, for reference by dependent resources.
 - `hpa_name` (String) Name of the provisioned HorizontalPodAutoscaler (set when replication_type is Hpa).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `ingress_name` (String) Name of the provisioned Ingress (if any).

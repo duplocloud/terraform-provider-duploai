@@ -67,6 +67,7 @@ resource "duploai_k8s_resource_quota" "example" {
 ### Read-Only
 
 - `id` (String) Composite resource identifier (workspace_id/id).
+- `k8s_resource_quota_id` (String) ID of this resource quota, for reference by dependent resources.
 - `status` (String) Current provisioning status.
 
 <a id="nestedblock--timeouts"></a>

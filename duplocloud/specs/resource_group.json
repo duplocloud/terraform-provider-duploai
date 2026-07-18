@@ -137,6 +137,13 @@
       "description": "Current provisioning status."
     },
     {
+      "name": "resource_group_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this resource group, for reference by dependent resources."
+    },
+    {
       "name": "security_group_id",
       "type": "string",
       "computed": true,

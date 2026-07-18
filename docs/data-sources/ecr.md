@@ -39,6 +39,7 @@ output "repository_arn" {
 ### Read-Only
 
 - `created_at` (String) Timestamp when the repository was created (RFC 3339).
+- `ecr_id` (String) ID of this ECR repository resource, for reference by dependent resources.
 - `encryption` (String) Server-side encryption for the repository: NoEncryption / AwsManagedKey (AWS-managed AES256) / ResourceGroupKmsKey (the resource group's KMS key). ResourceGroupKmsKey requires the resource group to have a provisioned KMS key. Immutable after creation.
 - `environment_id` (String) ID of the environment in which the repository is provisioned.
 - `image_tag_mutability` (String) Whether image tags can be overwritten: MUTABLE (tags may be overwritten) or IMMUTABLE (tags are write-once). Can be changed in place.
