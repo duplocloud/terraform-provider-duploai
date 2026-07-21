@@ -41,8 +41,7 @@
     {
       "name": "skill_ids",
       "type": "list(string)",
-      "optional": true,
-      "computed": true,
+      "required": true,
       "apiPath": "skillIds",
       "description": "IDs of the skills assigned to this persona. Each must reference an existing, active skill."
     },

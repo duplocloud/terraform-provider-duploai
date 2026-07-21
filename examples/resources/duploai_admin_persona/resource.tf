@@ -7,7 +7,8 @@ resource "duploai_admin_persona" "devops" {
   skill_ids = ["<skill-id-1>", "<skill-id-2>"]
 }
 
-# Minimal persona — name only.
+# Minimal persona — name and the required skill_ids.
 resource "duploai_admin_persona" "basic" {
-  name = "general-assistant"
+  name      = "general-assistant"
+  skill_ids = ["<skill-id>"]
 }

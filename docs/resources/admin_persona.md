@@ -22,9 +22,10 @@ resource "duploai_admin_persona" "devops" {
   skill_ids = ["<skill-id-1>", "<skill-id-2>"]
 }
 
-# Minimal persona — name only.
+# Minimal persona — name and the required skill_ids.
 resource "duploai_admin_persona" "basic" {
-  name = "general-assistant"
+  name      = "general-assistant"
+  skill_ids = ["<skill-id>"]
 }
 ```
 
@@ -34,6 +35,7 @@ resource "duploai_admin_persona" "basic" {
 ### Required
 
 - `name` (String) Name of the persona.
+- `skill_ids` (List of String) IDs of the skills assigned to this persona. Each must reference an existing, active skill.
 
 ### Optional
 
@@ -42,7 +44,6 @@ resource "duploai_admin_persona" "basic" {
 - `is_active` (Boolean) Whether the persona is active. Defaults to active when omitted.
 - `metadata` (Map of String) Free-form key/value metadata.
 - `prompt_md` (String) System prompt for the persona, in Markdown.
-- `skill_ids` (List of String) IDs of the skills assigned to this persona. Each must reference an existing, active skill.
 
 ### Read-Only
 
