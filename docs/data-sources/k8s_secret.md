@@ -35,7 +35,7 @@ output "status" {
 ### Read-Only
 
 - `annotations` (Map of String) Kubernetes annotations applied to the secret.
-- `data` (Map of String, Sensitive) Secret entries with base64-encoded values, keyed by name. The server also populates this from string_data, so it is optional+computed to avoid perpetual drift.
+- `data` (Map of String, Sensitive) Secret entries with base64-encoded values, keyed by name. Populated by the server from string_data if not set directly.
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
 - `immutable` (Boolean) Mark the secret immutable (its data cannot be changed after creation).

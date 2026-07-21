@@ -55,14 +55,14 @@ resource "duploai_k8s_secret" "app" {
 ### Optional
 
 - `annotations` (Map of String) Kubernetes annotations applied to the secret.
-- `data` (Map of String, Sensitive) Secret entries with base64-encoded values, keyed by name. The server also populates this from string_data, so it is optional+computed to avoid perpetual drift.
+- `data` (Map of String, Sensitive) Secret entries with base64-encoded values, keyed by name. Populated by the server from string_data if not set directly.
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `immutable` (Boolean) Mark the secret immutable (its data cannot be changed after creation).
 - `labels` (Map of String) Kubernetes labels applied to the secret.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
-- `string_data` (Map of String, Sensitive) Secret entries with plaintext (non-encoded) values, keyed by name. Write-only: Kubernetes never returns stringData on read, so this has no apiPath/responsePath (send-only, like aws_secret's secret_string).
+- `string_data` (Map of String, Sensitive) Secret entries with plaintext values, keyed by name. Write-only: the server never returns this field on read.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `type` (String) Kubernetes secret type (e.g. Opaque, kubernetes.io/dockerconfigjson, kubernetes.io/tls).
 
