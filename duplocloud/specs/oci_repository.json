@@ -4,7 +4,8 @@
   "idPath": "id",
   "dataSource": true,
   "endpoint": {
-    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sOCIRepositories"
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sOCIRepositories",
+    "deprovision": {}
   },
   "attributes": [
     {
@@ -246,6 +247,7 @@
     }
   ],
   "waiter": {
+    "deprovisionedState": "DeProvisioned",
     "createTimeoutMinutes": 15,
     "updateTimeoutMinutes": 15,
     "deleteTimeoutMinutes": 10
