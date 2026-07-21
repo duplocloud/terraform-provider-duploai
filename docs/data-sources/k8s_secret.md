@@ -35,7 +35,7 @@ output "status" {
 ### Read-Only
 
 - `annotations` (Map of String) Kubernetes annotations applied to the secret.
-- `data` (Map of String, Sensitive) Secret entries with base64-encoded values, keyed by name.
+- `data` (Map of String, Sensitive) Secret entries with base64-encoded values, keyed by name. The server also populates this from string_data, so it is optional+computed to avoid perpetual drift.
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
 - `immutable` (Boolean) Mark the secret immutable (its data cannot be changed after creation).
@@ -48,5 +48,4 @@ output "status" {
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this secret belongs to.
 - `scope_ids` (List of String) Scope IDs that link this secret to a cloud provider account.
 - `status` (String) Current provisioning status.
-- `string_data` (Map of String, Sensitive) Secret entries with plaintext (non-encoded) values, keyed by name.
 - `type` (String) Kubernetes secret type (e.g. Opaque, kubernetes.io/dockerconfigjson, kubernetes.io/tls).
