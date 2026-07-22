@@ -203,6 +203,7 @@
       "name": "aws_efs_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this EFS file system resource, for reference by dependent resources."
     },
@@ -210,6 +211,7 @@
       "name": "file_system_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.cloudDetails.fileSystem.fileSystemId",
       "description": "AWS ID of the provisioned file system (e.g. fs-0123456789abcdef0)."

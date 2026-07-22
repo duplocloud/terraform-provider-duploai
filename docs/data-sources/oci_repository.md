@@ -35,7 +35,7 @@ output "status" {
 ### Read-Only
 
 - `annotations` (Map of String) Kubernetes annotations applied to the OCI repository.
-- `api_version` (String) Flux OCIRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1).
+- `api_version` (String) Flux OCIRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1beta2).
 - `cert_secret_ref_name` (String) Name of a Kubernetes Secret holding TLS certificate data.
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.

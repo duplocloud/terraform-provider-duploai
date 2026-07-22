@@ -3624,6 +3624,7 @@
       "name": "k8s_cron_job_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this cron job, for reference by dependent resources."
     },

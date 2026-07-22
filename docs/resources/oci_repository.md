@@ -69,7 +69,7 @@ resource "duploai_oci_repository" "internal" {
 ### Optional
 
 - `annotations` (Map of String) Kubernetes annotations applied to the OCI repository.
-- `api_version` (String) Flux OCIRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1).
+- `api_version` (String) Flux OCIRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1beta2).
 - `cert_secret_ref_name` (String) Name of a Kubernetes Secret holding TLS certificate data.
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.

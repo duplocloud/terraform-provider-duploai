@@ -185,6 +185,7 @@
       "name": "msk_kafka_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this MSK Kafka cluster, for reference by dependent resources."
     },

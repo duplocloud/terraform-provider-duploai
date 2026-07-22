@@ -86,6 +86,7 @@
       "name": "plan_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this plan, for reference by dependent resources."
     },

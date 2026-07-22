@@ -69,6 +69,7 @@
       "name": "k8s_namespace_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this namespace, for reference by dependent resources."
     }

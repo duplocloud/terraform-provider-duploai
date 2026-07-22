@@ -247,6 +247,7 @@
       "name": "aws_lambda_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this Lambda function resource, for reference by dependent resources."
     },
