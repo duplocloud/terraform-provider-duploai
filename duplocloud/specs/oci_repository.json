@@ -4,7 +4,8 @@
   "idPath": "id",
   "dataSource": true,
   "endpoint": {
-    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sOCIRepositories"
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sOCIRepositories",
+    "deprovision": {}
   },
   "attributes": [
     {
@@ -230,6 +231,13 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "oci_repository_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this OCI repository, for reference by dependent resources."
     }
   ],
   "requestConstants": [
@@ -239,6 +247,7 @@
     }
   ],
   "waiter": {
+    "deprovisionedState": "DeProvisioned",
     "createTimeoutMinutes": 15,
     "updateTimeoutMinutes": 15,
     "deleteTimeoutMinutes": 10

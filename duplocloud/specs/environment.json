@@ -104,6 +104,13 @@
       "description": "Current provisioning status."
     },
     {
+      "name": "environment_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this environment, for reference by dependent resources."
+    },
+    {
       "name": "sub_status",
       "type": "string",
       "computed": true,

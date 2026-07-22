@@ -44,6 +44,7 @@ output "ingress_name" {
 
 - `affinity` (Attributes) Node/pod affinity and anti-affinity scheduling rules. (see [below for nested schema](#nestedatt--affinity))
 - `annotations` (Map of String) Kubernetes annotations applied to the Deployment object.
+- `app_service_id` (String) ID of this app service, for reference by dependent resources.
 - `automount_service_account_token` (Boolean) Whether to automount the service account token into the pod.
 - `containers` (Attributes List) Containers that make up the pod. (see [below for nested schema](#nestedatt--containers))
 - `deployment_name` (String) Name of the Kubernetes Deployment object (typically the same as name).

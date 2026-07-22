@@ -4,7 +4,8 @@
   "idPath": "id",
   "dataSource": true,
   "endpoint": {
-    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sHelmRepositories"
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sHelmRepositories",
+    "deprovision": {}
   },
   "attributes": [
     {
@@ -183,6 +184,13 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "helm_repository_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this Helm repository, for reference by dependent resources."
     }
   ],
   "requestConstants": [
@@ -192,6 +200,7 @@
     }
   ],
   "waiter": {
+    "deprovisionedState": "DeProvisioned",
     "createTimeoutMinutes": 15,
     "updateTimeoutMinutes": 15,
     "deleteTimeoutMinutes": 10

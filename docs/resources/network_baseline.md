@@ -94,7 +94,7 @@ resource "duploai_network_baseline" "imported" {
 
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `nat_gateway_ids` (List of String) Provisioned NAT gateway IDs.
-- `network_id` (String) UUID of this network baseline, for reference by dependent resources (e.g. a cluster baseline).
+- `network_id` (String) ID of this network baseline, for reference by dependent resources (e.g. a cluster baseline).
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) Provisioned subnet IDs.
 

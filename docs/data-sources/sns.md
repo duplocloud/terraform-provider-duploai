@@ -50,6 +50,7 @@ output "status" {
 - `provisioner_version` (String) Optional provisioner version.
 - `resource_group_id` (String) ID of the resource group in which the topic is provisioned.
 - `scope_ids` (List of String) Scope IDs that link this topic to a cloud provider account.
+- `sns_id` (String) ID of this SNS topic, for reference by dependent resources.
 - `status` (String) Current provisioning status of the topic.
 - `topic_arn` (String) ARN of the provisioned SNS topic.
 - `topic_type` (String) Topic type: Standard (best-effort ordering, at-least-once delivery) or Fifo (strict ordering, exactly-once). Immutable after creation.

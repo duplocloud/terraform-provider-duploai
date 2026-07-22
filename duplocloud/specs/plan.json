@@ -83,6 +83,13 @@
       "description": "Current provisioning status."
     },
     {
+      "name": "plan_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this plan, for reference by dependent resources."
+    },
+    {
       "name": "primary_hosted_zone_id",
       "type": "string",
       "optional": true,

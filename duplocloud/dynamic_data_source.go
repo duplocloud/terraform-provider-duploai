@@ -137,7 +137,9 @@ func (d *dynamicDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	// buildStateRaw skips write-only attrs (responsePath=="") and attrs absent from
 	// the data source schema type (hasType guard), so the full spec.Attributes list
 	// is safe to pass even though the schema exposes only a subset.
-	state := buildStateRaw(d.spec.Attributes, req.Config.Raw, *obj, scope, objID, true, &resp.Diagnostics)
+	// applyPreserveSplit=false: a data source has no user-managed set to split
+	// against, so a PreserveUnmanagedInto attribute reads back the full list.
+	state := buildStateRaw(d.spec.Attributes, req.Config.Raw, *obj, scope, objID, true, false, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}

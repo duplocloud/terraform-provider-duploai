@@ -181,7 +181,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "id",
-      "description": "UUID of this network baseline, for reference by dependent resources (e.g. a cluster baseline)."
+      "description": "ID of this network baseline, for reference by dependent resources (e.g. a cluster baseline)."
     },
     {
       "name": "vpc_id",

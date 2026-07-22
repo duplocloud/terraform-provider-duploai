@@ -84,6 +84,13 @@
       "description": "Current provisioning status of the cluster."
     },
     {
+      "name": "msk_kafka_serverless_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this MSK Kafka Serverless cluster, for reference by dependent resources."
+    },
+    {
       "name": "security_group_ids",
       "type": "list(string)",
       "computed": true,

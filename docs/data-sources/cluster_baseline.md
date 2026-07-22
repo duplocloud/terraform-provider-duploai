@@ -39,6 +39,7 @@ output "status" {
 - `cloud` (String) Cloud provider the cluster targets. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
 - `cluster_all_host_sg_id` (String) Security group ID applied to all cluster hosts.
 - `cluster_arn` (String) ARN of the provisioned cluster (AWS only).
+- `cluster_baseline_id` (String) ID of this cluster baseline, for reference by dependent resources.
 - `cluster_endpoint` (String) Kubernetes API server endpoint URL.
 - `cluster_ip_cidr` (String) CIDR block for the Kubernetes service IP range (e.g. 172.20.0.0/16). Defaults to the cloud provider's default when unset.
 - `cluster_sg_id` (String) Cluster security group ID (AWS only).

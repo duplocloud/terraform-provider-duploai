@@ -52,6 +52,7 @@ output "bucket_arn" {
 - `provisioner_version` (String) Optional provisioner version.
 - `region` (String) AWS region the bucket is created in (e.g. us-west-2).
 - `resource_group_id` (String) ID of the resource group this bucket belongs to.
+- `s3_bucket_id` (String) ID of this S3 bucket, for reference by dependent resources.
 - `scope_ids` (List of String) Scope IDs that link this bucket to a cloud provider account.
 - `status` (String) Current provisioning status.
 - `user_tags` (Map of String) User-defined tags applied to the bucket.

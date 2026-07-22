@@ -153,6 +153,13 @@
       "description": "Current provisioning status of the topic."
     },
     {
+      "name": "sns_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this SNS topic, for reference by dependent resources."
+    },
+    {
       "name": "topic_arn",
       "type": "string",
       "computed": true,

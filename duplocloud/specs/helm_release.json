@@ -4,7 +4,8 @@
   "idPath": "id",
   "dataSource": true,
   "endpoint": {
-    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sHelmReleases"
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sHelmReleases",
+    "deprovision": {}
   },
   "attributes": [
     {
@@ -235,6 +236,13 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "helm_release_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "ID of this Helm release, for reference by dependent resources."
     }
   ],
   "requestConstants": [
@@ -244,6 +252,10 @@
     }
   ],
   "waiter": {
-    "pollIntervalSeconds": 15
+    "deprovisionedState": "DeProvisioned",
+    "pollIntervalSeconds": 15,
+    "createTimeoutMinutes": 20,
+    "updateTimeoutMinutes": 20,
+    "deleteTimeoutMinutes": 20
   }
 }

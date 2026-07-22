@@ -49,6 +49,7 @@ output "status" {
 - `environment_id` (String) ID of the environment in which the cluster is provisioned.
 - `instance_type` (String) Broker instance type (e.g. kafka.m5.large). Can be changed in place.
 - `kafka_version` (String) Apache Kafka version for the cluster (e.g. 3.6.0). Can be upgraded in place.
+- `msk_kafka_id` (String) ID of this MSK Kafka cluster, for reference by dependent resources.
 - `name` (String) Cluster name. Letters, numbers, and hyphens. Cannot be changed after creation.
 - `number_of_broker_nodes` (Number) Number of broker nodes. Must be a multiple of the number of broker subnets (Availability Zones); rounded up server-side. Can be increased in place.
 - `provisioner_type` (String) Provisioner type. Defaults to DirectApiCall for MSK.

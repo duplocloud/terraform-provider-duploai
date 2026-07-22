@@ -74,6 +74,7 @@ resource "duploai_k8s_storage_class" "gp3" {
 ### Read-Only
 
 - `id` (String) Composite resource identifier (workspace_id/id).
+- `k8s_storage_class_id` (String) ID of this storage class, for reference by dependent resources.
 - `scope_ids` (List of String) Scope IDs that link this storage class to a cloud provider account. Inherited from the resource group.
 - `status` (String) Current provisioning status.
 

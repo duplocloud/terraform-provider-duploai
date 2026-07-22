@@ -46,6 +46,7 @@ output "version" {
 - `blocked_reason` (String) Reason the environment is blocked, when applicable.
 - `created_at` (String) Creation timestamp.
 - `description` (String) Optional description of the environment.
+- `environment_id` (String) ID of this environment, for reference by dependent resources.
 - `ever_completed` (Boolean) Whether the environment has ever reached the Complete state.
 - `faults` (List of String) Provisioning faults.
 - `is_active` (Boolean) Whether the environment is active.
