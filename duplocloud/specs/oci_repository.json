@@ -129,6 +129,7 @@
       "type": "string",
       "optional": true,
       "computed": true,
+      "default": "generic",
       "apiPath": "spec.k8sResource.spec.provider",
       "responsePath": "result.k8sResource.spec.provider",
       "description": "Provider used for authentication (e.g. generic, aws, azure, gcp)."
@@ -228,6 +229,9 @@
       "computed": true,
       "apiPath": "spec.k8sResource.metadata.annotations",
       "responsePath": "result.k8sResource.metadata.annotations",
+      "filterResponseKeys": [
+        "duplocloud.ai/*"
+      ],
       "description": "Kubernetes annotations applied to the OCI repository."
     },
     {

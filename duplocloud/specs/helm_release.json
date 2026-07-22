@@ -230,6 +230,9 @@
       "computed": true,
       "apiPath": "spec.k8sResource.metadata.annotations",
       "responsePath": "result.k8sResource.metadata.annotations",
+      "filterResponseKeys": [
+        "duplocloud.ai/*"
+      ],
       "description": "Kubernetes annotations applied to the HelmRelease."
     },
     {
