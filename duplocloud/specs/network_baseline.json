@@ -180,6 +180,7 @@
       "name": "network_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this network baseline, for reference by dependent resources (e.g. a cluster baseline)."
     },

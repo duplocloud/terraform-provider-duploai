@@ -69,15 +69,17 @@
       "type": "string",
       "optional": true,
       "computed": true,
-      "default": "source.toolkit.fluxcd.io/v1beta2",
+      "default": "source.toolkit.fluxcd.io/v1",
       "apiPath": "spec.k8sResource.apiVersion",
-      "description": "Flux OCIRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1)."
+      "responsePath": "result.k8sResource.apiVersion",
+      "description": "Flux OCIRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1beta2)."
     },
     {
       "name": "url",
       "type": "string",
       "required": true,
       "apiPath": "spec.k8sResource.spec.url",
+      "responsePath": "result.k8sResource.spec.url",
       "description": "URL of the OCI repository (e.g. oci://ghcr.io/org/charts)."
     },
     {
@@ -87,6 +89,7 @@
       "computed": true,
       "default": "5m",
       "apiPath": "spec.k8sResource.spec.interval",
+      "responsePath": "result.k8sResource.spec.interval",
       "description": "Interval at which the OCI artifact is fetched (Go duration, e.g. 5m, 1h)."
     },
     {
@@ -94,6 +97,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.ref.tag",
+      "responsePath": "result.k8sResource.spec.ref.tag",
       "description": "OCI artifact tag to pull (mutually exclusive with ref_semver/ref_digest)."
     },
     {
@@ -101,6 +105,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.ref.semver",
+      "responsePath": "result.k8sResource.spec.ref.semver",
       "description": "Semver range used to select the artifact tag."
     },
     {
@@ -108,6 +113,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.ref.semverFilter",
+      "responsePath": "result.k8sResource.spec.ref.semverFilter",
       "description": "Regex filter applied to tags before the semver range is evaluated."
     },
     {
@@ -115,13 +121,17 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.ref.digest",
+      "responsePath": "result.k8sResource.spec.ref.digest",
       "description": "Exact OCI artifact digest to pull (mutually exclusive with ref_tag/ref_semver)."
     },
     {
       "name": "oci_provider",
       "type": "string",
       "optional": true,
+      "computed": true,
+      "default": "generic",
       "apiPath": "spec.k8sResource.spec.provider",
+      "responsePath": "result.k8sResource.spec.provider",
       "description": "Provider used for authentication (e.g. generic, aws, azure, gcp)."
     },
     {
@@ -129,6 +139,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.secretRef.name",
+      "responsePath": "result.k8sResource.spec.secretRef.name",
       "description": "Name of a Kubernetes Secret holding registry credentials."
     },
     {
@@ -136,6 +147,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.certSecretRef.name",
+      "responsePath": "result.k8sResource.spec.certSecretRef.name",
       "description": "Name of a Kubernetes Secret holding TLS certificate data."
     },
     {
@@ -143,6 +155,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.proxySecretRef.name",
+      "responsePath": "result.k8sResource.spec.proxySecretRef.name",
       "description": "Name of a Kubernetes Secret holding proxy configuration."
     },
     {
@@ -150,6 +163,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.serviceAccountName",
+      "responsePath": "result.k8sResource.spec.serviceAccountName",
       "description": "Service account used for workload-identity authentication to the registry."
     },
     {
@@ -157,6 +171,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.layerSelector.mediaType",
+      "responsePath": "result.k8sResource.spec.layerSelector.mediaType",
       "description": "Media type of the OCI layer to extract."
     },
     {
@@ -164,6 +179,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.layerSelector.operation",
+      "responsePath": "result.k8sResource.spec.layerSelector.operation",
       "description": "How to handle the selected layer: extract or copy."
     },
     {
@@ -173,6 +189,7 @@
       "computed": true,
       "default": false,
       "apiPath": "spec.k8sResource.spec.insecure",
+      "responsePath": "result.k8sResource.spec.insecure",
       "description": "Allow connecting to an HTTP (non-TLS) OCI registry."
     },
     {
@@ -182,6 +199,7 @@
       "computed": true,
       "default": false,
       "apiPath": "spec.k8sResource.spec.suspend",
+      "responsePath": "result.k8sResource.spec.suspend",
       "description": "Suspend reconciliation of the repository."
     },
     {
@@ -189,20 +207,31 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.ignore",
+      "responsePath": "result.k8sResource.spec.ignore",
       "description": "Cluster-ignore (.gitignore-style) patterns of files to exclude from the artifact."
     },
     {
       "name": "labels",
       "type": "map(string)",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.k8sResource.metadata.labels",
+      "responsePath": "result.k8sResource.metadata.labels",
+      "filterResponseKeys": [
+        "duplocloud.ai/*"
+      ],
       "description": "Kubernetes labels applied to the OCI repository."
     },
     {
       "name": "annotations",
       "type": "map(string)",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.k8sResource.metadata.annotations",
+      "responsePath": "result.k8sResource.metadata.annotations",
+      "filterResponseKeys": [
+        "duplocloud.ai/*"
+      ],
       "description": "Kubernetes annotations applied to the OCI repository."
     },
     {
@@ -236,6 +265,7 @@
       "name": "oci_repository_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this OCI repository, for reference by dependent resources."
     }
