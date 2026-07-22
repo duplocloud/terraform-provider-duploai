@@ -69,10 +69,10 @@
       "type": "string",
       "optional": true,
       "computed": true,
-      "default": "source.toolkit.fluxcd.io/v1beta2",
+      "default": "source.toolkit.fluxcd.io/v1",
       "apiPath": "spec.k8sResource.apiVersion",
       "responsePath": "result.k8sResource.apiVersion",
-      "description": "Flux OCIRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1)."
+      "description": "Flux OCIRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1beta2)."
     },
     {
       "name": "url",
@@ -128,6 +128,7 @@
       "name": "oci_provider",
       "type": "string",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.k8sResource.spec.provider",
       "responsePath": "result.k8sResource.spec.provider",
       "description": "Provider used for authentication (e.g. generic, aws, azure, gcp)."
