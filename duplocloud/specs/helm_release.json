@@ -29,16 +29,16 @@
       "optional": true,
       "computed": true,
       "default": "",
-      "apiPath": "description",
-      "description": "Optional description."
+      "requestPath": "description",
+      "description": "Optional description. Not echoed back by the API, so it is never read from the response."
     },
     {
       "name": "scope_ids",
       "type": "list(string)",
       "required": true,
       "forceNew": true,
-      "apiPath": "spec.scopeIds",
-      "description": "Scope IDs that link this Helm release to a cloud provider account."
+      "requestPath": "spec.scopeIds",
+      "description": "Scope IDs that link this Helm release to a cloud provider account. Not echoed back by the API, so it is never read from the response."
     },
     {
       "name": "resource_group_id",
@@ -252,8 +252,8 @@
       "computed": true,
       "default": "",
       "forceNew": true,
-      "apiPath": "spec.provisioner.version",
-      "description": "Optional provisioner version."
+      "requestPath": "spec.provisioner.version",
+      "description": "Optional provisioner version. Not echoed back by the API, so it is never read from the response."
     },
     {
       "name": "status",

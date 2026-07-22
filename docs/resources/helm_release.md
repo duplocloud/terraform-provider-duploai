@@ -75,7 +75,7 @@ resource "duploai_helm_release" "app" {
 - `name` (String) Name of the Helm release resource.
 - `namespace_name` (String) Kubernetes namespace the HelmRelease object is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this Helm release belongs to.
-- `scope_ids` (List of String) Scope IDs that link this Helm release to a cloud provider account.
+- `scope_ids` (List of String) Scope IDs that link this Helm release to a cloud provider account. Not echoed back by the API, so it is never read from the response.
 - `workspace_id` (String) ID of the workspace that owns this Helm release.
 
 ### Optional
@@ -91,12 +91,12 @@ resource "duploai_helm_release" "app" {
 - `chart_source_ref_kind` (String) Kind of the chart source (e.g. HelmRepository).
 - `chart_source_ref_name` (String) Name of the chart source object.
 - `chart_version` (String) Chart version or semver range.
-- `description` (String) Optional description.
+- `description` (String) Optional description. Not echoed back by the API, so it is never read from the response.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `interval` (String) Interval at which the release is reconciled (Go duration, e.g. 5m, 1h).
 - `labels` (Map of String) Kubernetes labels applied to the HelmRelease.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
-- `provisioner_version` (String) Optional provisioner version.
+- `provisioner_version` (String) Optional provisioner version. Not echoed back by the API, so it is never read from the response.
 - `release_name` (String) Helm release name (defaults to the resource name).
 - `target_namespace` (String) Namespace the chart is installed into (defaults to the HelmRelease namespace).
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
@@ -144,4 +144,9 @@ The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/c
 terraform import duploai_helm_release.podinfo WORKSPACE_ID/HELM_RELEASE_ID
 # Example:
 # terraform import duploai_helm_release.podinfo 69b2aa30675718845bfe87a0/6a2258e94703bc957a1b824e
+#
+# NOTE: scope_ids, provisioner_version, and description are write-only — the
+# API never returns them, so import leaves them empty in state. Add the
+# correct values to your config and run `terraform apply` once after import
+# to populate them.
 ```
