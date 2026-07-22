@@ -45,7 +45,6 @@ output "status" {
 - `chart_source_ref_kind` (String) Kind of the chart source (e.g. HelmRepository).
 - `chart_source_ref_name` (String) Name of the chart source object.
 - `chart_version` (String) Chart version or semver range.
-- `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
 - `helm_release_id` (String) ID of this Helm release, for reference by dependent resources.
 - `interval` (String) Interval at which the release is reconciled (Go duration, e.g. 5m, 1h).
@@ -53,10 +52,8 @@ output "status" {
 - `name` (String) Name of the Helm release resource.
 - `namespace_name` (String) Kubernetes namespace the HelmRelease object is created in.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
-- `provisioner_version` (String) Optional provisioner version.
 - `release_name` (String) Helm release name (defaults to the resource name).
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this Helm release belongs to.
-- `scope_ids` (List of String) Scope IDs that link this Helm release to a cloud provider account.
 - `status` (String) Current provisioning status.
 - `target_namespace` (String) Namespace the chart is installed into (defaults to the HelmRelease namespace).
 - `values` (String) Inline Helm values as a YAML or JSON string.
