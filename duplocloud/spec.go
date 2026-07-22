@@ -231,6 +231,19 @@ type AttributeSpec struct {
 	// ForceNew marks the attribute as RequiresReplace.
 	ForceNew bool `json:"forceNew,omitempty"`
 
+	// Stable marks a computed-only attribute (Computed but not Optional or
+	// ForceNew) whose value is assigned once at creation and never changes
+	// afterward — e.g. the resource's own database ID, or a cloud identifier
+	// like a stack ID or security group ID. Without this flag, computed-only
+	// attributes are deliberately left out of UseStateForUnknown (see
+	// useStateForUnknown in typesystem.go) because most of them — status,
+	// load_balancer, etc. — legitimately change between applies and must stay
+	// recomputed. Stable opts a specific attribute back into preserving its
+	// prior value, so it does not spuriously show "(known after apply)" (and
+	// ripple into dependent resources) every time an unrelated attribute on
+	// the same resource changes.
+	Stable bool `json:"stable,omitempty"`
+
 	// Default supplies a static default for Optional+Computed attributes.
 	// Interpreted according to Type.
 	Default *json.RawMessage `json:"default,omitempty"`

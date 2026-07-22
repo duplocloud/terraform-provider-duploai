@@ -1883,6 +1883,7 @@
       "name": "app_service_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this app service, for reference by dependent resources."
     },
