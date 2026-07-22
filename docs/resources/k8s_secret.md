@@ -49,19 +49,19 @@ resource "duploai_k8s_secret" "app" {
 - `name` (String) Name of the secret resource.
 - `namespace_name` (String) Kubernetes namespace the secret is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this secret belongs to.
-- `scope_ids` (List of String) Scope IDs that link this secret to a cloud provider account. Not echoed back by the API, so it is never read from the response.
+- `scope_ids` (List of String) Scope IDs that link this secret to a cloud provider account.
 - `workspace_id` (String) ID of the workspace that owns this secret.
 
 ### Optional
 
 - `annotations` (Map of String) Kubernetes annotations applied to the secret.
 - `data` (Map of String, Sensitive) Secret entries with base64-encoded values, keyed by name. Populated by the server from string_data if not set directly.
-- `description` (String) Optional description. Not echoed back by the API, so it is never read from the response.
+- `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `immutable` (Boolean) Mark the secret immutable (its data cannot be changed after creation).
 - `labels` (Map of String) Kubernetes labels applied to the secret.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
-- `provisioner_version` (String) Optional provisioner version. Not echoed back by the API, so it is never read from the response.
+- `provisioner_version` (String) Optional provisioner version.
 - `string_data` (Map of String, Sensitive) Secret entries with plaintext values, keyed by name. Write-only: the server never returns this field on read.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `type` (String) Kubernetes secret type (e.g. Opaque, kubernetes.io/dockerconfigjson, kubernetes.io/tls).
@@ -94,9 +94,4 @@ The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/c
 terraform import duploai_k8s_secret.app WORKSPACE_ID/SECRET_ID
 # Example:
 # terraform import duploai_k8s_secret.app 69b2aa30675718845bfe87a0/6a2258e94703bc957a1b824e
-#
-# NOTE: scope_ids, provisioner_version, and description are write-only — the
-# API never returns them, so import leaves them empty in state. Add the
-# correct values to your config and run `terraform apply` once after import
-# to populate them.
 ```
