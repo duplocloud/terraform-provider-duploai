@@ -394,6 +394,7 @@
       "name": "elasticache_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this ElastiCache resource, for reference by dependent resources."
     },
@@ -433,6 +434,7 @@
       "name": "stack_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.stackId",
       "description": "Provisioned CloudFormation stack identifier."

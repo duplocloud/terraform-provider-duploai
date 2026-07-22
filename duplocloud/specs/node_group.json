@@ -195,6 +195,7 @@
       "name": "node_group_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this node group, for reference by dependent resources."
     },
@@ -216,6 +217,7 @@
       "name": "stack_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.stackId",
       "description": "ID of the underlying provisioning stack."
     },

@@ -156,6 +156,7 @@
       "name": "sns_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this SNS topic, for reference by dependent resources."
     },

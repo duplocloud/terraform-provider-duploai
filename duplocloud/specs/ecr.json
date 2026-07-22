@@ -157,6 +157,7 @@
       "name": "ecr_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this ECR repository resource, for reference by dependent resources."
     },
@@ -180,6 +181,7 @@
       "name": "registry_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.cloudDetails.registryId",
       "description": "AWS account ID of the registry that hosts the repository."

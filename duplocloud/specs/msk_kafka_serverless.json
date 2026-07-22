@@ -87,6 +87,7 @@
       "name": "msk_kafka_serverless_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this MSK Kafka Serverless cluster, for reference by dependent resources."
     },

@@ -259,6 +259,7 @@
       "name": "cluster_baseline_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this cluster baseline, for reference by dependent resources."
     },
@@ -294,6 +295,7 @@
       "name": "cluster_sg_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.clusterSgId",
       "description": "Cluster security group ID (AWS only)."
     },
@@ -301,6 +303,7 @@
       "name": "cluster_all_host_sg_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.clusterAllHostSgId",
       "description": "Security group ID applied to all cluster hosts."
     },
@@ -308,6 +311,7 @@
       "name": "stack_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.stackId",
       "description": "Provisioned infrastructure stack ID."
     }

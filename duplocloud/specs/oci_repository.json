@@ -261,6 +261,7 @@
       "name": "oci_repository_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this OCI repository, for reference by dependent resources."
     }

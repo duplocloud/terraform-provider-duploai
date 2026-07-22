@@ -71,6 +71,7 @@
       "computed": true,
       "default": "helm.toolkit.fluxcd.io/v2",
       "apiPath": "spec.k8sResource.apiVersion",
+      "responsePath": "result.k8sResource.apiVersion",
       "description": "Flux HelmRelease CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. helm.toolkit.fluxcd.io/v2beta2)."
     },
     {
@@ -80,6 +81,7 @@
       "computed": true,
       "default": "5m",
       "apiPath": "spec.k8sResource.spec.interval",
+      "responsePath": "result.k8sResource.spec.interval",
       "description": "Interval at which the release is reconciled (Go duration, e.g. 5m, 1h)."
     },
     {
@@ -87,6 +89,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.targetNamespace",
+      "responsePath": "result.k8sResource.spec.targetNamespace",
       "description": "Namespace the chart is installed into (defaults to the HelmRelease namespace)."
     },
     {
@@ -94,6 +97,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.releaseName",
+      "responsePath": "result.k8sResource.spec.releaseName",
       "description": "Helm release name (defaults to the resource name)."
     },
     {
@@ -101,6 +105,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.values",
+      "responsePath": "result.k8sResource.spec.values",
       "description": "Inline Helm values as a YAML or JSON string."
     },
     {
@@ -108,6 +113,7 @@
       "type": "list(object)",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.valuesFrom",
+      "responsePath": "result.k8sResource.spec.valuesFrom",
       "description": "Values sourced from ConfigMaps or Secrets.",
       "attributes": [
         {
@@ -138,6 +144,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chart.spec.chart",
+      "responsePath": "result.k8sResource.spec.chart.spec.chart",
       "description": "Chart name (or path) within the referenced HelmRepository source. Use with chart_source_ref_*."
     },
     {
@@ -145,6 +152,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chart.spec.version",
+      "responsePath": "result.k8sResource.spec.chart.spec.version",
       "description": "Chart version or semver range."
     },
     {
@@ -152,6 +160,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chart.spec.interval",
+      "responsePath": "result.k8sResource.spec.chart.spec.interval",
       "description": "Interval at which the chart source is checked for updates."
     },
     {
@@ -159,6 +168,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chart.spec.reconcileStrategy",
+      "responsePath": "result.k8sResource.spec.chart.spec.reconcileStrategy",
       "description": "When to reconcile the chart: ChartVersion or Revision."
     },
     {
@@ -166,6 +176,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chart.spec.sourceRef.kind",
+      "responsePath": "result.k8sResource.spec.chart.spec.sourceRef.kind",
       "description": "Kind of the chart source (e.g. HelmRepository)."
     },
     {
@@ -173,6 +184,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chart.spec.sourceRef.name",
+      "responsePath": "result.k8sResource.spec.chart.spec.sourceRef.name",
       "description": "Name of the chart source object."
     },
     {
@@ -180,6 +192,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chartRef.kind",
+      "responsePath": "result.k8sResource.spec.chartRef.kind",
       "description": "Kind of a directly-referenced chart source (e.g. OCIRepository or HelmChart). Alternative to chart_name/chart_source_ref_*."
     },
     {
@@ -187,6 +200,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chartRef.name",
+      "responsePath": "result.k8sResource.spec.chartRef.name",
       "description": "Name of the directly-referenced chart source object."
     },
     {
@@ -194,20 +208,28 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chartRef.namespace",
+      "responsePath": "result.k8sResource.spec.chartRef.namespace",
       "description": "Namespace of the directly-referenced chart source object."
     },
     {
       "name": "labels",
       "type": "map(string)",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.k8sResource.metadata.labels",
+      "responsePath": "result.k8sResource.metadata.labels",
+      "filterResponseKeys": [
+        "duplocloud.ai/*"
+      ],
       "description": "Kubernetes labels applied to the HelmRelease."
     },
     {
       "name": "annotations",
       "type": "map(string)",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.k8sResource.metadata.annotations",
+      "responsePath": "result.k8sResource.metadata.annotations",
       "description": "Kubernetes annotations applied to the HelmRelease."
     },
     {
@@ -241,6 +263,7 @@
       "name": "helm_release_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "ID of this Helm release, for reference by dependent resources."
     }

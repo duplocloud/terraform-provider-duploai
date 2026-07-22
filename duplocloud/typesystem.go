@@ -197,12 +197,13 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 // spuriously forces replacement on unrelated changes — and is the standard
 // behavior for optional+computed (server-defaulted) attributes. It is
 // deliberately NOT applied to pure-output computed fields (e.g. status), which
-// legitimately change on each apply and must stay recomputed.
+// legitimately change on each apply and must stay recomputed — unless the spec
+// marks one Stable (e.g. the resource's own ID), which never changes.
 func useStateForUnknown(a AttributeSpec) bool {
 	// preserveTarget: a computed sibling of a PreserveUnmanagedInto attribute
 	// must keep its prior-state value at plan time so the union-on-write can
 	// re-send the server-managed entries it holds.
-	return a.Computed && (a.Optional || a.ForceNew || a.preserveTarget)
+	return a.Computed && (a.Optional || a.ForceNew || a.preserveTarget || a.Stable)
 }
 
 // staticDefaultValue decodes a spec's raw JSON `default` into a framework
