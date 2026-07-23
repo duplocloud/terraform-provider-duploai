@@ -49,7 +49,6 @@ resource "duploai_k8s_secret" "app" {
 - `name` (String) Name of the secret resource.
 - `namespace_name` (String) Kubernetes namespace the secret is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this secret belongs to.
-- `scope_ids` (List of String) Scope IDs that link this secret to a cloud provider account.
 - `workspace_id` (String) ID of the workspace that owns this secret.
 
 ### Optional
@@ -62,6 +61,7 @@ resource "duploai_k8s_secret" "app" {
 - `labels` (Map of String) Kubernetes labels applied to the secret.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
+- `scope_ids` (List of String) Scope IDs that link this secret to a cloud provider account.
 - `string_data` (Map of String, Sensitive) Secret entries with plaintext values, keyed by name. Write-only: the server never returns this field on read.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `type` (String) Kubernetes secret type (e.g. Opaque, kubernetes.io/dockerconfigjson, kubernetes.io/tls).

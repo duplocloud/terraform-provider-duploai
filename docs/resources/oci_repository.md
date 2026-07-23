@@ -62,7 +62,6 @@ resource "duploai_oci_repository" "internal" {
 - `name` (String) Name of the OCI repository resource.
 - `namespace_name` (String) Kubernetes namespace the OCI repository is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this OCI repository belongs to.
-- `scope_ids` (List of String) Scope IDs that link this OCI repository to a cloud provider account.
 - `url` (String) URL of the OCI repository (e.g. oci://ghcr.io/org/charts).
 - `workspace_id` (String) ID of the workspace that owns this OCI repository.
 
@@ -87,6 +86,7 @@ resource "duploai_oci_repository" "internal" {
 - `ref_semver` (String) Semver range used to select the artifact tag.
 - `ref_semver_filter` (String) Regex filter applied to tags before the semver range is evaluated.
 - `ref_tag` (String) OCI artifact tag to pull (mutually exclusive with ref_semver/ref_digest).
+- `scope_ids` (List of String) Scope IDs that link this OCI repository to a cloud provider account.
 - `secret_ref_name` (String) Name of a Kubernetes Secret holding registry credentials.
 - `service_account_name` (String) Service account used for workload-identity authentication to the registry.
 - `suspend` (Boolean) Suspend reconciliation of the repository.
