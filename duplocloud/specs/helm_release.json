@@ -37,7 +37,6 @@
       "type": "list(string)",
       "optional": true,
       "computed": true,
-      "forceNew": true,
       "requestPath": "spec.scopeIds",
       "description": "Scope IDs that link this Helm release to a cloud provider account. Not echoed back by the API, so it is never read from the response."
     },
