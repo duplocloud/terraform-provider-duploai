@@ -37,6 +37,7 @@
       "type": "list(string)",
       "optional": true,
       "computed": true,
+      "default": [],
       "requestPath": "spec.scopeIds",
       "description": "Scope IDs that link this config map to a cloud provider account. Not echoed back by the API, so it is never read from the response."
     },
