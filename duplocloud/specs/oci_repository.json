@@ -35,8 +35,8 @@
     {
       "name": "scope_ids",
       "type": "list(string)",
-      "required": true,
-      "forceNew": true,
+      "optional": true,
+      "computed": true,
       "apiPath": "spec.scopeIds",
       "description": "Scope IDs that link this OCI repository to a cloud provider account."
     },
