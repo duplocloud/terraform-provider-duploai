@@ -38,7 +38,6 @@ output "status" {
 - `binary_data` (Map of String) Binary configuration entries, base64-encoded values keyed by name.
 - `data` (Map of String) Configuration key/value pairs (UTF-8 string data).
 - `environment_id` (String) ID of the environment that owns the resource group.
-- `immutable` (Boolean) Mark the config map immutable (its data cannot be changed after creation).
 - `k8s_config_map_id` (String) ID of this config map, for reference by dependent resources.
 - `labels` (Map of String) Kubernetes labels applied to the config map.
 - `name` (String) Name of the config map resource.

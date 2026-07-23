@@ -56,7 +56,6 @@ resource "duploai_k8s_config_map" "app" {
 - `data` (Map of String) Configuration key/value pairs (UTF-8 string data).
 - `description` (String) Optional description. Not echoed back by the API, so it is never read from the response.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
-- `immutable` (Boolean) Mark the config map immutable (its data cannot be changed after creation).
 - `labels` (Map of String) Kubernetes labels applied to the config map.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version. Not echoed back by the API, so it is never read from the response.
