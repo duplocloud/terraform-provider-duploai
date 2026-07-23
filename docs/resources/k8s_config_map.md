@@ -47,7 +47,6 @@ resource "duploai_k8s_config_map" "app" {
 - `name` (String) Name of the config map resource.
 - `namespace_name` (String) Kubernetes namespace the config map is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this config map belongs to.
-- `scope_ids` (List of String) Scope IDs that link this config map to a cloud provider account. Not echoed back by the API, so it is never read from the response.
 - `workspace_id` (String) ID of the workspace that owns this config map.
 
 ### Optional
@@ -61,6 +60,7 @@ resource "duploai_k8s_config_map" "app" {
 - `labels` (Map of String) Kubernetes labels applied to the config map.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version. Not echoed back by the API, so it is never read from the response.
+- `scope_ids` (List of String) Scope IDs that link this config map to a cloud provider account. Not echoed back by the API, so it is never read from the response.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
@@ -91,9 +91,4 @@ The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/c
 terraform import duploai_k8s_config_map.app WORKSPACE_ID/CONFIG_MAP_ID
 # Example:
 # terraform import duploai_k8s_config_map.app 69b2aa30675718845bfe87a0/6a2258e94703bc957a1b824e
-#
-# NOTE: scope_ids, provisioner_version, and description are write-only — the
-# API never returns them, so import leaves them empty in state. Add the
-# correct values to your config and run `terraform apply` once after import
-# to populate them.
 ```
