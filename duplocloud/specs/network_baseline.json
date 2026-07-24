@@ -44,7 +44,7 @@
         "Import"
       ],
       "apiPath": "spec.mode",
-      "description": "Provisioning mode: Create (the platform provisions a new network) or Import (adopt an existing network not provisioned by the platform — on AWS set vpc_id, on Azure set azure.import_vnet_id). Immutable after creation."
+      "description": "Provisioning mode: Create (the platform provisions a new network) or Import (adopt an existing network not provisioned by the platform \u2014 on AWS set vpc_id, on Azure set azure.import_vnet_id). Immutable after creation."
     },
     {
       "name": "region",
@@ -76,7 +76,7 @@
       "optional": true,
       "computed": true,
       "apiPath": "spec.cidr",
-      "description": "Primary network CIDR block (e.g. 10.0.0.0/16) — the VPC CIDR on AWS or the primary virtual network address space on Azure. Required when the platform provisions a new network; leave unset when importing an existing one — it is read from the imported network."
+      "description": "Primary network CIDR block (e.g. 10.0.0.0/16) \u2014 the VPC CIDR on AWS or the primary virtual network address space on Azure. Required when the platform provisions a new network; leave unset when importing an existing one \u2014 it is read from the imported network."
     },
     {
       "name": "additional_cidrs",
@@ -332,7 +332,8 @@
                   "apiPath": "serviceName",
                   "description": "Azure service name to delegate to (e.g. Microsoft.DBforPostgreSQL/flexibleServers)."
                 }
-              ]
+              ],
+              "orderByKey": "name"
             },
             {
               "name": "security_rules",
@@ -442,9 +443,11 @@
                   "apiPath": "destinationPortRanges",
                   "description": "Destination ports or ranges."
                 }
-              ]
+              ],
+              "orderByKey": "name"
             }
-          ]
+          ],
+          "orderByKey": "name"
         },
         {
           "name": "nat_gateways",
@@ -477,7 +480,8 @@
               "apiPath": "sku",
               "description": "NAT gateway SKU. Managed by the platform."
             }
-          ]
+          ],
+          "orderByKey": "name"
         }
       ]
     },
@@ -578,14 +582,38 @@
     }
   ],
   "conflictsWith": [
-    ["azure", "nat_mode"],
-    ["azure", "enable_dns"],
-    ["azure", "enable_flow_logs"],
-    ["azure", "flow_logs_retention_days"],
-    ["azure", "env_tag"],
-    ["azure", "vpc_id"],
-    ["azure", "az_count"],
-    ["azure", "subnet_prefix"]
+    [
+      "azure",
+      "nat_mode"
+    ],
+    [
+      "azure",
+      "enable_dns"
+    ],
+    [
+      "azure",
+      "enable_flow_logs"
+    ],
+    [
+      "azure",
+      "flow_logs_retention_days"
+    ],
+    [
+      "azure",
+      "env_tag"
+    ],
+    [
+      "azure",
+      "vpc_id"
+    ],
+    [
+      "azure",
+      "az_count"
+    ],
+    [
+      "azure",
+      "subnet_prefix"
+    ]
   ],
   "waiter": {
     "deprovisionedState": "DeProvisioned"
