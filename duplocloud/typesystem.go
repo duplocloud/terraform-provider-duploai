@@ -538,6 +538,12 @@ func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 				data = normalizeCsvOrder(s)
 			}
 		}
+		// Honor filterResponseKeys here too (not only in the top-level loop) so a
+		// map(string) attribute nested inside an object (e.g. azure.tags) still
+		// drops server-injected keys before it reaches state.
+		if len(a.FilterResponseKeys) > 0 {
+			data = filterMapKeys(data, a.FilterResponseKeys)
+		}
 		return goToTftypesValue(t, data)
 	}
 	if info.coll == "" {
