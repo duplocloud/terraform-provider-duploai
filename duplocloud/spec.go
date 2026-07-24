@@ -316,13 +316,16 @@ type AttributeSpec struct {
 	// the request (computed-only fields like status, vpc_id).
 	NoSend bool `json:"noSend,omitempty"`
 
-	// FilterResponseKeys, for a map(string) attribute, drops these exact keys from
-	// the response map before it is stored in state. Use when the backend injects
-	// its own entries into a map the user only partially manages (e.g. the ALB
-	// controller adds alb.ingress.kubernetes.io/{security-groups,subnets,...}
-	// annotations), which would otherwise show perpetual drift as Terraform tries
-	// to remove the server-added keys. Keys the user sets (not in this list) are
-	// preserved, so there is no "cannot remove a key" limitation for those.
+	// FilterResponseKeys, for a map(string) attribute (including one nested inside
+	// an object, e.g. azure.tags), drops matching keys from the response map before
+	// it is stored in state. Each pattern is an exact key, or a prefix when it ends
+	// in "*" (e.g. "duplocloud-ai-*"). Use when the backend injects its own entries
+	// into a map the user only partially manages (e.g. the ALB controller adds
+	// alb.ingress.kubernetes.io/{security-groups,subnets,...} annotations, or the
+	// platform stamps managed duplocloud-ai-* tags), which would otherwise show
+	// perpetual drift as Terraform tries to remove the server-added keys. Keys the
+	// user sets (not matched here) are preserved, so there is no "cannot remove a
+	// key" limitation for those.
 	FilterResponseKeys []string `json:"filterResponseKeys,omitempty"`
 
 	// NormalizeCsvOrder, for a string attribute, sorts the comma-separated tokens
