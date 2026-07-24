@@ -397,6 +397,36 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
+	// Some backends apply a subset of fields only on the update path, never on
+	// create (e.g. Azure storage account data protection is applied by
+	// UpdateInCloud, not CreateInCloud). When updateAfterCreate is set, issue a
+	// follow-up update once the resource is ready so those fields take effect on
+	// first apply. The update body is idempotent for fields create already applied.
+	if r.spec.UpdateAfterCreate {
+		updBody := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if _, err = api.Update(objID, &updBody); err != nil {
+			resp.Diagnostics.AddError("Error applying post-create update for "+r.spec.Name, err.Error())
+			return
+		}
+		if r.spec.Waiter != nil {
+			timeout := r.timeout(ctx, req.Plan, "update", &resp.Diagnostics)
+			final, err = api.WaitUntilReady(ctx, objID, timeout)
+			if err != nil {
+				resp.Diagnostics.AddError("Error waiting for "+r.spec.Name+" post-create update", err.Error())
+				return
+			}
+		} else {
+			final, err = api.Get(objID)
+			if err != nil {
+				resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after post-create update", err.Error())
+				return
+			}
+		}
+	}
+
 	id := composeID(scopeVals, objID)
 	state := r.stateFromResponse(ctx, req.Plan.Raw, *final, scope, id, false, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {

@@ -71,6 +71,16 @@ type ResourceSpec struct {
 	// already read back via polling, so this is ignored when a Waiter is set.)
 	ReadAfterWrite bool `json:"readAfterWrite,omitempty"`
 
+	// UpdateAfterCreate, when true, makes Create issue a follow-up update (PUT)
+	// once the resource is ready. Use for backends that apply a subset of fields
+	// only on the update path, never on create — e.g. Azure storage account data
+	// protection is applied by UpdateInCloud (spec.updateRequest.*) but not by
+	// CreateInCloud, so without this pass those fields are persisted but never
+	// pushed to the cloud (and no later diff triggers an update). The follow-up
+	// carries the full update body (bodyFromRaw verb=update), so it is idempotent
+	// for fields the create already applied.
+	UpdateAfterCreate bool `json:"updateAfterCreate,omitempty"`
+
 	// DataSource, when true, registers a read-only data source (data.duploai_<name>)
 	// from this spec in addition to the managed resource. The data source schema is
 	// derived automatically: path-parameter attributes stay Required, all other

@@ -1,0 +1,454 @@
+{
+  "name": "storage_account",
+  "description": "Manages a DuploCloud AI Helpdesk Azure Storage Account, provisioned within an environment and resource group.",
+  "idPath": "id",
+  "dataSource": true,
+  "updateAfterCreate": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AzureStorageAccounts",
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this storage account."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Storage account name. 3-24 characters, lowercase letters and numbers, globally unique across Azure. Immutable after creation."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment in which the storage account is provisioned."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group in which the storage account is provisioned."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs linking this storage account to a cloud provider account. Inherited from the resource group; not user-settable."
+    },
+    {
+      "name": "sku_name",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Standard_LRS",
+      "forceNew": true,
+      "createOnly": true,
+      "oneOf": [
+        "Standard_LRS",
+        "Standard_GRS",
+        "Standard_RAGRS",
+        "Standard_ZRS",
+        "Standard_GZRS",
+        "Standard_RAGZRS",
+        "Premium_LRS",
+        "Premium_ZRS"
+      ],
+      "apiPath": "spec.skuName",
+      "description": "Redundancy/performance SKU (e.g. Standard_LRS, Standard_GRS, Premium_LRS). Immutable after creation."
+    },
+    {
+      "name": "kind",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "StorageV2",
+      "forceNew": true,
+      "createOnly": true,
+      "oneOf": [
+        "StorageV2"
+      ],
+      "apiPath": "spec.kind",
+      "description": "Storage account kind. Immutable after creation."
+    },
+    {
+      "name": "is_hns_enabled",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "forceNew": true,
+      "createOnly": true,
+      "apiPath": "spec.isHnsEnabled",
+      "description": "Enable hierarchical namespace (Azure Data Lake Storage Gen2). Immutable after creation."
+    },
+    {
+      "name": "is_nfs_v3_enabled",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "forceNew": true,
+      "createOnly": true,
+      "apiPath": "spec.isNfsV3Enabled",
+      "description": "Enable NFS v3 protocol support (requires is_hns_enabled). Immutable after creation."
+    },
+    {
+      "name": "is_sftp_enabled",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "createPath": "spec.isSftpEnabled",
+      "updatePath": "spec.updateRequest.isSftpEnabled",
+      "responsePath": "spec.isSftpEnabled",
+      "description": "Enable SFTP support (requires is_hns_enabled)."
+    },
+    {
+      "name": "allow_cross_tenant_replication",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "createPath": "spec.allowCrossTenantReplication",
+      "updatePath": "spec.updateRequest.allowCrossTenantReplication",
+      "responsePath": "spec.allowCrossTenantReplication",
+      "description": "Allow object replication across Azure AD tenants."
+    },
+    {
+      "name": "access_tier",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Hot",
+      "oneOf": [
+        "Hot",
+        "Cool",
+        "Cold"
+      ],
+      "createPath": "spec.accessTier",
+      "updatePath": "spec.updateRequest.accessTier",
+      "responsePath": "spec.accessTier",
+      "description": "Default blob access tier."
+    },
+    {
+      "name": "minimum_tls_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "TLS1_2",
+      "oneOf": [
+        "TLS1_0",
+        "TLS1_1",
+        "TLS1_2"
+      ],
+      "createPath": "spec.minimumTlsVersion",
+      "updatePath": "spec.updateRequest.minimumTlsVersion",
+      "responsePath": "spec.minimumTlsVersion",
+      "description": "Minimum TLS version accepted for requests."
+    },
+    {
+      "name": "allow_blob_public_access",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "createPath": "spec.allowBlobPublicAccess",
+      "updatePath": "spec.updateRequest.allowBlobPublicAccess",
+      "responsePath": "spec.allowBlobPublicAccess",
+      "description": "Allow anonymous public read access to blobs/containers."
+    },
+    {
+      "name": "enable_https_traffic_only",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": true,
+      "createPath": "spec.enableHttpsTrafficOnly",
+      "updatePath": "spec.updateRequest.enableHttpsTrafficOnly",
+      "responsePath": "spec.enableHttpsTrafficOnly",
+      "description": "Require HTTPS for all traffic to the storage account."
+    },
+    {
+      "name": "tags",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "filterResponseKeys": [
+        "duplocloud-ai-*"
+      ],
+      "createPath": "spec.tags",
+      "updatePath": "spec.updateRequest.tags",
+      "responsePath": "spec.tags",
+      "description": "Tags applied to the storage account. The platform adds its own managed `duplocloud-ai-*` tags server-side; those are filtered out of state so only your tags are managed by Terraform."
+    },
+    {
+      "name": "data_protection",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "createPath": "spec.dataProtection",
+      "updatePath": "spec.updateRequest.dataProtection",
+      "responsePath": "spec.dataProtection",
+      "description": "Blob/container/file-share data protection settings (soft delete, versioning, point-in-time restore). Applied on update.",
+      "attributes": [
+        {
+          "name": "enable_blob_soft_delete",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": true,
+          "apiPath": "enableBlobSoftDelete",
+          "description": "Enable soft delete for blobs."
+        },
+        {
+          "name": "blob_soft_delete_retention_days",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "default": 7,
+          "apiPath": "blobSoftDeleteRetentionDays",
+          "description": "Retention period (days) for soft-deleted blobs."
+        },
+        {
+          "name": "enable_container_soft_delete",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": true,
+          "apiPath": "enableContainerSoftDelete",
+          "description": "Enable soft delete for containers."
+        },
+        {
+          "name": "container_soft_delete_retention_days",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "default": 7,
+          "apiPath": "containerSoftDeleteRetentionDays",
+          "description": "Retention period (days) for soft-deleted containers."
+        },
+        {
+          "name": "enable_file_share_soft_delete",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": true,
+          "apiPath": "enableFileShareSoftDelete",
+          "description": "Enable soft delete for file shares."
+        },
+        {
+          "name": "file_share_soft_delete_retention_days",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "default": 7,
+          "apiPath": "fileShareSoftDeleteRetentionDays",
+          "description": "Retention period (days) for soft-deleted file shares."
+        },
+        {
+          "name": "enable_versioning",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": false,
+          "apiPath": "enableVersioning",
+          "description": "Enable blob versioning."
+        },
+        {
+          "name": "enable_point_in_time_restore",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": false,
+          "apiPath": "enablePointInTimeRestore",
+          "description": "Enable point-in-time restore for block blobs (auto-enables versioning and blob soft delete)."
+        },
+        {
+          "name": "point_in_time_restore_retention_days",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "default": 6,
+          "apiPath": "pointInTimeRestoreRetentionDays",
+          "description": "Point-in-time restore window (days). Must be less than the blob soft-delete retention."
+        }
+      ]
+    },
+    {
+      "name": "azure_resource_group_name",
+      "type": "string",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.azureResourceGroupName",
+      "description": "Azure resource group the storage account is created in. Derived from the linked resource group; not user-settable."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "oneOf": [
+        "Cli",
+        "IacNativeTf",
+        "IacDuploTf",
+        "DirectApiCall"
+      ],
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type. Defaults to DirectApiCall for Azure passthrough resources."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status of the storage account."
+    },
+    {
+      "name": "storage_account_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this storage account, for reference by dependent resources."
+    },
+    {
+      "name": "azure_resource_id",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.storageAccountId",
+      "description": "Full Azure resource ID (ARM ID) of the provisioned storage account."
+    },
+    {
+      "name": "provisioning_state",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.provisioningState",
+      "description": "Azure provisioning state of the storage account (e.g. Succeeded)."
+    },
+    {
+      "name": "primary_blob_endpoint",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.primaryBlobEndpoint",
+      "description": "Primary Blob service endpoint URL."
+    },
+    {
+      "name": "primary_file_endpoint",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.primaryFileEndpoint",
+      "description": "Primary File service endpoint URL."
+    },
+    {
+      "name": "primary_queue_endpoint",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.primaryQueueEndpoint",
+      "description": "Primary Queue service endpoint URL."
+    },
+    {
+      "name": "primary_table_endpoint",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.primaryTableEndpoint",
+      "description": "Primary Table service endpoint URL."
+    },
+    {
+      "name": "private_endpoint_infos",
+      "type": "list(object)",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.privateEndpointInfos",
+      "description": "Private endpoints connected to the storage account.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "computed": true,
+          "apiPath": "name",
+          "description": "Private endpoint name."
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "id",
+          "description": "Private endpoint resource ID."
+        },
+        {
+          "name": "provisioning_state",
+          "type": "string",
+          "computed": true,
+          "apiPath": "provisioningState",
+          "description": "Provisioning state of the private endpoint."
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "computed": true,
+          "apiPath": "status",
+          "description": "Connection status of the private endpoint."
+        }
+      ]
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the storage account was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the storage account was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ],
+  "createConstants": [
+    {
+      "path": "spec.mode",
+      "value": "Create"
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned"
+  }
+}
