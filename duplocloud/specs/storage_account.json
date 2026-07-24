@@ -3,6 +3,7 @@
   "description": "Manages a DuploCloud AI Helpdesk Azure Storage Account, provisioned within an environment and resource group.",
   "idPath": "id",
   "dataSource": true,
+  "updateAfterCreate": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AzureStorageAccounts",
     "deprovision": {}
