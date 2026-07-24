@@ -82,16 +82,6 @@
       "description": "Binary configuration entries, base64-encoded values keyed by name."
     },
     {
-      "name": "immutable",
-      "type": "bool",
-      "optional": true,
-      "computed": true,
-      "default": false,
-      "apiPath": "spec.k8sResource.immutable",
-      "responsePath": "result.k8sResource.immutable",
-      "description": "Mark the config map immutable (its data cannot be changed after creation)."
-    },
-    {
       "name": "labels",
       "type": "map(string)",
       "optional": true,
