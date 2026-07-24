@@ -570,7 +570,22 @@
       "attribute": "subnet_prefix",
       "whenAttribute": "cloud",
       "whenEquals": "Aws"
+    },
+    {
+      "attribute": "cidr",
+      "whenAttribute": "mode",
+      "whenEquals": "Create"
     }
+  ],
+  "conflictsWith": [
+    ["azure", "nat_mode"],
+    ["azure", "enable_dns"],
+    ["azure", "enable_flow_logs"],
+    ["azure", "flow_logs_retention_days"],
+    ["azure", "env_tag"],
+    ["azure", "vpc_id"],
+    ["azure", "az_count"],
+    ["azure", "subnet_prefix"]
   ],
   "waiter": {
     "deprovisionedState": "DeProvisioned"
