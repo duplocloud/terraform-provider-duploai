@@ -45,6 +45,120 @@ resource "duploai_cluster_baseline" "full" {
   }
 }
 
+# ── Azure (AKS) variations ────────────────────────────────────────────────────
+# All Azure clusters link to an Azure network baseline; the VNet, subnets, region,
+# and scope are derived from it. Azure-specific settings go in the nested `azure`
+# block.
+#
+# CONFLICTS — these are AWS (EKS) only and cannot be combined with the `azure`
+# block (the provider errors at plan time):
+#   - control_plane_logging   (AKS uses diagnostic settings, not this list)
+#   - system_node_group       (EC2 node group; Azure uses azure.system_node_pool)
+#   - cluster_type = "Auto"   (EKS Auto Mode; Azure supports only "Standard")
+#   - vpc_id / subnet_ids     (AWS-only outputs; Azure exposes azure.* subnet IDs)
+#
+# SPECIFIC-CASE fields and their prerequisites on the linked network:
+#   - azure.network_mode = "AzureCniPodSubnet" → network must have an AksPods subnet
+#   - azure.enable_agic = true                 → network must have an ApplicationGateway subnet
+#   - domain_name_filter                       → the Azure public DNS zone(s) must already exist
+#   - api_server_visibility = "Private"        → private API endpoint only
+#   - cluster_ip_cidr                          → optional K8s service CIDR (AKS default when unset)
+
+# Minimal Azure cluster — only the required inputs. network_mode defaults to
+# AzureCniOverlay, AGIC is enabled, and the system node pool uses its defaults
+# (Standard_DS2_v2, 2 nodes, autoscaling 2–5).
+resource "duploai_cluster_baseline" "azure_minimal" {
+  workspace_id = "<workspace-id>"
+  name         = "aks-minimal"
+  cloud        = "Azure"
+  network_id   = "<azure-network-baseline-id>"
+  version      = "1.35"
+}
+
+# Fully-customized Azure cluster — public+private API, a custom service CIDR, AGIC,
+# a sized node pool, tags, and external-dns zones.
+resource "duploai_cluster_baseline" "azure_full" {
+  workspace_id = "<workspace-id>"
+  name         = "aks-full"
+  cloud        = "Azure"
+  network_id   = "<azure-network-baseline-id>"
+
+  version               = "1.35"
+  api_server_visibility = "PublicAndPrivate"
+  cluster_ip_cidr       = "10.2.0.0/24" # Kubernetes service CIDR (AKS default when unset)
+
+  azure = {
+    network_mode = "AzureCniOverlay"
+    enable_agic  = true
+
+    system_node_pool = {
+      vm_size             = "Standard_DS4_v2"
+      count               = 3
+      enable_auto_scaling = true
+      min_count           = 3
+      max_count           = 10
+    }
+
+    tags = {
+      team        = "platform"
+      environment = "production"
+    }
+  }
+
+  # Requires these Azure public DNS zones to already exist in the subscription.
+  domain_name_filter = "dev.example.com,apps.example.com"
+
+  timeouts {
+    create = "60m"
+    update = "45m"
+    delete = "30m"
+  }
+}
+
+# Pod Subnet networking — assigns pod IPs from a dedicated subnet. Requires the
+# linked network to have an AksPods subnet.
+resource "duploai_cluster_baseline" "azure_pod_subnet" {
+  workspace_id = "<workspace-id>"
+  name         = "aks-podsubnet"
+  cloud        = "Azure"
+  network_id   = "<azure-network-baseline-id>"
+  version      = "1.35"
+
+  azure = {
+    network_mode = "AzureCniPodSubnet"
+    enable_agic  = true
+  }
+}
+
+# Private cluster with no ingress controller — private API endpoint and AGIC off
+# (no Application Gateway subnet needed on the network).
+resource "duploai_cluster_baseline" "azure_private" {
+  workspace_id          = "<workspace-id>"
+  name                  = "aks-private"
+  cloud                 = "Azure"
+  network_id            = "<azure-network-baseline-id>"
+  version               = "1.35"
+  api_server_visibility = "Private"
+
+  azure = {
+    network_mode = "AzureCniOverlay"
+    enable_agic  = false
+  }
+}
+
+# Import an existing AKS cluster (mode = "Import"). `name` must match the existing
+# cluster; version and Azure details are auto-discovered. Provide network_id (for
+# the region/scope) or region directly.
+resource "duploai_cluster_baseline" "azure_imported" {
+  workspace_id = "<workspace-id>"
+  mode         = "Import"
+  cloud        = "Azure"
+  name         = "existing-aks-cluster"
+  network_id   = "<azure-network-baseline-id>"
+
+  # version / region / VNet / subnets are auto-discovered — leave unset.
+}
+
 # On-premise / bare Kubernetes cluster (K8S_ONLY) — registers an existing cluster
 # via its Kubernetes scope. No cloud network is provisioned, so network_id is
 # omitted and scope_ids is set explicitly.

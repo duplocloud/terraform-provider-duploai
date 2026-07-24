@@ -281,6 +281,16 @@ type AttributeSpec struct {
 	RequestPath  string `json:"requestPath,omitempty"`
 	ResponsePath string `json:"responsePath,omitempty"`
 
+	// ResponsePaths is an ordered list of response dot-paths for a read-only
+	// (computed) attribute; on read the engine stores the value at the FIRST path
+	// that yields a non-null, non-empty result. Use for a cloud-agnostic output
+	// whose value lives at different paths per cloud (e.g. an EKS cluster id at
+	// result.clusterArn but an AKS cluster id at result.azure.clusterId) so a
+	// single attribute is populated regardless of cloud. Takes precedence over
+	// apiPath/responsePath for the read direction; intended for computed-only
+	// attributes (it is not sent in any request).
+	ResponsePaths []string `json:"responsePaths,omitempty"`
+
 	// CreatePath / UpdatePath override RequestPath (and APIPath) for the POST
 	// and PUT bodies respectively. Use when the API uses different DTOs for
 	// create vs update (e.g. spec.createRequest vs spec.updateRequest). Each
@@ -321,6 +331,15 @@ type AttributeSpec struct {
 	// returned in a non-deterministic order (e.g. AWS MSK bootstrap broker
 	// strings), which would otherwise show perpetual drift on refresh.
 	NormalizeCsvOrder bool `json:"normalizeCsvOrder,omitempty"`
+
+	// NormalizeVersion, for a string attribute, truncates the response value to
+	// its major.minor components (first two dot-separated parts) before storing
+	// it in state. Use for a Kubernetes/semver version the user specifies at
+	// minor precision (e.g. "1.35") but the backend resolves to a patch version
+	// (e.g. AKS returns "1.35.6"), which would otherwise show perpetual drift —
+	// and on a forceNew field, forced replacement. Values with two or fewer
+	// components (e.g. EKS "1.34") are returned unchanged.
+	NormalizeVersion bool `json:"normalizeVersion,omitempty"`
 
 	// UpdateIntent, when set (and the resource has SingleIntentUpdate), makes this
 	// attribute mutable via a single-intent update: a change issues a dedicated
@@ -366,6 +385,19 @@ func (a AttributeSpec) responsePath() string {
 		return a.ResponsePath
 	}
 	return a.APIPath
+}
+
+// responsePathList returns the ordered read-direction paths for an attribute:
+// the explicit ResponsePaths fallback list when set, otherwise the single
+// resolved responsePath (empty slice when neither is present).
+func (a AttributeSpec) responsePathList() []string {
+	if len(a.ResponsePaths) > 0 {
+		return a.ResponsePaths
+	}
+	if p := a.responsePath(); p != "" {
+		return []string{p}
+	}
+	return nil
 }
 
 // effectiveCreatePath resolves the path used in POST (create) bodies.
