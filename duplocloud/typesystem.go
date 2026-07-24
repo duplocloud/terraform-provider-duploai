@@ -532,6 +532,18 @@ func normalizeCsvOrder(s string) string {
 	return strings.Join(parts, ",")
 }
 
+// normalizeVersionMinor truncates a version string to its major.minor components
+// (first two dot-separated parts), so a minor-precision config ("1.35") matches a
+// backend that resolves it to a patch version ("1.35.6"). Values with two or
+// fewer components are returned unchanged.
+func normalizeVersionMinor(s string) string {
+	parts := strings.Split(s, ".")
+	if len(parts) <= 2 {
+		return s
+	}
+	return strings.Join(parts[:2], ".")
+}
+
 func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 	if data == nil {
 		return tftypes.NewValue(t, nil)
@@ -541,6 +553,11 @@ func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 		if a.NormalizeCsvOrder {
 			if s, ok := data.(string); ok {
 				data = normalizeCsvOrder(s)
+			}
+		}
+		if a.NormalizeVersion {
+			if s, ok := data.(string); ok {
+				data = normalizeVersionMinor(s)
 			}
 		}
 		// Honor filterResponseKeys here too (not only in the top-level loop) so a

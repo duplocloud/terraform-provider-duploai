@@ -71,7 +71,8 @@ func (d *dynamicDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 
 		// Exclude write-only attributes that the API never returns in responses.
 		// These have no apiPath and no responsePath (only createPath/updatePath).
-		if !isPathParam && a.responsePath() == "" {
+		// responsePathList() also covers ResponsePaths (cloud-agnostic fallbacks).
+		if !isPathParam && len(a.responsePathList()) == 0 {
 			continue
 		}
 

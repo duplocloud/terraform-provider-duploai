@@ -60,6 +60,120 @@ resource "duploai_cluster_baseline" "full" {
   }
 }
 
+# ── Azure (AKS) variations ────────────────────────────────────────────────────
+# All Azure clusters link to an Azure network baseline; the VNet, subnets, region,
+# and scope are derived from it. Azure-specific settings go in the nested `azure`
+# block.
+#
+# CONFLICTS — these are AWS (EKS) only and cannot be combined with the `azure`
+# block (the provider errors at plan time):
+#   - control_plane_logging   (AKS uses diagnostic settings, not this list)
+#   - system_node_group       (EC2 node group; Azure uses azure.system_node_pool)
+#   - cluster_type = "Auto"   (EKS Auto Mode; Azure supports only "Standard")
+#   - vpc_id / subnet_ids     (AWS-only outputs; Azure exposes azure.* subnet IDs)
+#
+# SPECIFIC-CASE fields and their prerequisites on the linked network:
+#   - azure.network_mode = "AzureCniPodSubnet" → network must have an AksPods subnet
+#   - azure.enable_agic = true                 → network must have an ApplicationGateway subnet
+#   - domain_name_filter                       → the Azure public DNS zone(s) must already exist
+#   - api_server_visibility = "Private"        → private API endpoint only
+#   - cluster_ip_cidr                          → optional K8s service CIDR (AKS default when unset)
+
+# Minimal Azure cluster — only the required inputs. network_mode defaults to
+# AzureCniOverlay, AGIC is enabled, and the system node pool uses its defaults
+# (Standard_DS2_v2, 2 nodes, autoscaling 2–5).
+resource "duploai_cluster_baseline" "azure_minimal" {
+  workspace_id = "<workspace-id>"
+  name         = "aks-minimal"
+  cloud        = "Azure"
+  network_id   = "<azure-network-baseline-id>"
+  version      = "1.35"
+}
+
+# Fully-customized Azure cluster — public+private API, a custom service CIDR, AGIC,
+# a sized node pool, tags, and external-dns zones.
+resource "duploai_cluster_baseline" "azure_full" {
+  workspace_id = "<workspace-id>"
+  name         = "aks-full"
+  cloud        = "Azure"
+  network_id   = "<azure-network-baseline-id>"
+
+  version               = "1.35"
+  api_server_visibility = "PublicAndPrivate"
+  cluster_ip_cidr       = "10.2.0.0/24" # Kubernetes service CIDR (AKS default when unset)
+
+  azure = {
+    network_mode = "AzureCniOverlay"
+    enable_agic  = true
+
+    system_node_pool = {
+      vm_size             = "Standard_DS4_v2"
+      count               = 3
+      enable_auto_scaling = true
+      min_count           = 3
+      max_count           = 10
+    }
+
+    tags = {
+      team        = "platform"
+      environment = "production"
+    }
+  }
+
+  # Requires these Azure public DNS zones to already exist in the subscription.
+  domain_name_filter = "dev.example.com,apps.example.com"
+
+  timeouts {
+    create = "60m"
+    update = "45m"
+    delete = "30m"
+  }
+}
+
+# Pod Subnet networking — assigns pod IPs from a dedicated subnet. Requires the
+# linked network to have an AksPods subnet.
+resource "duploai_cluster_baseline" "azure_pod_subnet" {
+  workspace_id = "<workspace-id>"
+  name         = "aks-podsubnet"
+  cloud        = "Azure"
+  network_id   = "<azure-network-baseline-id>"
+  version      = "1.35"
+
+  azure = {
+    network_mode = "AzureCniPodSubnet"
+    enable_agic  = true
+  }
+}
+
+# Private cluster with no ingress controller — private API endpoint and AGIC off
+# (no Application Gateway subnet needed on the network).
+resource "duploai_cluster_baseline" "azure_private" {
+  workspace_id          = "<workspace-id>"
+  name                  = "aks-private"
+  cloud                 = "Azure"
+  network_id            = "<azure-network-baseline-id>"
+  version               = "1.35"
+  api_server_visibility = "Private"
+
+  azure = {
+    network_mode = "AzureCniOverlay"
+    enable_agic  = false
+  }
+}
+
+# Import an existing AKS cluster (mode = "Import"). `name` must match the existing
+# cluster; version and Azure details are auto-discovered. Provide network_id (for
+# the region/scope) or region directly.
+resource "duploai_cluster_baseline" "azure_imported" {
+  workspace_id = "<workspace-id>"
+  mode         = "Import"
+  cloud        = "Azure"
+  name         = "existing-aks-cluster"
+  network_id   = "<azure-network-baseline-id>"
+
+  # version / region / VNet / subnets are auto-discovered — leave unset.
+}
+
 # On-premise / bare Kubernetes cluster (K8S_ONLY) — registers an existing cluster
 # via its Kubernetes scope. No cloud network is provisioned, so network_id is
 # omitted and scope_ids is set explicitly.
@@ -98,10 +212,11 @@ resource "duploai_cluster_baseline" "imported" {
 ### Optional
 
 - `api_server_visibility` (String) Visibility of the Kubernetes API server endpoint.
+- `azure` (Attributes) Azure-specific (AKS) cluster configuration. Set only when cloud is Azure; ignored for other clouds. The VNet, subnets, region, and scope are derived from the linked network (network_id). (see [below for nested schema](#nestedatt--azure))
 - `cloud` (String) Cloud provider the cluster targets. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
 - `cluster_ip_cidr` (String) CIDR block for the Kubernetes service IP range (e.g. 172.20.0.0/16). Defaults to the cloud provider's default when unset.
-- `cluster_type` (String) Cluster mode: Standard (self-managed/managed node groups) or Auto (cloud-managed node lifecycle, e.g. EKS Auto Mode on AWS).
-- `control_plane_logging` (List of String) Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler). When unset, defaults to none (server-assigned; list attributes take no static default).
+- `cluster_type` (String) Cluster mode: Standard (self-managed/managed node groups) or Auto (cloud-managed node lifecycle, e.g. EKS Auto Mode). Auto is AWS (EKS) only; Azure (AKS) supports only Standard.
+- `control_plane_logging` (List of String) Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler). AWS (EKS) only — not supported for Azure (AKS uses diagnostic settings). When unset, defaults to none (server-assigned; list attributes take no static default).
 - `description` (String) Optional description.
 - `domain_name_filter` (String) Comma-joined list of Route53 hosted-zone names that external-dns should manage for this cluster.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
@@ -112,24 +227,53 @@ resource "duploai_cluster_baseline" "imported" {
 - `region` (String) Cloud region (e.g. us-east-1). For Create, inherited from the linked network (network_id) — leave unset. Required for Import (identifies where the existing cluster runs).
 - `scope_ids` (List of String) Scope IDs for the cluster. For cloud clusters leave unset — inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from.
 - `skip_attribute_auto_creation` (Boolean) Skip automatic creation of cluster attributes (add-ons/managed components) during provisioning. When unset, follows the server default; set true to fully self-manage cluster attributes.
-- `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))
+- `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. AWS (EKS) only — for Azure (AKS) use azure.system_node_pool instead. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `version` (String) Kubernetes version for the cluster (e.g. "1.34"). Required when mode is Create; auto-discovered when mode is Import. Read from the live cluster (authoritative over the create-time value). Immutable after creation.
+- `version` (String) Kubernetes major.minor version for the cluster (e.g. "1.34"). Required when mode is Create; auto-discovered when mode is Import. The live cluster's version is read back at major.minor precision (e.g. AKS's resolved "1.35.6" is stored as "1.35"). Immutable after creation.
 
 ### Read-Only
 
+- `azure_fqdn` (String) Azure only. FQDN of the AKS API server.
+- `azure_node_resource_group` (String) Azure only. AKS-managed node resource group (the 'MC_' group).
+- `azure_oidc_issuer_url` (String) Azure only. OIDC issuer URL for workload identity.
+- `azure_provisioning_state` (String) Azure only. Provisioning state of the AKS cluster (e.g. Succeeded).
+- `azure_resource_group` (String) Azure only. Resource group the AKS cluster was provisioned into.
 - `certificate_authority` (String) Base64-encoded cluster certificate authority data.
 - `cluster_all_host_sg_id` (String) Security group ID applied to all cluster hosts.
 - `cluster_arn` (String) ARN of the provisioned cluster (AWS only).
 - `cluster_baseline_id` (String) ID of this cluster baseline, for reference by dependent resources.
 - `cluster_endpoint` (String) Kubernetes API server endpoint URL.
+- `cluster_id` (String) Cloud-native identifier of the provisioned cluster, regardless of cloud — the EKS cluster ARN on AWS or the AKS cluster resource ID on Azure.
 - `cluster_sg_id` (String) Cluster security group ID (AWS only).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `oidc_issuer_url` (String) OIDC issuer URL for IRSA.
 - `stack_id` (String) Provisioned infrastructure stack ID.
 - `status` (String) Current provisioning status.
-- `subnet_ids` (List of String) Subnet IDs for the cluster. Inherited from the linked network (network_id); computed, not user-settable.
-- `vpc_id` (String) VPC ID for the cluster. Inherited from the linked network (network_id); computed, not user-settable.
+- `subnet_ids` (List of String) Subnet IDs for the cluster (AWS only). Inherited from the linked network (network_id); computed, not user-settable. For Azure see azure.node_subnet_id / azure.pod_subnet_id.
+- `vpc_id` (String) VPC ID for the cluster (AWS only). Inherited from the linked network (network_id); computed, not user-settable. For Azure see azure.vnet_id.
+
+<a id="nestedatt--azure"></a>
+### Nested Schema for `azure`
+
+Optional:
+
+- `enable_agic` (Boolean) Enable the Application Gateway Ingress Controller (AGIC) add-on. Requires the linked network to have an Application Gateway subnet.
+- `network_mode` (String) AKS networking mode. AzureCniPodSubnet requires an AksPods subnet on the linked network.
+- `system_node_pool` (Attributes) The AKS system node pool. (see [below for nested schema](#nestedatt--azure--system_node_pool))
+- `tags` (Map of String) Tags applied to the AKS cluster. The platform adds its own managed `duplocloud-ai-*` tags server-side; those are filtered out of state so only your tags are managed by Terraform.
+
+<a id="nestedatt--azure--system_node_pool"></a>
+### Nested Schema for `azure.system_node_pool`
+
+Optional:
+
+- `count` (Number) Initial node count (must be >= 1).
+- `enable_auto_scaling` (Boolean) Enable the AKS cluster autoscaler for this node pool.
+- `max_count` (Number) Maximum node count when autoscaling (must be >= min_count).
+- `min_count` (Number) Minimum node count when autoscaling (must be >= 1).
+- `vm_size` (String) Azure VM size for the node pool (e.g. Standard_DS2_v2).
+
+
 
 <a id="nestedatt--system_node_group"></a>
 ### Nested Schema for `system_node_group`
