@@ -92,6 +92,7 @@ provider "duploai" {
 | [`duploai_s3_bucket`](docs/resources/s3_bucket.md) | Manages a DuploCloud AI Helpdesk AWS S3 bucket |
 | [`duploai_sns`](docs/resources/sns.md) | Manages a DuploCloud AI Helpdesk AWS SNS (Simple Notification Service) topic, provisioned within an environment and resource group |
 | [`duploai_sqs`](docs/resources/sqs.md) | Manages a DuploCloud AI Helpdesk AWS SQS (Simple Queue Service) queue, provisioned within an environment and resource group |
+| [`duploai_storage_account`](docs/resources/storage_account.md) | Manages a DuploCloud AI Helpdesk Azure Storage Account, provisioned within an environment and resource group |
 <!-- resources-end -->
 
 ## Data Sources
@@ -145,6 +146,7 @@ provider "duploai" {
 | [`duploai_s3_bucket`](docs/data-sources/s3_bucket.md) | Manages a DuploCloud AI Helpdesk AWS S3 bucket |
 | [`duploai_sns`](docs/data-sources/sns.md) | Manages a DuploCloud AI Helpdesk AWS SNS (Simple Notification Service) topic, provisioned within an environment and resource group |
 | [`duploai_sqs`](docs/data-sources/sqs.md) | Manages a DuploCloud AI Helpdesk AWS SQS (Simple Queue Service) queue, provisioned within an environment and resource group |
+| [`duploai_storage_account`](docs/data-sources/storage_account.md) | Manages a DuploCloud AI Helpdesk Azure Storage Account, provisioned within an environment and resource group |
 <!-- data-sources-end -->
 
 ## Release Process
