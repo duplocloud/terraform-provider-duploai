@@ -344,6 +344,16 @@ type AttributeSpec struct {
 	// components (e.g. EKS "1.34") are returned unchanged.
 	NormalizeVersion bool `json:"normalizeVersion,omitempty"`
 
+	// OrderByKey, for a list(object) attribute, names a nested string attribute
+	// whose value is used to sort the list into a canonical (lexical) order. The
+	// engine sorts both the planned config (via a plan modifier) and the API
+	// response (before storing state), so a backend that returns the elements in a
+	// different order than the user declared them does not show order-only drift.
+	// Use for order-insensitive collections that have a natural unique key (e.g.
+	// Azure network subnets/NAT gateways/NSG rules keyed by name). The named
+	// nested attribute must exist and be of type string.
+	OrderByKey string `json:"orderByKey,omitempty"`
+
 	// UpdateIntent, when set (and the resource has SingleIntentUpdate), makes this
 	// attribute mutable via a single-intent update: a change issues a dedicated
 	// PUT carrying the discriminator + this attribute's new value. Requires the
@@ -791,6 +801,24 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			}
 			if a.UpdatePath == "" {
 				return nil, fmt.Errorf("attribute %q: updateBoolTrueValue requires updatePath", a.Name)
+			}
+		}
+		if a.OrderByKey != "" {
+			if a.Type != "list(object)" {
+				return nil, fmt.Errorf("attribute %q: orderByKey is only valid on list(object)", a.Name)
+			}
+			var keyAttr *AttributeSpec
+			for i := range a.Attributes {
+				if a.Attributes[i].Name == a.OrderByKey {
+					keyAttr = &a.Attributes[i]
+					break
+				}
+			}
+			if keyAttr == nil {
+				return nil, fmt.Errorf("attribute %q: orderByKey references unknown nested attribute %q", a.Name, a.OrderByKey)
+			}
+			if keyAttr.Type != "string" {
+				return nil, fmt.Errorf("attribute %q: orderByKey nested attribute %q must be a string", a.Name, a.OrderByKey)
 			}
 		}
 		if info.elem == "object" {
