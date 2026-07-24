@@ -3,12 +3,12 @@
 page_title: "duploai_network_baseline Resource - duploai"
 subcategory: ""
 description: |-
-  Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways).
+  Manages a DuploCloud AI Helpdesk network baseline. On AWS this provisions a VPC, subnets, and NAT gateways; on Azure it provisions a virtual network, subnets, and NAT gateways via the nested azure block. The target cloud is selected with cloud.
 ---
 
 # duploai_network_baseline (Resource)
 
-Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways).
+Manages a DuploCloud AI Helpdesk network baseline. On AWS this provisions a VPC, subnets, and NAT gateways; on Azure it provisions a virtual network, subnets, and NAT gateways via the nested `azure` block. The target cloud is selected with `cloud`.
 
 ## Example Usage
 
@@ -59,6 +59,168 @@ resource "duploai_network_baseline" "imported" {
   az_count      = 2
   subnet_prefix = 24
 }
+
+# Azure network baseline — provisions a virtual network, subnets, and a NAT
+# gateway. az_count and subnet_prefix are AWS-only and omitted for Azure;
+# per-subnet address prefixes are set explicitly. Delegations and NSG rules are
+# seeded by the platform from each subnet's type.
+resource "duploai_network_baseline" "azure" {
+  workspace_id = "<workspace-id>"
+  name         = "prod-network-azure"
+  cloud        = "Azure"
+  scope_ids    = ["<scope-id>"]
+  region       = "eastus"
+  cidr         = "10.0.0.0/16"
+
+  azure = {
+    preferred_subnet_mask = 22
+
+    nat_gateways = [
+      { name = "egress-nat" }
+    ]
+
+    subnets = [
+      {
+        name           = "general"
+        subnet_type    = "GeneralPurpose"
+        address_prefix = "10.0.1.0/24"
+        # No default outbound — egress through the attached NAT gateway.
+        default_outbound_access = false
+        attach_nat              = true
+        nat_gateway_name        = "egress-nat"
+      },
+      {
+        name           = "app-gateway"
+        subnet_type    = "ApplicationGateway"
+        address_prefix = "10.0.2.0/24"
+        # Azure-managed outbound; no NAT gateway attached.
+        default_outbound_access = true
+        attach_nat              = false
+      }
+    ]
+
+    tags = {
+      team = "platform"
+    }
+  }
+
+  timeouts {
+    create = "45m"
+  }
+}
+
+# Full Azure network baseline — every azure option in use: an explicit resource
+# group, custom DNS servers, additional address spaces, two NAT gateways, and
+# subnets with explicit delegations and NSG security rules. Fields the platform
+# manages (private_endpoint_network_policies, nat gateway sku, subnet/nsg IDs)
+# are computed and never set here.
+resource "duploai_network_baseline" "azure_full" {
+  workspace_id = "<workspace-id>"
+  name         = "prod-network-azure-full"
+  cloud        = "Azure"
+  scope_ids    = ["<scope-id>"]
+  region       = "eastus"
+  cidr         = "10.10.0.0/16"
+
+  # Secondary virtual network address spaces beyond cidr.
+  additional_cidrs = ["10.11.0.0/16"]
+
+  azure = {
+    resource_group_name   = "prod-network-rg"
+    dns_servers           = ["10.10.0.4", "10.10.0.5"]
+    preferred_subnet_mask = 24
+
+    nat_gateways = [
+      {
+        name            = "egress-nat"
+        public_ip_count = 2
+      },
+    ]
+
+    subnets = [
+      # General-purpose subnet: private, egressing through the NAT gateway,
+      # with two custom inbound NSG rules on its own named NSG.
+      {
+        name                    = "general"
+        subnet_type             = "GeneralPurpose"
+        address_prefix          = "10.10.1.0/24"
+        default_outbound_access = false
+        attach_nat              = true
+        nat_gateway_name        = "egress-nat"
+        nsg_name                = "general-nsg"
+
+        security_rules = [
+          {
+            name                       = "allow-https"
+            description                = "Allow inbound HTTPS from anywhere"
+            priority                   = 100
+            direction                  = "Inbound"
+            access                     = "Allow"
+            protocol                   = "Tcp"
+            source_address_prefix      = "*"
+            source_port_range          = "*"
+            destination_address_prefix = "*"
+            destination_port_ranges    = ["443"]
+          },
+          {
+            name                       = "allow-internal-app"
+            description                = "Allow app ports from internal ranges"
+            priority                   = 110
+            direction                  = "Inbound"
+            access                     = "Allow"
+            protocol                   = "Tcp"
+            source_address_prefixes    = ["10.10.0.0/16", "10.11.0.0/16"]
+            source_port_range          = "*"
+            destination_address_prefix = "*"
+            destination_port_ranges    = ["8080", "8443"]
+          },
+        ]
+      },
+      # Delegated subnet for a PostgreSQL Flexible Server. The delegation hands
+      # the subnet to the Azure service; keep it private (no default outbound).
+      {
+        name                    = "postgres"
+        subnet_type             = "PostgresFlexibleServer"
+        address_prefix          = "10.10.2.0/24"
+        default_outbound_access = false
+        attach_nat              = false
+
+        delegations = [
+          {
+            name         = "postgres-delegation"
+            service_name = "Microsoft.DBforPostgreSQL/flexibleServers"
+          },
+        ]
+      },
+    ]
+
+    tags = {
+      team        = "platform"
+      environment = "production"
+    }
+  }
+
+  timeouts {
+    create = "60m"
+    update = "45m"
+    delete = "30m"
+  }
+}
+
+# Import an existing Azure virtual network (mode = "Import"). Set
+# azure.import_vnet_id to the VNet resource ID to adopt.
+resource "duploai_network_baseline" "azure_imported" {
+  workspace_id = "<workspace-id>"
+  name         = "imported-network-azure"
+  cloud        = "Azure"
+  mode         = "Import"
+  scope_ids    = ["<scope-id>"]
+  region       = "eastus"
+
+  azure = {
+    import_vnet_id = "/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<vnet-name>"
+  }
+}
 ```
 
 <!-- schema generated by tfplugindocs -->
@@ -66,37 +228,128 @@ resource "duploai_network_baseline" "imported" {
 
 ### Required
 
-- `az_count` (Number) Number of availability zones (1-4).
-- `name` (String) Name of the network baseline.
-- `region` (String) Cloud region (e.g. us-east-1).
-- `scope_ids` (List of String) Scope IDs that link this network to a cloud provider account.
-- `subnet_prefix` (Number) Subnet prefix length (e.g. 24).
+- `name` (String) Name of the network baseline. On Azure this also seeds the virtual network name and the default resource group name.
+- `region` (String) Cloud region (e.g. us-east-1 on AWS, eastus on Azure).
+- `scope_ids` (List of String) Scope IDs that link this network to a cloud provider account. On Azure this resolves the subscription and provider credentials.
 - `workspace_id` (String) ID of the workspace that owns this network baseline.
 
 ### Optional
 
-- `cidr` (String) VPC CIDR block (e.g. 10.0.0.0/16). Required when the platform provisions a new VPC; leave unset when importing an existing VPC (vpc_id) — it is read from the imported VPC.
-- `cloud` (String) Cloud provider the network is provisioned in. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
+- `additional_cidrs` (List of String) Additional network address spaces beyond `cidr` (e.g. secondary Azure virtual network address spaces). Consumed on Azure.
+- `az_count` (Number) Number of availability zones (1-4). Required on AWS; ignored on Azure, which declares subnets explicitly via the `azure` block.
+- `azure` (Attributes) Azure-specific network configuration. Set only when cloud is Azure; ignored for other clouds. (see [below for nested schema](#nestedatt--azure))
+- `cidr` (String) Primary network CIDR block (e.g. 10.0.0.0/16) — the VPC CIDR on AWS or the primary virtual network address space on Azure. Required when the platform provisions a new network; leave unset when importing an existing one — it is read from the imported network.
+- `cloud` (String) Cloud provider the network is provisioned in. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws. When set to Azure, configure the nested `azure` block.
 - `description` (String) Optional description.
-- `enable_dns` (Boolean) Enable DNS support in the VPC.
-- `enable_flow_logs` (Boolean) Enable VPC flow logs.
-- `env_tag` (String) Environment tag applied to provisioned resources.
+- `enable_dns` (Boolean) Enable DNS support in the VPC. AWS only; Azure custom DNS is configured via azure.dns_servers.
+- `enable_flow_logs` (Boolean) Enable VPC flow logs. AWS only.
+- `env_tag` (String) Environment tag applied to provisioned resources. AWS only; Azure virtual network tags are set via azure.tags.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
-- `flow_logs_retention_days` (Number) Flow logs retention in days. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default).
-- `mode` (String) Provisioning mode: Create (the platform provisions a new VPC) or Import (adopt an existing VPC not provisioned by the platform — set vpc_id to the VPC to adopt). Immutable after creation.
-- `nat_mode` (String) NAT gateway mode: None, SingleAz, or MultiAz.
+- `flow_logs_retention_days` (Number) Flow logs retention in days. AWS only. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default).
+- `mode` (String) Provisioning mode: Create (the platform provisions a new network) or Import (adopt an existing network not provisioned by the platform — on AWS set vpc_id, on Azure set azure.import_vnet_id). Immutable after creation.
+- `nat_mode` (String) NAT gateway mode: None, SingleAz, or MultiAz. AWS only; Azure NAT gateways are declared in azure.nat_gateways.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
+- `subnet_prefix` (Number) Subnet prefix length (e.g. 24). Required on AWS; ignored on Azure, which sets per-subnet address prefixes via the `azure` block.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `vpc_id` (String) ID of the VPC. Set this to import an existing VPC that was not provisioned by the platform (the baseline adopts the given VPC instead of creating one); leave unset to have the platform provision a new VPC. Computed to the provisioned or adopted VPC ID.
+- `vpc_id` (String) AWS only. ID of the VPC. Set this to import an existing VPC that was not provisioned by the platform (the baseline adopts the given VPC instead of creating one); leave unset to have the platform provision a new VPC. Computed to the provisioned or adopted VPC ID.
 
 ### Read-Only
 
+- `azure_nat_gateway_ids` (List of String) Azure only. Provisioned NAT gateway resource IDs.
+- `azure_resource_group` (String) Azure only. Resource group the virtual network was provisioned into.
+- `azure_subnet_ids` (List of String) Azure only. Provisioned subnet resource IDs.
+- `azure_subscription_id` (String) Azure only. Subscription the virtual network was provisioned into.
+- `azure_vnet_id` (String) Azure only. Resource ID of the provisioned or adopted virtual network.
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `nat_gateway_ids` (List of String) Provisioned NAT gateway IDs.
+- `nat_gateway_ids` (List of String) AWS only. Provisioned NAT gateway IDs.
 - `network_id` (String) ID of this network baseline, for reference by dependent resources (e.g. a cluster baseline).
 - `status` (String) Current provisioning status.
-- `subnet_ids` (List of String) Provisioned subnet IDs.
+- `subnet_ids` (List of String) AWS only. Provisioned subnet IDs.
+
+<a id="nestedatt--azure"></a>
+### Nested Schema for `azure`
+
+Optional:
+
+- `dns_servers` (List of String) Custom DNS servers for the virtual network. Leave empty to use Azure-provided DNS.
+- `import_vnet_id` (String) Existing virtual network resource ID to adopt when mode is Import.
+- `nat_gateways` (Attributes List) NAT gateways to provision. Subnets attach to one by name via nat_gateway_name. (see [below for nested schema](#nestedatt--azure--nat_gateways))
+- `preferred_subnet_mask` (Number) Preferred subnet mask used to propose subnet CIDRs. Convenience only; per-subnet address_prefix is authoritative.
+- `resource_group_name` (String) Resource group for the virtual network. When unset, the platform derives and creates one from the network name. Immutable once set.
+- `subnets` (Attributes List) Subnets to provision in the virtual network. When omitted on a new subnet, the platform seeds type-appropriate defaults. (see [below for nested schema](#nestedatt--azure--subnets))
+- `tags` (Map of String) Tags applied to the virtual network. The platform adds its own managed `duplocloud-ai-*` tags server-side; those are filtered out of state so only your tags are managed by Terraform.
+
+<a id="nestedatt--azure--nat_gateways"></a>
+### Nested Schema for `azure.nat_gateways`
+
+Required:
+
+- `name` (String) NAT gateway name, referenced by subnet nat_gateway_name.
+
+Optional:
+
+- `public_ip_count` (Number) Number of public IPs to allocate. Defaults to 1.
+
+Read-Only:
+
+- `sku` (String) NAT gateway SKU. Managed by the platform.
+
+
+<a id="nestedatt--azure--subnets"></a>
+### Nested Schema for `azure.subnets`
+
+Required:
+
+- `address_prefix` (String) Subnet CIDR. Must fit within the network address space and not overlap other subnets.
+- `name` (String) Subnet name. Unique within the network.
+
+Optional:
+
+- `attach_nat` (Boolean) Whether to attach a NAT gateway for outbound egress. When unset, derived from subnet_type.
+- `default_outbound_access` (Boolean) Whether default outbound internet access is enabled. When unset, derived from subnet_type. false makes the subnet private.
+- `delegations` (Attributes List) Service delegations for the subnet. When omitted on a new subnet, the platform seeds defaults based on subnet_type. (see [below for nested schema](#nestedatt--azure--subnets--delegations))
+- `nat_gateway_name` (String) Name of a NAT gateway (from azure.nat_gateways) to attach. When attach_nat is true and this is empty, the platform assigns a default.
+- `nsg_name` (String) Network security group name. When unset, the platform assigns '<subnet name>-nsg'.
+- `security_rules` (Attributes List) Network security group rules for the subnet. When omitted on a new subnet, the platform seeds type-preset rules. (see [below for nested schema](#nestedatt--azure--subnets--security_rules))
+- `subnet_type` (String) Subnet type. Defaults to GeneralPurpose. Drives default delegations and security rules.
+
+Read-Only:
+
+- `private_endpoint_network_policies` (String) Private endpoint network policies for the subnet. Managed by the platform (always Enabled).
+
+<a id="nestedatt--azure--subnets--delegations"></a>
+### Nested Schema for `azure.subnets.delegations`
+
+Required:
+
+- `name` (String) Delegation name.
+- `service_name` (String) Azure service name to delegate to (e.g. Microsoft.DBforPostgreSQL/flexibleServers).
+
+
+<a id="nestedatt--azure--subnets--security_rules"></a>
+### Nested Schema for `azure.subnets.security_rules`
+
+Required:
+
+- `access` (String) Whether traffic is allowed or denied.
+- `direction` (String) Traffic direction: Inbound or Outbound.
+- `name` (String) Rule name.
+- `priority` (Number) Rule priority (100-4096). Lower numbers take precedence.
+- `protocol` (String) Protocol: Tcp, Udp, Icmp, Esp, Ah, or * for any.
+
+Optional:
+
+- `description` (String) Optional rule description.
+- `destination_address_prefix` (String) Destination address prefix (CIDR, tag, or *). Use this or destination_address_prefixes.
+- `destination_address_prefixes` (List of String) List of destination address prefixes. Use this or destination_address_prefix.
+- `destination_port_ranges` (List of String) Destination ports or ranges.
+- `source_address_prefix` (String) Source address prefix (CIDR, tag, or *). Use this or source_address_prefixes.
+- `source_address_prefixes` (List of String) List of source address prefixes. Use this or source_address_prefix.
+- `source_port_range` (String) Source port or range (e.g. '*', '443', '1000-2000').
+
+
+
 
 <a id="nestedblock--timeouts"></a>
 ### Nested Schema for `timeouts`

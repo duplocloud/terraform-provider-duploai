@@ -1,6 +1,6 @@
 {
   "name": "network_baseline",
-  "description": "Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways).",
+  "description": "Manages a DuploCloud AI Helpdesk network baseline. On AWS this provisions a VPC, subnets, and NAT gateways; on Azure it provisions a virtual network, subnets, and NAT gateways via the nested `azure` block. The target cloud is selected with `cloud`.",
   "idPath": "id",
   "dataSource": true,
   "endpoint": {
@@ -21,7 +21,7 @@
       "required": true,
       "forceNew": true,
       "apiPath": "name",
-      "description": "Name of the network baseline."
+      "description": "Name of the network baseline. On Azure this also seeds the virtual network name and the default resource group name."
     },
     {
       "name": "description",
@@ -44,7 +44,7 @@
         "Import"
       ],
       "apiPath": "spec.mode",
-      "description": "Provisioning mode: Create (the platform provisions a new VPC) or Import (adopt an existing VPC not provisioned by the platform — set vpc_id to the VPC to adopt). Immutable after creation."
+      "description": "Provisioning mode: Create (the platform provisions a new network) or Import (adopt an existing network not provisioned by the platform \u2014 on AWS set vpc_id, on Azure set azure.import_vnet_id). Immutable after creation."
     },
     {
       "name": "region",
@@ -52,7 +52,7 @@
       "required": true,
       "forceNew": true,
       "apiPath": "spec.region",
-      "description": "Cloud region (e.g. us-east-1)."
+      "description": "Cloud region (e.g. us-east-1 on AWS, eastus on Azure)."
     },
     {
       "name": "cloud",
@@ -68,7 +68,7 @@
         "K8S_ONLY"
       ],
       "apiPath": "spec.cloud",
-      "description": "Cloud provider the network is provisioned in. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws."
+      "description": "Cloud provider the network is provisioned in. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws. When set to Azure, configure the nested `azure` block."
     },
     {
       "name": "cidr",
@@ -76,23 +76,33 @@
       "optional": true,
       "computed": true,
       "apiPath": "spec.cidr",
-      "description": "VPC CIDR block (e.g. 10.0.0.0/16). Required when the platform provisions a new VPC; leave unset when importing an existing VPC (vpc_id) — it is read from the imported VPC."
+      "description": "Primary network CIDR block (e.g. 10.0.0.0/16) \u2014 the VPC CIDR on AWS or the primary virtual network address space on Azure. Required when the platform provisions a new network; leave unset when importing an existing one \u2014 it is read from the imported network."
+    },
+    {
+      "name": "additional_cidrs",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.additionalCidrs",
+      "description": "Additional network address spaces beyond `cidr` (e.g. secondary Azure virtual network address spaces). Consumed on Azure."
     },
     {
       "name": "az_count",
       "type": "int",
-      "required": true,
+      "optional": true,
+      "computed": true,
       "forceNew": true,
       "apiPath": "spec.azCount",
-      "description": "Number of availability zones (1-4)."
+      "description": "Number of availability zones (1-4). Required on AWS; ignored on Azure, which declares subnets explicitly via the `azure` block."
     },
     {
       "name": "subnet_prefix",
       "type": "int",
-      "required": true,
+      "optional": true,
+      "computed": true,
       "forceNew": true,
       "apiPath": "spec.subnetPrefix",
-      "description": "Subnet prefix length (e.g. 24)."
+      "description": "Subnet prefix length (e.g. 24). Required on AWS; ignored on Azure, which sets per-subnet address prefixes via the `azure` block."
     },
     {
       "name": "nat_mode",
@@ -106,7 +116,7 @@
         "MultiAz"
       ],
       "apiPath": "spec.natMode",
-      "description": "NAT gateway mode: None, SingleAz, or MultiAz."
+      "description": "NAT gateway mode: None, SingleAz, or MultiAz. AWS only; Azure NAT gateways are declared in azure.nat_gateways."
     },
     {
       "name": "enable_dns",
@@ -115,7 +125,7 @@
       "computed": true,
       "default": false,
       "apiPath": "spec.enableDns",
-      "description": "Enable DNS support in the VPC."
+      "description": "Enable DNS support in the VPC. AWS only; Azure custom DNS is configured via azure.dns_servers."
     },
     {
       "name": "enable_flow_logs",
@@ -124,7 +134,7 @@
       "computed": true,
       "default": false,
       "apiPath": "spec.enableFlowLogs",
-      "description": "Enable VPC flow logs."
+      "description": "Enable VPC flow logs. AWS only."
     },
     {
       "name": "flow_logs_retention_days",
@@ -132,7 +142,7 @@
       "optional": true,
       "computed": true,
       "apiPath": "spec.flowLogsRetentionDays",
-      "description": "Flow logs retention in days. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default)."
+      "description": "Flow logs retention in days. AWS only. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default)."
     },
     {
       "name": "env_tag",
@@ -140,7 +150,7 @@
       "optional": true,
       "computed": true,
       "apiPath": "spec.envTag",
-      "description": "Environment tag applied to provisioned resources."
+      "description": "Environment tag applied to provisioned resources. AWS only; Azure virtual network tags are set via azure.tags."
     },
     {
       "name": "scope_ids",
@@ -148,7 +158,7 @@
       "required": true,
       "forceNew": true,
       "apiPath": "spec.scopeIds",
-      "description": "Scope IDs that link this network to a cloud provider account."
+      "description": "Scope IDs that link this network to a cloud provider account. On Azure this resolves the subscription and provider credentials."
     },
     {
       "name": "provisioner_type",
@@ -168,6 +178,312 @@
       "forceNew": true,
       "apiPath": "spec.provisioner.version",
       "description": "Optional provisioner version."
+    },
+    {
+      "name": "azure",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.azure",
+      "description": "Azure-specific network configuration. Set only when cloud is Azure; ignored for other clouds.",
+      "attributes": [
+        {
+          "name": "resource_group_name",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "forceNew": true,
+          "apiPath": "resourceGroupName",
+          "description": "Resource group for the virtual network. When unset, the platform derives and creates one from the network name. Immutable once set."
+        },
+        {
+          "name": "dns_servers",
+          "type": "list(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "dnsServers",
+          "description": "Custom DNS servers for the virtual network. Leave empty to use Azure-provided DNS."
+        },
+        {
+          "name": "tags",
+          "type": "map(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "tags",
+          "filterResponseKeys": [
+            "duplocloud-ai-*"
+          ],
+          "description": "Tags applied to the virtual network. The platform adds its own managed `duplocloud-ai-*` tags server-side; those are filtered out of state so only your tags are managed by Terraform."
+        },
+        {
+          "name": "preferred_subnet_mask",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "default": 24,
+          "apiPath": "preferredSubnetMask",
+          "description": "Preferred subnet mask used to propose subnet CIDRs. Convenience only; per-subnet address_prefix is authoritative."
+        },
+        {
+          "name": "import_vnet_id",
+          "type": "string",
+          "optional": true,
+          "apiPath": "importVnetId",
+          "description": "Existing virtual network resource ID to adopt when mode is Import."
+        },
+        {
+          "name": "subnets",
+          "type": "list(object)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "subnets",
+          "description": "Subnets to provision in the virtual network. When omitted on a new subnet, the platform seeds type-appropriate defaults.",
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "apiPath": "name",
+              "description": "Subnet name. Unique within the network."
+            },
+            {
+              "name": "subnet_type",
+              "type": "string",
+              "optional": true,
+              "computed": true,
+              "oneOf": [
+                "GeneralPurpose",
+                "ApplicationGateway",
+                "AzureBastion",
+                "PostgresFlexibleServer",
+                "MySqlFlexibleServer",
+                "Databricks",
+                "AksPods"
+              ],
+              "apiPath": "subnetType",
+              "description": "Subnet type. Defaults to GeneralPurpose. Drives default delegations and security rules."
+            },
+            {
+              "name": "address_prefix",
+              "type": "string",
+              "required": true,
+              "apiPath": "addressPrefix",
+              "description": "Subnet CIDR. Must fit within the network address space and not overlap other subnets."
+            },
+            {
+              "name": "default_outbound_access",
+              "type": "bool",
+              "optional": true,
+              "computed": true,
+              "apiPath": "defaultOutboundAccess",
+              "description": "Whether default outbound internet access is enabled. When unset, derived from subnet_type. false makes the subnet private."
+            },
+            {
+              "name": "attach_nat",
+              "type": "bool",
+              "optional": true,
+              "computed": true,
+              "apiPath": "attachNat",
+              "description": "Whether to attach a NAT gateway for outbound egress. When unset, derived from subnet_type."
+            },
+            {
+              "name": "nat_gateway_name",
+              "type": "string",
+              "optional": true,
+              "computed": true,
+              "apiPath": "natGatewayName",
+              "description": "Name of a NAT gateway (from azure.nat_gateways) to attach. When attach_nat is true and this is empty, the platform assigns a default."
+            },
+            {
+              "name": "nsg_name",
+              "type": "string",
+              "optional": true,
+              "computed": true,
+              "apiPath": "nsgName",
+              "description": "Network security group name. When unset, the platform assigns '<subnet name>-nsg'."
+            },
+            {
+              "name": "private_endpoint_network_policies",
+              "type": "string",
+              "computed": true,
+              "stable": true,
+              "apiPath": "privateEndpointNetworkPolicies",
+              "description": "Private endpoint network policies for the subnet. Managed by the platform (always Enabled)."
+            },
+            {
+              "name": "delegations",
+              "type": "list(object)",
+              "optional": true,
+              "computed": true,
+              "apiPath": "delegations",
+              "description": "Service delegations for the subnet. When omitted on a new subnet, the platform seeds defaults based on subnet_type.",
+              "attributes": [
+                {
+                  "name": "name",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "name",
+                  "description": "Delegation name."
+                },
+                {
+                  "name": "service_name",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "serviceName",
+                  "description": "Azure service name to delegate to (e.g. Microsoft.DBforPostgreSQL/flexibleServers)."
+                }
+              ],
+              "orderByKey": "name"
+            },
+            {
+              "name": "security_rules",
+              "type": "list(object)",
+              "optional": true,
+              "computed": true,
+              "apiPath": "securityRules",
+              "description": "Network security group rules for the subnet. When omitted on a new subnet, the platform seeds type-preset rules.",
+              "attributes": [
+                {
+                  "name": "name",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "name",
+                  "description": "Rule name."
+                },
+                {
+                  "name": "description",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "description",
+                  "description": "Optional rule description."
+                },
+                {
+                  "name": "priority",
+                  "type": "int",
+                  "required": true,
+                  "apiPath": "priority",
+                  "description": "Rule priority (100-4096). Lower numbers take precedence."
+                },
+                {
+                  "name": "direction",
+                  "type": "string",
+                  "required": true,
+                  "oneOf": [
+                    "Inbound",
+                    "Outbound"
+                  ],
+                  "apiPath": "direction",
+                  "description": "Traffic direction: Inbound or Outbound."
+                },
+                {
+                  "name": "access",
+                  "type": "string",
+                  "required": true,
+                  "oneOf": [
+                    "Allow",
+                    "Deny"
+                  ],
+                  "apiPath": "access",
+                  "description": "Whether traffic is allowed or denied."
+                },
+                {
+                  "name": "protocol",
+                  "type": "string",
+                  "required": true,
+                  "oneOf": [
+                    "Tcp",
+                    "Udp",
+                    "Icmp",
+                    "Esp",
+                    "Ah",
+                    "*"
+                  ],
+                  "apiPath": "protocol",
+                  "description": "Protocol: Tcp, Udp, Icmp, Esp, Ah, or * for any."
+                },
+                {
+                  "name": "source_address_prefix",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "sourceAddressPrefix",
+                  "description": "Source address prefix (CIDR, tag, or *). Use this or source_address_prefixes."
+                },
+                {
+                  "name": "source_address_prefixes",
+                  "type": "list(string)",
+                  "optional": true,
+                  "apiPath": "sourceAddressPrefixes",
+                  "description": "List of source address prefixes. Use this or source_address_prefix."
+                },
+                {
+                  "name": "source_port_range",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "sourcePortRange",
+                  "description": "Source port or range (e.g. '*', '443', '1000-2000')."
+                },
+                {
+                  "name": "destination_address_prefix",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "destinationAddressPrefix",
+                  "description": "Destination address prefix (CIDR, tag, or *). Use this or destination_address_prefixes."
+                },
+                {
+                  "name": "destination_address_prefixes",
+                  "type": "list(string)",
+                  "optional": true,
+                  "apiPath": "destinationAddressPrefixes",
+                  "description": "List of destination address prefixes. Use this or destination_address_prefix."
+                },
+                {
+                  "name": "destination_port_ranges",
+                  "type": "list(string)",
+                  "optional": true,
+                  "apiPath": "destinationPortRanges",
+                  "description": "Destination ports or ranges."
+                }
+              ],
+              "orderByKey": "name"
+            }
+          ],
+          "orderByKey": "name"
+        },
+        {
+          "name": "nat_gateways",
+          "type": "list(object)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "natGateways",
+          "description": "NAT gateways to provision. Subnets attach to one by name via nat_gateway_name.",
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "apiPath": "name",
+              "description": "NAT gateway name, referenced by subnet nat_gateway_name."
+            },
+            {
+              "name": "public_ip_count",
+              "type": "int",
+              "optional": true,
+              "computed": true,
+              "apiPath": "publicIpCount",
+              "description": "Number of public IPs to allocate. Defaults to 1."
+            },
+            {
+              "name": "sku",
+              "type": "string",
+              "computed": true,
+              "stable": true,
+              "apiPath": "sku",
+              "description": "NAT gateway SKU. Managed by the platform."
+            }
+          ],
+          "orderByKey": "name"
+        }
+      ]
     },
     {
       "name": "status",
@@ -191,21 +507,56 @@
       "computed": true,
       "requestPath": "spec.importVpcId",
       "responsePath": "result.id",
-      "description": "ID of the VPC. Set this to import an existing VPC that was not provisioned by the platform (the baseline adopts the given VPC instead of creating one); leave unset to have the platform provision a new VPC. Computed to the provisioned or adopted VPC ID."
+      "description": "AWS only. ID of the VPC. Set this to import an existing VPC that was not provisioned by the platform (the baseline adopts the given VPC instead of creating one); leave unset to have the platform provision a new VPC. Computed to the provisioned or adopted VPC ID."
     },
     {
       "name": "subnet_ids",
       "type": "list(string)",
       "computed": true,
       "apiPath": "result.subnets[].subnetId",
-      "description": "Provisioned subnet IDs."
+      "description": "AWS only. Provisioned subnet IDs."
     },
     {
       "name": "nat_gateway_ids",
       "type": "list(string)",
       "computed": true,
       "apiPath": "result.natGateways[].natGatewayId",
-      "description": "Provisioned NAT gateway IDs."
+      "description": "AWS only. Provisioned NAT gateway IDs."
+    },
+    {
+      "name": "azure_vnet_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.azure.vnet.vnetId",
+      "description": "Azure only. Resource ID of the provisioned or adopted virtual network."
+    },
+    {
+      "name": "azure_resource_group",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.azure.resourceGroup",
+      "description": "Azure only. Resource group the virtual network was provisioned into."
+    },
+    {
+      "name": "azure_subscription_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.azure.subscriptionId",
+      "description": "Azure only. Subscription the virtual network was provisioned into."
+    },
+    {
+      "name": "azure_subnet_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "result.azure.subnets[].subnetId",
+      "description": "Azure only. Provisioned subnet resource IDs."
+    },
+    {
+      "name": "azure_nat_gateway_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "result.azure.natGateways[].natGatewayId",
+      "description": "Azure only. Provisioned NAT gateway resource IDs."
     }
   ],
   "requiredIf": [
@@ -213,7 +564,56 @@
       "attribute": "flow_logs_retention_days",
       "whenAttribute": "enable_flow_logs",
       "whenEquals": "true"
+    },
+    {
+      "attribute": "az_count",
+      "whenAttribute": "cloud",
+      "whenEquals": "Aws"
+    },
+    {
+      "attribute": "subnet_prefix",
+      "whenAttribute": "cloud",
+      "whenEquals": "Aws"
+    },
+    {
+      "attribute": "cidr",
+      "whenAttribute": "mode",
+      "whenEquals": "Create"
     }
+  ],
+  "conflictsWith": [
+    [
+      "azure",
+      "nat_mode"
+    ],
+    [
+      "azure",
+      "enable_dns"
+    ],
+    [
+      "azure",
+      "enable_flow_logs"
+    ],
+    [
+      "azure",
+      "flow_logs_retention_days"
+    ],
+    [
+      "azure",
+      "env_tag"
+    ],
+    [
+      "azure",
+      "vpc_id"
+    ],
+    [
+      "azure",
+      "az_count"
+    ],
+    [
+      "azure",
+      "subnet_prefix"
+    ]
   ],
   "waiter": {
     "deprovisionedState": "DeProvisioned"

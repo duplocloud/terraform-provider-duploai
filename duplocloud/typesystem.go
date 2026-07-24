@@ -309,6 +309,11 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.RequiresReplace())
 		}
+		if a.OrderByKey != "" {
+			// Sort the planned config by the key so it matches the read side's
+			// canonical order — must run after UseStateForUnknown resolves the value.
+			o.PlanModifiers = append(o.PlanModifiers, orderByKeyModifier{key: a.OrderByKey})
+		}
 		return o
 	case "set":
 		o := schema.SetNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
@@ -538,6 +543,12 @@ func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 				data = normalizeCsvOrder(s)
 			}
 		}
+		// Honor filterResponseKeys here too (not only in the top-level loop) so a
+		// map(string) attribute nested inside an object (e.g. azure.tags) still
+		// drops server-injected keys before it reaches state.
+		if len(a.FilterResponseKeys) > 0 {
+			data = filterMapKeys(data, a.FilterResponseKeys)
+		}
 		return goToTftypesValue(t, data)
 	}
 	if info.coll == "" {
@@ -546,6 +557,9 @@ func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 	switch tt := t.(type) {
 	case tftypes.List:
 		arr := toAnySlice(data)
+		if a.OrderByKey != "" {
+			arr = sortObjectsByKey(arr, a.orderKeyResponseKey())
+		}
 		elems := make([]tftypes.Value, 0, len(arr))
 		for _, e := range arr {
 			elems = append(elems, objectFromResponse(a.Attributes, tt.ElementType, e))
