@@ -47,6 +47,8 @@ provider "duploai" {
 | Resource | Description |
 |---|---|
 | [`duploai_admin_ai_agent`](docs/resources/admin_ai_agent.md) | Manages a DuploCloud AI Helpdesk AI Agent — an external AI service or model the help desk can invoke to perform automated tasks. Agents are assigned to personas, which determine where they are available |
+| [`duploai_admin_command_policy`](docs/resources/admin_command_policy.md) | Manages a DuploCloud AI Helpdesk command policy — reusable allow/block regular-expression lists that govern which agent-proposed commands are auto-approved or denied (deny-wins). A policy has no effect on its own; it takes effect once bound to a scope (System, Workspace, or Project) by a command policy mapping |
+| [`duploai_admin_command_policy_mapping`](docs/resources/admin_command_policy_mapping.md) | Manages a DuploCloud AI Helpdesk command policy mapping — binds a command policy to a scope (System, Workspace, or Project), putting the policy's allow/block command rules into effect for tickets in that scope. Only one active mapping may exist per System scope, and per Workspace/Project target |
 | [`duploai_admin_permission_set`](docs/resources/admin_permission_set.md) | Manages a DuploCloud AI Helpdesk permission set — a named grant of workspace-scoped access (scopes and agents) that can be assigned to users via permission set groups |
 | [`duploai_admin_persona`](docs/resources/admin_persona.md) | Manages a DuploCloud AI Helpdesk persona — a named assistant profile (prompt and assigned skills) that determines how an AI agent behaves and which skills it can use |
 | [`duploai_admin_provider`](docs/resources/admin_provider.md) | Manages a DuploCloud AI Helpdesk Provider — a registered cloud, Kubernetes, source-control, or observability provider (with its authentication credentials) that scopes and agents use |
@@ -80,7 +82,7 @@ provider "duploai" {
 | [`duploai_msk_kafka`](docs/resources/msk_kafka.md) | Manages a DuploCloud AI Helpdesk AWS MSK (Managed Streaming for Apache Kafka) provisioned cluster, in which you size the brokers, provisioned within an environment and resource group |
 | [`duploai_msk_kafka_serverless`](docs/resources/msk_kafka_serverless.md) | Manages a DuploCloud AI Helpdesk AWS MSK (Managed Streaming for Apache Kafka) serverless cluster, in which AWS manages broker capacity automatically. Networking (private subnets and security group) and IAM client authentication are configured server-side |
 | [`duploai_native_host`](docs/resources/native_host.md) | Manages a DuploCloud native host — an AWS EC2 instance provisioned inside a workspace environment |
-| [`duploai_network_baseline`](docs/resources/network_baseline.md) | Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways) |
+| [`duploai_network_baseline`](docs/resources/network_baseline.md) | Manages a DuploCloud AI Helpdesk network baseline. On AWS this provisions a VPC, subnets, and NAT gateways; on Azure it provisions a virtual network, subnets, and NAT gateways via the nested `azure` block. The target cloud is selected with `cloud` |
 | [`duploai_node_group`](docs/resources/node_group.md) | Manages a DuploCloud AI Helpdesk AWS EKS managed node group |
 | [`duploai_oci_repository`](docs/resources/oci_repository.md) | Manages a DuploCloud AI Helpdesk Kubernetes OCI repository (Flux OCIRepository) |
 | [`duploai_plan`](docs/resources/plan.md) | Manages a DuploCloud AI Helpdesk plan (region landing zone built on a network baseline) |
@@ -90,6 +92,7 @@ provider "duploai" {
 | [`duploai_s3_bucket`](docs/resources/s3_bucket.md) | Manages a DuploCloud AI Helpdesk AWS S3 bucket |
 | [`duploai_sns`](docs/resources/sns.md) | Manages a DuploCloud AI Helpdesk AWS SNS (Simple Notification Service) topic, provisioned within an environment and resource group |
 | [`duploai_sqs`](docs/resources/sqs.md) | Manages a DuploCloud AI Helpdesk AWS SQS (Simple Queue Service) queue, provisioned within an environment and resource group |
+| [`duploai_storage_account`](docs/resources/storage_account.md) | Manages a DuploCloud AI Helpdesk Azure Storage Account, provisioned within an environment and resource group |
 <!-- resources-end -->
 
 ## Data Sources
@@ -98,6 +101,8 @@ provider "duploai" {
 | Data Source | Description |
 |---|---|
 | [`duploai_admin_ai_agent`](docs/data-sources/admin_ai_agent.md) | Manages a DuploCloud AI Helpdesk AI Agent — an external AI service or model the help desk can invoke to perform automated tasks. Agents are assigned to personas, which determine where they are available |
+| [`duploai_admin_command_policy`](docs/data-sources/admin_command_policy.md) | Manages a DuploCloud AI Helpdesk command policy — reusable allow/block regular-expression lists that govern which agent-proposed commands are auto-approved or denied (deny-wins). A policy has no effect on its own; it takes effect once bound to a scope (System, Workspace, or Project) by a command policy mapping |
+| [`duploai_admin_command_policy_mapping`](docs/data-sources/admin_command_policy_mapping.md) | Manages a DuploCloud AI Helpdesk command policy mapping — binds a command policy to a scope (System, Workspace, or Project), putting the policy's allow/block command rules into effect for tickets in that scope. Only one active mapping may exist per System scope, and per Workspace/Project target |
 | [`duploai_admin_permission_set`](docs/data-sources/admin_permission_set.md) | Manages a DuploCloud AI Helpdesk permission set — a named grant of workspace-scoped access (scopes and agents) that can be assigned to users via permission set groups |
 | [`duploai_admin_persona`](docs/data-sources/admin_persona.md) | Manages a DuploCloud AI Helpdesk persona — a named assistant profile (prompt and assigned skills) that determines how an AI agent behaves and which skills it can use |
 | [`duploai_admin_provider`](docs/data-sources/admin_provider.md) | Manages a DuploCloud AI Helpdesk Provider — a registered cloud, Kubernetes, source-control, or observability provider (with its authentication credentials) that scopes and agents use |
@@ -131,7 +136,7 @@ provider "duploai" {
 | [`duploai_msk_kafka`](docs/data-sources/msk_kafka.md) | Manages a DuploCloud AI Helpdesk AWS MSK (Managed Streaming for Apache Kafka) provisioned cluster, in which you size the brokers, provisioned within an environment and resource group |
 | [`duploai_msk_kafka_serverless`](docs/data-sources/msk_kafka_serverless.md) | Manages a DuploCloud AI Helpdesk AWS MSK (Managed Streaming for Apache Kafka) serverless cluster, in which AWS manages broker capacity automatically. Networking (private subnets and security group) and IAM client authentication are configured server-side |
 | [`duploai_native_host`](docs/data-sources/native_host.md) | Manages a DuploCloud native host — an AWS EC2 instance provisioned inside a workspace environment |
-| [`duploai_network_baseline`](docs/data-sources/network_baseline.md) | Manages a DuploCloud AI Helpdesk network baseline (VPC, subnets, NAT gateways) |
+| [`duploai_network_baseline`](docs/data-sources/network_baseline.md) | Manages a DuploCloud AI Helpdesk network baseline. On AWS this provisions a VPC, subnets, and NAT gateways; on Azure it provisions a virtual network, subnets, and NAT gateways via the nested `azure` block. The target cloud is selected with `cloud` |
 | [`duploai_node_group`](docs/data-sources/node_group.md) | Manages a DuploCloud AI Helpdesk AWS EKS managed node group |
 | [`duploai_oci_repository`](docs/data-sources/oci_repository.md) | Manages a DuploCloud AI Helpdesk Kubernetes OCI repository (Flux OCIRepository) |
 | [`duploai_plan`](docs/data-sources/plan.md) | Manages a DuploCloud AI Helpdesk plan (region landing zone built on a network baseline) |
@@ -141,6 +146,7 @@ provider "duploai" {
 | [`duploai_s3_bucket`](docs/data-sources/s3_bucket.md) | Manages a DuploCloud AI Helpdesk AWS S3 bucket |
 | [`duploai_sns`](docs/data-sources/sns.md) | Manages a DuploCloud AI Helpdesk AWS SNS (Simple Notification Service) topic, provisioned within an environment and resource group |
 | [`duploai_sqs`](docs/data-sources/sqs.md) | Manages a DuploCloud AI Helpdesk AWS SQS (Simple Queue Service) queue, provisioned within an environment and resource group |
+| [`duploai_storage_account`](docs/data-sources/storage_account.md) | Manages a DuploCloud AI Helpdesk Azure Storage Account, provisioned within an environment and resource group |
 <!-- data-sources-end -->
 
 ## Release Process

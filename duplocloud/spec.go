@@ -71,6 +71,16 @@ type ResourceSpec struct {
 	// already read back via polling, so this is ignored when a Waiter is set.)
 	ReadAfterWrite bool `json:"readAfterWrite,omitempty"`
 
+	// UpdateAfterCreate, when true, makes Create issue a follow-up update (PUT)
+	// once the resource is ready. Use for backends that apply a subset of fields
+	// only on the update path, never on create — e.g. Azure storage account data
+	// protection is applied by UpdateInCloud (spec.updateRequest.*) but not by
+	// CreateInCloud, so without this pass those fields are persisted but never
+	// pushed to the cloud (and no later diff triggers an update). The follow-up
+	// carries the full update body (bodyFromRaw verb=update), so it is idempotent
+	// for fields the create already applied.
+	UpdateAfterCreate bool `json:"updateAfterCreate,omitempty"`
+
 	// DataSource, when true, registers a read-only data source (data.duploai_<name>)
 	// from this spec in addition to the managed resource. The data source schema is
 	// derived automatically: path-parameter attributes stay Required, all other
@@ -281,6 +291,16 @@ type AttributeSpec struct {
 	RequestPath  string `json:"requestPath,omitempty"`
 	ResponsePath string `json:"responsePath,omitempty"`
 
+	// ResponsePaths is an ordered list of response dot-paths for a read-only
+	// (computed) attribute; on read the engine stores the value at the FIRST path
+	// that yields a non-null, non-empty result. Use for a cloud-agnostic output
+	// whose value lives at different paths per cloud (e.g. an EKS cluster id at
+	// result.clusterArn but an AKS cluster id at result.azure.clusterId) so a
+	// single attribute is populated regardless of cloud. Takes precedence over
+	// apiPath/responsePath for the read direction; intended for computed-only
+	// attributes (it is not sent in any request).
+	ResponsePaths []string `json:"responsePaths,omitempty"`
+
 	// CreatePath / UpdatePath override RequestPath (and APIPath) for the POST
 	// and PUT bodies respectively. Use when the API uses different DTOs for
 	// create vs update (e.g. spec.createRequest vs spec.updateRequest). Each
@@ -306,13 +326,16 @@ type AttributeSpec struct {
 	// the request (computed-only fields like status, vpc_id).
 	NoSend bool `json:"noSend,omitempty"`
 
-	// FilterResponseKeys, for a map(string) attribute, drops these exact keys from
-	// the response map before it is stored in state. Use when the backend injects
-	// its own entries into a map the user only partially manages (e.g. the ALB
-	// controller adds alb.ingress.kubernetes.io/{security-groups,subnets,...}
-	// annotations), which would otherwise show perpetual drift as Terraform tries
-	// to remove the server-added keys. Keys the user sets (not in this list) are
-	// preserved, so there is no "cannot remove a key" limitation for those.
+	// FilterResponseKeys, for a map(string) attribute (including one nested inside
+	// an object, e.g. azure.tags), drops matching keys from the response map before
+	// it is stored in state. Each pattern is an exact key, or a prefix when it ends
+	// in "*" (e.g. "duplocloud-ai-*"). Use when the backend injects its own entries
+	// into a map the user only partially manages (e.g. the ALB controller adds
+	// alb.ingress.kubernetes.io/{security-groups,subnets,...} annotations, or the
+	// platform stamps managed duplocloud-ai-* tags), which would otherwise show
+	// perpetual drift as Terraform tries to remove the server-added keys. Keys the
+	// user sets (not matched here) are preserved, so there is no "cannot remove a
+	// key" limitation for those.
 	FilterResponseKeys []string `json:"filterResponseKeys,omitempty"`
 
 	// NormalizeCsvOrder, for a string attribute, sorts the comma-separated tokens
@@ -321,6 +344,25 @@ type AttributeSpec struct {
 	// returned in a non-deterministic order (e.g. AWS MSK bootstrap broker
 	// strings), which would otherwise show perpetual drift on refresh.
 	NormalizeCsvOrder bool `json:"normalizeCsvOrder,omitempty"`
+
+	// NormalizeVersion, for a string attribute, truncates the response value to
+	// its major.minor components (first two dot-separated parts) before storing
+	// it in state. Use for a Kubernetes/semver version the user specifies at
+	// minor precision (e.g. "1.35") but the backend resolves to a patch version
+	// (e.g. AKS returns "1.35.6"), which would otherwise show perpetual drift —
+	// and on a forceNew field, forced replacement. Values with two or fewer
+	// components (e.g. EKS "1.34") are returned unchanged.
+	NormalizeVersion bool `json:"normalizeVersion,omitempty"`
+
+	// OrderByKey, for a list(object) attribute, names a nested string attribute
+	// whose value is used to sort the list into a canonical (lexical) order. The
+	// engine sorts both the planned config (via a plan modifier) and the API
+	// response (before storing state), so a backend that returns the elements in a
+	// different order than the user declared them does not show order-only drift.
+	// Use for order-insensitive collections that have a natural unique key (e.g.
+	// Azure network subnets/NAT gateways/NSG rules keyed by name). The named
+	// nested attribute must exist and be of type string.
+	OrderByKey string `json:"orderByKey,omitempty"`
 
 	// UpdateIntent, when set (and the resource has SingleIntentUpdate), makes this
 	// attribute mutable via a single-intent update: a change issues a dedicated
@@ -366,6 +408,19 @@ func (a AttributeSpec) responsePath() string {
 		return a.ResponsePath
 	}
 	return a.APIPath
+}
+
+// responsePathList returns the ordered read-direction paths for an attribute:
+// the explicit ResponsePaths fallback list when set, otherwise the single
+// resolved responsePath (empty slice when neither is present).
+func (a AttributeSpec) responsePathList() []string {
+	if len(a.ResponsePaths) > 0 {
+		return a.ResponsePaths
+	}
+	if p := a.responsePath(); p != "" {
+		return []string{p}
+	}
+	return nil
 }
 
 // effectiveCreatePath resolves the path used in POST (create) bodies.
@@ -756,6 +811,24 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			}
 			if a.UpdatePath == "" {
 				return nil, fmt.Errorf("attribute %q: updateBoolTrueValue requires updatePath", a.Name)
+			}
+		}
+		if a.OrderByKey != "" {
+			if a.Type != "list(object)" {
+				return nil, fmt.Errorf("attribute %q: orderByKey is only valid on list(object)", a.Name)
+			}
+			var keyAttr *AttributeSpec
+			for i := range a.Attributes {
+				if a.Attributes[i].Name == a.OrderByKey {
+					keyAttr = &a.Attributes[i]
+					break
+				}
+			}
+			if keyAttr == nil {
+				return nil, fmt.Errorf("attribute %q: orderByKey references unknown nested attribute %q", a.Name, a.OrderByKey)
+			}
+			if keyAttr.Type != "string" {
+				return nil, fmt.Errorf("attribute %q: orderByKey nested attribute %q must be a string", a.Name, a.OrderByKey)
 			}
 		}
 		if info.elem == "object" {

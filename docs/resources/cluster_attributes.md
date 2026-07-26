@@ -28,6 +28,30 @@ resource "duploai_cluster_attributes" "basic" {
   }
 }
 
+# Azure (AKS) cluster attributes — enable only AKS-valid components. AKS provides
+# cluster autoscaling, metrics-server, and secret access (azureKeyvaultSecretsProvider)
+# out of the box, and alb_load_balancer_controller / efs_volumes / eks_addons are
+# AWS-only — enabling any of those for an Azure cluster is rejected at apply.
+# Allowed on Azure: flux_cd, external_dns, kube_state_metrics.
+resource "duploai_cluster_attributes" "azure" {
+  workspace_id = "<workspace-id>"
+  name         = "<cluster-attributes-name>"
+  cluster_id   = "<azure-cluster-baseline-id>"
+
+  components = {
+    kube_state_metrics = true
+    flux_cd            = true
+    external_dns       = true
+  }
+
+  # On Azure, external-dns manages records in an existing Azure DNS zone — the
+  # domain(s) must already exist in the subscription. provider, policy, and
+  # txt_owner_id are set by the platform.
+  external_dns_config = {
+    domain_filters = ["dev.example.com"]
+  }
+}
+
 # Install components and configure ExternalDNS to manage a specific Route53 zone.
 resource "duploai_cluster_attributes" "with_external_dns" {
   workspace_id = "<workspace-id>"
@@ -71,7 +95,7 @@ resource "duploai_cluster_baseline" "this" {
   workspace_id = "<workspace-id>"
   name         = "prod-cluster"
   network_id   = "<network-id>"
-  eks_version  = "1.34"
+  version      = "1.34"
 }
 
 resource "duploai_cluster_attributes" "full" {

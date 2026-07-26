@@ -397,6 +397,36 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
+	// Some backends apply a subset of fields only on the update path, never on
+	// create (e.g. Azure storage account data protection is applied by
+	// UpdateInCloud, not CreateInCloud). When updateAfterCreate is set, issue a
+	// follow-up update once the resource is ready so those fields take effect on
+	// first apply. The update body is idempotent for fields create already applied.
+	if r.spec.UpdateAfterCreate {
+		updBody := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if _, err = api.Update(objID, &updBody); err != nil {
+			resp.Diagnostics.AddError("Error applying post-create update for "+r.spec.Name, err.Error())
+			return
+		}
+		if r.spec.Waiter != nil {
+			timeout := r.timeout(ctx, req.Plan, "update", &resp.Diagnostics)
+			final, err = api.WaitUntilReady(ctx, objID, timeout)
+			if err != nil {
+				resp.Diagnostics.AddError("Error waiting for "+r.spec.Name+" post-create update", err.Error())
+				return
+			}
+		} else {
+			final, err = api.Get(objID)
+			if err != nil {
+				resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after post-create update", err.Error())
+				return
+			}
+		}
+	}
+
 	id := composeID(scopeVals, objID)
 	state := r.stateFromResponse(ctx, req.Plan.Raw, *final, scope, id, false, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
@@ -1225,8 +1255,8 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 			}
 			continue
 		}
-		respPath := a.responsePath()
-		if respPath == "" {
+		respPaths := a.responsePathList()
+		if len(respPaths) == 0 {
 			continue
 		}
 		computedOnly := a.Computed && !a.Required && !a.Optional
@@ -1244,7 +1274,7 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		if !hasType {
 			continue
 		}
-		goVal := extractPath(resp, strings.Split(respPath, "."))
+		goVal := extractFirstNonEmpty(resp, respPaths)
 		if len(a.FilterResponseKeys) > 0 {
 			goVal = filterMapKeys(goVal, a.FilterResponseKeys)
 		}
@@ -1305,6 +1335,32 @@ func toStringValue(v any) string {
 }
 
 // ── path helpers ──────────────────────────────────────────────────────────────
+
+// extractFirstNonEmpty returns the value at the first path (of an ordered list)
+// that yields something present — non-nil, and, for a string, non-empty. It
+// backs AttributeSpec.ResponsePaths, letting a single cloud-agnostic output read
+// from whichever per-cloud path is populated. Returns nil when none match.
+func extractFirstNonEmpty(resp map[string]any, paths []string) any {
+	var firstPresent any
+	seen := false
+	for _, p := range paths {
+		v := extractPath(resp, strings.Split(p, "."))
+		if v == nil {
+			continue
+		}
+		if !seen {
+			firstPresent, seen = v, true
+		}
+		// An empty string is "present but empty" — prefer a later path that may
+		// hold a real value, but fall back to it if none does (so a legitimately
+		// empty single-path value like description="" is preserved, not dropped).
+		if s, ok := v.(string); ok && s == "" {
+			continue
+		}
+		return v
+	}
+	return firstPresent
+}
 
 // extractPath walks a decoded JSON value following dot-separated segments. A
 // segment suffixed with "[]" treats the current value as an array and maps the
