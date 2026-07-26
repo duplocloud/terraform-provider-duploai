@@ -10,10 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
+	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
 )
 
 // updateAfterCreate: when set, Create issues a follow-up PUT (carrying the update
