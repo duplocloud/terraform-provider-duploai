@@ -204,6 +204,7 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `createOnly` | bool | Send this field in POST (create) only; never in PUT (update). Useful for fields immutable after creation that do not trigger replacement. |
 | `noSend` | bool | Read from the response but never sent in requests. Use for computed-only output fields. |
 | `normalizeCsvOrder` | bool | For a `string` field, sort its comma-separated tokens into a canonical (lexical) order before storing in state. Use for order-insensitive values the backend returns non-deterministically (e.g. AWS MSK bootstrap broker strings) to prevent perpetual refresh drift. |
+| `preserveOnEmptyResponse` | bool | Keep the value already held for this attribute — the configured plan value on create/update, the prior state value on refresh — whenever the API returns null or empty for it. See [Write-only fields](#write-only-fields). |
 | `deprecated` | string | Marks the attribute deprecated: the message is wired to the framework's `DeprecationMessage` and shown as a warning whenever the attribute is set in config. Use when renaming an attribute — keep the old one with a deprecation message pointing at the replacement (pair with `conflictsWith` + `requiredIf`/`isEmpty` for a backwards-compatible rename). |
 | `attributes` | array | Nested `AttributeSpec` entries. Required when `type` is an object form. Recurses to any depth. |
 
@@ -247,6 +248,44 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 - `required + computed` is invalid (framework rejects it).
 - `required + optional` is invalid.
 - `default` requires `computed: true` — the framework hard-errors otherwise.
+
+### Write-only fields
+
+Some backends accept a value but never return it. The AI Helpdesk redacts every
+sensitive credential value to `""` on the way out — on `GET`, and on the `POST`
+/ `PUT` response too. Storing that empty value fails the apply with
+*"provider produced inconsistent result after apply: … inconsistent values for
+sensitive attribute"*, and, once past create, shows perpetual drift.
+
+Mark such a leaf `preserveOnEmptyResponse: true`:
+
+```json
+{
+  "name": "value",
+  "type": "string",
+  "optional": true,
+  "sensitive": true,
+  "apiPath": "value",
+  "preserveOnEmptyResponse": true
+}
+```
+
+The engine then keeps what it already had — the configured plan value on
+create/update, the prior state value on refresh — whenever the response is null
+or an empty string. A **non-empty** response value always wins, so a rotation
+the API does surface is still picked up.
+
+Scope and limits:
+
+- Valid on a leaf (`string` / `bool` / `number`), top-level or nested inside an
+  `object`, `list(object)` or `map(object)`. Inside a collection the prior value
+  is paired positionally — list by index, map by key.
+- Not applied inside `set(object)`: element order is not stable, so a prior
+  element cannot be matched to a response element.
+- Terraform cannot detect an out-of-band change to a field the API won't return.
+  Say so in the attribute's `description`.
+- On **import** there is no prior value, so the field lands empty — expected,
+  since the secret is unrecoverable from the API.
 
 ### Path mapping
 

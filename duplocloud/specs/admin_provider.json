@@ -71,7 +71,7 @@
       "optional": true,
       "computed": true,
       "apiPath": "credentials",
-      "description": "Authentication credentials for the provider. Each credential's field values are stored in Terraform state.",
+      "description": "Authentication credentials for the provider. Sensitive field values are write-only: the API redacts them on read, so Terraform keeps the configured value in state and cannot detect an out-of-band change to a secret.",
       "attributes": [
         {
           "name": "name",
@@ -101,7 +101,8 @@
               "optional": true,
               "sensitive": true,
               "apiPath": "value",
-              "description": "Field value. Sensitive — redacted in plan output but stored in state."
+              "preserveOnEmptyResponse": true,
+              "description": "Field value. Sensitive — redacted in plan output, and write-only: the API never returns it, so the configured value is kept in state."
             },
             {
               "name": "type",
@@ -137,7 +138,7 @@
       "optional": true,
       "computed": true,
       "apiPath": "systemCredential",
-      "description": "System credential for the provider. Its field values are stored in Terraform state.",
+      "description": "System credential for the provider. Sensitive field values are write-only: the API redacts them on read, so Terraform keeps the configured value in state.",
       "attributes": [
         {
           "name": "name",
@@ -167,7 +168,8 @@
               "optional": true,
               "sensitive": true,
               "apiPath": "value",
-              "description": "Field value. Sensitive — redacted in plan output but stored in state."
+              "preserveOnEmptyResponse": true,
+              "description": "Field value. Sensitive — redacted in plan output, and write-only: the API never returns it, so the configured value is kept in state."
             },
             {
               "name": "type",
