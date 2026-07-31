@@ -81,6 +81,23 @@ type ResourceSpec struct {
 	// for fields the create already applied.
 	UpdateAfterCreate bool `json:"updateAfterCreate,omitempty"`
 
+	// IDRequestPath, when set, writes the resource's backend object id into the
+	// UPDATE (PUT) body at this dot-path — normally "id". Use for APIs that
+	// validate a full-document update against the id carried in the BODY rather
+	// than the one in the route.
+	//
+	// DuploAI's admin entity endpoints are such an API: the update path fetches
+	// the existing record by route id but validates the deserialized body, and
+	// Entity.Id self-generates a fresh ObjectId when the body omits it. A
+	// uniqueness check that self-excludes by body id therefore excludes nothing,
+	// and the record collides with itself — e.g. updating a workspace fails with
+	// "ShortName 'X' is already used by workspace 'Y'" where Y IS the workspace
+	// being updated. The console sends the id in the body, so it never sees this;
+	// this flag makes the provider match.
+	//
+	// Never sent on create — the backend assigns the id there.
+	IDRequestPath string `json:"idRequestPath,omitempty"`
+
 	// DataSource, when true, registers a read-only data source (data.duploai_<name>)
 	// from this spec in addition to the managed resource. The data source schema is
 	// derived automatically: path-parameter attributes stay Required, all other
