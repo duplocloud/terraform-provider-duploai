@@ -354,6 +354,23 @@ type AttributeSpec struct {
 	// components (e.g. EKS "1.34") are returned unchanged.
 	NormalizeVersion bool `json:"normalizeVersion,omitempty"`
 
+	// PreserveOnEmptyResponse keeps the value already held for this attribute —
+	// the configured plan value on create/update, the prior state value on
+	// refresh — whenever the API response comes back null or empty for it. Use
+	// for write-only fields the backend accepts but never echoes: e.g. an
+	// admin_provider credential secret, which the API redacts to "" on every
+	// read (including the create/update response). Without it the redacted empty
+	// value lands in state, which fails the apply with "provider produced
+	// inconsistent result after apply" and shows perpetual drift afterwards. A
+	// non-empty response value always wins, so an out-of-band rotation the API
+	// does surface is still picked up.
+	//
+	// Valid on a leaf (string/bool/number) attribute at the top level or nested
+	// inside an object, list(object) or map(object): inside a collection the
+	// prior value is paired positionally (list by index, map by key). Inside
+	// set(object) element order is not stable, so nothing is preserved there.
+	PreserveOnEmptyResponse bool `json:"preserveOnEmptyResponse,omitempty"`
+
 	// OrderByKey, for a list(object) attribute, names a nested string attribute
 	// whose value is used to sort the list into a canonical (lexical) order. The
 	// engine sorts both the planned config (via a plan modifier) and the API

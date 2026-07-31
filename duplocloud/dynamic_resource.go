@@ -1286,6 +1286,10 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		} else {
 			next[a.Name] = attrFromResponse(a, attrType, goVal)
 		}
+		// Write-only leaves (e.g. a credential secret the API redacts on every
+		// read) keep whatever the base value already held rather than the empty
+		// value the response carries.
+		next[a.Name] = restorePreservedValues(a, current[a.Name], next[a.Name])
 	}
 
 	return tftypes.NewValue(objType, next)
