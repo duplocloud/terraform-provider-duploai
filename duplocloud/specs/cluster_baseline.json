@@ -50,7 +50,16 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.scopeIds",
-      "description": "Scope IDs for the cluster. For cloud clusters leave unset \u2014 inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from."
+      "description": "Scope IDs for the cluster. For cloud clusters leave unset \u2014 inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from. Not used when cloud is K8S_ONLY and mode is Import \u2014 use scope_id instead."
+    },
+    {
+      "name": "scope_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "scopeId",
+      "description": "Scope ID for the cluster, sent as a top-level request field. Required (and only applicable) when cloud is K8S_ONLY and mode is Import \u2014 importing an existing installer-provisioned cluster by its scope. For all other cloud/mode combinations use scope_ids instead."
     },
     {
       "name": "network_id",
@@ -476,6 +485,10 @@
     [
       "azure",
       "system_node_group"
+    ],
+    [
+      "scope_ids",
+      "scope_id"
     ]
   ],
   "requiredIf": [
@@ -511,6 +524,23 @@
         {
           "attribute": "network_id",
           "isEmpty": true
+        },
+        {
+          "attribute": "cloud",
+          "notEquals": "K8S_ONLY"
+        }
+      ]
+    },
+    {
+      "attribute": "scope_id",
+      "when": [
+        {
+          "attribute": "cloud",
+          "equals": "K8S_ONLY"
+        },
+        {
+          "attribute": "mode",
+          "equals": "Import"
         }
       ]
     }

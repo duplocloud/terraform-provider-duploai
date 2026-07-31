@@ -170,6 +170,19 @@ resource "duploai_cluster_baseline" "onprem" {
   version      = "1.34"
 }
 
+# Import an existing installer-provisioned bare-Kubernetes cluster (K8S_ONLY,
+# mode = Import) by its scope. No cloud network is provisioned, so network_id
+# is omitted; scope_id (not scope_ids) identifies the cluster. Delete is a
+# no-op for this combination (the cluster isn't deprovisioned by Terraform) —
+# see endpoint.deprovision.skipWhen.
+resource "duploai_cluster_baseline" "onprem_imported" {
+  workspace_id = "<workspace-id>"
+  name         = "installer-poc-vcfa-vks"
+  cloud        = "K8S_ONLY"
+  mode         = "Import"
+  scope_id     = "<k8s-scope-id>"
+}
+
 # Import an existing EKS cluster (mode = "Import") — adopts a cluster the platform
 # did not provision. `name` must match the existing cluster's name; the platform
 # finds it by name + region + cloud and auto-discovers version, VPC, and subnets.
