@@ -14,10 +14,9 @@ Manages a DuploCloud AI user account, including identity, roles, and metadata.
 
 ```terraform
 resource "duploai_admin_user" "example" {
-  name         = "alice"
-  email        = "alice@example.com"
-  display_name = "Alice Example"
-  roles        = ["user"]
+  name  = "Alice Example"
+  email = "alice@example.com"
+  roles = ["user"]
 }
 ```
 
@@ -27,12 +26,11 @@ resource "duploai_admin_user" "example" {
 ### Required
 
 - `email` (String) Email address of the user (required by the backend).
-- `name` (String) Username or handle for the user.
+- `name` (String) Name of the user, as shown in the console.
 
 ### Optional
 
 - `description` (String) Optional description of the user.
-- `display_name` (String) Human-readable display name shown in the UI.
 - `external_provider` (String) External OAuth/SSO provider name (e.g. 'Google', 'GitHub').
 - `external_subject` (String) Subject identifier from the external OAuth/SSO provider.
 - `is_active` (Boolean) Whether the user account is active. Defaults to true when omitted.
