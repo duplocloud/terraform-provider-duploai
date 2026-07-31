@@ -635,20 +635,85 @@ func mergeUnknownFromResponse(a AttributeSpec, t tftypes.Type, plan tftypes.Valu
 		// The whole value is unknown — take it from the response.
 		return attrFromResponse(a, t, respData)
 	}
-	// Known at this level but with unknown descendants: only single nested
-	// objects need a per-field merge; anything else is rebuilt from the response.
+	// Known at this level but with unknown descendants: nested objects (single,
+	// or in a list/map) merge per field so a computed child is filled from the
+	// response without discarding its configured siblings. Anything else —
+	// primitive collections, set(object), a shape mismatch — is rebuilt wholesale.
 	info, _ := parseType(a.Type)
-	ot, isObj := t.(tftypes.Object)
-	if info.elem != "object" || info.coll != "" || !isObj {
+	if info.elem != "object" {
 		return attrFromResponse(a, t, respData)
+	}
+	switch info.coll {
+	case "":
+		return mergeObjectUnknown(a.Attributes, t, plan, respData)
+	case "list":
+		lt, ok := t.(tftypes.List)
+		if !ok {
+			return attrFromResponse(a, t, respData)
+		}
+		var cur []tftypes.Value
+		if err := plan.As(&cur); err != nil {
+			return attrFromResponse(a, t, respData)
+		}
+		arr := toAnySlice(respData)
+		if a.OrderByKey != "" {
+			arr = sortObjectsByKey(arr, a.orderKeyResponseKey())
+		}
+		// Elements are paired by index, so a response of a different length
+		// cannot be aligned with the plan — fall back to the response.
+		if len(arr) != len(cur) {
+			return attrFromResponse(a, t, respData)
+		}
+		out := make([]tftypes.Value, 0, len(cur))
+		for i, e := range cur {
+			out = append(out, mergeObjectUnknown(a.Attributes, lt.ElementType, e, arr[i]))
+		}
+		return tftypes.NewValue(t, out)
+	case "map":
+		mt, ok := t.(tftypes.Map)
+		if !ok {
+			return attrFromResponse(a, t, respData)
+		}
+		var cur map[string]tftypes.Value
+		if err := plan.As(&cur); err != nil {
+			return attrFromResponse(a, t, respData)
+		}
+		dm := toAnyMap(respData)
+		if len(dm) != len(cur) {
+			return attrFromResponse(a, t, respData)
+		}
+		out := make(map[string]tftypes.Value, len(cur))
+		for k, e := range cur {
+			re, present := dm[k]
+			if !present {
+				return attrFromResponse(a, t, respData)
+			}
+			out[k] = mergeObjectUnknown(a.Attributes, mt.ElementType, e, re)
+		}
+		return tftypes.NewValue(t, out)
+	default: // set — element order is not meaningful, so plan and response
+		// elements cannot be paired reliably.
+		return attrFromResponse(a, t, respData)
+	}
+}
+
+// mergeObjectUnknown merges one object value field by field: each configured
+// (known) field is kept and each unknown one is filled from the response.
+func mergeObjectUnknown(attrs []AttributeSpec, t tftypes.Type, plan tftypes.Value, respData any) tftypes.Value {
+	if plan.IsFullyKnown() {
+		return plan
+	}
+	ot, isObj := t.(tftypes.Object)
+	if !isObj {
+		return goToTftypesValue(t, respData)
 	}
 	var cur map[string]tftypes.Value
 	if err := plan.As(&cur); err != nil {
-		return attrFromResponse(a, t, respData)
+		return objectFromResponse(attrs, t, respData)
 	}
 	dm, _ := respData.(map[string]any)
 	out := make(map[string]tftypes.Value, len(ot.AttributeTypes))
-	for _, na := range a.Attributes {
+	for _, na := range attrs {
 		ct := ot.AttributeTypes[na.Name]
 		var childResp any
 		if dm != nil {
@@ -661,6 +726,136 @@ func mergeUnknownFromResponse(a AttributeSpec, t tftypes.Type, plan tftypes.Valu
 		out[na.Name] = mergeUnknownFromResponse(na, ct, cur[na.Name], childResp)
 	}
 	return tftypes.NewValue(t, out)
+}
+
+// hasPreserveOnEmptyResponse reports whether an attribute, or any attribute
+// nested below it, is marked PreserveOnEmptyResponse. Used to skip the restore
+// walk entirely for the (overwhelming majority of) attributes that do not need it.
+func hasPreserveOnEmptyResponse(a AttributeSpec) bool {
+	if a.PreserveOnEmptyResponse {
+		return true
+	}
+	for _, na := range a.Attributes {
+		if hasPreserveOnEmptyResponse(na) {
+			return true
+		}
+	}
+	return false
+}
+
+// restorePreservedValues walks a freshly built state value alongside the value
+// it replaces (the plan on create/update, the prior state on refresh) and, at
+// every leaf marked PreserveOnEmptyResponse that the API returned as null or
+// empty, keeps the prior value instead. This is what lets a write-only secret —
+// redacted by the backend on every read — stay in state instead of being
+// blanked. See AttributeSpec.PreserveOnEmptyResponse.
+func restorePreservedValues(a AttributeSpec, prior, next tftypes.Value) tftypes.Value {
+	if !hasPreserveOnEmptyResponse(a) {
+		return next
+	}
+	if a.PreserveOnEmptyResponse {
+		if isEmptyStateValue(next) && prior.IsKnown() && !prior.IsNull() && prior.Type().Is(next.Type()) {
+			return prior
+		}
+		return next
+	}
+	info, _ := parseType(a.Type)
+	if info.elem != "object" || next.IsNull() || !next.IsKnown() {
+		return next
+	}
+	switch info.coll {
+	case "":
+		return restoreObjectPreserved(a.Attributes, prior, next)
+	case "list":
+		var nextElems, priorElems []tftypes.Value
+		if err := next.As(&nextElems); err != nil {
+			return next
+		}
+		if prior.IsKnown() && !prior.IsNull() {
+			_ = prior.As(&priorElems)
+		}
+		out := make([]tftypes.Value, 0, len(nextElems))
+		for i, e := range nextElems {
+			out = append(out, restoreObjectPreserved(a.Attributes, elemAt(priorElems, i, e.Type()), e))
+		}
+		return tftypes.NewValue(next.Type(), out)
+	case "map":
+		var nextElems, priorElems map[string]tftypes.Value
+		if err := next.As(&nextElems); err != nil {
+			return next
+		}
+		if prior.IsKnown() && !prior.IsNull() {
+			_ = prior.As(&priorElems)
+		}
+		out := make(map[string]tftypes.Value, len(nextElems))
+		for k, e := range nextElems {
+			p, ok := priorElems[k]
+			if !ok {
+				p = tftypes.NewValue(e.Type(), nil)
+			}
+			out[k] = restoreObjectPreserved(a.Attributes, p, e)
+		}
+		return tftypes.NewValue(next.Type(), out)
+	default: // set — elements cannot be paired positionally.
+		return next
+	}
+}
+
+// restoreObjectPreserved applies restorePreservedValues to each field of one
+// object value, pairing it with the same field of the prior object.
+func restoreObjectPreserved(attrs []AttributeSpec, prior, next tftypes.Value) tftypes.Value {
+	if next.IsNull() || !next.IsKnown() {
+		return next
+	}
+	var nm map[string]tftypes.Value
+	if err := next.As(&nm); err != nil {
+		return next
+	}
+	var pm map[string]tftypes.Value
+	if prior.IsKnown() && !prior.IsNull() {
+		_ = prior.As(&pm)
+	}
+	out := make(map[string]tftypes.Value, len(nm))
+	for k, v := range nm {
+		out[k] = v
+	}
+	for _, na := range attrs {
+		child, ok := nm[na.Name]
+		if !ok {
+			continue
+		}
+		p, ok := pm[na.Name]
+		if !ok {
+			p = tftypes.NewValue(child.Type(), nil)
+		}
+		out[na.Name] = restorePreservedValues(na, p, child)
+	}
+	return tftypes.NewValue(next.Type(), out)
+}
+
+// elemAt returns the i-th element of elems, or a typed null when the prior
+// collection is shorter (or absent).
+func elemAt(elems []tftypes.Value, i int, t tftypes.Type) tftypes.Value {
+	if i < len(elems) {
+		return elems[i]
+	}
+	return tftypes.NewValue(t, nil)
+}
+
+// isEmptyStateValue reports whether a value carries nothing worth storing —
+// null, unknown, or the empty string a redacting backend returns in place of a
+// secret.
+func isEmptyStateValue(v tftypes.Value) bool {
+	if v.IsNull() || !v.IsKnown() {
+		return true
+	}
+	if v.Type().Is(tftypes.String) {
+		var s string
+		if err := v.As(&s); err == nil {
+			return s == ""
+		}
+	}
+	return false
 }
 
 func toAnySlice(g any) []any        { s, _ := g.([]any); return s }

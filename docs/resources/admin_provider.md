@@ -186,11 +186,11 @@ resource "duploai_admin_provider" "other" {
 
 - `account_id` (String) Account identifier for the provider (e.g. an AWS account id or cluster endpoint).
 - `category` (String) Provider category. Defaults to 'cloud'.
-- `credentials` (Attributes List) Authentication credentials for the provider. Each credential's field values are stored in Terraform state. (see [below for nested schema](#nestedatt--credentials))
+- `credentials` (Attributes List) Authentication credentials for the provider. Sensitive field values are write-only: the API redacts them on read, so Terraform keeps the configured value in state and cannot detect an out-of-band change to a secret. (see [below for nested schema](#nestedatt--credentials))
 - `description` (String) Human-readable description of the provider.
 - `is_active` (Boolean) Whether the provider is active. Defaults to active when omitted.
 - `metadata` (Map of String) Free-form key/value metadata.
-- `system_credential` (Attributes) System credential for the provider. Its field values are stored in Terraform state. (see [below for nested schema](#nestedatt--system_credential))
+- `system_credential` (Attributes) System credential for the provider. Sensitive field values are write-only: the API redacts them on read, so Terraform keeps the configured value in state. (see [below for nested schema](#nestedatt--system_credential))
 - `type` (String) Provider type (case-insensitive). One of: eks, aks, gke, rhos, otel, aws, azure, gcp, datadog, newrelic, sentry, grafanaalertmanager, pagerduty, incident.io, github, gitlab, bitbucket, apollo, outreach, zoom, attention, gong, hubspot, salesforce, marketo, mailchimp, vanta, drata, other.
 
 ### Read-Only
@@ -223,7 +223,7 @@ Optional:
 
 - `is_sensitive` (Boolean) Whether this field is sensitive. The server may auto-promote known secret keys (e.g. password, apikey).
 - `type` (String) Field type (e.g. 'string', 'secret').
-- `value` (String, Sensitive) Field value. Sensitive — redacted in plan output but stored in state.
+- `value` (String, Sensitive) Field value. Sensitive — redacted in plan output, and write-only: the API never returns it, so the configured value is kept in state.
 
 
 
@@ -250,7 +250,7 @@ Optional:
 
 - `is_sensitive` (Boolean) Whether this field is sensitive.
 - `type` (String) Field type (e.g. 'string', 'secret').
-- `value` (String, Sensitive) Field value. Sensitive — redacted in plan output but stored in state.
+- `value` (String, Sensitive) Field value. Sensitive — redacted in plan output, and write-only: the API never returns it, so the configured value is kept in state.
 
 ## Import
 
