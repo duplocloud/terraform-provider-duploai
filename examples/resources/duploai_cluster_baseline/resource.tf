@@ -159,14 +159,25 @@ resource "duploai_cluster_baseline" "azure_imported" {
   # version / region / VNet / subnets are auto-discovered — leave unset.
 }
 
+# On-premise / bare Kubernetes cluster (K8S_ONLY) — registers an existing cluster
+# via its Kubernetes scope. No cloud network is provisioned, so network_id is
+# omitted and scope_ids is set explicitly.
+resource "duploai_cluster_baseline" "onprem" {
+  workspace_id = "<workspace-id>"
+  name         = "onprem-cluster"
+  cloud        = "K8S_ONLY"
+  scope_ids    = ["<k8s-scope-id>"]
+  version      = "1.34"
+}
+
 # Import an existing installer-provisioned bare-Kubernetes cluster (K8S_ONLY,
 # mode = Import) by its scope. No cloud network is provisioned, so network_id
 # is omitted; scope_id (not scope_ids) identifies the cluster. Delete is a
 # no-op for this combination (the cluster isn't deprovisioned by Terraform) —
 # see endpoint.deprovision.skipWhen.
-resource "duploai_cluster_baseline" "onprem" {
+resource "duploai_cluster_baseline" "onprem_imported" {
   workspace_id = "<workspace-id>"
-  name         = "onprem-cluster"
+  name         = "installer-poc-vcfa-vks"
   cloud        = "K8S_ONLY"
   mode         = "Import"
   scope_id     = "<k8s-scope-id>"
