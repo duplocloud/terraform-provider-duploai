@@ -3,6 +3,7 @@
   "description": "Manages a DuploCloud AI Helpdesk workspace — the top-level container that groups personas, scopes, a quota, and configuration for a team or tenant.",
   "idPath": "id",
   "dataSource": true,
+  "idRequestPath": "id",
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/admin/data/Workspaces"
   },

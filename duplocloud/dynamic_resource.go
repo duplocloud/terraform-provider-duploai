@@ -403,7 +403,7 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	// follow-up update once the resource is ready so those fields take effect on
 	// first apply. The update body is idempotent for fields create already applied.
 	if r.spec.UpdateAfterCreate {
-		updBody := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
+		updBody := r.updateBodyFromRaw(req.Plan.Raw, objID, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -494,7 +494,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	body := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
+	body := r.updateBodyFromRaw(req.Plan.Raw, objID, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -505,7 +505,9 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	// waiter entirely — issuing a PUT would re-trigger provisioning for a
 	// metadata-only change. ModifyPlan has already carried prior computed values
 	// into the plan, so it is fully known and safe to persist directly.
-	stateBody := r.bodyFromRaw(req.State.Raw, "update", &resp.Diagnostics)
+	// Built the same way as the plan body (id included) so the injected id cannot
+	// make the two differ and defeat the skip.
+	stateBody := r.updateBodyFromRaw(req.State.Raw, objID, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -624,7 +626,7 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 		// environment_id, resource_group_id, …) the backend needs to resolve the
 		// resource are present, then overlay this one update intent. Create-only
 		// and other update-intent fields are excluded by bodyFromRaw.
-		body := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
+		body := r.updateBodyFromRaw(req.Plan.Raw, objID, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -1015,6 +1017,20 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *dia
 		applyConstants(body, r.spec.UpdateConstants, diags)
 	} else {
 		applyConstants(body, r.spec.CreateConstants, diags)
+	}
+	return body
+}
+
+// updateBodyFromRaw builds the PUT body and, when the spec sets idRequestPath,
+// writes the backend object id into it. Required by APIs that validate a
+// full-document update against the id in the BODY rather than the one in the
+// route — see ResourceSpec.IDRequestPath. Used by every real update call; the
+// no-op comparison in ModifyPlan deliberately skips it, since the id is equal on
+// both sides and would only add noise.
+func (r *dynamicResource) updateBodyFromRaw(raw tftypes.Value, objID string, diags *diag.Diagnostics) map[string]any {
+	body := r.bodyFromRaw(raw, "update", diags)
+	if body != nil && r.spec.IDRequestPath != "" && objID != "" {
+		setPath(body, strings.Split(r.spec.IDRequestPath, "."), objID)
 	}
 	return body
 }

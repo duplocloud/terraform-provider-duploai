@@ -54,6 +54,7 @@ Saving this file, running `go generate ./...` (to regenerate docs), and running
 | `description` | string | **yes** | User-facing description shown in generated docs and the Terraform schema. |
 | `idPath` | string | **yes** | Dot-path into the create/read response that contains the backend-assigned object ID (e.g. `"id"`, `"result.id"`). The engine composes the Terraform resource ID as `<scope_values>/<backend_id>`. |
 | `endpoint` | object | **yes** | API endpoint configuration. See [Endpoint config](#endpoint-config). |
+| `idRequestPath` | string | no | Dot-path at which to write the backend object id into the **update** body (normally `"id"`). For APIs that validate a full-document update against the id in the body rather than the route. See [Sending the id on update](#sending-the-id-on-update). |
 | `attributes` | array | **yes** | Schema attributes. See [Attributes](#attributes). |
 | `requestConstants` | array | no | Fixed key/value pairs injected into every request body. See [Request constants](#request-constants). |
 | `createConstants` | array | no | Fixed pairs injected into **create** (POST) bodies only. Overrides `requestConstants` for the same path. |
@@ -65,6 +66,48 @@ Saving this file, running `go generate ./...` (to regenerate docs), and running
 | `waiter` | object | no | Async polling config. Required for resources that provision asynchronously. See [Waiter](#waiter). |
 
 ---
+
+## Sending the id on update
+
+The engine puts the object id in the URL (`PUT {uriBase}/{id}`) and never in the
+body — `id` is injected into the schema, not declared as an attribute. Some APIs
+need it in the body anyway.
+
+DuploAI's admin entity endpoints are one: the update path loads the existing
+record by route id but validates the *deserialized body*, and `Entity.Id`
+self-generates a fresh identifier when the body omits it. A uniqueness check that
+self-excludes by that id then excludes nothing, and the record collides with
+itself:
+
+```
+status 400: Validation error
+ShortName 'INSTALLER' is already used by workspace 'xforge-installer'.
+```
+
+— where `xforge-installer` *is* the workspace being updated. The console never
+hits this because it PUTs the whole object, id included.
+
+Set `idRequestPath` at the top level of the spec to match:
+
+```json
+{
+  "name": "admin_workspace",
+  "idPath": "id",
+  "idRequestPath": "id",
+  "endpoint": { "uriBase": "/v1/aiservicedesk/admin/data/Workspaces" }
+}
+```
+
+Notes:
+
+- **Update only.** The create body never carries an id — the backend assigns it.
+- Applies to every real update: the normal `PUT`, the `updateAfterCreate`
+  follow-up, and each `singleIntentUpdate` call.
+- It is also written into the prior-state body used for the
+  "nothing the API cares about changed" comparison, so an injected id cannot make
+  the two sides differ and turn every apply into a pointless `PUT`.
+- Opt-in. Leave it unset unless an API actually needs it; a stray `id` in the
+  body is at best ignored and at worst rejected.
 
 ## Endpoint config
 
