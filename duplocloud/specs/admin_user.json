@@ -11,8 +11,8 @@
       "name": "name",
       "type": "string",
       "required": true,
-      "apiPath": "name",
-      "description": "Username or handle for the user."
+      "apiPath": "displayName",
+      "description": "Name of the user, as shown in the console."
     },
     {
       "name": "email",
@@ -20,14 +20,6 @@
       "required": true,
       "apiPath": "email",
       "description": "Email address of the user (required by the backend)."
-    },
-    {
-      "name": "display_name",
-      "type": "string",
-      "optional": true,
-      "computed": true,
-      "apiPath": "displayName",
-      "description": "Human-readable display name shown in the UI."
     },
     {
       "name": "description",

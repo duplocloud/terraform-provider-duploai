@@ -33,14 +33,13 @@ output "user_email" {
 
 - `created_at` (String) Timestamp when the user was created (RFC 3339).
 - `description` (String) Optional description of the user.
-- `display_name` (String) Human-readable display name shown in the UI.
 - `email` (String) Email address of the user (required by the backend).
 - `external_provider` (String) External OAuth/SSO provider name (e.g. 'Google', 'GitHub').
 - `external_subject` (String) Subject identifier from the external OAuth/SSO provider.
 - `is_active` (Boolean) Whether the user account is active. Defaults to true when omitted.
 - `last_login_at_utc` (String) Timestamp of the user's last login (RFC 3339, UTC).
 - `metadata` (Map of String) Free-form key/value metadata.
-- `name` (String) Username or handle for the user.
+- `name` (String) Name of the user, as shown in the console.
 - `roles` (List of String) List of roles assigned to the user.
 - `updated_at` (String) Timestamp when the user was last updated (RFC 3339).
 - `version` (Number) Version counter, incremented on each update.
