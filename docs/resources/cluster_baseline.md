@@ -185,6 +185,19 @@ resource "duploai_cluster_baseline" "onprem" {
   version      = "1.34"
 }
 
+# Import an existing installer-provisioned bare-Kubernetes cluster (K8S_ONLY,
+# mode = Import) by its scope. No cloud network is provisioned, so network_id
+# is omitted; scope_id (not scope_ids) identifies the cluster. Delete is a
+# no-op for this combination (the cluster isn't deprovisioned by Terraform) —
+# see endpoint.deprovision.skipWhen.
+resource "duploai_cluster_baseline" "onprem_imported" {
+  workspace_id = "<workspace-id>"
+  name         = "installer-poc-vcfa-vks"
+  cloud        = "K8S_ONLY"
+  mode         = "Import"
+  scope_id     = "<k8s-scope-id>"
+}
+
 # Import an existing EKS cluster (mode = "Import") — adopts a cluster the platform
 # did not provision. `name` must match the existing cluster's name; the platform
 # finds it by name + region + cloud and auto-discovers version, VPC, and subnets.
@@ -225,7 +238,8 @@ resource "duploai_cluster_baseline" "imported" {
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `region` (String) Cloud region (e.g. us-east-1). For Create, inherited from the linked network (network_id) — leave unset. Required for Import (identifies where the existing cluster runs).
-- `scope_ids` (List of String) Scope IDs for the cluster. For cloud clusters leave unset — inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from.
+- `scope_id` (String) Scope ID for the cluster, sent as a top-level request field. Required (and only applicable) when cloud is K8S_ONLY and mode is Import — importing an existing installer-provisioned cluster by its scope. For all other cloud/mode combinations use scope_ids instead.
+- `scope_ids` (List of String) Scope IDs for the cluster. For cloud clusters leave unset — inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from. Not used when cloud is K8S_ONLY and mode is Import — use scope_id instead.
 - `skip_attribute_auto_creation` (Boolean) Skip automatic creation of cluster attributes (add-ons/managed components) during provisioning. When unset, follows the server default; set true to fully self-manage cluster attributes.
 - `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. AWS (EKS) only — for Azure (AKS) use azure.system_node_pool instead. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
