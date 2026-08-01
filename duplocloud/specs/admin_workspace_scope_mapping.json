@@ -1,0 +1,28 @@
+{
+  "name": "admin_workspace_scope_mapping",
+  "description": "Attaches an infrastructure scope to a DuploCloud AI workspace. Use this to manage the link on its own — for example when the workspace is managed elsewhere, or by a different team — instead of listing the scope in the workspace's `scope_ids`. Manage a given scope with one or the other, never both.",
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/workspaces/{workspace_id}/scopes/{scope_id}"
+  },
+  "association": {
+    "readPath": "/v1/aiservicedesk/admin/data/workspaces/{workspace_id}",
+    "memberPath": "scopeIds",
+    "memberAttribute": "scope_id"
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "Workspace the scope is attached to."
+    },
+    {
+      "name": "scope_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "Scope to attach."
+    }
+  ]
+}

@@ -58,6 +58,7 @@ provider "duploai" {
 | [`duploai_admin_skill`](docs/resources/admin_skill.md) | Manages a DuploCloud AI Helpdesk skill — a reusable capability (Markdown docs, a package, or a private Git repo) that is assigned to personas |
 | [`duploai_admin_user`](docs/resources/admin_user.md) | Manages a DuploCloud AI user account, including identity, roles, and metadata |
 | [`duploai_admin_workspace`](docs/resources/admin_workspace.md) | Manages a DuploCloud AI Helpdesk workspace — the top-level container that groups personas, scopes, a quota, and configuration for a team or tenant |
+| [`duploai_admin_workspace_scope_mapping`](docs/resources/admin_workspace_scope_mapping.md) | Attaches an infrastructure scope to a DuploCloud AI workspace. Use this to manage the link on its own — for example when the workspace is managed elsewhere, or by a different team — instead of listing the scope in the workspace's `scope_ids`. Manage a given scope with one or the other, never both |
 | [`duploai_app_service`](docs/resources/app_service.md) | Manages a DuploCloud AI Helpdesk app service (Kubernetes Deployment) |
 | [`duploai_aws_efs`](docs/resources/aws_efs.md) | Manages a DuploCloud AI Helpdesk AWS EFS file system — an elastic, managed NFS file system provisioned within an environment and resource group |
 | [`duploai_aws_lambda`](docs/resources/aws_lambda.md) | Manages a DuploCloud AI Helpdesk AWS Lambda function — a serverless compute resource that runs code in response to events within an environment and resource group |
