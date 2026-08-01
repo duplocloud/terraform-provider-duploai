@@ -81,6 +81,26 @@ type ResourceSpec struct {
 	// for fields the create already applied.
 	UpdateAfterCreate bool `json:"updateAfterCreate,omitempty"`
 
+	// Association, when set, makes this a pure link between two existing objects
+	// rather than an object of its own — e.g. attaching a scope to a workspace via
+	// POST/DELETE .../workspaces/{workspace_id}/scopes/{scope_id}. Such endpoints
+	// carry both ids in the path, take no request body, return no content, and
+	// offer no GET for the link itself, so the standard CRUD shape does not fit:
+	//
+	//   - create  POSTs the resolved uriBase and ignores the empty response
+	//   - delete  DELETEs the same path (no "/{id}" suffix is appended)
+	//   - read    GETs Association.ReadPath (the parent) and reports the link as
+	//             present only while MemberAttribute's value appears in the list at
+	//             MemberPath — so detaching it out of band shows up as drift
+	//             instead of being invisible
+	//   - id      is the path parameters joined, e.g. "<workspace_id>/<scope_id>",
+	//             which is also the import id
+	//
+	// Every attribute of an association resource is a path parameter and must be
+	// required + forceNew: there is nothing to update in place, and changing
+	// either end means a different link.
+	Association *AssociationSpec `json:"association,omitempty"`
+
 	// IDRequestPath, when set, writes the resource's backend object id into the
 	// UPDATE (PUT) body at this dot-path — normally "id". Use for APIs that
 	// validate a full-document update against the id carried in the BODY rather
@@ -120,6 +140,25 @@ type ResourceSpec struct {
 	// that attribute's target value, then waits for the ready state again before
 	// the next. Attributes without an UpdateIntent should be forceNew/createOnly.
 	SingleIntentUpdate *SingleIntentUpdateSpec `json:"singleIntentUpdate,omitempty"`
+}
+
+// AssociationSpec configures a link-only resource: how to tell whether the link
+// still exists, given that the API offers no GET for the link itself.
+type AssociationSpec struct {
+	// ReadPath is the absolute path of the object that owns the list of links,
+	// with the same {placeholder} path parameters as the endpoint's uriBase —
+	// e.g. "/v1/aiservicedesk/admin/data/workspaces/{workspace_id}". It is NOT
+	// appended to uriBase; the parent usually sits above it.
+	ReadPath string `json:"readPath"`
+
+	// MemberPath is the dot-path, within the ReadPath response, of the list the
+	// link appears in — e.g. "scopeIds".
+	MemberPath string `json:"memberPath"`
+
+	// MemberAttribute names the schema attribute whose value is looked for in
+	// that list — e.g. "scope_id". When it is absent, the link is gone and the
+	// resource is removed from state so the next plan recreates it.
+	MemberAttribute string `json:"memberAttribute"`
 }
 
 // SingleIntentUpdateSpec configures resource-level single-intent updates.
@@ -199,13 +238,18 @@ func (s *ResourceSpec) BuildEndpoint() (duplosdk.Endpoint, error) {
 		return duplosdk.Endpoint{}, fmt.Errorf("endpoint.uriBase is required")
 	}
 	result := duplosdk.Endpoint{UriBase: ep.UriBase}
+	if s.Association != nil {
+		// The link has no object id, so nothing may be appended to the path: the
+		// delete call targets uriBase itself.
+		result.NoItemPath = true
+	}
 	if ep.Create != nil {
 		result.Create = duplosdk.Operation{Verb: ep.Create.Verb, Path: ep.Create.Path}
 	}
 	if ep.Read != nil {
 		result.Read = duplosdk.Operation{Verb: ep.Read.Verb, Path: ep.Read.Path}
 	}
-	if !ep.Immutable {
+	if !ep.Immutable && s.Association == nil {
 		// Endpoint.HasUpdate() checks Update != Operation{}, so the value must
 		// be non-zero. Start with the REST convention and apply any overrides.
 		update := duplosdk.Operation{Verb: "PUT", Path: "/{id}"}
@@ -667,7 +711,9 @@ func (s *ResourceSpec) validate() error {
 	if s.Name == "" {
 		return fmt.Errorf("name is required")
 	}
-	if s.IDPath == "" {
+	// An association resource has no object of its own, so no idPath to read one
+	// from — its identity is the path parameters.
+	if s.IDPath == "" && s.Association == nil {
 		return fmt.Errorf("idPath is required")
 	}
 	if s.Endpoint.UriBase == "" {
@@ -675,6 +721,9 @@ func (s *ResourceSpec) validate() error {
 	}
 	seen, err := validateAttributes(s.Attributes)
 	if err != nil {
+		return err
+	}
+	if err := s.validateAssociation(seen); err != nil {
 		return err
 	}
 	if seen["id"] {
@@ -762,6 +811,70 @@ func validateSingleIntentUpdate(s *ResourceSpec) error {
 		}
 	} else if intents > 0 {
 		return fmt.Errorf("updateIntent on an attribute requires a resource-level singleIntentUpdate block")
+	}
+	return nil
+}
+
+// validateAssociation checks a link-only resource is coherent: it needs a way to
+// detect the link, and every attribute must be a required + forceNew path
+// parameter, since there is no body to update and changing either end means a
+// different link. Catching this at startup beats discovering it at apply time.
+func (s *ResourceSpec) validateAssociation(seen map[string]bool) error {
+	a := s.Association
+	if a == nil {
+		return nil
+	}
+	if a.ReadPath == "" {
+		return fmt.Errorf("association.readPath is required")
+	}
+	if a.MemberPath == "" {
+		return fmt.Errorf("association.memberPath is required")
+	}
+	if a.MemberAttribute == "" {
+		return fmt.Errorf("association.memberAttribute is required")
+	}
+	if !seen[a.MemberAttribute] {
+		return fmt.Errorf("association.memberAttribute references unknown attribute %q", a.MemberAttribute)
+	}
+	if s.Endpoint.Update != nil {
+		return fmt.Errorf("association resources have nothing to update in place; remove endpoint.update")
+	}
+	if s.Waiter != nil {
+		return fmt.Errorf("association resources are synchronous; remove waiter")
+	}
+	if s.DataSource || s.DataSourceOnly {
+		// A generated data source would GET the link path, which has no GET.
+		return fmt.Errorf("association resources cannot expose a data source; read the parent instead")
+	}
+
+	params := map[string]bool{}
+	for _, p := range (duplosdk.Endpoint{UriBase: s.Endpoint.UriBase}).PathParams() {
+		params[p] = true
+	}
+	// readPath is resolved from the same scope as uriBase, so a placeholder that
+	// is not a path parameter silently substitutes to empty — producing a wrong
+	// URL that 404s, which reads as "link gone" and recreates the resource on
+	// every apply instead of failing with something actionable.
+	for _, p := range (duplosdk.Endpoint{UriBase: a.ReadPath}).PathParams() {
+		if !params[p] {
+			return fmt.Errorf("association.readPath references {%s}, which is not a path parameter of endpoint.uriBase", p)
+		}
+	}
+	for _, at := range s.Attributes {
+		if !params[at.Name] {
+			return fmt.Errorf("association attribute %q is not a path parameter in endpoint.uriBase", at.Name)
+		}
+		if !at.Required || !at.ForceNew {
+			return fmt.Errorf("association attribute %q must be required + forceNew", at.Name)
+		}
+		if at.Type != "string" {
+			return fmt.Errorf("association attribute %q must be a string", at.Name)
+		}
+	}
+	for p := range params {
+		if s.attr(p) == nil {
+			return fmt.Errorf("association path parameter {%s} has no matching attribute", p)
+		}
 	}
 	return nil
 }

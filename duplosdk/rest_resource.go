@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -44,9 +45,25 @@ func (r *RESTResource[T]) Create(req *T) (*T, ClientError) {
 	return r.decode(r.endpoint.createVerb(), r.endpoint.createPath(r.scope), req)
 }
 
+// CreateNoContent issues the create call and ignores the response body. Use for
+// endpoints that return 200 with no content — an association resource's POST
+// (".../workspaces/{id}/scopes/{scopeId}") carries both ids in the path and
+// returns nothing, so decode's "no data" check would reject a perfectly good
+// response.
+func (r *RESTResource[T]) CreateNoContent() ClientError {
+	return r.client.callAPI(r.endpoint.createVerb(), r.endpoint.createPath(r.scope), nil, nil)
+}
+
 // Get fetches a single object by id.
 func (r *RESTResource[T]) Get(id string) (*T, ClientError) {
 	return r.decode(r.endpoint.readVerb(), r.endpoint.readPath(r.scope, id), nil)
+}
+
+// GetPath fetches and decodes an already-resolved absolute path. Use when the
+// object to read is not the resource's own path — an association resource reads
+// its parent and checks membership, since the mapping itself has no GET.
+func (r *RESTResource[T]) GetPath(path string) (*T, ClientError) {
+	return r.decode(http.MethodGet, path, nil)
 }
 
 // retryBaseDelay is the initial backoff between GetWithRetry attempts; it
