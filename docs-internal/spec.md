@@ -64,8 +64,83 @@ Saving this file, running `go generate ./...` (to regenerate docs), and running
 | `dataSource` | bool | no | When `true`, also registers a read-only `data.duploai_<name>` data source derived automatically from this spec. See [Auto-generated data source](#auto-generated-data-source). |
 | `dataSourceOnly` | bool | no | When `true`, registers **only** a read-only `data.duploai_<name>` data source — no managed resource is registered. Use this for purely read-only APIs (e.g. look-up endpoints with no create/update/delete). Implies data source semantics; `dataSource` need not also be set. |
 | `waiter` | object | no | Async polling config. Required for resources that provision asynchronously. See [Waiter](#waiter). |
+| `association` | object | no | Makes this a link between two existing objects rather than an object of its own. See [Association resources](#association-resources). |
 
 ---
+
+## Association resources
+
+Some endpoints link two objects that already exist rather than creating one:
+
+```
+POST   /v1/aiservicedesk/admin/data/workspaces/{workspace_id}/scopes/{scope_id}
+DELETE /v1/aiservicedesk/admin/data/workspaces/{workspace_id}/scopes/{scope_id}
+```
+
+These break every assumption the normal CRUD shape makes. Both ids are in the
+path, there is no request body, the response is empty (so the usual decode
+rejects it as "no data"), there is no object id to append, and — critically —
+there is **no GET for the link itself**. Whether the link exists can only be
+learned by reading the parent and looking for the member.
+
+Set `association` and the engine switches to that shape:
+
+```json
+{
+  "name": "admin_workspace_scope_mapping",
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/workspaces/{workspace_id}/scopes/{scope_id}"
+  },
+  "association": {
+    "readPath": "/v1/aiservicedesk/admin/data/workspaces/{workspace_id}",
+    "memberPath": "scopeIds",
+    "memberAttribute": "scope_id"
+  },
+  "attributes": [
+    { "name": "workspace_id", "type": "string", "required": true, "forceNew": true },
+    { "name": "scope_id",     "type": "string", "required": true, "forceNew": true }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `readPath` | Absolute path of the object that owns the list, sharing `uriBase`'s path parameters. **Not** appended to `uriBase` — the parent normally sits above it. |
+| `memberPath` | Dot-path to the list within that response, e.g. `"scopeIds"`. |
+| `memberAttribute` | The attribute whose value is looked for in the list, e.g. `"scope_id"`. |
+
+Behaviour:
+
+- **create** — POSTs the resolved `uriBase` and ignores the empty response.
+- **delete** — DELETEs the same path; no `/{id}` is appended.
+- **read** — GETs `readPath` and treats the link as present only while
+  `memberAttribute`'s value appears at `memberPath`. If it is gone, or the parent
+  404s, the resource leaves state and the next plan recreates it. This is what
+  makes detaching in the console show up as drift instead of silently persisting.
+- **id** — the path parameters joined (`<workspace_id>/<scope_id>`), which is also
+  the import id.
+- **update** — never happens; there is nothing to change in place.
+
+Rules enforced at startup:
+
+- `readPath`, `memberPath` and `memberAttribute` are all required, and
+  `memberAttribute` must name a real attribute.
+- Every `{placeholder}` in `readPath` must be a path parameter of `uriBase`. An
+  unknown one substitutes to empty, giving a URL that 404s — which reads as "link
+  gone" and silently recreates the resource on every apply.
+- Every attribute must be a `string`, `required`, `forceNew`, and a path
+  parameter of `uriBase`. There is no body, so anything else could never be sent;
+  and changing either end means a different link, not an edit.
+- `endpoint.update` must not be declared.
+- No `waiter` — the link is created synchronously.
+- No `dataSource` / `dataSourceOnly` — a generated data source would GET the link
+  path, which is exactly the endpoint that does not exist. Read the parent
+  instead.
+
+One caveat is the spec's job to document, not the engine's: if the parent
+resource also manages the same list (e.g. `duploai_admin_workspace.scope_ids`),
+the two will fight over it on every apply. Pick one owner per link and say so in
+the resource description.
 
 ## Sending the id on update
 
