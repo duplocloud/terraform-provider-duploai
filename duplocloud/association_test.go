@@ -148,6 +148,42 @@ func TestAssociation_ReadKeepsStateWhenMemberPresent(t *testing.T) {
 	}
 }
 
+// Import: `terraform import <ws>/<scope>` passes the id through and leaves every
+// attribute null, so Read is what has to populate them — from the id alone. This
+// is the shape TestAssociation_ReadKeepsStateWhenMemberPresent cannot exercise,
+// because it seeds state with the attributes already set.
+func TestAssociation_ReadPopulatesAttributesFromIDOnImport(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":{"id":"ws-1","scopeIds":["sc-9"]}}`))
+	}))
+	defer srv.Close()
+
+	// Exactly what ImportStatePassthroughID leaves behind: id set, rest null.
+	imported := tftypes.NewValue(assocObjType, map[string]tftypes.Value{
+		"id":           tftypes.NewValue(tftypes.String, "ws-1/sc-9"),
+		"workspace_id": tftypes.NewValue(tftypes.String, nil),
+		"scope_id":     tftypes.NewValue(tftypes.String, nil),
+	})
+
+	r, schema := assocResource(t, srv.URL)
+	resp := resource.ReadResponse{State: tfsdk.State{Schema: schema, Raw: imported}}
+	r.Read(context.Background(),
+		resource.ReadRequest{State: tfsdk.State{Schema: schema, Raw: imported}}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read diags: %v", resp.Diagnostics)
+	}
+	if resp.State.Raw.IsNull() {
+		t.Fatal("state was removed although the scope is attached")
+	}
+	if got := stateString(t, resp.State.Raw, "workspace_id"); got != "ws-1" {
+		t.Errorf("workspace_id = %q, want it recovered from the id", got)
+	}
+	if got := stateString(t, resp.State.Raw, "scope_id"); got != "sc-9" {
+		t.Errorf("scope_id = %q, want it recovered from the id", got)
+	}
+}
+
 // Detached out of band ⇒ the resource must leave state so the next plan
 // recreates it, rather than reporting a mapping that no longer exists.
 func TestAssociation_ReadRemovesStateWhenMemberGone(t *testing.T) {
@@ -237,6 +273,11 @@ func TestAssociation_ValidationRejectsBadSpecs(t *testing.T) {
 			s.Attributes[1].Optional = true
 		}},
 		{"update declared", func(s *ResourceSpec) { s.Endpoint.Update = &OperationSpec{Verb: "PUT"} }},
+		{"waiter declared", func(s *ResourceSpec) { s.Waiter = &WaiterSpec{} }},
+		{"data source requested", func(s *ResourceSpec) { s.DataSource = true }},
+		{"readPath references a non-path-parameter", func(s *ResourceSpec) {
+			s.Association.ReadPath = "/workspaces/{workspace}" // typo: not {workspace_id}
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := associationSpec()

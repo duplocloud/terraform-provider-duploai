@@ -125,10 +125,17 @@ Rules enforced at startup:
 
 - `readPath`, `memberPath` and `memberAttribute` are all required, and
   `memberAttribute` must name a real attribute.
+- Every `{placeholder}` in `readPath` must be a path parameter of `uriBase`. An
+  unknown one substitutes to empty, giving a URL that 404s — which reads as "link
+  gone" and silently recreates the resource on every apply.
 - Every attribute must be a `string`, `required`, `forceNew`, and a path
   parameter of `uriBase`. There is no body, so anything else could never be sent;
   and changing either end means a different link, not an edit.
 - `endpoint.update` must not be declared.
+- No `waiter` — the link is created synchronously.
+- No `dataSource` / `dataSourceOnly` — a generated data source would GET the link
+  path, which is exactly the endpoint that does not exist. Read the parent
+  instead.
 
 One caveat is the spec's job to document, not the engine's: if the parent
 resource also manages the same list (e.g. `duploai_admin_workspace.scope_ids`),

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -389,7 +390,11 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 			resp.Diagnostics.AddError("Error creating "+r.spec.Name, clientErr.Error())
 			return
 		}
-		resp.State.Raw = r.stateFromResponse(ctx, req.Plan.Raw, map[string]any{}, scope, id, false, &resp.Diagnostics)
+		state := r.stateFromResponse(ctx, req.Plan.Raw, map[string]any{}, scope, id, false, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		resp.State.Raw = state
 		return
 	}
 
@@ -522,7 +527,7 @@ func (r *dynamicResource) readAssociation(ctx context.Context, req resource.Read
 
 	want := scope[as.MemberAttribute]
 	members := anyToStringSlice(extractPath(*parent, strings.Split(as.MemberPath, ".")))
-	if !containsString(members, want) {
+	if !slices.Contains(members, want) {
 		log.Printf("[TRACE] dynamic %s Read(%s): %s no longer in %s, removing from state",
 			r.spec.Name, id, want, as.MemberPath)
 		resp.State.RemoveResource(ctx)
@@ -534,15 +539,6 @@ func (r *dynamicResource) readAssociation(ctx context.Context, req resource.Read
 	// which is what makes import work.
 	resp.State.Raw = r.stateFromResponse(ctx, req.State.Raw, map[string]any{}, scope, id, true, &resp.Diagnostics)
 	log.Printf("[TRACE] dynamic %s Read(%s): end", r.spec.Name, id)
-}
-
-func containsString(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-	return false
 }
 
 func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -840,9 +839,26 @@ func (s *ResourceSpec) validateAssociation(seen map[string]bool) error {
 	if s.Endpoint.Update != nil {
 		return fmt.Errorf("association resources have nothing to update in place; remove endpoint.update")
 	}
+	if s.Waiter != nil {
+		return fmt.Errorf("association resources are synchronous; remove waiter")
+	}
+	if s.DataSource || s.DataSourceOnly {
+		// A generated data source would GET the link path, which has no GET.
+		return fmt.Errorf("association resources cannot expose a data source; read the parent instead")
+	}
+
 	params := map[string]bool{}
-	for _, p := range pathParamNames(s.Endpoint.UriBase) {
+	for _, p := range (duplosdk.Endpoint{UriBase: s.Endpoint.UriBase}).PathParams() {
 		params[p] = true
+	}
+	// readPath is resolved from the same scope as uriBase, so a placeholder that
+	// is not a path parameter silently substitutes to empty — producing a wrong
+	// URL that 404s, which reads as "link gone" and recreates the resource on
+	// every apply instead of failing with something actionable.
+	for _, p := range (duplosdk.Endpoint{UriBase: a.ReadPath}).PathParams() {
+		if !params[p] {
+			return fmt.Errorf("association.readPath references {%s}, which is not a path parameter of endpoint.uriBase", p)
+		}
 	}
 	for _, at := range s.Attributes {
 		if !params[at.Name] {
@@ -862,20 +878,6 @@ func (s *ResourceSpec) validateAssociation(seen map[string]bool) error {
 	}
 	return nil
 }
-
-// pathParamNames returns the {placeholder} names in a path template, excluding
-// the reserved {id}.
-func pathParamNames(tmpl string) []string {
-	out := []string{}
-	for _, m := range pathParamTokenRe.FindAllStringSubmatch(tmpl, -1) {
-		if m[1] != "id" {
-			out = append(out, m[1])
-		}
-	}
-	return out
-}
-
-var pathParamTokenRe = regexp.MustCompile(`\{(\w+)\}`)
 
 // validatePreservePairs checks every PreserveUnmanagedInto pairing: the source
 // must be a top-level string set/list, and the named sibling must exist as a
