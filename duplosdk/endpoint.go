@@ -31,6 +31,13 @@ type Endpoint struct {
 	Update Operation
 	Delete Operation
 
+	// NoItemPath suppresses the conventional "/{id}" suffix on read/update/delete.
+	// Set for association resources, whose identity is carried entirely by the
+	// path parameters in UriBase (e.g. a workspace↔scope mapping addressed as
+	// .../workspaces/{workspace_id}/scopes/{scope_id}) and which therefore have no
+	// object id of their own to append.
+	NoItemPath bool
+
 	// Deprovision, when set, is invoked as a pre-delete step for resources the
 	// API refuses to delete while live (e.g. a provisioned cluster must tear down
 	// its cloud resources first). Leave it zero for resources whose Delete call
@@ -74,13 +81,21 @@ func (e Endpoint) createPath(scope map[string]string) string {
 	return e.resolve(e.UriBase+e.Create.Path, scope, "")
 }
 func (e Endpoint) readPath(scope map[string]string, id string) string {
-	return e.resolve(e.UriBase+itemPath(e.Read.Path), scope, id)
+	return e.resolve(e.UriBase+e.itemPath(e.Read.Path), scope, id)
 }
 func (e Endpoint) updatePath(scope map[string]string, id string) string {
-	return e.resolve(e.UriBase+itemPath(e.Update.Path), scope, id)
+	return e.resolve(e.UriBase+e.itemPath(e.Update.Path), scope, id)
 }
 func (e Endpoint) deletePath(scope map[string]string, id string) string {
-	return e.resolve(e.UriBase+itemPath(e.Delete.Path), scope, id)
+	return e.resolve(e.UriBase+e.itemPath(e.Delete.Path), scope, id)
+}
+
+// ResolvePath substitutes the endpoint's path parameters into an arbitrary path
+// template. Use for calls that are not UriBase-relative — an association
+// resource reads its parent (".../workspaces/{workspace_id}") rather than its
+// own path, and cannot express that by appending to UriBase.
+func (e Endpoint) ResolvePath(tmpl string, scope map[string]string) string {
+	return e.resolve(tmpl, scope, "")
 }
 
 // HasUpdate reports whether the resource supports in-place updates. When the
@@ -96,12 +111,16 @@ func (e Endpoint) deprovisionPath(scope map[string]string, id string) string {
 	return e.resolve(e.UriBase+e.Deprovision.Path, scope, id)
 }
 
-// itemPath defaults a read/update/delete path to the conventional "/{id}".
-func itemPath(p string) string {
-	if p == "" {
-		return "/{id}"
+// itemPath defaults a read/update/delete path to the conventional "/{id}",
+// unless the endpoint has no object id to append (see NoItemPath).
+func (e Endpoint) itemPath(p string) string {
+	if p != "" {
+		return p
 	}
-	return p
+	if e.NoItemPath {
+		return ""
+	}
+	return "/{id}"
 }
 
 // resolve substitutes scope (and optionally an object id) into a template.

@@ -62,10 +62,16 @@ func (r *dynamicResource) Metadata(_ context.Context, req resource.MetadataReque
 // ── Schema ──────────────────────────────────────────────────────────────────
 
 func (r *dynamicResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	idDescription := "Composite resource identifier (workspace_id/id)."
+	if r.spec.Association != nil {
+		// A link has no object id — it is identified by its path parameters alone.
+		idDescription = "Composite resource identifier (" +
+			strings.Join(r.endpoint.PathParams(), "/") + ")."
+	}
 	attrs := map[string]schema.Attribute{
 		"id": schema.StringAttribute{
 			Computed:      true,
-			Description:   "Composite resource identifier (workspace_id/id).",
+			Description:   idDescription,
 			PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 		},
 	}
@@ -207,6 +213,16 @@ func (r *dynamicResource) scopeFromReader(ctx context.Context, reader attrReader
 // slashes.
 func composeID(scopeValues []string, objID string) string {
 	return strings.Join(append(append([]string{}, scopeValues...), objID), "/")
+}
+
+// resourceID composes the state id. An association resource has no object id —
+// its identity is exactly its path parameters — so the id is just those values
+// joined ("<workspace_id>/<scope_id>"), with no trailing empty segment.
+func (r *dynamicResource) resourceID(scopeValues []string, objID string) string {
+	if r.spec.Association != nil {
+		return strings.Join(scopeValues, "/")
+	}
+	return composeID(scopeValues, objID)
 }
 
 // specFailureRetries is the waiter.failureRetries declared in the spec (0 when
@@ -360,6 +376,23 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 
 func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	scope, scopeVals := r.scopeFromReader(ctx, req.Plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// An association is created by POSTing the link path itself — both ids are in
+	// the URL, there is no body, and the response carries no content.
+	if r.spec.Association != nil {
+		id := r.resourceID(scopeVals, "")
+		log.Printf("[TRACE] dynamic %s Create(%s): association", r.spec.Name, id)
+		if clientErr := r.api(scope, r.specFailureRetries()).CreateNoContent(); clientErr != nil {
+			resp.Diagnostics.AddError("Error creating "+r.spec.Name, clientErr.Error())
+			return
+		}
+		resp.State.Raw = r.stateFromResponse(ctx, req.Plan.Raw, map[string]any{}, scope, id, false, &resp.Diagnostics)
+		return
+	}
+
 	body := r.bodyFromRaw(req.Plan.Raw, "create", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -427,7 +460,7 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
-	id := composeID(scopeVals, objID)
+	id := r.resourceID(scopeVals, objID)
 	state := r.stateFromResponse(ctx, req.Plan.Raw, *final, scope, id, false, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -442,6 +475,11 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 	log.Printf("[TRACE] dynamic %s Read(%s): start", r.spec.Name, id)
+
+	if r.spec.Association != nil {
+		r.readAssociation(ctx, req, resp, scope, id)
+		return
+	}
 
 	obj, clientErr := r.api(scope, r.specFailureRetries()).Get(objID)
 	if clientErr != nil {
@@ -461,9 +499,64 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 	log.Printf("[TRACE] dynamic %s Read(%s): end", r.spec.Name, id)
 }
 
+// readAssociation refreshes a link-only resource. The API offers no GET for the
+// link itself, so the parent is fetched and the link counts as present only
+// while the member value still appears in the parent's list. When it does not —
+// the link was removed out of band, or the parent is gone — the resource is
+// dropped from state so the next plan recreates it, rather than reporting a
+// mapping that no longer exists.
+func (r *dynamicResource) readAssociation(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse, scope map[string]string, id string) {
+	as := r.spec.Association
+	parentPath := r.endpoint.ResolvePath(as.ReadPath, scope)
+
+	parent, clientErr := r.api(scope, r.specFailureRetries()).GetPath(parentPath)
+	if clientErr != nil {
+		if clientErr.IsNotFound() {
+			// Parent gone ⇒ the link cannot exist either.
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError("Error reading "+r.spec.Name, clientErr.Error())
+		return
+	}
+
+	want := scope[as.MemberAttribute]
+	members := anyToStringSlice(extractPath(*parent, strings.Split(as.MemberPath, ".")))
+	if !containsString(members, want) {
+		log.Printf("[TRACE] dynamic %s Read(%s): %s no longer in %s, removing from state",
+			r.spec.Name, id, want, as.MemberPath)
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	// Still linked. Nothing is read back into attributes — every one of them is a
+	// path parameter — but rebuilding state re-asserts them from the parsed id,
+	// which is what makes import work.
+	resp.State.Raw = r.stateFromResponse(ctx, req.State.Raw, map[string]any{}, scope, id, true, &resp.Diagnostics)
+	log.Printf("[TRACE] dynamic %s Read(%s): end", r.spec.Name, id)
+}
+
+func containsString(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	scope, objID, id, err := r.parseID(ctx, req.State, &resp.Diagnostics)
 	if err != nil || resp.Diagnostics.HasError() {
+		return
+	}
+
+	// An association has no readable object and nothing to update — every
+	// attribute is a forceNew path parameter, so a real change replaces the link.
+	// Any diff reaching here is config-only; persist the plan as-is.
+	if r.spec.Association != nil {
+		resp.State.Raw = req.Plan.Raw
+		log.Printf("[TRACE] dynamic %s Update(%s): association, nothing to update", r.spec.Name, id)
 		return
 	}
 
@@ -1080,7 +1173,13 @@ func (r *dynamicResource) parseID(ctx context.Context, state attrReader, diags *
 	id = idVal.ValueString()
 
 	params := r.endpoint.PathParams()
-	parts, splitErr := splitID(id, len(params)+1)
+	// An association id carries only the path parameters — there is no object id
+	// segment to account for.
+	want := len(params) + 1
+	if r.spec.Association != nil {
+		want = len(params)
+	}
+	parts, splitErr := splitID(id, want)
 	if splitErr != nil {
 		diags.AddError("Invalid resource ID", splitErr.Error())
 		return nil, "", id, splitErr
@@ -1089,7 +1188,9 @@ func (r *dynamicResource) parseID(ctx context.Context, state attrReader, diags *
 	for i, p := range params {
 		scope[p] = parts[i]
 	}
-	objID = parts[len(params)]
+	if r.spec.Association == nil {
+		objID = parts[len(params)]
+	}
 	return scope, objID, id, nil
 }
 
