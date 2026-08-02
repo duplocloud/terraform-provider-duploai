@@ -29,6 +29,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -145,6 +146,9 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, boolplanmodifier.RequiresReplace())
+		}
+		if a.ImmutableOnceTrue {
+			o.PlanModifiers = append(o.PlanModifiers, immutableOnceTrueModifier{attr: a.Name})
 		}
 		return o
 	case "int":
@@ -361,6 +365,38 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		}
 		return o
 	}
+}
+
+// immutableOnceTrueModifier fails the plan when a one-way boolean is turned back
+// off. See AttributeSpec.ImmutableOnceTrue for why this errors instead of
+// quietly holding the old value.
+type immutableOnceTrueModifier struct{ attr string }
+
+func (m immutableOnceTrueModifier) Description(_ context.Context) string {
+	return "cannot be set back to false once true; the resource must be recreated"
+}
+
+func (m immutableOnceTrueModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m immutableOnceTrueModifier) PlanModifyBool(_ context.Context, req planmodifier.BoolRequest, resp *planmodifier.BoolResponse) {
+	// Null state = create; unknown either side = nothing decided yet.
+	if req.StateValue.IsNull() || req.StateValue.IsUnknown() || req.PlanValue.IsUnknown() {
+		return
+	}
+	if !req.StateValue.ValueBool() || req.PlanValue.ValueBool() {
+		return // staying off, turning on, or already on — all fine
+	}
+	resp.Diagnostics.AddAttributeError(
+		req.Path,
+		"Cannot disable "+m.attr,
+		"This setting is one-way: once enabled the cloud provider does not allow turning it "+
+			"off again, so the change would fail during apply.\n\n"+
+			"Set it back to true, destroy and recreate the resource, or keep the config as-is "+
+			"and add lifecycle { ignore_changes = ["+m.attr+"] } to stop Terraform planning "+
+			"the change.",
+	)
 }
 
 // ── Generic value bridges (used for everything that is not a nested object) ───
