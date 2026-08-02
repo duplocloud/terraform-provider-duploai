@@ -87,3 +87,49 @@ func TestWithCallTimeout_NeverShortensTheDefault(t *testing.T) {
 		t.Fatalf("a shorter override must fall back to the 5s default, got: %v", err)
 	}
 }
+
+// A Client built literally rather than via NewClient has a zero timeout. Before
+// the floor, every context deadline was already expired and the first call died
+// with a misleading "context deadline exceeded".
+func TestZeroValueClientTimeout_FallsBackToDefault(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":{"id":"o1"}}`))
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), HostURL: srv.URL} // no timeout set
+	api := NewRESTResource[map[string]any](c, Endpoint{UriBase: "/things"}, map[string]string{}, nil)
+
+	if _, err := api.Get("o1"); err != nil {
+		t.Fatalf("a zero-value client must fall back to the default deadline, got: %v", err)
+	}
+}
+
+// Reads must keep the client default even on a resource widened for a long
+// operation: the waiter polls through the same resource, and a wedged GET should
+// retry on the next poll rather than hold the operation's whole deadline open.
+func TestWithCallTimeout_ReadsKeepTheDefaultDeadline(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			time.Sleep(200 * time.Millisecond)
+		}
+		_, _ = w.Write([]byte(`{"data":{"id":"o1"}}`))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(srv.URL, "tok", false, 50*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := NewRESTResource[map[string]any](client, Endpoint{UriBase: "/things"}, map[string]string{}, nil).
+		WithCallTimeout(5 * time.Second)
+
+	// The write inherits the widened deadline...
+	if _, err := api.Update("o1", &map[string]any{}); err != nil {
+		t.Fatalf("write should use the widened deadline: %v", err)
+	}
+	// ...the read does not.
+	if _, err := api.Get("o1"); err == nil {
+		t.Fatal("reads must stay on the client default, not the widened deadline")
+	}
+}

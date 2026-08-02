@@ -52,8 +52,17 @@ func NewRESTResource[T any](c *Client, endpoint Endpoint, scope map[string]strin
 // API returned data:null, a non-enveloped body, or an empty body) is reported
 // as an error rather than a nil pointer the caller would dereference.
 func (r *RESTResource[T]) decode(verb, path string, req *T) (*T, ClientError) {
+	// Reads keep the client default: the waiter polls on the same (possibly
+	// widened) resource, and a wedged GET should retry on the next poll rather
+	// than hold the whole operation's deadline open.
+	return r.decodeWithTimeout(0, verb, path, req)
+}
+
+// decodeWithTimeout is decode under an explicit per-request deadline. Used by
+// the operation-initiating calls, which may legitimately block for minutes.
+func (r *RESTResource[T]) decodeWithTimeout(timeout time.Duration, verb, path string, req *T) (*T, ClientError) {
 	var resp apiResponse[T]
-	if err := r.client.callAPIWithTimeout(r.callTimeout, verb, path, req, &resp); err != nil {
+	if err := r.client.callAPIWithTimeout(timeout, verb, path, req, &resp); err != nil {
 		return nil, err
 	}
 	if resp.Data == nil {
@@ -64,7 +73,7 @@ func (r *RESTResource[T]) decode(verb, path string, req *T) (*T, ClientError) {
 
 // Create POSTs req to the create path and returns the created object.
 func (r *RESTResource[T]) Create(req *T) (*T, ClientError) {
-	return r.decode(r.endpoint.createVerb(), r.endpoint.createPath(r.scope), req)
+	return r.decodeWithTimeout(r.callTimeout, r.endpoint.createVerb(), r.endpoint.createPath(r.scope), req)
 }
 
 // CreateNoContent issues the create call and ignores the response body. Use for
@@ -133,7 +142,7 @@ func isRetryableRead(err ClientError) bool {
 
 // Update writes req to the update path and returns the updated object.
 func (r *RESTResource[T]) Update(id string, req *T) (*T, ClientError) {
-	return r.decode(r.endpoint.updateVerb(), r.endpoint.updatePath(r.scope, id), req)
+	return r.decodeWithTimeout(r.callTimeout, r.endpoint.updateVerb(), r.endpoint.updatePath(r.scope, id), req)
 }
 
 // Delete removes the object. A 404 is treated as success (already gone).

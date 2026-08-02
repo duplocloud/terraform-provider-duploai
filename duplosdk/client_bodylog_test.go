@@ -26,14 +26,24 @@ func TestBodyLogging_DisabledByDefault(t *testing.T) {
 // to — the redaction keys off the JSON field name, not a known schema.
 func TestRedactBody_HidesSecrets(t *testing.T) {
 	in := []byte(`{"spec":{"administratorLogin":"pgadmin",` +
-		`"administratorLoginPassword":"Sup3rSecret!pg",` +
+		`"administratorLoginPassword":"PLACEHOLDER-pg-password",` +
 		`"authConfig":{"tenantId":"abc"},` +
-		`"credentials":[{"key":"token","value":"dahp_realtoken"}],` +
-		`"apiKey":"ghp_realkey","storageSizeGB":32}}`)
+		`"credentials":[{"key":"token","value":"PLACEHOLDER-provider-token"},` +
+		`{"key":"certificateAuthorityData","value":"PLACEHOLDER-ca-data"},` +
+		`{"key":"iamRoleArn","value":"arn:aws:iam::1234:role/NotASecret"}],` +
+		`"apiKey":"PLACEHOLDER-api-key","storageSizeGB":32}}`)
 
 	got := redactBody(in)
 
-	for _, secret := range []string{"Sup3rSecret!pg", "ghp_realkey"} {
+	for _, secret := range []string{
+		"PLACEHOLDER-pg-password",
+		"PLACEHOLDER-api-key",
+		// Typed key/value pairs: the secret sits under a field named "value",
+		// so a field-name match alone never fires — this is the case that
+		// leaked provider credentials before the walk-the-document rewrite.
+		"PLACEHOLDER-provider-token",
+		"PLACEHOLDER-ca-data",
+	} {
 		if strings.Contains(got, secret) {
 			t.Errorf("secret leaked into the log: %q\n%s", secret, got)
 		}
@@ -41,6 +51,14 @@ func TestRedactBody_HidesSecrets(t *testing.T) {
 	// Non-secret fields must survive, or the log is useless for debugging.
 	if !strings.Contains(got, `"administratorLogin":"pgadmin"`) {
 		t.Errorf("non-secret field was redacted:\n%s", got)
+	}
+	// The credential's KEY name stays readable — you need to know which field
+	// was sent — and a non-secret typed value is not blanked.
+	if !strings.Contains(got, `"token"`) {
+		t.Errorf("credential key name should stay visible:\n%s", got)
+	}
+	if !strings.Contains(got, "arn:aws:iam::1234:role/NotASecret") {
+		t.Errorf("a non-secret typed value must not be redacted:\n%s", got)
 	}
 	if !strings.Contains(got, `"storageSizeGB":32`) {
 		t.Errorf("numeric field was mangled:\n%s", got)
@@ -58,5 +76,18 @@ func TestRedactBody_TruncatesAndHandlesEmpty(t *testing.T) {
 	}
 	if !strings.Contains(got, "truncated") {
 		t.Errorf("truncation not signposted:\n%s", got[:120])
+	}
+}
+
+// A body that is not JSON (an HTML error page, a plain message) still gets the
+// field-name pass rather than being logged verbatim or dropped.
+func TestRedactBody_NonJSONFallsBackToPatternMatch(t *testing.T) {
+	in := []byte(`<html>oops "password":"PLACEHOLDER-leak" </html>`)
+	got := redactBody(in)
+	if strings.Contains(got, "PLACEHOLDER-leak") {
+		t.Errorf("secret leaked from a non-JSON body:\n%s", got)
+	}
+	if !strings.Contains(got, "<html>") {
+		t.Errorf("non-JSON body should still be readable:\n%s", got)
 	}
 }

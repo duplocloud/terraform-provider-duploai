@@ -39,25 +39,88 @@ func bodyLoggingEnabled() bool {
 	return true
 }
 
-// secretJSONKeyRe matches JSON keys whose values must never reach a log:
-// passwords, tokens, secrets, keys, and the credential value field. Matched on
-// the key name so it works without knowing any particular resource's shape.
-var secretJSONKeyRe = regexp.MustCompile(
-	`(?i)"([^"]*(password|secret|token|apikey|api_key|credential|privatekey|private_key|certificateauthoritydata)[^"]*)"\s*:\s*"[^"]*"`)
+// secretKeyWords are the substrings that make a JSON field name — or a typed
+// key/value pair's key — carry something that must not reach a log. Mirrors
+// CredentialKeyUtils.IsSensitiveKey on the backend, minus a bare "key" so that
+// harmless field names like "key" and "scopeIds" stay readable.
+var secretKeyWords = []string{
+	"password", "secret", "token", "apikey", "api_key", "credential",
+	"privatekey", "private_key", "passphrase", "passcode", "bearer",
+	"certificate", "connectionstring", "jwt", "sessionid",
+}
 
-// redactBody replaces secret-looking JSON string values with REDACTED and
-// truncates the result. Best-effort: it is a debugging aid, not a guarantee, so
-// never enable body logging against a host whose data you would not paste into
-// a ticket.
+func isSecretKeyName(k string) bool {
+	l := strings.ToLower(k)
+	for _, w := range secretKeyWords {
+		if strings.Contains(l, w) {
+			return true
+		}
+	}
+	return false
+}
+
+// secretJSONKeyRe is the fallback for bodies that are not valid JSON.
+var secretJSONKeyRe = regexp.MustCompile(
+	`(?i)"([^"]*(password|secret|token|apikey|api_key|credential|privatekey|private_key|passphrase|passcode|bearer|certificate|connectionstring|jwt|sessionid)[^"]*)"\s*:\s*"[^"]*"`)
+
+// redactBody hides secret-looking values and truncates the result.
+//
+// It parses the body and walks it, rather than pattern-matching the raw text,
+// because DuploAI carries credentials in a TYPED KEY/VALUE shape —
+// {"key":"token","value":"<secret>"} — where the field holding the secret is
+// named "value". A field-name match alone never fires on that, so the secret
+// would be logged in the clear.
+//
+// Best-effort: a debugging aid, not a guarantee. Do not enable body logging
+// against a host whose data you would not paste into a ticket.
 func redactBody(b []byte) string {
 	if len(b) == 0 {
 		return "(empty)"
 	}
-	s := secretJSONKeyRe.ReplaceAllString(string(b), `"$1":"REDACTED"`)
-	if len(s) > maxLoggedBody {
-		s = s[:maxLoggedBody] + fmt.Sprintf("... (truncated, %d bytes total)", len(b))
+	out := string(b)
+	var doc any
+	if err := json.Unmarshal(b, &doc); err == nil {
+		redactJSONValue(doc)
+		if reser, err := json.Marshal(doc); err == nil {
+			out = string(reser)
+		}
+	} else {
+		// Not JSON (an HTML error page, a plain-text message): fall back to the
+		// field-name pattern, which is all that is possible without structure.
+		out = secretJSONKeyRe.ReplaceAllString(out, `"$1":"REDACTED"`)
 	}
-	return s
+	if len(out) > maxLoggedBody {
+		out = out[:maxLoggedBody] + fmt.Sprintf("... (truncated, %d bytes total)", len(b))
+	}
+	return out
+}
+
+// redactJSONValue walks a decoded body in place, blanking secret string values.
+func redactJSONValue(v any) {
+	switch t := v.(type) {
+	case map[string]any:
+		// Typed key/value pair — the secret lives under "value", named by a
+		// sibling "key". The key name itself is left readable so the log still
+		// says WHICH credential field was sent.
+		if k, ok := t["key"].(string); ok && isSecretKeyName(k) {
+			if _, isStr := t["value"].(string); isStr {
+				t["value"] = "REDACTED"
+			}
+		}
+		for k, child := range t {
+			if s, ok := child.(string); ok {
+				if isSecretKeyName(k) && s != "" {
+					t[k] = "REDACTED"
+				}
+				continue
+			}
+			redactJSONValue(child)
+		}
+	case []any:
+		for _, child := range t {
+			redactJSONValue(child)
+		}
+	}
 }
 
 // Client is the API client for the DuploCloud AI service.
@@ -112,8 +175,15 @@ func (c *Client) doRequest(method, path string, body interface{}) ([]byte, Clien
 // non-positive or shorter-than-default timeout falls back to the client
 // default, so a caller can only ever ask for MORE room, never less.
 func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string, body interface{}) ([]byte, ClientError) {
-	if timeout < c.timeout {
-		timeout = c.timeout
+	// A Client built literally (rather than via NewClient) has a zero timeout,
+	// which would make every context deadline already expired — a confusing
+	// "context deadline exceeded" on the first call. Floor it.
+	base := c.timeout
+	if base <= 0 {
+		base = defaultTimeout
+	}
+	if timeout < base {
+		timeout = base
 	}
 	url := c.HostURL + path
 	log.Printf("[TRACE] duplo-request: %s %s (deadline=%s)", method, url, timeout)
