@@ -167,13 +167,10 @@ func NewClient(hostURL, token string, sslNoVerify bool, timeout time.Duration) (
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────
 
-func (c *Client) doRequest(method, path string, body interface{}) ([]byte, ClientError) {
-	return c.doRequestWithTimeout(c.timeout, method, path, body)
-}
-
 // doRequestWithTimeout issues one request under an explicit deadline. A
 // non-positive or shorter-than-default timeout falls back to the client
-// default, so a caller can only ever ask for MORE room, never less.
+// default, so a caller can only ever ask for MORE room, never less — pass 0 for
+// the default.
 func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string, body interface{}) ([]byte, ClientError) {
 	// A Client built literally (rather than via NewClient) has a zero timeout,
 	// which would make every context deadline already expired — a confusing
@@ -253,18 +250,15 @@ func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string
 	return respBody, nil
 }
 
-// callAPI issues a request with an arbitrary HTTP method and optionally decodes
-// the response body into out. A nil req sends no body; a nil out discards the
-// response. This one helper backs every CRUD verb, including the non-REST verbs
-// a resource Endpoint may configure.
-func (c *Client) callAPI(method, path string, req, out interface{}) ClientError {
-	return c.callAPIWithTimeout(0, method, path, req, out)
-}
-
-// callAPIWithTimeout is callAPI under an explicit per-request deadline. Use for
-// operations the backend performs synchronously and slowly — a cloud teardown
-// can run for minutes, and disconnecting mid-flight does not merely lose the
-// reply, it cancels the server's work.
+// callAPIWithTimeout issues a request with an arbitrary HTTP method and
+// optionally decodes the response body into out. A nil req sends no body; a nil
+// out discards the response. This one helper backs every CRUD verb, including
+// the non-REST verbs a resource Endpoint may configure.
+//
+// timeout is the per-request deadline; pass 0 for the client default. Give a
+// longer one to operations the backend performs synchronously and slowly — a
+// cloud teardown can run for minutes, and disconnecting mid-flight does not
+// merely lose the reply, it cancels the server's work.
 func (c *Client) callAPIWithTimeout(timeout time.Duration, method, path string, req, out interface{}) ClientError {
 	body, err := c.doRequestWithTimeout(timeout, method, path, req)
 	if err != nil {
