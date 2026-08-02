@@ -39,6 +39,7 @@ output "primary_hosted_zone_domain" {
 ### Read-Only
 
 - `ami_ids` (List of String) IDs of AMIs registered by the plan.
+- `azure_certificates` (Attributes List) Azure Key Vault certificates for the plan. Set to bring existing certificates; leave unset to have the platform provision them. (see [below for nested schema](#nestedatt--azure_certificates))
 - `certificates` (Attributes List) ACM certificates for the plan. Set to bring existing certificates; leave unset to have the platform provision them. (see [below for nested schema](#nestedatt--certificates))
 - `description` (String) Optional description.
 - `name` (String) Name of the plan.
@@ -51,6 +52,15 @@ output "primary_hosted_zone_domain" {
 - `region` (String) AWS region (e.g. us-east-1).
 - `scope_ids` (List of String) Scope IDs that link this plan to a cloud provider account.
 - `status` (String) Current provisioning status.
+
+<a id="nestedatt--azure_certificates"></a>
+### Nested Schema for `azure_certificates`
+
+Read-Only:
+
+- `key_vault_secret_id` (String) Full secret URI of the certificate in Azure Key Vault (e.g. https://<vault>.vault.azure.net/secrets/<name>/<version>).
+- `name` (String) Name of the certificate.
+
 
 <a id="nestedatt--certificates"></a>
 ### Nested Schema for `certificates`

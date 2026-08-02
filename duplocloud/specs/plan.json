@@ -133,6 +133,32 @@
       ]
     },
     {
+      "name": "azure_certificates",
+      "type": "list(object)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "result.azureResult.azureCertificates",
+      "description": "Azure Key Vault certificates for the plan. Set to bring existing certificates; leave unset to have the platform provision them.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "name",
+          "description": "Name of the certificate."
+        },
+        {
+          "name": "key_vault_secret_id",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "keyVaultSecretId",
+          "description": "Full secret URI of the certificate in Azure Key Vault (e.g. https://<vault>.vault.azure.net/secrets/<name>/<version>)."
+        }
+      ]
+    },
+    {
       "name": "ami_ids",
       "type": "list(string)",
       "computed": true,
