@@ -28,6 +28,11 @@ func TestImmutableOnceTrue_PlanModifier(t *testing.T) {
 		{"turning on", types.BoolValue(false), types.BoolValue(true), false},
 		{"staying on", types.BoolValue(true), types.BoolValue(true), false},
 		{"unknown plan (computed)", types.BoolValue(true), types.BoolUnknown(), false},
+		// A null plan means "not set at all", which ValueBool() also reports as
+		// false. Without an explicit null check an unset attribute would look
+		// exactly like a request to disable — and a destroy plan is null too.
+		{"null plan (attribute not set)", types.BoolValue(true), types.BoolNull(), false},
+		{"null plan, was off", types.BoolValue(false), types.BoolNull(), false},
 		{"TURNING OFF", types.BoolValue(true), types.BoolValue(false), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

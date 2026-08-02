@@ -381,8 +381,14 @@ func (m immutableOnceTrueModifier) MarkdownDescription(ctx context.Context) stri
 }
 
 func (m immutableOnceTrueModifier) PlanModifyBool(_ context.Context, req planmodifier.BoolRequest, resp *planmodifier.BoolResponse) {
-	// Null state = create; unknown either side = nothing decided yet.
-	if req.StateValue.IsNull() || req.StateValue.IsUnknown() || req.PlanValue.IsUnknown() {
+	// Null state = create. Unknown either side = nothing decided yet. A NULL plan
+	// means the attribute is not set at all, which is not the same as asking for
+	// false — but ValueBool() reports both as false, so it has to be excluded
+	// explicitly or an unset attribute would look like a request to disable.
+	// (Unreachable on an attribute with a default, and the framework skips plan
+	// modifiers on destroy, but the flag is general.)
+	if req.StateValue.IsNull() || req.StateValue.IsUnknown() ||
+		req.PlanValue.IsNull() || req.PlanValue.IsUnknown() {
 		return
 	}
 	if !req.StateValue.ValueBool() || req.PlanValue.ValueBool() {
