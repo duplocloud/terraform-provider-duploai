@@ -287,6 +287,13 @@ func (r *dynamicResource) waiter(failureRetries int) *duplosdk.Waiter[map[string
 			return toStringValue(extractPath(*m, readySegs))
 		}
 	}
+	if w.ReadyFailurePath != "" && len(w.ReadyFailureStates) > 0 {
+		readyFailureSegs := strings.Split(w.ReadyFailurePath, ".")
+		waiter.ReadyFailureFn = func(m *map[string]any) string {
+			return toStringValue(extractPath(*m, readyFailureSegs))
+		}
+		waiter.ReadyFailureStates = w.ReadyFailureStates
+	}
 	return waiter
 }
 
@@ -409,7 +416,13 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	api := r.apiWaitingForPopulated(scope, retries, waitPopulated)
+	// The create call itself gets the create timeout, not the client's 60s
+	// default — a backend that provisions synchronously can block for minutes.
+	api := r.apiWaitingForPopulated(scope, retries, waitPopulated).
+		WithCallTimeout(r.operationTimeout(ctx, req.Plan, "create", &resp.Diagnostics))
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	created, err := api.Create(&body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating "+r.spec.Name, err.Error())
@@ -611,7 +624,11 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	api := r.apiWaitingForPopulated(scope, retries, waitPopulated)
+	api := r.apiWaitingForPopulated(scope, retries, waitPopulated).
+		WithCallTimeout(r.operationTimeout(ctx, req.Plan, "update", &resp.Diagnostics))
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	updated, clientErr := api.Update(objID, &body)
 	if clientErr != nil {
 		resp.Diagnostics.AddError("Error updating "+r.spec.Name, clientErr.Error())
@@ -755,13 +772,15 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	var timeout time.Duration
-	if r.spec.Waiter != nil {
-		timeout = r.timeout(ctx, req.State, "delete", &resp.Diagnostics)
-		if resp.Diagnostics.HasError() {
-			return
-		}
+	// The delete timeout governs both the waiter and the HTTP deadline of the
+	// calls that start the teardown. Deprovision/delete can run for minutes on a
+	// synchronous backend, and cutting the connection at the client's 60s default
+	// cancels the server's work rather than merely losing the reply.
+	timeout := r.operationTimeout(ctx, req.State, "delete", &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
 	}
+	api = api.WithCallTimeout(timeout)
 
 	// Resources the API refuses to delete while live declare a Deprovision
 	// operation: tear down the underlying cloud resources and wait for the
@@ -1139,6 +1158,29 @@ func applyConstants(body map[string]any, constants []ConstantField, diags *diag.
 	}
 }
 
+// operationTimeout is timeout() for callers that must work whether or not the
+// resource declares a waiter. Without a waiter there is no timeouts block in the
+// schema to read, so the engine default for the operation applies.
+//
+// It doubles as the per-request HTTP deadline for the call that STARTS the
+// operation (see RESTResource.WithCallTimeout). The client default is 60s, which
+// is fine for metadata calls but far too short for a backend that performs a
+// cloud create or teardown synchronously — and a client disconnect there does
+// not merely lose the response, it cancels the server's work.
+func (r *dynamicResource) operationTimeout(ctx context.Context, reader attrReader, op string, diags *diag.Diagnostics) time.Duration {
+	if r.spec.Waiter != nil {
+		return r.timeout(ctx, reader, op, diags)
+	}
+	switch op {
+	case "create":
+		return defaultCreateTimeout
+	case "update":
+		return defaultUpdateTimeout
+	default:
+		return defaultDeleteTimeout
+	}
+}
+
 func (r *dynamicResource) timeout(ctx context.Context, plan attrReader, op string, diags *diag.Diagnostics) time.Duration {
 	var to timeouts.Value
 	diags.Append(plan.GetAttribute(ctx, path.Root("timeouts"), &to)...)
@@ -1481,7 +1523,11 @@ func extractFirstNonEmpty(resp map[string]any, paths []string) any {
 
 // extractPath walks a decoded JSON value following dot-separated segments. A
 // segment suffixed with "[]" treats the current value as an array and maps the
-// remaining path over each element, yielding []any.
+// remaining path over each element, yielding []any. A segment of the form
+// "key[filterKey=filterValue]" instead selects the first element of the array
+// at key whose filterKey field stringifies to filterValue — e.g. a
+// Kubernetes-style conditions array: "conditions[type=Ready]" — and continues
+// extraction from that single matched element.
 func extractPath(cur any, segs []string) any {
 	if len(segs) == 0 {
 		return cur
@@ -1500,6 +1546,23 @@ func extractPath(cur any, segs []string) any {
 			}
 		}
 		return out
+	}
+	if open := strings.IndexByte(seg, '['); open >= 0 && strings.HasSuffix(seg, "]") {
+		key := seg[:open]
+		filter := seg[open+1 : len(seg)-1]
+		if eq := strings.IndexByte(filter, '='); eq >= 0 {
+			filterKey, filterVal := filter[:eq], filter[eq+1:]
+			arr, ok := mapIndex(cur, key).([]any)
+			if !ok {
+				return nil
+			}
+			for _, el := range arr {
+				if m, ok := el.(map[string]any); ok && toStringValue(m[filterKey]) == filterVal {
+					return extractPath(m, segs[1:])
+				}
+			}
+			return nil
+		}
 	}
 	return extractPath(mapIndex(cur, seg), segs[1:])
 }

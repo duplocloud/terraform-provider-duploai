@@ -147,6 +147,43 @@ func TestExtractPath(t *testing.T) {
 	}
 }
 
+// TestExtractPath_ConditionFilter covers the "key[filterKey=filterValue]"
+// segment against a Flux HelmRelease-shaped conditions array — the wrapper
+// status can report Complete (the CR was applied) while the Ready condition
+// itself reports the actual, later Helm install outcome.
+func TestExtractPath_ConditionFilter(t *testing.T) {
+	resp := map[string]any{
+		"status": "Complete",
+		"result": map[string]any{
+			"k8sResource": map[string]any{
+				"status": map[string]any{
+					"conditions": []any{
+						map[string]any{"type": "Stalled", "status": "True", "reason": "RetriesExceeded"},
+						map[string]any{"type": "Ready", "status": "False", "reason": "InstallFailed"},
+						map[string]any{"type": "Released", "status": "False", "reason": "InstallFailed"},
+					},
+				},
+			},
+		},
+	}
+	tests := []struct {
+		path string
+		want any
+	}{
+		{"result.k8sResource.status.conditions[type=Ready].status", "False"},
+		{"result.k8sResource.status.conditions[type=Ready].reason", "InstallFailed"},
+		{"result.k8sResource.status.conditions[type=Stalled].status", "True"},
+		{"result.k8sResource.status.conditions[type=Missing].status", nil},
+		{"result.k8sResource.status.missing[type=Ready].status", nil},
+	}
+	for _, tt := range tests {
+		got := extractPath(resp, splitDot(tt.path))
+		if !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("extractPath(%q) = %#v, want %#v", tt.path, got, tt.want)
+		}
+	}
+}
+
 func TestComposeID(t *testing.T) {
 	if got := composeID([]string{"ws-1"}, "net-2"); got != "ws-1/net-2" {
 		t.Errorf("single-scope composeID = %q", got)

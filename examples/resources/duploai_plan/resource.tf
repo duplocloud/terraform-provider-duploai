@@ -48,3 +48,27 @@ resource "duploai_plan" "byo_dns" {
     delete = "15m"
   }
 }
+
+# An Azure plan that brings an existing Key Vault certificate instead of
+# letting the platform provision one. Leave azure_certificates unset to have
+# the platform manage certificates automatically.
+resource "duploai_plan" "azure_byo_cert" {
+  workspace_id        = "<workspace-id>"
+  name                = "prod-plan-azure"
+  scope_ids           = ["<scope-id>"]
+  region              = "westus2"
+  network_baseline_id = "<network-id>"
+
+  # Existing Azure Key Vault certificate (name + full secret URI).
+  azure_certificates = [
+    {
+      name                = "wildcard-cert"
+      key_vault_secret_id = "https://myvault.vault.azure.net/secrets/wildcard-cert/1234567890abcdef1234567890abcdef"
+    },
+  ]
+
+  timeouts {
+    create = "30m"
+    delete = "15m"
+  }
+}
