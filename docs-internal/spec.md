@@ -879,7 +879,7 @@ a `timeouts` block is automatically added to the schema.
 **Gated on a Kubernetes-style Ready condition (Flux CRDs — HelmRelease, GitRepository, OCIRepository, …):**
 the wrapper `status` reaches `Complete` as soon as the CR is applied to the cluster, well before Flux
 finishes reconciling it. Use `readyPath`/`readyState` to hold success until the CR's own `Ready`
-condition is `True`, and `readyFailurePath`/`readyFailureStates` to fail fast on a known-terminal reason
+condition is `True`, and `readyFailurePath`/`readyFailureStates` to fail fast on a terminal signal
 instead of polling to timeout. A path segment of the form `key[filterKey=filterValue]` (e.g.
 `conditions[type=Ready]`) selects the first array element matching that field — this is the only place
 dot-paths support filtering, everywhere else a path is a plain series of key lookups (with `[]` to spread
@@ -889,25 +889,25 @@ over every element instead of matching one).
   "deprovisionedState": "DeProvisioned",
   "readyPath": "result.k8sResource.status.conditions[type=Ready].status",
   "readyState": "True",
-  "readyFailurePath": "result.k8sResource.status.conditions[type=Ready].reason",
+  "readyFailurePath": "result.k8sResource.status.conditions[type=Stalled].status",
   "readyFailureStates": {
-    "InstallFailed": "Helm install failed"
-  }
+    "True": "Helm release failed to reconcile and Flux is not retrying further"
+  },
+  "failureDetailPath": "result.k8sResource.status.conditions[type=Ready].message"
 }
 ```
 
-**Caveat — `Ready`'s `reason` vs. `Stalled`:** matching on the `Ready` condition's
-`reason` treats that reason as immediately terminal. That's only correct because
-these specs expose no attribute for Flux's `remediation.retries` — with the field
-default (`0`), a failed attempt goes straight to `Stalled: True` in the same
-reconciliation, so `Ready: False, reason: InstallFailed` and `Stalled: True` always
-appear together in practice. If a future spec exposes `remediation.retries`,
-a value >0 lets Flux retry automatically after a `Ready: False` failure *before*
-giving up — matching on `Ready`'s `reason` alone would then abort the wait
-prematurely on a retry Flux was about to recover from. The precise "no more
-retries" signal is `conditions[type=Stalled].status == "True"`; revisit
-`readyFailurePath` to key off `Stalled` instead of `Ready` if retries are ever
-exposed.
+**Why `Stalled`, not `Ready`'s `reason`:** kstatus's `Stalled` condition is Flux's
+dedicated "reconciliation cannot make further progress, human intervention needed"
+signal — it only becomes `True` once every configured retry (`remediation.retries`)
+is exhausted. `Ready`'s `reason` (e.g. `InstallFailed`) can appear on a single
+failed attempt that Flux is still going to retry automatically; gating on it
+directly would abort the wait prematurely on a retry Flux was about to recover
+from. Gating on `Stalled` instead is correct regardless of how many retries are
+configured — including if a future spec exposes `remediation.retries` as an
+attribute. `Ready`'s own `message` (rich, attempt-specific detail) is still worth
+surfacing via `failureDetailPath` once `Stalled` has confirmed the failure is
+final.
 
 ---
 
