@@ -293,6 +293,7 @@
       "UninstallFailed": "Helm uninstall failed",
       "ArtifactFailed": "failed to fetch the chart artifact",
       "DependencyNotReady": "a dependency HelmRelease is not ready"
-    }
+    },
+    "failureDetailPath": "result.k8sResource.status.conditions[type=Ready].message"
   }
 }

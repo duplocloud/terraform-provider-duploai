@@ -896,6 +896,19 @@ over every element instead of matching one).
 }
 ```
 
+**Caveat — `Ready`'s `reason` vs. `Stalled`:** matching on the `Ready` condition's
+`reason` treats that reason as immediately terminal. That's only correct because
+these specs expose no attribute for Flux's `remediation.retries` — with the field
+default (`0`), a failed attempt goes straight to `Stalled: True` in the same
+reconciliation, so `Ready: False, reason: InstallFailed` and `Stalled: True` always
+appear together in practice. If a future spec exposes `remediation.retries`,
+a value >0 lets Flux retry automatically after a `Ready: False` failure *before*
+giving up — matching on `Ready`'s `reason` alone would then abort the wait
+prematurely on a retry Flux was about to recover from. The precise "no more
+retries" signal is `conditions[type=Stalled].status == "True"`; revisit
+`readyFailurePath` to key off `Stalled` instead of `Ready` if retries are ever
+exposed.
+
 ---
 
 ## Complete example
