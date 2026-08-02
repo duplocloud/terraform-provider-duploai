@@ -302,6 +302,19 @@ type AttributeSpec struct {
 	// ForceNew marks the attribute as RequiresReplace.
 	ForceNew bool `json:"forceNew,omitempty"`
 
+	// ImmutableOnceTrue, for a bool attribute, rejects a true → false change at
+	// PLAN time. Use for one-way switches the cloud refuses to reverse, e.g. Azure
+	// Key Vault purge protection: once enabled the vault must be recreated to turn
+	// it off, and without this the config plans cleanly and only fails deep in the
+	// apply with the provider's own error.
+	//
+	// It errors rather than silently keeping the old value: the plugin framework
+	// has no diff suppression, and a plan modifier that returned a value differing
+	// from a set config value would make Terraform reject the plan outright
+	// ("planned value ... does not match config value ..."). Users who want the
+	// drift ignored can say so themselves with lifecycle.ignore_changes.
+	ImmutableOnceTrue bool `json:"immutableOnceTrue,omitempty"`
+
 	// Stable marks a computed-only attribute (Computed but not Optional or
 	// ForceNew) whose value is assigned once at creation and never changes
 	// afterward — e.g. the resource's own database ID, or a cloud identifier
@@ -966,6 +979,16 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 		}
 		if !a.Required && !a.Optional && !a.Computed {
 			return nil, fmt.Errorf("attribute %q must be one of required/optional/computed", a.Name)
+		}
+		if a.ImmutableOnceTrue {
+			if a.Type != "bool" {
+				return nil, fmt.Errorf("attribute %q: immutableOnceTrue is only valid on a bool", a.Name)
+			}
+			if a.ForceNew {
+				// RequiresReplace already recreates on any change, so the plan-time
+				// rejection would never be reached.
+				return nil, fmt.Errorf("attribute %q: immutableOnceTrue is redundant with forceNew", a.Name)
+			}
 		}
 		if a.UpdateBoolTrueValue != "" {
 			if a.Type != "string" {

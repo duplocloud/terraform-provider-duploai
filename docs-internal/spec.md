@@ -312,6 +312,7 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `computed` | bool | Attribute may be set by the provider (server-returned). |
 | `sensitive` | bool | Value is masked in plan output and state. Use for passwords, tokens, keys. |
 | `forceNew` | bool | Changing this attribute destroys and recreates the resource (`RequiresReplace`). |
+| `immutableOnceTrue` | bool | For a `bool`: reject a `true` → `false` change at plan time. See [One-way switches](#one-way-switches). |
 | `default` | any | Static default value (JSON literal). Requires `computed: true` — the framework errors if `computed` is false and a default is set. |
 | `oneOf` | array of strings | Enum constraint on a `string` attribute. Bad values fail at plan time. Only wired for `string` — on any other type it is silently ignored. |
 | `apiPath` | string | Dot-path in the API body this attribute reads/writes (e.g. `"spec.region"`). See [Path mapping](#path-mapping). |
@@ -366,6 +367,57 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 - `required + computed` is invalid (framework rejects it).
 - `required + optional` is invalid.
 - `default` requires `computed: true` — the framework hard-errors otherwise.
+
+### One-way switches
+
+Some cloud settings can be turned on but never off. Azure Key Vault purge
+protection is the canonical case: enable it and the vault must be destroyed and
+recreated to get rid of it. Setting it back to `false` plans cleanly and then
+fails deep in the apply with the provider's own error.
+
+`immutableOnceTrue` moves that failure to plan time:
+
+```json
+{
+  "name": "enable_purge_protection",
+  "type": "bool",
+  "optional": true,
+  "computed": true,
+  "default": false,
+  "immutableOnceTrue": true
+}
+```
+
+```
+Error: Cannot disable enable_purge_protection
+
+  This setting is one-way: once enabled the cloud provider does not allow
+  turning it off again, so the change would fail during apply.
+
+  Set it back to true, destroy and recreate the resource, or keep the config
+  as-is and add lifecycle { ignore_changes = [enable_purge_protection] } to
+  stop Terraform planning the change.
+```
+
+**Why it errors instead of suppressing the diff.** The obvious alternative —
+quietly keep the old `true` — is not available. The plugin framework has no
+`DiffSuppressFunc` (that was SDKv2); the nearest equivalent is a plan modifier,
+and a plan modifier that returns a value differing from a *set config value*
+makes Terraform reject the plan outright:
+
+```
+Provider produced invalid plan: planned value cty.True does not match
+config value cty.False
+```
+
+So suppression would trade an apply-time error for a plan-time framework error,
+and would leave config and reality silently diverged. A user who genuinely wants
+the drift ignored can say so explicitly with `lifecycle.ignore_changes`, which is
+the supported way to express "I know, leave it".
+
+Rules enforced at startup: only valid on a `bool`, and rejected alongside
+`forceNew` (which recreates on any change, so the plan-time check would never be
+reached).
 
 ### Write-only fields
 
