@@ -81,6 +81,49 @@ func TestWaiter_ReadyGate_FailureStillAborts(t *testing.T) {
 	}
 }
 
+// ReadyFailureFn/ReadyFailureStates abort the wait immediately on a terminal
+// value at the secondary signal, even though the primary status already
+// reports success (e.g. a Flux HelmRelease CR applied fine but the chart
+// install itself failed).
+func TestWaiter_ReadyFailureState_AbortsDespitePrimarySuccess(t *testing.T) {
+	w := statusWaiter()
+	w.ReadyState = "True"
+	w.ReadyFn = func(m *map[string]any) string { s, _ := (*m)["readyStatus"].(string); return s }
+	w.ReadyFailureStates = map[string]string{"InstallFailed": "Helm install failed"}
+	w.ReadyFailureFn = func(m *map[string]any) string { s, _ := (*m)["readyReason"].(string); return s }
+	_, err := w.Wait(context.Background(), "x", time.Second, func() (*map[string]any, ClientError) {
+		return &map[string]any{"s": "Ready", "readyStatus": "False", "readyReason": "InstallFailed"}, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "Helm install failed") || !strings.Contains(err.Error(), "InstallFailed") {
+		t.Fatalf("expected ready-failure abort, got %v", err)
+	}
+}
+
+// A ready-failure reason that isn't in ReadyFailureStates (e.g. a transient
+// "Progressing" reason while Flux still reconciles) must not abort the wait.
+func TestWaiter_ReadyFailureState_UnknownReasonKeepsPolling(t *testing.T) {
+	w := statusWaiter()
+	w.ReadyState = "True"
+	w.ReadyFn = func(m *map[string]any) string { s, _ := (*m)["readyStatus"].(string); return s }
+	w.ReadyFailureStates = map[string]string{"InstallFailed": "Helm install failed"}
+	w.ReadyFailureFn = func(m *map[string]any) string { s, _ := (*m)["readyReason"].(string); return s }
+	n := 0
+	obj, err := w.Wait(context.Background(), "x", time.Second, func() (*map[string]any, ClientError) {
+		n++
+		readyStatus, readyReason := "False", "Progressing"
+		if n >= 3 {
+			readyStatus, readyReason = "True", "InstallSucceeded"
+		}
+		return &map[string]any{"s": "Ready", "readyStatus": readyStatus, "readyReason": readyReason}, nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if (*obj)["readyStatus"] != "True" || n < 3 {
+		t.Errorf("obj=%v calls=%d", *obj, n)
+	}
+}
+
 func TestWaiter_FailureState(t *testing.T) {
 	_, err := statusWaiter().Wait(context.Background(), "x", time.Second, func() (*map[string]any, ClientError) {
 		return &map[string]any{"s": "Failed", "detail": "quota exceeded"}, nil

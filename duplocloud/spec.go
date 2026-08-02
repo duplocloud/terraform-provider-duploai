@@ -582,6 +582,17 @@ type WaiterSpec struct {
 	// to enable the gate; failure detection still uses StatusPath/FailureStates.
 	ReadyPath  string `json:"readyPath,omitempty"`
 	ReadyState string `json:"readyState,omitempty"`
+	// ReadyFailurePath / ReadyFailureStates add an optional failure gate keyed
+	// off a second read-response signal, independent of StatusPath/FailureStates
+	// — e.g. the reason on a Kubernetes-style Ready condition
+	// (conditions[type=Ready].reason). When the value at ReadyFailurePath is a
+	// key in ReadyFailureStates, the wait aborts immediately instead of polling
+	// until timeout. Use for resources whose wrapper status reaches
+	// SuccessState (e.g. a k8s object was applied) well before a downstream
+	// controller (e.g. Flux) reports whether it actually succeeded. Both fields
+	// must be set together.
+	ReadyFailurePath   string            `json:"readyFailurePath,omitempty"`
+	ReadyFailureStates map[string]string `json:"readyFailureStates,omitempty"`
 	// PopulatedPath / PopulatedPathAttribute add an optional, user-gated wait: the
 	// engine adds a boolean control attribute named PopulatedPathAttribute (e.g.
 	// "wait_for_load_balancer") to the resource. When the user sets it true, Create
@@ -774,6 +785,10 @@ func (s *ResourceSpec) validate() error {
 		return err
 	}
 	if s.Waiter != nil {
+		rfp, rfs := s.Waiter.ReadyFailurePath, len(s.Waiter.ReadyFailureStates) > 0
+		if (rfp != "") != rfs {
+			return fmt.Errorf("waiter.readyFailurePath and waiter.readyFailureStates must be set together")
+		}
 		pp, pa := s.Waiter.PopulatedPath, s.Waiter.PopulatedPathAttribute
 		if (pp == "") != (pa == "") {
 			return fmt.Errorf("waiter.populatedPath and waiter.populatedPathAttribute must be set together")

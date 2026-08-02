@@ -818,6 +818,8 @@ Default `failureStates` map (identical across all resources):
 | `deprovisionedState` | string | — | **No default.** Terminal status after the deprovision step completes (e.g. `"DeProvisioned"`). Required when `endpoint.deprovision` is set — the delete flow waits for this state before issuing the final delete call. |
 | `failureDetailPath` | string | `"blockedReason"` | Dot-path to a field with extra error context. Appended to the error message when the status is a failure state. |
 | `failureRetries` | int | `0` | **No default.** Extra polls to tolerate after first seeing a failure state before treating it as terminal. Use for backends that report a transient failure and then self-recover. |
+| `readyPath` / `readyState` | string | — | **No default.** Optional secondary success gate: the resource is only ready once `statusPath` reaches `successState` **and** the value at `readyPath` equals `readyState`. Use when the wrapper status flips to `"Complete"` before a downstream signal is actually ready (e.g. an EC2 host whose status is `Complete` but `result.liveState` is not yet `"running"`). Must be set together. |
+| `readyFailurePath` / `readyFailureStates` | string / object | — | **No default.** Optional failure gate on a second signal, independent of `statusPath`/`failureStates`. When the value at `readyFailurePath` is a key in `readyFailureStates`, the wait aborts immediately instead of polling to timeout. Use when the wrapper status reaches `successState` well before a downstream controller (e.g. Flux) reports whether it actually succeeded — e.g. a Kubernetes-style Ready condition's `reason` field. Must be set together. |
 | `pollIntervalSeconds` | int | `10` | Seconds between status polls. |
 | `failurePollIntervalSeconds` | int | *(same as `pollIntervalSeconds`)* | Override the poll interval when the resource is in a failure state during a retry. Use a longer value to give the backend more time to self-recover between checks. Falls back to `pollIntervalSeconds` when unset. |
 | `createTimeoutMinutes` | int | `30` | Default create timeout. Overridable per-instance via the `timeouts` block. |
@@ -873,6 +875,39 @@ a `timeouts` block is automatically added to the schema.
   "failureRetries": 3
 }
 ```
+
+**Gated on a Kubernetes-style Ready condition (Flux CRDs — HelmRelease, GitRepository, OCIRepository, …):**
+the wrapper `status` reaches `Complete` as soon as the CR is applied to the cluster, well before Flux
+finishes reconciling it. Use `readyPath`/`readyState` to hold success until the CR's own `Ready`
+condition is `True`, and `readyFailurePath`/`readyFailureStates` to fail fast on a terminal signal
+instead of polling to timeout. A path segment of the form `key[filterKey=filterValue]` (e.g.
+`conditions[type=Ready]`) selects the first array element matching that field — this is the only place
+dot-paths support filtering, everywhere else a path is a plain series of key lookups (with `[]` to spread
+over every element instead of matching one).
+```json
+"waiter": {
+  "deprovisionedState": "DeProvisioned",
+  "readyPath": "result.k8sResource.status.conditions[type=Ready].status",
+  "readyState": "True",
+  "readyFailurePath": "result.k8sResource.status.conditions[type=Stalled].status",
+  "readyFailureStates": {
+    "True": "Helm release failed to reconcile and Flux is not retrying further"
+  },
+  "failureDetailPath": "result.k8sResource.status.conditions[type=Ready].message"
+}
+```
+
+**Why `Stalled`, not `Ready`'s `reason`:** kstatus's `Stalled` condition is Flux's
+dedicated "reconciliation cannot make further progress, human intervention needed"
+signal — it only becomes `True` once every configured retry (`remediation.retries`)
+is exhausted. `Ready`'s `reason` (e.g. `InstallFailed`) can appear on a single
+failed attempt that Flux is still going to retry automatically; gating on it
+directly would abort the wait prematurely on a retry Flux was about to recover
+from. Gating on `Stalled` instead is correct regardless of how many retries are
+configured — including if a future spec exposes `remediation.retries` as an
+attribute. `Ready`'s own `message` (rich, attempt-specific detail) is still worth
+surfacing via `failureDetailPath` once `Stalled` has confirmed the failure is
+final.
 
 ---
 

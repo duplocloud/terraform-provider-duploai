@@ -283,6 +283,13 @@
     "pollIntervalSeconds": 15,
     "createTimeoutMinutes": 20,
     "updateTimeoutMinutes": 20,
-    "deleteTimeoutMinutes": 20
+    "deleteTimeoutMinutes": 20,
+    "readyPath": "result.k8sResource.status.conditions[type=Ready].status",
+    "readyState": "True",
+    "readyFailurePath": "result.k8sResource.status.conditions[type=Stalled].status",
+    "readyFailureStates": {
+      "True": "Helm release failed to reconcile and Flux is not retrying further"
+    },
+    "failureDetailPath": "result.k8sResource.status.conditions[type=Ready].message"
   }
 }

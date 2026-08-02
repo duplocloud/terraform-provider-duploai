@@ -287,6 +287,13 @@ func (r *dynamicResource) waiter(failureRetries int) *duplosdk.Waiter[map[string
 			return toStringValue(extractPath(*m, readySegs))
 		}
 	}
+	if w.ReadyFailurePath != "" && len(w.ReadyFailureStates) > 0 {
+		readyFailureSegs := strings.Split(w.ReadyFailurePath, ".")
+		waiter.ReadyFailureFn = func(m *map[string]any) string {
+			return toStringValue(extractPath(*m, readyFailureSegs))
+		}
+		waiter.ReadyFailureStates = w.ReadyFailureStates
+	}
 	return waiter
 }
 
@@ -1516,7 +1523,11 @@ func extractFirstNonEmpty(resp map[string]any, paths []string) any {
 
 // extractPath walks a decoded JSON value following dot-separated segments. A
 // segment suffixed with "[]" treats the current value as an array and maps the
-// remaining path over each element, yielding []any.
+// remaining path over each element, yielding []any. A segment of the form
+// "key[filterKey=filterValue]" instead selects the first element of the array
+// at key whose filterKey field stringifies to filterValue — e.g. a
+// Kubernetes-style conditions array: "conditions[type=Ready]" — and continues
+// extraction from that single matched element.
 func extractPath(cur any, segs []string) any {
 	if len(segs) == 0 {
 		return cur
@@ -1535,6 +1546,23 @@ func extractPath(cur any, segs []string) any {
 			}
 		}
 		return out
+	}
+	if open := strings.IndexByte(seg, '['); open >= 0 && strings.HasSuffix(seg, "]") {
+		key := seg[:open]
+		filter := seg[open+1 : len(seg)-1]
+		if eq := strings.IndexByte(filter, '='); eq >= 0 {
+			filterKey, filterVal := filter[:eq], filter[eq+1:]
+			arr, ok := mapIndex(cur, key).([]any)
+			if !ok {
+				return nil
+			}
+			for _, el := range arr {
+				if m, ok := el.(map[string]any); ok && toStringValue(m[filterKey]) == filterVal {
+					return extractPath(m, segs[1:])
+				}
+			}
+			return nil
+		}
 	}
 	return extractPath(mapIndex(cur, seg), segs[1:])
 }
