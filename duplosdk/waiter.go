@@ -40,6 +40,14 @@ type Waiter[T any] struct {
 	// detection still keys off StatusFn/FailureStates.
 	ReadyFn    func(*T) string
 	ReadyState string
+	// ReadyFailureFn / ReadyFailureStates add an optional failure gate on a
+	// second signal, independent of StatusFn/FailureStates — e.g. the reason on
+	// a Kubernetes-style Ready condition. When set and ReadyFailureFn(obj) is a
+	// key in ReadyFailureStates, Wait aborts immediately (respecting
+	// FailureRetries) instead of polling until timeout. Only consulted when the
+	// primary status is not already a failure state.
+	ReadyFailureFn     func(*T) string
+	ReadyFailureStates map[string]string
 }
 
 // ready reports whether the optional secondary readiness gate is satisfied.
@@ -82,12 +90,21 @@ func (w *Waiter[T]) Wait(ctx context.Context, name string, timeout time.Duration
 			}
 			log.Printf("[TRACE] waiter(%s): status reached %q but readiness gate not met (want %q), still polling", name, status, w.ReadyState)
 		}
-		if reason, bad := w.FailureStates[status]; bad {
+		reason, bad := w.FailureStates[status]
+		failedValue := status
+		if !bad && w.ReadyFailureFn != nil {
+			if rv := w.ReadyFailureFn(obj); rv != "" {
+				if r, ok := w.ReadyFailureStates[rv]; ok {
+					reason, bad, failedValue = r, true, rv
+				}
+			}
+		}
+		if bad {
 			failCount++
 			if failCount > w.FailureRetries {
-				return nil, newClientError(0, fmt.Errorf("%s", w.failureMsg(status, reason, obj)))
+				return nil, newClientError(0, fmt.Errorf("%s", w.failureMsg(failedValue, reason, obj)))
 			}
-			log.Printf("[TRACE] waiter(%s): failure state %q, retry %d/%d before treating as terminal", name, status, failCount, w.FailureRetries)
+			log.Printf("[TRACE] waiter(%s): failure state %q, retry %d/%d before treating as terminal", name, failedValue, failCount, w.FailureRetries)
 		} else {
 			failCount = 0
 		}

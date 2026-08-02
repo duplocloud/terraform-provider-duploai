@@ -283,6 +283,16 @@
     "pollIntervalSeconds": 15,
     "createTimeoutMinutes": 20,
     "updateTimeoutMinutes": 20,
-    "deleteTimeoutMinutes": 20
+    "deleteTimeoutMinutes": 20,
+    "readyPath": "result.k8sResource.status.conditions[type=Ready].status",
+    "readyState": "True",
+    "readyFailurePath": "result.k8sResource.status.conditions[type=Ready].reason",
+    "readyFailureStates": {
+      "InstallFailed": "Helm install failed",
+      "UpgradeFailed": "Helm upgrade failed",
+      "UninstallFailed": "Helm uninstall failed",
+      "ArtifactFailed": "failed to fetch the chart artifact",
+      "DependencyNotReady": "a dependency HelmRelease is not ready"
+    }
   }
 }
