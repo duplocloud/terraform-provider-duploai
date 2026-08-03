@@ -144,7 +144,7 @@
       "optional": true,
       "computed": true,
       "apiPath": "result.azureResult.azureCertificates",
-      "description": "Azure Key Vault certificates registered with this plan, for the AGIC Application Gateway to serve. Each entry is a REFERENCE to a certificate that already exists in a Key Vault — the platform does not create or provision certificates, so leaving this unset simply means none are registered. This differs from the AWS `certificates` list by design: ACM certificates can be platform-provisioned, Key Vault certificates can only be referenced. On reconcile the platform reads the referenced secret itself and pushes the PFX into the Application Gateway. Names must be unique within the plan, compared case-insensitively; an entry whose name is already registered by another plan on the same cluster is ignored A plan targets a single cloud, so this conflicts with `certificates` (the AWS/ACM list) — set at most one.",
+      "description": "Azure Key Vault certificates registered with this plan, for the AGIC Application Gateway to serve. Each entry is a REFERENCE to a certificate that already exists in a Key Vault — the platform does not create or provision certificates, so leaving this unset simply means none are registered. On reconcile the platform reads the referenced secret itself and pushes the PFX into the Application Gateway. Names must be unique within the plan, compared case-insensitively; an entry whose name is already registered by another plan on the same cluster is ignored. A plan targets a single cloud, so this conflicts with `certificates` (the AWS/ACM list) — set at most one.",
       "attributes": [
         {
           "name": "name",
