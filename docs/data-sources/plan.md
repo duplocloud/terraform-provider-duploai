@@ -39,7 +39,7 @@ output "primary_hosted_zone_domain" {
 ### Read-Only
 
 - `ami_ids` (List of String) IDs of AMIs registered by the plan.
-- `azure_certificates` (Attributes List) Azure Key Vault certificates for the plan. Set to bring existing certificates; leave unset to have the platform provision them. (see [below for nested schema](#nestedatt--azure_certificates))
+- `azure_certificates` (Attributes List) Azure Key Vault certificates registered with this plan, for the AGIC Application Gateway to serve. Each entry is a REFERENCE to a certificate that already exists in a Key Vault — the platform does not create or provision certificates, so leaving this unset simply means none are registered. On reconcile the platform reads the referenced secret itself and pushes the PFX into the Application Gateway. Names must be unique within the plan, compared case-insensitively; an entry whose name is already registered by another plan on the same cluster is ignored. (see [below for nested schema](#nestedatt--azure_certificates))
 - `certificates` (Attributes List) ACM certificates for the plan. Set to bring existing certificates; leave unset to have the platform provision them. (see [below for nested schema](#nestedatt--certificates))
 - `description` (String) Optional description.
 - `name` (String) Name of the plan.
@@ -58,8 +58,8 @@ output "primary_hosted_zone_domain" {
 
 Read-Only:
 
-- `key_vault_secret_id` (String) Full secret URI of the certificate in Azure Key Vault (e.g. https://<vault>.vault.azure.net/secrets/<name>/<version>).
-- `name` (String) Name of the certificate.
+- `key_vault_secret_id` (String) Key Vault secret URI holding the certificate's PFX, `https://<vault>.vault.azure.net/secrets/<name>` with an optional trailing `/<version>`. Prefer the UNVERSIONED form: the platform resolves the URI on every reconcile, so an unversioned URI picks up certificate rotations automatically while a versioned one pins that exact version forever. The API rejects a URI that is not `https://.../secrets/...` with HTTP 400.
+- `name` (String) Application Gateway SSL certificate name, used verbatim, so it must satisfy Azure's SSL-certificate naming convention: 1-80 characters, starting with a letter or digit and containing only letters, digits, `.`, `_` or `-`. Must be unique within the plan (case-insensitive). The API rejects anything else with HTTP 400.
 
 
 <a id="nestedatt--certificates"></a>

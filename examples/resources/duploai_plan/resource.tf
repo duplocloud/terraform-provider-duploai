@@ -49,9 +49,12 @@ resource "duploai_plan" "byo_dns" {
   }
 }
 
-# An Azure plan that brings an existing Key Vault certificate instead of
-# letting the platform provision one. Leave azure_certificates unset to have
-# the platform manage certificates automatically.
+# An Azure plan registering existing Key Vault certificates for the AGIC
+# Application Gateway to serve.
+#
+# These are REFERENCES, not certificates: the platform never creates one. Leaving
+# azure_certificates unset means no certificates are registered, not that the
+# platform will provide them.
 resource "duploai_plan" "azure_byo_cert" {
   workspace_id        = "<workspace-id>"
   name                = "prod-plan-azure"
@@ -59,11 +62,20 @@ resource "duploai_plan" "azure_byo_cert" {
   region              = "westus2"
   network_baseline_id = "<network-id>"
 
-  # Existing Azure Key Vault certificate (name + full secret URI).
+  # Both fields are required on every entry, and `name` is used verbatim as the
+  # App Gateway SSL certificate name.
   azure_certificates = [
+    # Unversioned URI: the platform re-resolves it on every reconcile, so the
+    # gateway picks up certificate rotations automatically. Prefer this.
     {
       name                = "wildcard-cert"
-      key_vault_secret_id = "https://myvault.vault.azure.net/secrets/wildcard-cert/1234567890abcdef1234567890abcdef"
+      key_vault_secret_id = "https://myvault.vault.azure.net/secrets/wildcard-cert"
+    },
+    # Versioned URI: pins that exact version forever. Only use it when you
+    # deliberately do not want rotations picked up.
+    {
+      name                = "pinned-cert"
+      key_vault_secret_id = "https://myvault.vault.azure.net/secrets/pinned-cert/1234567890abcdef1234567890abcdef"
     },
   ]
 
