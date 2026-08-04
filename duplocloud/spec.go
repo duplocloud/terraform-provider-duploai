@@ -50,6 +50,24 @@ type ResourceSpec struct {
 	CreateConstants []ConstantField `json:"createConstants,omitempty"`
 	UpdateConstants []ConstantField `json:"updateConstants,omitempty"`
 
+	// ResendCreatePathsOnUpdate makes the PUT body carry each attribute's CREATE
+	// path in addition to its update path, with the same value. Set it for a
+	// backend that REBUILDS its stored document from the request body, where a
+	// field the body omits is dropped or reset to a type default.
+	//
+	// The pattern it exists for: an API whose update body is a delta envelope
+	// (spec.updateRequest.*) applied against the stored record, while the record
+	// itself is replaced by the body's spec.*. Send only the envelope and the
+	// backend keeps the fields it recognises as CHANGED, but resets the rest to
+	// their type defaults — Azure Managed Redis silently reset a non-default
+	// eviction_policy to NoEviction on any unrelated update, after which the
+	// stored value no longer matched the live cloud resource. Sending both is what
+	// the platform's own console does.
+	//
+	// createOnly attributes are still skipped on update: they opt out explicitly,
+	// and a field the API refuses on update must not reappear because of this flag.
+	ResendCreatePathsOnUpdate bool `json:"resendCreatePathsOnUpdate,omitempty"`
+
 	// RequiredIf declares conditional-required rules evaluated at plan time.
 	RequiredIf []RequiredIfRule `json:"requiredIf,omitempty"`
 
@@ -390,6 +408,27 @@ type AttributeSpec struct {
 	// enableTagImmutability=true (bool). Only applies to the update body (create
 	// still writes the raw string via CreatePath). Requires UpdatePath.
 	UpdateBoolTrueValue string `json:"updateBoolTrueValue,omitempty"`
+
+	// SendFromState makes a COMPUTED-ONLY attribute be sent in request bodies,
+	// carrying the value Terraform already holds in state. Without it, computed-only
+	// attributes are never sent (see bodyFromRaw) because they are outputs — which is
+	// right for most of them.
+	//
+	// Use it for a server-assigned field that the API nonetheless expects back on
+	// update, which happens when the backend rebuilds its stored document from the
+	// request body: anything the body omits is dropped. Azure Managed Redis is such an
+	// API — a computed-only scope_ids was silently wiped from the stored record by any
+	// update, losing the resource's link to its cloud provider account.
+	//
+	// The alternative is marking such a field Optional purely so the body builder will
+	// send it, which misrepresents a server-assigned value as user-settable and invites
+	// someone to set it. SendFromState keeps the attribute honestly read-only.
+	//
+	// Implies UseStateForUnknown (see useStateForUnknown): the value has to be known at
+	// plan time to be sendable. On create there is no prior state, so the value is
+	// unknown and is correctly omitted — which is what the API wants, since the server
+	// has not assigned it yet.
+	SendFromState bool `json:"sendFromState,omitempty"`
 
 	// CreateOnly marks an attribute that is only sent in the POST (create)
 	// body and never in the PUT (update) body. Useful for fields that are
@@ -988,6 +1027,24 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 				// RequiresReplace already recreates on any change, so the plan-time
 				// rejection would never be reached.
 				return nil, fmt.Errorf("attribute %q: immutableOnceTrue is redundant with forceNew", a.Name)
+			}
+		}
+		if a.SendFromState {
+			if !a.Computed {
+				return nil, fmt.Errorf("attribute %q: sendFromState is only valid on a computed attribute", a.Name)
+			}
+			if a.NoSend {
+				return nil, fmt.Errorf("attribute %q: sendFromState and noSend are contradictory", a.Name)
+			}
+			if a.Required || a.Optional {
+				return nil, fmt.Errorf("attribute %q: sendFromState is redundant on a required/optional attribute, which is already sent", a.Name)
+			}
+			if a.CreateOnly {
+				// A sendFromState value comes from prior state, and on create there is
+				// none — so createOnly would confine the field to the one verb where it
+				// can never have a value, and it would never be sent at all.
+				return nil, fmt.Errorf("attribute %q: sendFromState and createOnly cannot be combined — "+
+					"the value is only known after create, so it would never be sent", a.Name)
 			}
 		}
 		if a.UpdateBoolTrueValue != "" {
