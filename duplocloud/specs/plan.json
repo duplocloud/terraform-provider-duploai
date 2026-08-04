@@ -1,16 +1,29 @@
 {
   "name": "plan",
-  "description": "Manages a DuploCloud AI Helpdesk plan (region landing zone built on a network baseline).",
+  "description": "Manages a DuploCloud AI Helpdesk plan (a region landing zone that collects reusable cloud references: a primary hosted zone, certificates, and AMIs). A plan has no provisioning lifecycle of its own — it is created synchronously and its references are edited directly or by the agent.",
   "idPath": "id",
   "dataSource": true,
+  "readAfterWrite": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Plans"
   },
   "conflictsWith": [
-    [
-      "certificates",
-      "azure_certificates"
-    ]
+    ["region", "network_baseline_id"],
+    ["certificates", "azure_certificates"]
+  ],
+  "requiredIf": [
+    {
+      "attribute": "region",
+      "when": [
+        { "attribute": "network_baseline_id", "isEmpty": true }
+      ]
+    },
+    {
+      "attribute": "network_baseline_id",
+      "when": [
+        { "attribute": "region", "isEmpty": true }
+      ]
+    }
   ],
   "attributes": [
     {
@@ -40,53 +53,35 @@
     {
       "name": "scope_ids",
       "type": "list(string)",
-      "required": true,
-      "forceNew": true,
+      "optional": true,
+      "computed": true,
       "apiPath": "spec.scopeIds",
-      "description": "Scope IDs that link this plan to a cloud provider account."
+      "description": "Scope IDs that link this plan to a cloud provider account. Optional and mutable: leave unset to bind a scope later from the UI via the \"Configure using agent\" action (the platform auto-creates the agent assist ticket once a scope is set)."
     },
     {
       "name": "region",
       "type": "string",
-      "required": true,
+      "optional": true,
+      "computed": true,
       "forceNew": true,
       "apiPath": "spec.region",
-      "description": "AWS region (e.g. us-east-1)."
+      "description": "Cloud region (e.g. us-east-1 for AWS, westus2 for Azure). Mutually exclusive with network_baseline_id — set exactly one. When network_baseline_id is set instead, the region is inherited from the network baseline. Immutable after creation."
     },
     {
       "name": "network_baseline_id",
       "type": "string",
-      "required": true,
+      "optional": true,
+      "computed": true,
       "forceNew": true,
       "apiPath": "spec.networkBaselineId",
-      "description": "ID of the network baseline this plan is built on."
-    },
-    {
-      "name": "provisioner_type",
-      "type": "string",
-      "optional": true,
-      "computed": true,
-      "default": "Cli",
-      "forceNew": true,
-      "apiPath": "spec.provisioner.type",
-      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
-    },
-    {
-      "name": "provisioner_version",
-      "type": "string",
-      "optional": true,
-      "computed": true,
-      "default": "",
-      "forceNew": true,
-      "apiPath": "spec.provisioner.version",
-      "description": "Optional provisioner version."
+      "description": "ID of the network baseline this plan inherits its region from. Mutually exclusive with region — set exactly one. Immutable after creation."
     },
     {
       "name": "status",
       "type": "string",
       "computed": true,
       "apiPath": "status",
-      "description": "Current provisioning status."
+      "description": "Current status reported by the platform. A plan has no provisioning lifecycle of its own."
     },
     {
       "name": "plan_id",
@@ -163,12 +158,38 @@
       ]
     },
     {
-      "name": "ami_ids",
-      "type": "list(string)",
+      "name": "amis",
+      "type": "list(object)",
+      "optional": true,
       "computed": true,
-      "apiPath": "result.amis[].amiId",
-      "description": "IDs of AMIs registered by the plan."
+      "apiPath": "result.amis",
+      "description": "AMIs registered by the plan. Set to bring existing AMIs; leave unset to have them added later (via the form or the agent).",
+      "attributes": [
+        {
+          "name": "ami_id",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "amiId",
+          "description": "AMI ID (e.g. ami-0abcdef1234567890)."
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "name",
+          "description": "Friendly name for the AMI."
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "description",
+          "description": "Free-form description of the AMI."
+        }
+      ]
     }
-  ],
-  "waiter": {}
+  ]
 }
