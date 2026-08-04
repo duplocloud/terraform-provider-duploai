@@ -89,7 +89,7 @@ provider "duploai" {
 | [`duploai_network_baseline`](docs/resources/network_baseline.md) | Manages a DuploCloud AI Helpdesk network baseline. On AWS this provisions a VPC, subnets, and NAT gateways; on Azure it provisions a virtual network, subnets, and NAT gateways via the nested `azure` block. The target cloud is selected with `cloud` |
 | [`duploai_node_group`](docs/resources/node_group.md) | Manages a DuploCloud AI Helpdesk AWS EKS managed node group |
 | [`duploai_oci_repository`](docs/resources/oci_repository.md) | Manages a DuploCloud AI Helpdesk Kubernetes OCI repository (Flux OCIRepository) |
-| [`duploai_plan`](docs/resources/plan.md) | Manages a DuploCloud AI Helpdesk plan (region landing zone built on a network baseline) |
+| [`duploai_plan`](docs/resources/plan.md) | Manages a DuploCloud AI Helpdesk plan (a region landing zone that collects reusable cloud references: a primary hosted zone, certificates, and AMIs). A plan has no provisioning lifecycle of its own — it is created synchronously and its references are edited directly or by the agent |
 | [`duploai_rds_cluster`](docs/resources/rds_cluster.md) | Manages a DuploCloud AI Helpdesk AWS RDS (Aurora) cluster |
 | [`duploai_rds_instance`](docs/resources/rds_instance.md) | Manages a DuploCloud AI Helpdesk standalone AWS RDS instance |
 | [`duploai_resource_group`](docs/resources/resource_group.md) | Manages a DuploCloud AI Helpdesk resource group (shared security groups, IAM role, KMS key) |
@@ -146,7 +146,7 @@ provider "duploai" {
 | [`duploai_network_baseline`](docs/data-sources/network_baseline.md) | Manages a DuploCloud AI Helpdesk network baseline. On AWS this provisions a VPC, subnets, and NAT gateways; on Azure it provisions a virtual network, subnets, and NAT gateways via the nested `azure` block. The target cloud is selected with `cloud` |
 | [`duploai_node_group`](docs/data-sources/node_group.md) | Manages a DuploCloud AI Helpdesk AWS EKS managed node group |
 | [`duploai_oci_repository`](docs/data-sources/oci_repository.md) | Manages a DuploCloud AI Helpdesk Kubernetes OCI repository (Flux OCIRepository) |
-| [`duploai_plan`](docs/data-sources/plan.md) | Manages a DuploCloud AI Helpdesk plan (region landing zone built on a network baseline) |
+| [`duploai_plan`](docs/data-sources/plan.md) | Manages a DuploCloud AI Helpdesk plan (a region landing zone that collects reusable cloud references: a primary hosted zone, certificates, and AMIs). A plan has no provisioning lifecycle of its own — it is created synchronously and its references are edited directly or by the agent |
 | [`duploai_rds_cluster`](docs/data-sources/rds_cluster.md) | Manages a DuploCloud AI Helpdesk AWS RDS (Aurora) cluster |
 | [`duploai_rds_instance`](docs/data-sources/rds_instance.md) | Manages a DuploCloud AI Helpdesk standalone AWS RDS instance |
 | [`duploai_resource_group`](docs/data-sources/resource_group.md) | Manages a DuploCloud AI Helpdesk resource group (shared security groups, IAM role, KMS key) |
