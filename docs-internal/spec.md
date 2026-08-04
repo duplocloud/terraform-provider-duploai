@@ -61,6 +61,7 @@ Saving this file, running `go generate ./...` (to regenerate docs), and running
 | `updateConstants` | array | no | Fixed pairs injected into **update** (PUT) bodies only. Overrides `requestConstants` for the same path. |
 | `requiredIf` | array | no | Conditional-required rules evaluated at plan time. See [RequiredIf rules](#requiredif-rules). |
 | `conflictsWith` | array | no | Mutually-exclusive attribute groups enforced at plan time. See [ConflictsWith rules](#conflictswith-rules). |
+| `resendCreatePathsOnUpdate` | bool | no | Also write each attribute's **create** path in the PUT body, with the same value. For a backend whose update body is a delta envelope over a record it rebuilds from that body. See [Delta envelopes over a rebuilt record](#delta-envelopes-over-a-rebuilt-record). |
 | `dataSource` | bool | no | When `true`, also registers a read-only `data.duploai_<name>` data source derived automatically from this spec. See [Auto-generated data source](#auto-generated-data-source). |
 | `dataSourceOnly` | bool | no | When `true`, registers **only** a read-only `data.duploai_<name>` data source — no managed resource is registered. Use this for purely read-only APIs (e.g. look-up endpoints with no create/update/delete). Implies data source semantics; `dataSource` need not also be set. |
 | `waiter` | object | no | Async polling config. Required for resources that provision asynchronously. See [Waiter](#waiter). |
@@ -322,6 +323,7 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `updatePath` | string | Override for PUT (update) body. Falls back to `requestPath`, then `apiPath`. |
 | `createOnly` | bool | Send this field in POST (create) only; never in PUT (update). Useful for fields immutable after creation that do not trigger replacement. |
 | `noSend` | bool | Read from the response but never sent in requests. Use for computed-only output fields. |
+| `sendFromState` | bool | The inverse of `noSend`: send a **computed-only** attribute in request bodies, carrying the value Terraform already holds in state. See [Server-assigned fields the API wants back](#server-assigned-fields-the-api-wants-back). |
 | `normalizeCsvOrder` | bool | For a `string` field, sort its comma-separated tokens into a canonical (lexical) order before storing in state. Use for order-insensitive values the backend returns non-deterministically (e.g. AWS MSK bootstrap broker strings) to prevent perpetual refresh drift. |
 | `preserveOnEmptyResponse` | bool | Keep the value already held for this attribute — the configured plan value on create/update, the prior state value on refresh — whenever the API returns null or empty for it. See [Write-only fields](#write-only-fields). |
 | `deprecated` | string | Marks the attribute deprecated: the message is wired to the framework's `DeprecationMessage` and shown as a warning whenever the attribute is set in config. Use when renaming an attribute — keep the old one with a deprecation message pointing at the replacement (pair with `conflictsWith` + `requiredIf`/`isEmpty` for a backwards-compatible rename). |
@@ -456,6 +458,78 @@ Scope and limits:
   Say so in the attribute's `description`.
 - On **import** there is no prior value, so the field lands empty — expected,
   since the secret is unrecoverable from the API.
+
+### Delta envelopes over a rebuilt record
+
+A sibling of the problem above, for an API whose update body is a **delta envelope**
+(`spec.updateRequest.*`) applied against the stored record — while the record itself is
+replaced by the body's create-shape fields (`spec.cluster.*`, `spec.database.*`).
+
+Send only the envelope and the backend keeps the fields it recognises as *changed* and
+resets every other one to its type default. Azure Managed Redis reset a non-default
+`eviction_policy` to `NoEviction` on any unrelated update: Terraform state and Azure
+still agreed, but the platform's stored record did not — and because the backend decides
+whether to patch the cloud by diffing the envelope against that record, a later change
+back to `NoEviction` was a no-op that reported success and never reached Azure.
+
+Set it at the spec level:
+
+```json
+{
+  "name": "azure_managed_redis",
+  "resendCreatePathsOnUpdate": true
+}
+```
+
+The PUT body then carries each attribute's create path **and** its update path with the
+same value — the shape the platform's own console sends. Notes:
+
+- Attributes with a single path (`apiPath` only) are written once; nothing is duplicated.
+- `createOnly` attributes are still skipped on update — they opt out explicitly, and a
+  field the API refuses on update must not reappear because of this flag.
+- Only the update body changes; create is untouched.
+
+### Server-assigned fields the API wants back
+
+Computed-only attributes are outputs, so the engine never sends them (see the
+`!a.Required && !a.Optional` gate in `bodyFromRaw`). That breaks against a backend
+that **rebuilds its stored document from the request body**: anything the body
+omits is dropped from the record.
+
+Azure Managed Redis is such an API. `spec.scopeIds` links the instance to its
+cloud provider account and is assigned by the platform, so it was modelled
+computed-only — and every update silently wiped it from the stored record.
+Confirmed live 2026-08-04.
+
+`sendFromState: true` makes the engine send the value Terraform already holds:
+
+```json
+{
+  "name": "scope_ids",
+  "type": "list(string)",
+  "computed": true,
+  "sendFromState": true,
+  "apiPath": "spec.scopeIds"
+}
+```
+
+The alternative — marking the field `optional` purely so the body builder picks it
+up — misrepresents a server-assigned value as user-settable and invites someone to
+set it. `sendFromState` keeps the attribute honestly read-only.
+
+Notes:
+
+- Implies `UseStateForUnknown`: the value must be **known at plan time** to be
+  sendable. (An earlier attempt using `stable: true` failed for exactly this
+  reason.)
+- On **create** there is no prior state, so the value is unknown and correctly
+  omitted — which is what the API wants, since the server has not assigned it yet.
+- Rejected at startup on a non-computed attribute, alongside `noSend`
+  (contradictory), or on an `optional`/`required` attribute (redundant — those are
+  already sent).
+- This is a workaround for backend behaviour. The durable fix is for the API to
+  merge updates into the stored entity instead of replacing it; until then, every
+  server-assigned field in that resource's write path needs the flag.
 
 ### Path mapping
 

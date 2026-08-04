@@ -1078,6 +1078,20 @@ func preserveUnion(a AttributeSpec, attrs []AttributeSpec, top map[string]tftype
 	return out
 }
 
+// resendCreatePath writes an attribute's CREATE path into an update body as well,
+// when the spec sets ResendCreatePathsOnUpdate. Backends that rebuild their stored
+// document from the request body need the create shape alongside the update
+// envelope, or every field the envelope does not treat as changed falls back to a
+// type default. No-op on create, and on any attribute whose two paths coincide.
+func (r *dynamicResource) resendCreatePath(body map[string]any, a AttributeSpec, val any, verb, reqPath string) {
+	if verb != "update" || !r.spec.ResendCreatePathsOnUpdate {
+		return
+	}
+	if cp := a.effectiveCreatePath(); cp != "" && cp != reqPath {
+		setPath(body, strings.Split(cp, "."), val)
+	}
+}
+
 func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *diag.Diagnostics) map[string]any {
 	var top map[string]tftypes.Value
 	if err := raw.As(&top); err != nil {
@@ -1092,7 +1106,7 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *dia
 		} else {
 			reqPath = a.effectiveCreatePath()
 		}
-		if reqPath == "" || a.NoSend || (!a.Required && !a.Optional) {
+		if reqPath == "" || a.NoSend || (!a.Required && !a.Optional && !a.SendFromState) {
 			continue
 		}
 		if a.PreserveUnmanagedInto != "" {
@@ -1101,6 +1115,7 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *dia
 			// update instead of being cleared.
 			if union := preserveUnion(a, r.spec.Attributes, top); len(union) > 0 {
 				setPath(body, strings.Split(reqPath, "."), union)
+				r.resendCreatePath(body, a, union, verb, reqPath)
 			}
 			continue
 		}
@@ -1112,6 +1127,9 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *dia
 		if !ok {
 			continue
 		}
+		// The create shape keeps the untransformed value: UpdateBoolTrueValue rewrites
+		// what the UPDATE path carries, not what the create path expects.
+		createVal := val
 		// String-enum → bool on update: e.g. image_tag_mutability "IMMUTABLE"
 		// (create string) maps to enableTagImmutability true (update bool).
 		if verb == "update" && a.UpdateBoolTrueValue != "" {
@@ -1119,6 +1137,7 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *dia
 			val = s == a.UpdateBoolTrueValue
 		}
 		setPath(body, strings.Split(reqPath, "."), val)
+		r.resendCreatePath(body, a, createVal, verb, reqPath)
 	}
 	applyConstants(body, r.spec.RequestConstants, diags)
 	if verb == "update" {
