@@ -1,0 +1,506 @@
+{
+  "name": "azure_managed_redis",
+  "description": "Manages an Azure Managed Redis (Redis Enterprise) instance, provisioned within an environment and resource group.\n\nAzure models this as two ARM resources and the platform creates both: a `Microsoft.Cache/redisEnterprise` cluster (SKU, TLS, high availability, public network access) and a single `Microsoft.Cache/redisEnterprise/databases` child named `default` (clustering policy, eviction policy, modules, persistence, geo-replication, access-key auth). The attributes below are flattened across both. The database child is created only after the cluster finishes provisioning, so `database_id` and the access-key operations are unavailable for a period after the resource first reports Complete — set `wait_for_database` if you need to depend on them.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AzureManagedRedis",
+    "deprovision": {}
+  },
+  "resendCreatePathsOnUpdate": true,
+  "conflictsWith": [
+    [
+      "persistence",
+      "geo_replication"
+    ]
+  ],
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this Redis instance."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Redis instance name. 1-60 characters, alphanumeric and hyphens, first and last character alphanumeric, no consecutive hyphens, and globally unique across Azure. Immutable after creation."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment in which the Redis instance is provisioned."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group in which the Redis instance is provisioned."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "computed": true,
+      "sendFromState": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs linking this Redis instance to a cloud provider account, inherited from the resource group."
+    },
+    {
+      "name": "sku_name",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Balanced_B0",
+      "forceNew": true,
+      "oneOf": [
+        "Balanced_B0",
+        "Balanced_B1",
+        "Balanced_B3",
+        "Balanced_B5",
+        "Balanced_B10",
+        "Balanced_B20",
+        "Balanced_B50",
+        "Balanced_B100",
+        "Balanced_B150",
+        "Balanced_B250",
+        "Balanced_B350",
+        "Balanced_B500",
+        "Balanced_B700",
+        "Balanced_B1000",
+        "MemoryOptimized_M10",
+        "MemoryOptimized_M20",
+        "MemoryOptimized_M50",
+        "MemoryOptimized_M100",
+        "MemoryOptimized_M150",
+        "MemoryOptimized_M250",
+        "MemoryOptimized_M350",
+        "MemoryOptimized_M500",
+        "MemoryOptimized_M700",
+        "MemoryOptimized_M1000",
+        "MemoryOptimized_M1500",
+        "MemoryOptimized_M2000",
+        "ComputeOptimized_X3",
+        "ComputeOptimized_X5",
+        "ComputeOptimized_X10",
+        "ComputeOptimized_X20",
+        "ComputeOptimized_X50",
+        "ComputeOptimized_X100",
+        "ComputeOptimized_X150",
+        "ComputeOptimized_X250",
+        "ComputeOptimized_X350",
+        "ComputeOptimized_X500",
+        "ComputeOptimized_X700",
+        "FlashOptimized_A250",
+        "FlashOptimized_A500",
+        "FlashOptimized_A700",
+        "FlashOptimized_A1000",
+        "FlashOptimized_A1500",
+        "FlashOptimized_A2000",
+        "FlashOptimized_A4500"
+      ],
+      "apiPath": "spec.skuName",
+      "description": "Azure Managed Redis SKU. Cache size is fixed by the SKU name across all four supported families (Balanced, MemoryOptimized, ComputeOptimized, FlashOptimized). Immutable after creation.\n\nThe legacy `Enterprise_*` and `EnterpriseFlash_*` families are deliberately not offered: those are Azure Cache for Redis Enterprise SKUs, which Azure has retired — a create returns \"Creation of new Azure Cache for Redis Enterprise resources is no longer supported\". They are therefore unusable here, including for adopting an existing legacy instance."
+    },
+    {
+      "name": "minimum_tls_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Tls1_2",
+      "oneOf": [
+        "Tls1_2"
+      ],
+      "createPath": "spec.cluster.minimumTlsVersion",
+      "updatePath": "spec.updateRequest.minimumTlsVersion",
+      "responsePath": "spec.cluster.minimumTlsVersion",
+      "description": "Minimum TLS version the cluster accepts. `Tls1_2` is the only accepted value — TLS 1.0 and 1.1 are obsolete on Azure Managed Redis and the API rejects them. The attribute exists so the value is explicit in configuration and state, and so a future version can be added without a breaking change."
+    },
+    {
+      "name": "high_availability",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": true,
+      "createPath": "spec.cluster.highAvailability",
+      "updatePath": "spec.updateRequest.highAvailability",
+      "responsePath": "spec.cluster.highAvailability",
+      "description": "Replicate the data set within the cluster. Enabled by default, which is also what `persistence` and `geo_replication` require — setting this to `false` makes either of them fail. Disabling it lowers the availability SLA and increases the risk of data loss."
+    },
+    {
+      "name": "public_network_access_enabled",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "createPath": "spec.cluster.publicNetworkAccessEnabled",
+      "updatePath": "spec.updateRequest.publicNetworkAccessEnabled",
+      "responsePath": "spec.cluster.publicNetworkAccessEnabled",
+      "description": "Expose the cluster's public endpoint. Defaults to disabled per platform policy, in which case the cluster is reachable only through a Private Endpoint."
+    },
+    {
+      "name": "clustering_policy",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "OSSCluster",
+      "forceNew": true,
+      "oneOf": [
+        "EnterpriseCluster",
+        "OSSCluster",
+        "NoCluster"
+      ],
+      "apiPath": "spec.database.clusteringPolicy",
+      "description": "Redis clustering policy. Treated as immutable here: Azure only allows it to change while the current value is `NoCluster`, so a change forces replacement rather than risking an update the API rejects. `EnterpriseCluster` is required by the RediSearch module. `NoCluster` additionally only applies to SKUs of 25 GB or less and is not supported at all by the `FlashOptimized_*` family; the API rejects both cases."
+    },
+    {
+      "name": "eviction_policy",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "NoEviction",
+      "oneOf": [
+        "AllKeysLFU",
+        "AllKeysLRU",
+        "AllKeysRandom",
+        "VolatileLRU",
+        "VolatileLFU",
+        "VolatileTTL",
+        "VolatileRandom",
+        "NoEviction"
+      ],
+      "createPath": "spec.database.evictionPolicy",
+      "updatePath": "spec.updateRequest.evictionPolicy",
+      "responsePath": "spec.database.evictionPolicy",
+      "description": "Key eviction policy applied when the cache is full."
+    },
+    {
+      "name": "non_tls_access_enabled",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "createPath": "spec.database.nonTlsAccessEnabled",
+      "updatePath": "spec.updateRequest.nonTlsAccessEnabled",
+      "responsePath": "spec.database.nonTlsAccessEnabled",
+      "description": "Also accept plaintext Redis connections alongside TLS. Defaults to TLS-only."
+    },
+    {
+      "name": "access_keys_authentication_enabled",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "description": "Allow classic access-key authentication. Defaults to disabled, matching Azure's guidance to use Microsoft Entra ID for new caches. While disabled, the platform's access-key read and regenerate operations return an error, because Azure rejects ListKeys outright. Can be changed in place — verified live 2026-08-04. The platform's own console cannot change it: its save payload resends the current value rather than the newly selected one, so the toggle appears to revert.",
+      "createPath": "spec.database.accessKeysAuthenticationEnabled",
+      "updatePath": "spec.updateRequest.accessKeysAuthenticationEnabled",
+      "responsePath": "spec.database.accessKeysAuthenticationEnabled"
+    },
+    {
+      "name": "modules",
+      "type": "list(object)",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.database.modules",
+      "description": "Redis modules to enable, e.g. RediSearch, RedisBloom, RedisJSON, RedisTimeSeries. Immutable after creation — Azure only accepts modules when the database is first created, so a change forces replacement. RediSearch additionally requires `clustering_policy = \"EnterpriseCluster\"`.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "Module name, e.g. `RediSearch`, `RedisBloom`, `RedisJSON`, `RedisTimeSeries`. `RediSearch` requires `clustering_policy` = EnterpriseCluster and `eviction_policy` = NoEviction; with `geo_replication` enabled, only `RediSearch` and `RedisJSON` are accepted at all."
+        },
+        {
+          "name": "args",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "args",
+          "description": "Optional module configuration string, e.g. `ERROR_RATE 0.01 INITIAL_SIZE 400`."
+        }
+      ]
+    },
+    {
+      "name": "reported_modules",
+      "type": "list(object)",
+      "computed": true,
+      "sendFromState": true,
+      "updatePath": "result.modules",
+      "responsePath": "result.modules",
+      "description": "Modules as Azure reports them, mirroring `modules`.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "computed": true,
+          "apiPath": "name",
+          "description": "Module name."
+        },
+        {
+          "name": "args",
+          "type": "string",
+          "computed": true,
+          "apiPath": "args",
+          "description": "Module configuration string, empty when none."
+        }
+      ]
+    },
+    {
+      "name": "persistence",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "createPath": "spec.database.persistence",
+      "updatePath": "spec.updateRequest.persistence",
+      "responsePath": "spec.database.persistence",
+      "description": "Data persistence (backup) settings. At most one of `rdb_enabled` / `aof_enabled` may be true — Azure rejects both — and whichever is enabled requires its matching frequency. Enabling either requires `high_availability = true`, and cannot be combined with `geo_replication`. That conflict is enforced at plan time against the presence of the two blocks, which is slightly stricter than the API: it also rejects a persistence block whose flags are all `false` alongside `geo_replication`, where the API would accept it. Omit the block entirely in that case — an all-`false` persistence block does nothing.",
+      "attributes": [
+        {
+          "name": "rdb_enabled",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": false,
+          "apiPath": "rdbEnabled",
+          "description": "Enable RDB snapshot persistence."
+        },
+        {
+          "name": "rdb_frequency",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "oneOf": [
+            "OneHour",
+            "SixHours",
+            "TwelveHours"
+          ],
+          "apiPath": "rdbFrequency",
+          "description": "Snapshot interval. Required when `rdb_enabled` is true."
+        },
+        {
+          "name": "aof_enabled",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": false,
+          "apiPath": "aofEnabled",
+          "description": "Enable append-only-file persistence."
+        },
+        {
+          "name": "aof_frequency",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "oneOf": [
+            "OneSecond",
+            "Always"
+          ],
+          "apiPath": "aofFrequency",
+          "description": "Append-only-file write frequency. Required when `aof_enabled` is true."
+        }
+      ]
+    },
+    {
+      "name": "geo_replication",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "createPath": "spec.geoReplication",
+      "updatePath": "spec.updateRequest.geoReplication",
+      "responsePath": "spec.geoReplication",
+      "description": "Active geo-replication group membership. Immutable: any change here REPLACES the instance. Azure only accepts geo-replication settings when the database is created, so the platform rejects an edit outright and Azure answers the underlying request with an opaque 501.\n\nBuild a group by creating both members with it already configured: give the first a `group_nickname` and an empty `linked_database_arm_ids`, then create the second with the same nickname and the first's `database_id` in its link list. Azure then links both ends itself \u2014 the first database reports the second as a member without Terraform ever sending it, so `geo_replication_linked_database_ids` on the first member will show a value its own configuration does not, and a refresh reports that as an out-of-band change. Leaving `linked_database_arm_ids` empty with no nickname creates an ordinary standalone database. Verified live 2026-08-04.\n\nSetting either field here counts as enabling geo-replication, which brings four constraints: it requires `high_availability = true`; it is rejected on the `Balanced_B0`, `Balanced_B1` and every `FlashOptimized_*` SKU; it cannot be combined with `persistence`; and the only modules it tolerates are `RediSearch` and `RedisJSON`.\n\nWARNING: while geo-replication is enabled the instance cannot be UPDATED AT ALL \u2014 not even its tags. The platform validates geo-replication immutability by comparing the requested `linked_database_arm_ids` against Azure's reported member list within the same request body, and those two can never match: the configured list holds the peers, while Azure's holds every member including the database itself. Every update is therefore rejected with \"Cannot change spec.geoReplication after creation\", whatever it actually changed. This affects the platform's own console equally. Treat a geo-replicated instance as immutable and replace it to change anything. Verified live 2026-08-04.",
+      "attributes": [
+        {
+          "name": "group_nickname",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "groupNickname",
+          "description": "Shared name identifying the geo-replication group. Required when `linked_database_arm_ids` is non-empty."
+        },
+        {
+          "name": "linked_database_arm_ids",
+          "type": "list(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "linkedDatabaseArmIds",
+          "description": "Full ARM resource IDs of the other databases already in the group."
+        }
+      ]
+    },
+    {
+      "name": "tags",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "filterResponseKeys": [
+        "duplocloud-ai-*"
+      ],
+      "createPath": "spec.tags",
+      "updatePath": "spec.updateRequest.tags",
+      "responsePath": "spec.tags",
+      "description": "Tags applied to the Redis instance. The platform adds its own managed `duplocloud-ai-*` tags server-side; those are filtered out of state so only your tags are managed by Terraform."
+    },
+    {
+      "name": "azure_resource_group_name",
+      "type": "string",
+      "computed": true,
+      "sendFromState": true,
+      "apiPath": "spec.azureResourceGroupName",
+      "description": "Azure resource group the cluster is created in, derived from the linked resource group."
+    },
+    {
+      "name": "unique_cloud_resource_id",
+      "type": "string",
+      "computed": true,
+      "sendFromState": true,
+      "apiPath": "spec.uniqueCloudResourceId",
+      "description": "Full Azure resource ID (ARM ID) of the cluster, as the platform records it on the resource itself. `cluster_id` exposes the same ARM ID read from the live Azure result."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "oneOf": [
+        "Cli",
+        "IacNativeTf",
+        "IacDuploTf",
+        "DirectApiCall"
+      ],
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type. Assigned by the platform when unset — existing instances report `Cli`."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version. Left unset the API omits it, so this reads back empty rather than as an empty string."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status of the Redis instance."
+    },
+    {
+      "name": "redis_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this Redis instance, for reference by dependent resources."
+    },
+    {
+      "name": "cluster_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "noSend": true,
+      "apiPath": "result.clusterId",
+      "description": "Full Azure resource ID (ARM ID) of the Redis Enterprise cluster."
+    },
+    {
+      "name": "database_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "noSend": true,
+      "apiPath": "result.databaseId",
+      "description": "Full Azure resource ID (ARM ID) of the `default` database. Empty until the database child finishes provisioning, which happens after the cluster — set `wait_for_database` to block until it is populated."
+    },
+    {
+      "name": "provisioning_state",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.provisioningState",
+      "description": "Azure provisioning state of the cluster, e.g. Succeeded or Creating."
+    },
+    {
+      "name": "host_name",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "noSend": true,
+      "apiPath": "result.hostName",
+      "description": "Redis endpoint hostname, e.g. myredis.eastus.redisenterprise.cache.azure.net."
+    },
+    {
+      "name": "port",
+      "type": "int",
+      "computed": true,
+      "stable": true,
+      "noSend": true,
+      "apiPath": "result.port",
+      "description": "TCP port of the database endpoint."
+    },
+    {
+      "name": "geo_replication_group_nickname",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.geoReplicationGroupNickname",
+      "description": "Geo-replication group nickname reported by Azure, if the database belongs to a group."
+    },
+    {
+      "name": "geo_replication_linked_database_ids",
+      "type": "list(string)",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.geoReplicationLinkedDatabaseIds",
+      "description": "ARM resource IDs of the other databases linked in the same geo-replication group, as reported by Azure."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the Redis instance was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the Redis instance was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ],
+  "createConstants": [
+    {
+      "path": "spec.mode",
+      "value": "Create"
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned",
+    "populatedPath": "result.databaseId",
+    "populatedPathAttribute": "wait_for_database",
+    "createTimeoutMinutes": 60,
+    "updateTimeoutMinutes": 60
+  }
+}
