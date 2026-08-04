@@ -58,3 +58,56 @@ func TestRequiredIf_UnknownTargetNotFlagged(t *testing.T) {
 		t.Error("requiredIf fired on a set network_id")
 	}
 }
+
+// A requiredIf rule's CONDITION attribute (the "when" clause) being UNKNOWN —
+// e.g. region required "when network_baseline_id isEmpty", and
+// network_baseline_id = duploai_network_baseline.x.network_id (unresolved in
+// the same apply) — must NOT be treated as empty. readConfigString collapses
+// unknown to "" the same as null, so without readConfigUnknown the isEmpty
+// condition would wrongly hold and demand region even though
+// network_baseline_id is plainly set. Regression for the duploai_plan
+// first-apply case (network_baseline + plan created together).
+func TestRequiredIf_UnknownConditionAttrDoesNotFire(t *testing.T) {
+	spec := ResourceSpec{
+		Name: "plan", IDPath: "id",
+		Endpoint: EndpointSpec{UriBase: "/plans"},
+		RequiredIf: []RequiredIfRule{
+			{Attribute: "region", When: []RequiredIfCondition{{Attribute: "network_baseline_id", IsEmpty: true}}},
+		},
+		Attributes: []AttributeSpec{
+			{Name: "region", Type: "string", Optional: true, Computed: true, APIPath: "spec.region"},
+			{Name: "network_baseline_id", Type: "string", Optional: true, Computed: true, APIPath: "spec.networkBaselineId"},
+		},
+	}
+	r := &dynamicResource{spec: spec}
+	var sr resource.SchemaResponse
+	r.Schema(context.Background(), resource.SchemaRequest{}, &sr)
+	v := requiredIfValidator{spec: spec}
+
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"id":                  tftypes.String,
+		"region":              tftypes.String,
+		"network_baseline_id": tftypes.String,
+	}}
+	run := func(region, networkBaselineID tftypes.Value) bool {
+		raw := tftypes.NewValue(objType, map[string]tftypes.Value{
+			"id":                  tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+			"region":              region,
+			"network_baseline_id": networkBaselineID,
+		})
+		req := resource.ValidateConfigRequest{Config: tfsdk.Config{Schema: sr.Schema, Raw: raw}}
+		resp := resource.ValidateConfigResponse{}
+		v.ValidateResource(context.Background(), req, &resp)
+		return resp.Diagnostics.HasError()
+	}
+
+	if run(tftypes.NewValue(tftypes.String, nil), tftypes.NewValue(tftypes.String, tftypes.UnknownValue)) {
+		t.Error("requiredIf fired on region when network_baseline_id is an unresolved reference — should not treat unknown as empty")
+	}
+	if !run(tftypes.NewValue(tftypes.String, nil), tftypes.NewValue(tftypes.String, nil)) {
+		t.Error("requiredIf did not fire on region when network_baseline_id is genuinely null")
+	}
+	if run(tftypes.NewValue(tftypes.String, "us-east-1"), tftypes.NewValue(tftypes.String, nil)) {
+		t.Error("requiredIf fired on region when region is set and network_baseline_id is null")
+	}
+}

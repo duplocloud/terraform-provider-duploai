@@ -936,6 +936,15 @@ func (v requiredIfValidator) conditionsHold(ctx context.Context, cfg attrReader,
 		if when == nil {
 			return false
 		}
+		if readConfigUnknown(ctx, cfg, *when) {
+			// Unresolved reference to another resource created in the same apply
+			// (e.g. network_baseline_id = duploai_network_baseline.x.network_id).
+			// It is configured, just not yet known — don't evaluate conditions
+			// against it, matching configAttrNull's treatment of unknown as "set"
+			// for ConflictsWith. Otherwise IsEmpty would wrongly hold (readConfigString
+			// collapses unknown to "" the same as null) and fire a false requiredIf error.
+			return false
+		}
 		val := readConfigString(ctx, cfg, *when)
 		if val == "" {
 			val = defaultString(*when) // user omitted it — use the spec default
@@ -1343,6 +1352,51 @@ func readConfigString(ctx context.Context, cfg attrReader, a AttributeSpec) stri
 		return ""
 	}
 	return toStringValue(v)
+}
+
+// readConfigUnknown reports whether a's value in cfg is unknown — an
+// unresolved reference to another resource being created in the same apply
+// (e.g. network_baseline_id = duploai_network_baseline.x.network_id). Unlike
+// readConfigString, which collapses unknown to "" the same as a genuinely
+// null value, this lets requiredIf condition checks distinguish the two —
+// the same distinction configAttrNull makes for ConflictsWith.
+func readConfigUnknown(ctx context.Context, cfg attrReader, a AttributeSpec) bool {
+	switch a.Type {
+	case "string":
+		var v types.String
+		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
+		return v.IsUnknown()
+	case "bool":
+		var v types.Bool
+		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
+		return v.IsUnknown()
+	case "int":
+		var v types.Int64
+		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
+		return v.IsUnknown()
+	case "number":
+		var v types.Float64
+		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
+		return v.IsUnknown()
+	case "list(string)":
+		var v types.List
+		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
+		return v.IsUnknown()
+	case "set(string)":
+		var v types.Set
+		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
+		return v.IsUnknown()
+	case "map(string)":
+		var v types.Map
+		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
+		return v.IsUnknown()
+	case "object":
+		var v types.Object
+		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
+		return v.IsUnknown()
+	default:
+		return false
+	}
 }
 
 // configAttrNull reports whether a top-level attribute is genuinely unset (null)
