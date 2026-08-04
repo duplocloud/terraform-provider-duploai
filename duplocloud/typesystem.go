@@ -207,7 +207,7 @@ func useStateForUnknown(a AttributeSpec) bool {
 	// preserveTarget: a computed sibling of a PreserveUnmanagedInto attribute
 	// must keep its prior-state value at plan time so the union-on-write can
 	// re-send the server-managed entries it holds.
-	return a.Computed && (a.Optional || a.ForceNew || a.preserveTarget || a.Stable)
+	return a.Computed && (a.Optional || a.ForceNew || a.preserveTarget || a.Stable || a.SendFromState)
 }
 
 // staticDefaultValue decodes a spec's raw JSON `default` into a framework
