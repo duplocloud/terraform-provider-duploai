@@ -64,9 +64,12 @@ resource "duploai_plan" "byo_dns" {
   }
 }
 
-# An Azure plan that brings an existing Key Vault certificate instead of
-# letting the platform provision one. Leave azure_certificates unset to have
-# the platform manage certificates automatically.
+# An Azure plan registering existing Key Vault certificates for the AGIC
+# Application Gateway to serve.
+#
+# These are REFERENCES, not certificates: the platform never creates one. Leaving
+# azure_certificates unset means no certificates are registered, not that the
+# platform will provide them.
 resource "duploai_plan" "azure_byo_cert" {
   workspace_id        = "<workspace-id>"
   name                = "prod-plan-azure"
@@ -74,11 +77,20 @@ resource "duploai_plan" "azure_byo_cert" {
   region              = "westus2"
   network_baseline_id = "<network-id>"
 
-  # Existing Azure Key Vault certificate (name + full secret URI).
+  # Both fields are required on every entry, and `name` is used verbatim as the
+  # App Gateway SSL certificate name.
   azure_certificates = [
+    # Unversioned URI: the platform re-resolves it on every reconcile, so the
+    # gateway picks up certificate rotations automatically. Prefer this.
     {
       name                = "wildcard-cert"
-      key_vault_secret_id = "https://myvault.vault.azure.net/secrets/wildcard-cert/1234567890abcdef1234567890abcdef"
+      key_vault_secret_id = "https://myvault.vault.azure.net/secrets/wildcard-cert"
+    },
+    # Versioned URI: pins that exact version forever. Only use it when you
+    # deliberately do not want rotations picked up.
+    {
+      name                = "pinned-cert"
+      key_vault_secret_id = "https://myvault.vault.azure.net/secrets/pinned-cert/1234567890abcdef1234567890abcdef"
     },
   ]
 
@@ -102,8 +114,8 @@ resource "duploai_plan" "azure_byo_cert" {
 
 ### Optional
 
-- `azure_certificates` (Attributes List) Azure Key Vault certificates for the plan. Set to bring existing certificates; leave unset to have the platform provision them. (see [below for nested schema](#nestedatt--azure_certificates))
-- `certificates` (Attributes List) ACM certificates for the plan. Set to bring existing certificates; leave unset to have the platform provision them. (see [below for nested schema](#nestedatt--certificates))
+- `azure_certificates` (Attributes List) Azure Key Vault certificates registered with this plan, for the AGIC Application Gateway to serve. Each entry is a REFERENCE to a certificate that already exists in a Key Vault — the platform does not create or provision certificates, so leaving this unset simply means none are registered. On reconcile the platform reads the referenced secret itself and pushes the PFX into the Application Gateway. Names must be unique within the plan, compared case-insensitively; an entry whose name is already registered by another plan on the same cluster is ignored. A plan targets a single cloud, so this conflicts with `certificates` (the AWS/ACM list) — set at most one. (see [below for nested schema](#nestedatt--azure_certificates))
+- `certificates` (Attributes List) ACM certificates for the plan. Set to bring existing certificates; leave unset to have the platform provision them. A plan targets a single cloud, so this conflicts with `azure_certificates` — set at most one. (see [below for nested schema](#nestedatt--certificates))
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `primary_hosted_zone_domain` (String) Domain name of the primary hosted zone. Set to bring an existing domain; leave unset to have the platform provision one.
@@ -122,10 +134,10 @@ resource "duploai_plan" "azure_byo_cert" {
 <a id="nestedatt--azure_certificates"></a>
 ### Nested Schema for `azure_certificates`
 
-Optional:
+Required:
 
-- `key_vault_secret_id` (String) Full secret URI of the certificate in Azure Key Vault (e.g. https://<vault>.vault.azure.net/secrets/<name>/<version>).
-- `name` (String) Name of the certificate.
+- `key_vault_secret_id` (String) Key Vault secret URI holding the certificate's PFX, `https://<vault>.vault.azure.net/secrets/<name>` with an optional trailing `/<version>`. Prefer the UNVERSIONED form: the platform resolves the URI on every reconcile, so an unversioned URI picks up certificate rotations automatically while a versioned one pins that exact version forever. The API rejects a URI that is not `https://.../secrets/...` with HTTP 400.
+- `name` (String) Application Gateway SSL certificate name, used verbatim, so it must satisfy Azure's SSL-certificate naming convention: 1-80 characters, starting with a letter or digit and containing only letters, digits, `.`, `_` or `-`. Must be unique within the plan (case-insensitive). The API rejects anything else with HTTP 400.
 
 
 <a id="nestedatt--certificates"></a>

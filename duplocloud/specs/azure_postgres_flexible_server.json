@@ -78,7 +78,7 @@
       "computed": true,
       "default": "16",
       "forceNew": true,
-      "oneOf": ["11", "12", "13", "14", "15", "16"],
+      "oneOf": ["11", "12", "13", "14", "15", "16", "17", "18"],
       "apiPath": "spec.version",
       "description": "PostgreSQL major version. Immutable — Azure does not support in-place major version upgrades."
     },
