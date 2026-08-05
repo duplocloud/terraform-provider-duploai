@@ -1,0 +1,390 @@
+{
+  "name": "azure_node_pool",
+  "description": "Manages a node pool (AKS agent pool) on an Azure Kubernetes Service cluster, provisioned within an environment and resource group.\n\nThe pool is created on the AKS cluster linked to the resource group, so that resource group must already have a cluster attached and the cluster must have finished provisioning — the API rejects the create otherwise. Every pool is created as a `User` pool backed by a virtual machine scale set; the cluster's own system pool is not managed here.\n\nThe platform stores the pool's configuration and sends the whole of it to Azure on every change, so Terraform sends every field back on update, not just the ones that changed. Nothing in this resource surfaces live Azure state such as the current node count or Kubernetes version: the API deliberately withholds the raw cloud snapshot from its responses, so only `arm_resource_id` and the platform's own status are available.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AksAgentPools",
+    "deprovision": {}
+  },
+  "resendCreatePathsOnUpdate": true,
+  "createConstants": [
+    {
+      "path": "spec.mode",
+      "value": "Create"
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned",
+    "pollIntervalSeconds": 15,
+    "createTimeoutMinutes": 45,
+    "updateTimeoutMinutes": 45,
+    "deleteTimeoutMinutes": 30
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this node pool."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Node pool name. 1-12 characters, lowercase letters and digits only — no hyphens, underscores or capitals. A Windows pool is limited to 6 characters, which Azure enforces. Immutable after creation."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment in which the node pool is provisioned."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group in which the node pool is provisioned. The AKS cluster the pool joins is the one linked to this resource group."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "computed": true,
+      "sendFromState": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs linking this node pool to a cloud provider account, inherited from the resource group."
+    },
+    {
+      "name": "vm_size",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.vmSize",
+      "description": "Azure VM size for the pool's nodes, e.g. `Standard_DS2_v2`. Immutable after creation — Azure has no way to resize an existing pool, so changing this replaces it. Which sizes are available depends on the subscription and region."
+    },
+    {
+      "name": "os_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Linux",
+      "forceNew": true,
+      "oneOf": [
+        "Linux",
+        "Windows"
+      ],
+      "apiPath": "spec.osType",
+      "description": "Operating system for the pool's nodes. Immutable after creation. A `Windows` pool additionally caps `name` at 6 characters."
+    },
+    {
+      "name": "os_sku",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "oneOf": [
+        "Ubuntu",
+        "AzureLinux",
+        "Windows2019",
+        "Windows2022"
+      ],
+      "apiPath": "spec.osSku",
+      "description": "Specific OS image for the pool's nodes. Left unset, Azure picks the default for `os_type` — currently Ubuntu for Linux and Windows2022 for Windows. Must match `os_type`: the Windows SKUs are only valid on a Windows pool, `Ubuntu` and `AzureLinux` only on a Linux one. Immutable after creation."
+    },
+    {
+      "name": "availability_zones",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.availabilityZones",
+      "description": "Availability zones the pool spreads its nodes across, e.g. `[\"1\", \"2\", \"3\"]`. Left unset, the pool is not zone-spanning. Only zones the region actually offers are accepted. Immutable after creation."
+    },
+    {
+      "name": "scale_set_priority",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Regular",
+      "forceNew": true,
+      "oneOf": [
+        "Regular",
+        "Spot"
+      ],
+      "apiPath": "spec.scaleSetPriority",
+      "description": "Pricing tier for the pool's scale set. `Spot` nodes cost less but Azure can evict them at any time, so keep interruption-tolerant workloads on them only. Immutable after creation."
+    },
+    {
+      "name": "max_pods_per_node",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 30,
+      "forceNew": true,
+      "apiPath": "spec.maxPodsPerNode",
+      "description": "Maximum pods that may be scheduled on each node. Immutable after creation, and bounded by the cluster's network plugin — the practical ceiling is 250, and Azure CNI reserves an IP address per pod, so a high value needs a subnet large enough to cover `max_pods_per_node` × nodes."
+    },
+    {
+      "name": "node_count",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 1,
+      "apiPath": "spec.count",
+      "updatePath": "spec.updateRequest.count",
+      "description": "Number of nodes in the pool. Ignored while `enable_auto_scaling` is true — Azure then drives the count itself between `min_count` and `max_count`, and a value set here is not applied.\n\nNamed `node_count` rather than `count` because `count` is a reserved Terraform meta-argument."
+    },
+    {
+      "name": "min_count",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 1,
+      "apiPath": "spec.minCount",
+      "updatePath": "spec.updateRequest.minCount",
+      "description": "Lower bound for the autoscaler. Only meaningful when `enable_auto_scaling` is true, and must then be at least 1."
+    },
+    {
+      "name": "max_count",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 1,
+      "apiPath": "spec.maxCount",
+      "updatePath": "spec.updateRequest.maxCount",
+      "description": "Upper bound for the autoscaler. Only meaningful when `enable_auto_scaling` is true, and must then be greater than or equal to `min_count`."
+    },
+    {
+      "name": "enable_auto_scaling",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.enableAutoScaling",
+      "updatePath": "spec.updateRequest.enableAutoScaling",
+      "description": "Let the AKS cluster autoscaler size the pool between `min_count` and `max_count`. While enabled, `node_count` has no effect."
+    },
+    {
+      "name": "allocation_tag",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.allocationTag",
+      "description": "Workload allocation tag for the pool. The platform turns it into an `allocationtags` node label, which is how a service is pinned to these nodes. Must be a valid Kubernetes label value: at most 63 characters of letters, digits, dashes, underscores and dots, starting and ending alphanumeric. Clearing it removes the label."
+    },
+    {
+      "name": "node_labels",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.nodeLabels",
+      "updatePath": "spec.updateRequest.nodeLabels",
+      "filterResponseKeys": [
+        "resourcegroup",
+        "environment",
+        "workspace",
+        "allocationtags"
+      ],
+      "description": "Kubernetes labels applied to every node in the pool. The platform adds its own `resourcegroup`, `environment`, `workspace` and `allocationtags` labels so that pods can target these nodes; those are filtered out of state and always win over a value set here, so use `allocation_tag` rather than writing the `allocationtags` label directly."
+    },
+    {
+      "name": "node_taints",
+      "type": "list(object)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.nodeTaints",
+      "updatePath": "spec.updateRequest.nodeTaints",
+      "description": "Kubernetes taints applied to every node in the pool, so only pods with a matching toleration are scheduled there.",
+      "attributes": [
+        {
+          "name": "key",
+          "type": "string",
+          "required": true,
+          "apiPath": "key",
+          "description": "Taint key."
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "required": true,
+          "apiPath": "value",
+          "description": "Taint value."
+        },
+        {
+          "name": "effect",
+          "type": "string",
+          "required": true,
+          "oneOf": [
+            "NoSchedule",
+            "PreferNoSchedule",
+            "NoExecute"
+          ],
+          "apiPath": "effect",
+          "description": "What the taint does to pods that do not tolerate it. `NoSchedule` keeps new pods off the node, `PreferNoSchedule` avoids it when possible, and `NoExecute` also evicts pods already running there."
+        }
+      ]
+    },
+    {
+      "name": "upgrade_settings",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.upgradeSettings",
+      "updatePath": "spec.updateRequest.upgradeSettings",
+      "description": "How aggressively Azure rolls nodes during an upgrade. At most one of surge or unavailable may be active: the API rejects a setting where both are greater than zero.",
+      "attributes": [
+        {
+          "name": "max_surge_type",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "default": "Default",
+          "oneOf": [
+            "Default",
+            "NodeCount",
+            "Percentage"
+          ],
+          "apiPath": "maxSurgeType",
+          "description": "How `max_surge_value` is read. `Default` leaves surge to Azure and ignores the value."
+        },
+        {
+          "name": "max_surge_value",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "apiPath": "maxSurgeValue",
+          "description": "Extra nodes Azure may add during an upgrade — a node count, or a percentage of the pool between 0 and 100. Required when `max_surge_type` is not `Default`."
+        },
+        {
+          "name": "max_unavailable_type",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "default": "Default",
+          "oneOf": [
+            "Default",
+            "NodeCount",
+            "Percentage"
+          ],
+          "apiPath": "maxUnavailableType",
+          "description": "How `max_unavailable_value` is read. `Default` leaves it to Azure and ignores the value."
+        },
+        {
+          "name": "max_unavailable_value",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "apiPath": "maxUnavailableValue",
+          "description": "Nodes Azure may take out of service at once during an upgrade — a node count, or a percentage of the pool between 0 and 100. Required when `max_unavailable_type` is not `Default`."
+        }
+      ]
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "oneOf": [
+        "Cli",
+        "IacNativeTf",
+        "IacDuploTf",
+        "DirectApiCall"
+      ],
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type. Assigned by the platform when unset."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version. Left unset the API omits it, so this reads back empty rather than as an empty string."
+    },
+    {
+      "name": "cluster_id",
+      "type": "string",
+      "computed": true,
+      "sendFromState": true,
+      "apiPath": "spec.clusterId",
+      "description": "ID of the cluster this pool belongs to, taken from the resource group's linked cluster when the pool is created."
+    },
+    {
+      "name": "azure_cluster_name",
+      "type": "string",
+      "computed": true,
+      "sendFromState": true,
+      "apiPath": "spec.azureClusterName",
+      "description": "Name of the AKS managed cluster in Azure that hosts this pool."
+    },
+    {
+      "name": "azure_cluster_resource_group_name",
+      "type": "string",
+      "computed": true,
+      "sendFromState": true,
+      "apiPath": "spec.azureClusterResourceGroupName",
+      "description": "Azure resource group that owns the AKS managed cluster. Note this is the cluster's resource group, which is not necessarily the one named by `resource_group_id`."
+    },
+    {
+      "name": "unique_cloud_resource_id",
+      "type": "string",
+      "computed": true,
+      "sendFromState": true,
+      "apiPath": "spec.uniqueCloudResourceId",
+      "description": "Full Azure resource ID (ARM ID) of the node pool, as the platform records it on the resource itself. It is what the delete and refresh operations use to reach the pool. `arm_resource_id` exposes the same ID as reported after creation."
+    },
+    {
+      "name": "node_pool_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this node pool, for reference by dependent resources."
+    },
+    {
+      "name": "arm_resource_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "result.armResourceId",
+      "description": "Full Azure resource ID (ARM ID) of the node pool, as reported after creation."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status of the node pool."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the node pool was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the node pool was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ]
+}
