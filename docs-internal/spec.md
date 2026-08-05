@@ -468,6 +468,14 @@ rule between two leaves of the same object — and APIs are full of those. Witho
 state them, the spec can only document the rule in a description and let the apply fail
 with a cloud error.
 
+**Reach for the simpler tools first.** An unconditional bound is `min` / `max` on the
+attribute, which the engine already wires to the framework's own validators; a fixed value
+set is `oneOf`; a presence rule is `requiredIf` or `conflictsWith`. `invalidWhen` is for
+what those cannot say — and note that the framework's stock comparison validators
+(`int64validator.AtLeastSumOf` and friends) do not substitute here: they skip null values,
+so a rule comparing an explicit value against a defaulted one never fires, which is
+usually the case most worth catching.
+
 `invalidWhen` states them. Each rule fires when **all** of its conditions hold:
 
 ```json
