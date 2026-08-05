@@ -15,10 +15,10 @@ import (
 // express: numeric bounds, a comparison between two attributes, and a rule between
 // leaves of the same object. The autoscaler bounds and upgrade policy of
 // azure_node_pool are all three.
-func f64(v float64) *float64 { return &v }
+func iwNum(v float64) *float64 { return &v }
 
 // defRaw builds an attribute default the way a spec file would.
-func defRaw(s string) *json.RawMessage { r := json.RawMessage(s); return &r }
+func iwDefault(s string) *json.RawMessage { r := json.RawMessage(s); return &r }
 
 func invalidWhenSpec() ResourceSpec {
 	return ResourceSpec{
@@ -27,18 +27,18 @@ func invalidWhenSpec() ResourceSpec {
 		Endpoint: EndpointSpec{UriBase: "/pools"},
 		Attributes: []AttributeSpec{
 			{Name: "enable_auto_scaling", Type: "bool", Optional: true, Computed: true,
-				Default: defRaw(`false`), APIPath: "spec.enableAutoScaling"},
+				Default: iwDefault(`false`), APIPath: "spec.enableAutoScaling"},
 			{Name: "min_count", Type: "int", Optional: true, Computed: true,
-				Default: defRaw(`1`), APIPath: "spec.minCount"},
+				Default: iwDefault(`1`), APIPath: "spec.minCount"},
 			{Name: "max_count", Type: "int", Optional: true, Computed: true,
-				Default: defRaw(`1`), APIPath: "spec.maxCount"},
+				Default: iwDefault(`1`), APIPath: "spec.maxCount"},
 			{Name: "upgrade_settings", Type: "object", Optional: true, Computed: true,
 				APIPath: "spec.upgradeSettings", Attributes: []AttributeSpec{
 					{Name: "max_surge_type", Type: "string", Optional: true, Computed: true,
-						Default: defRaw(`"Default"`), APIPath: "maxSurgeType"},
+						Default: iwDefault(`"Default"`), APIPath: "maxSurgeType"},
 					{Name: "max_surge_value", Type: "int", Optional: true, Computed: true, APIPath: "maxSurgeValue"},
 					{Name: "max_unavailable_type", Type: "string", Optional: true, Computed: true,
-						Default: defRaw(`"Default"`), APIPath: "maxUnavailableType"},
+						Default: iwDefault(`"Default"`), APIPath: "maxUnavailableType"},
 					{Name: "max_unavailable_value", Type: "int", Optional: true, Computed: true, APIPath: "maxUnavailableValue"},
 				}},
 		},
@@ -47,7 +47,7 @@ func invalidWhenSpec() ResourceSpec {
 				Attribute: "min_count",
 				When: []RequiredIfCondition{
 					{Attribute: "enable_auto_scaling", Equals: "true"},
-					{Attribute: "min_count", LessThan: f64(1)},
+					{Attribute: "min_count", LessThan: iwNum(1)},
 				},
 				Message: "min_count must be at least 1 when enable_auto_scaling is true.",
 			},
@@ -63,9 +63,9 @@ func invalidWhenSpec() ResourceSpec {
 				Attribute: "upgrade_settings",
 				When: []RequiredIfCondition{
 					{Attribute: "upgrade_settings.max_surge_type", NotEquals: "Default"},
-					{Attribute: "upgrade_settings.max_surge_value", GreaterThan: f64(0)},
+					{Attribute: "upgrade_settings.max_surge_value", GreaterThan: iwNum(0)},
 					{Attribute: "upgrade_settings.max_unavailable_type", NotEquals: "Default"},
-					{Attribute: "upgrade_settings.max_unavailable_value", GreaterThan: f64(0)},
+					{Attribute: "upgrade_settings.max_unavailable_value", GreaterThan: iwNum(0)},
 				},
 				Message: "upgrade_settings cannot have both surge and unavailable active.",
 			},
@@ -148,8 +148,8 @@ func runInvalidWhen(t *testing.T, raw tftypes.Value) []string {
 	return msgs
 }
 
-func ptrBool(b bool) *bool  { return &b }
-func ptrI64(i int64) *int64 { return &i }
+func iwBool(b bool) *bool  { return &b }
+func iwInt(i int64) *int64 { return &i }
 
 func TestInvalidWhen_AutoscalerBounds(t *testing.T) {
 	tests := []struct {
@@ -160,22 +160,22 @@ func TestInvalidWhen_AutoscalerBounds(t *testing.T) {
 	}{
 		{
 			name:    "min below one while autoscaling",
-			raw:     poolConfig(ptrBool(true), ptrI64(0), ptrI64(3), nil),
+			raw:     poolConfig(iwBool(true), iwInt(0), iwInt(3), nil),
 			wantHit: "min_count must be at least 1",
 		},
 		{
 			name:     "min below one but autoscaling off",
-			raw:      poolConfig(ptrBool(false), ptrI64(0), ptrI64(3), nil),
+			raw:      poolConfig(iwBool(false), iwInt(0), iwInt(3), nil),
 			wantNone: true,
 		},
 		{
 			name:     "min below one with autoscaling left at its default of false",
-			raw:      poolConfig(nil, ptrI64(0), ptrI64(3), nil),
+			raw:      poolConfig(nil, iwInt(0), iwInt(3), nil),
 			wantNone: true,
 		},
 		{
 			name:    "max below min while autoscaling",
-			raw:     poolConfig(ptrBool(true), ptrI64(3), ptrI64(2), nil),
+			raw:     poolConfig(iwBool(true), iwInt(3), iwInt(2), nil),
 			wantHit: "max_count must be >= min_count",
 		},
 		{
@@ -183,17 +183,17 @@ func TestInvalidWhen_AutoscalerBounds(t *testing.T) {
 			// 1 — below the min the user set. Comparing against the default is what
 			// catches it before apply.
 			name:    "min set, max left at its default",
-			raw:     poolConfig(ptrBool(true), ptrI64(3), nil, nil),
+			raw:     poolConfig(iwBool(true), iwInt(3), nil, nil),
 			wantHit: "max_count must be >= min_count",
 		},
 		{
 			name:     "equal bounds are fine",
-			raw:      poolConfig(ptrBool(true), ptrI64(2), ptrI64(2), nil),
+			raw:      poolConfig(iwBool(true), iwInt(2), iwInt(2), nil),
 			wantNone: true,
 		},
 		{
 			name:     "valid range",
-			raw:      poolConfig(ptrBool(true), ptrI64(1), ptrI64(5), nil),
+			raw:      poolConfig(iwBool(true), iwInt(1), iwInt(5), nil),
 			wantNone: true,
 		},
 	}
@@ -222,35 +222,35 @@ func TestInvalidWhen_UpgradeSettingsMutualExclusion(t *testing.T) {
 	}{
 		{
 			name:    "both active is rejected",
-			upgrade: upgradeValue("NodeCount", ptrI64(2), "NodeCount", ptrI64(1)),
+			upgrade: upgradeValue("NodeCount", iwInt(2), "NodeCount", iwInt(1)),
 		},
 		{
 			name:     "surge only",
-			upgrade:  upgradeValue("Percentage", ptrI64(33), "Default", ptrI64(0)),
+			upgrade:  upgradeValue("Percentage", iwInt(33), "Default", iwInt(0)),
 			wantNone: true,
 		},
 		{
 			name:     "unavailable only",
-			upgrade:  upgradeValue("Default", ptrI64(0), "NodeCount", ptrI64(1)),
+			upgrade:  upgradeValue("Default", iwInt(0), "NodeCount", iwInt(1)),
 			wantNone: true,
 		},
 		{
 			// Matches the API exactly: a non-Default type with a zero value is inert,
 			// so this pair is accepted even though both types are set.
 			name:     "both types set but one value is zero",
-			upgrade:  upgradeValue("NodeCount", ptrI64(2), "NodeCount", ptrI64(0)),
+			upgrade:  upgradeValue("NodeCount", iwInt(2), "NodeCount", iwInt(0)),
 			wantNone: true,
 		},
 		{
 			// Also matches the API: Default ignores its value entirely.
 			name:     "Default type with a stray value",
-			upgrade:  upgradeValue("Default", ptrI64(5), "NodeCount", ptrI64(1)),
+			upgrade:  upgradeValue("Default", iwInt(5), "NodeCount", iwInt(1)),
 			wantNone: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := runInvalidWhen(t, poolConfig(ptrBool(false), nil, nil, tt.upgrade))
+			got := runInvalidWhen(t, poolConfig(iwBool(false), nil, nil, tt.upgrade))
 			if tt.wantNone {
 				if len(got) != 0 {
 					t.Errorf("expected no error, got %v", got)
@@ -327,7 +327,7 @@ func TestInvalidWhen_Validation(t *testing.T) {
 			"no message",
 			func(s *ResourceSpec) {
 				s.InvalidWhen = []InvalidWhenRule{{
-					When: []RequiredIfCondition{{Attribute: "min_count", LessThan: f64(1)}},
+					When: []RequiredIfCondition{{Attribute: "min_count", LessThan: iwNum(1)}},
 				}}
 			},
 			"no message",
@@ -343,7 +343,7 @@ func TestInvalidWhen_Validation(t *testing.T) {
 			"two operators",
 			func(s *ResourceSpec) {
 				s.InvalidWhen = []InvalidWhenRule{{
-					When:    []RequiredIfCondition{{Attribute: "min_count", LessThan: f64(1), GreaterThan: f64(5)}},
+					When:    []RequiredIfCondition{{Attribute: "min_count", LessThan: iwNum(1), GreaterThan: iwNum(5)}},
 					Message: "m",
 				}}
 			},
@@ -353,7 +353,7 @@ func TestInvalidWhen_Validation(t *testing.T) {
 			"numeric operator on a string attribute",
 			func(s *ResourceSpec) {
 				s.InvalidWhen = []InvalidWhenRule{{
-					When:    []RequiredIfCondition{{Attribute: "upgrade_settings.max_surge_type", GreaterThan: f64(0)}},
+					When:    []RequiredIfCondition{{Attribute: "upgrade_settings.max_surge_type", GreaterThan: iwNum(0)}},
 					Message: "m",
 				}}
 			},

@@ -1480,6 +1480,22 @@ func readPathUnknown(ctx context.Context, cfg attrReader, a AttributeSpec, p pat
 		var v types.Float64
 		cfg.GetAttribute(ctx, p, &v)
 		return v.IsUnknown()
+	case "list(string)":
+		var v types.List
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "set(string)":
+		var v types.Set
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "map(string)":
+		var v types.Map
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "object":
+		var v types.Object
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
 	default:
 		return false
 	}
@@ -1560,42 +1576,7 @@ func readPathNumber(ctx context.Context, cfg attrReader, a AttributeSpec, p path
 // null value, this lets requiredIf condition checks distinguish the two —
 // the same distinction configAttrNull makes for ConflictsWith.
 func readConfigUnknown(ctx context.Context, cfg attrReader, a AttributeSpec) bool {
-	switch a.Type {
-	case "string":
-		var v types.String
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	case "bool":
-		var v types.Bool
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	case "int":
-		var v types.Int64
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	case "number":
-		var v types.Float64
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	case "list(string)":
-		var v types.List
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	case "set(string)":
-		var v types.Set
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	case "map(string)":
-		var v types.Map
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	case "object":
-		var v types.Object
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	default:
-		return false
-	}
+	return readPathUnknown(ctx, cfg, a, path.Root(a.Name))
 }
 
 // configAttrNull reports whether a top-level attribute is genuinely unset (null)
