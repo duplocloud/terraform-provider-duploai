@@ -76,6 +76,17 @@ type ResourceSpec struct {
 	// [["snapshot_name", "snapshot_arns"]].
 	ConflictsWith [][]string `json:"conflictsWith,omitempty"`
 
+	// InvalidWhen declares combinations the API rejects, so the config fails at
+	// plan time with an explanation instead of at apply time with a cloud error.
+	// Each rule fires when ALL of its conditions hold.
+	//
+	// Use it for the cross-field rules RequiredIf and ConflictsWith cannot express:
+	// numeric bounds, comparisons between two attributes, and rules between leaves
+	// of the same object — e.g. an autoscaler whose max must not be below its min,
+	// or an upgrade policy where at most one of two settings may be active.
+	// Conditions may address a nested leaf by dot-path ("upgrade_settings.max_surge_type").
+	InvalidWhen []InvalidWhenRule `json:"invalidWhen,omitempty"`
+
 	// Waiter, when present, makes Create/Update poll until the resource
 	// reaches a terminal state.
 	Waiter *WaiterSpec `json:"waiter,omitempty"`
@@ -605,10 +616,41 @@ type RequiredIfRule struct {
 // default) value is empty — used for "required unless X is set" rules, e.g.
 // engine_version required when snapshot_name is empty.
 type RequiredIfCondition struct {
+	// Attribute names the attribute to test. A dot-path addresses a leaf inside an
+	// object attribute, e.g. "upgrade_settings.max_surge_type". Only InvalidWhen
+	// rules support dot-paths; RequiredIf conditions are top-level only.
 	Attribute string `json:"attribute"`
 	Equals    string `json:"equals,omitempty"`
 	NotEquals string `json:"notEquals,omitempty"`
 	IsEmpty   bool   `json:"isEmpty,omitempty"`
+
+	// Numeric comparisons, for int and number attributes. A null config value
+	// falls back to the attribute's default, so a rule still catches a bad
+	// combination of one explicit value and one defaulted one. When no default
+	// exists either, the condition does not hold — there is nothing to compare.
+	GreaterThan *float64 `json:"greaterThan,omitempty"`
+	LessThan    *float64 `json:"lessThan,omitempty"`
+
+	// LessThanAttribute holds when this attribute's value is below the named
+	// attribute's value. Both must be numeric; a dot-path is allowed.
+	LessThanAttribute string `json:"lessThanAttribute,omitempty"`
+}
+
+// InvalidWhenRule rejects a configuration at plan time when every one of its
+// conditions holds. See ResourceSpec.InvalidWhen.
+type InvalidWhenRule struct {
+	// When lists the conditions, AND-ed together.
+	When []RequiredIfCondition `json:"when"`
+
+	// Message is shown to the user. Required: it is the only thing that explains
+	// which combination is wrong and what to do about it, so it should name the
+	// attributes and the rule, not just report failure.
+	Message string `json:"message"`
+
+	// Attribute optionally names the attribute the error is reported against, so
+	// the diagnostic points at the field the user should change. Defaults to the
+	// first condition's attribute. A dot-path is allowed.
+	Attribute string `json:"attribute,omitempty"`
 }
 
 // conditions normalizes a rule to its list of AND-ed conditions (the single
@@ -830,6 +872,9 @@ func (s *ResourceSpec) validate() error {
 			}
 		}
 	}
+	if err := s.validateInvalidWhen(); err != nil {
+		return err
+	}
 	if err := validatePreservePairs(s.Attributes); err != nil {
 		return err
 	}
@@ -941,6 +986,79 @@ func (s *ResourceSpec) validateAssociation(seen map[string]bool) error {
 	for p := range params {
 		if s.attr(p) == nil {
 			return fmt.Errorf("association path parameter {%s} has no matching attribute", p)
+		}
+	}
+	return nil
+}
+
+// leafAt resolves a dot-path to a leaf attribute, walking into object,
+// list(object), set(object) and map(object) attributes. Returns nil when any
+// segment is missing, so a typo in a spec is caught at startup rather than
+// producing a rule that silently never fires.
+func (s *ResourceSpec) leafAt(dotted string) *AttributeSpec {
+	segs := strings.Split(dotted, ".")
+	cur := s.attr(segs[0])
+	for _, seg := range segs[1:] {
+		if cur == nil {
+			return nil
+		}
+		var next *AttributeSpec
+		for i := range cur.Attributes {
+			if cur.Attributes[i].Name == seg {
+				next = &cur.Attributes[i]
+				break
+			}
+		}
+		cur = next
+	}
+	return cur
+}
+
+// validateInvalidWhen checks every InvalidWhen rule: the attributes it names must
+// exist, each condition must use exactly one operator, numeric operators must
+// address a numeric attribute, and the rule must carry a message — without one the
+// user gets a plan failure with nothing to act on.
+func (s *ResourceSpec) validateInvalidWhen() error {
+	numeric := func(a *AttributeSpec) bool { return a.Type == "int" || a.Type == "number" }
+	for _, r := range s.InvalidWhen {
+		if len(r.When) == 0 {
+			return fmt.Errorf("invalidWhen rule has no condition")
+		}
+		if strings.TrimSpace(r.Message) == "" {
+			return fmt.Errorf("invalidWhen rule on %q has no message", r.When[0].Attribute)
+		}
+		if r.Attribute != "" && s.leafAt(r.Attribute) == nil {
+			return fmt.Errorf("invalidWhen references unknown attribute %q", r.Attribute)
+		}
+		for _, c := range r.When {
+			target := s.leafAt(c.Attribute)
+			if target == nil {
+				return fmt.Errorf("invalidWhen references unknown attribute %q", c.Attribute)
+			}
+			ops := 0
+			for _, set := range []bool{
+				c.Equals != "", c.NotEquals != "", c.IsEmpty,
+				c.GreaterThan != nil, c.LessThan != nil, c.LessThanAttribute != "",
+			} {
+				if set {
+					ops++
+				}
+			}
+			if ops != 1 {
+				return fmt.Errorf("invalidWhen condition on %q must set exactly one operator", c.Attribute)
+			}
+			if (c.GreaterThan != nil || c.LessThan != nil || c.LessThanAttribute != "") && !numeric(target) {
+				return fmt.Errorf("invalidWhen condition on %q uses a numeric operator on a %s attribute", c.Attribute, target.Type)
+			}
+			if c.LessThanAttribute != "" {
+				other := s.leafAt(c.LessThanAttribute)
+				if other == nil {
+					return fmt.Errorf("invalidWhen references unknown attribute %q", c.LessThanAttribute)
+				}
+				if !numeric(other) {
+					return fmt.Errorf("invalidWhen lessThanAttribute %q is a %s attribute, not numeric", c.LessThanAttribute, other.Type)
+				}
+			}
 		}
 	}
 	return nil
