@@ -1,6 +1,6 @@
 {
   "name": "azure_node_pool",
-  "description": "Manages a node pool (AKS agent pool) on an Azure Kubernetes Service cluster, provisioned within an environment and resource group.\n\nThe pool is created on the AKS cluster linked to the resource group, so that resource group must already have a cluster attached and the cluster must have finished provisioning — the API rejects the create otherwise. Every pool is created as a `User` pool backed by a virtual machine scale set; the cluster's own system pool is not managed here.\n\nThe platform stores the pool's configuration and sends the whole of it to Azure on every change, so Terraform sends every field back on update, not just the ones that changed. Nothing in this resource surfaces live Azure state such as the current node count or Kubernetes version: the API deliberately withholds the raw cloud snapshot from its responses, so only `arm_resource_id` and the platform's own status are available.",
+  "description": "Manages a node pool (AKS agent pool) on an Azure Kubernetes Service cluster, provisioned within an environment and resource group.\n\nThe pool is created on the AKS cluster linked to the resource group, so that resource group must already have a cluster attached and the cluster must have finished provisioning — the API rejects the create otherwise. Every pool is created as a `User` pool backed by a virtual machine scale set; the cluster's own system pool is not managed here.\n\nThe platform stores the pool's configuration and sends the whole of it to Azure on every change, so Terraform sends every field back on update, not just the ones that changed. Nothing in this resource surfaces live Azure state such as the current node count or Kubernetes version: the API deliberately withholds the raw cloud snapshot from its responses, so only `arm_resource_id` and the platform's own status are available. The record's version counter and last-updated timestamp are not exposed either — the API refreshes its cloud snapshot on every read and saves the record as it does, so both change on every GET and would report drift on every plan while meaning nothing.",
   "idPath": "id",
   "dataSource": true,
   "endpoint": {
@@ -371,20 +371,6 @@
       "stable": true,
       "apiPath": "createdAt",
       "description": "Timestamp when the node pool was created (RFC 3339)."
-    },
-    {
-      "name": "updated_at",
-      "type": "string",
-      "computed": true,
-      "apiPath": "updatedAt",
-      "description": "Timestamp when the node pool was last updated (RFC 3339)."
-    },
-    {
-      "name": "version",
-      "type": "int",
-      "computed": true,
-      "apiPath": "version",
-      "description": "Version counter, incremented on each update."
     }
   ]
 }

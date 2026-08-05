@@ -5,7 +5,7 @@ subcategory: ""
 description: |-
   Manages a node pool (AKS agent pool) on an Azure Kubernetes Service cluster, provisioned within an environment and resource group.
   The pool is created on the AKS cluster linked to the resource group, so that resource group must already have a cluster attached and the cluster must have finished provisioning — the API rejects the create otherwise. Every pool is created as a User pool backed by a virtual machine scale set; the cluster's own system pool is not managed here.
-  The platform stores the pool's configuration and sends the whole of it to Azure on every change, so Terraform sends every field back on update, not just the ones that changed. Nothing in this resource surfaces live Azure state such as the current node count or Kubernetes version: the API deliberately withholds the raw cloud snapshot from its responses, so only arm_resource_id and the platform's own status are available.
+  The platform stores the pool's configuration and sends the whole of it to Azure on every change, so Terraform sends every field back on update, not just the ones that changed. Nothing in this resource surfaces live Azure state such as the current node count or Kubernetes version: the API deliberately withholds the raw cloud snapshot from its responses, so only arm_resource_id and the platform's own status are available. The record's version counter and last-updated timestamp are not exposed either — the API refreshes its cloud snapshot on every read and saves the record as it does, so both change on every GET and would report drift on every plan while meaning nothing.
 ---
 
 # duploai_azure_node_pool (Data Source)
@@ -14,7 +14,7 @@ Manages a node pool (AKS agent pool) on an Azure Kubernetes Service cluster, pro
 
 The pool is created on the AKS cluster linked to the resource group, so that resource group must already have a cluster attached and the cluster must have finished provisioning — the API rejects the create otherwise. Every pool is created as a `User` pool backed by a virtual machine scale set; the cluster's own system pool is not managed here.
 
-The platform stores the pool's configuration and sends the whole of it to Azure on every change, so Terraform sends every field back on update, not just the ones that changed. Nothing in this resource surfaces live Azure state such as the current node count or Kubernetes version: the API deliberately withholds the raw cloud snapshot from its responses, so only `arm_resource_id` and the platform's own status are available.
+The platform stores the pool's configuration and sends the whole of it to Azure on every change, so Terraform sends every field back on update, not just the ones that changed. Nothing in this resource surfaces live Azure state such as the current node count or Kubernetes version: the API deliberately withholds the raw cloud snapshot from its responses, so only `arm_resource_id` and the platform's own status are available. The record's version counter and last-updated timestamp are not exposed either — the API refreshes its cloud snapshot on every read and saves the record as it does, so both change on every GET and would report drift on every plan while meaning nothing.
 
 ## Example Usage
 
@@ -86,9 +86,7 @@ Named `node_count` rather than `count` because `count` is a reserved Terraform m
 - `scope_ids` (List of String) Scope IDs linking this node pool to a cloud provider account, inherited from the resource group.
 - `status` (String) Current provisioning status of the node pool.
 - `unique_cloud_resource_id` (String) Full Azure resource ID (ARM ID) of the node pool, as the platform records it on the resource itself. It is what the delete and refresh operations use to reach the pool. `arm_resource_id` exposes the same ID as reported after creation.
-- `updated_at` (String) Timestamp when the node pool was last updated (RFC 3339).
 - `upgrade_settings` (Attributes) How aggressively Azure rolls nodes during an upgrade. At most one of surge or unavailable may be active: the API rejects a setting where both are greater than zero. (see [below for nested schema](#nestedatt--upgrade_settings))
-- `version` (Number) Version counter, incremented on each update.
 - `vm_size` (String) Azure VM size for the pool's nodes, e.g. `Standard_DS2_v2`. Immutable after creation — Azure has no way to resize an existing pool, so changing this replaces it. Which sizes are available depends on the subscription and region.
 
 <a id="nestedatt--node_taints"></a>
