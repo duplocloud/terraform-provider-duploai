@@ -867,7 +867,112 @@ func (r *dynamicResource) ConfigValidators(_ context.Context) []resource.ConfigV
 	if len(r.spec.ConflictsWith) > 0 {
 		vs = append(vs, conflictsWithValidator{spec: r.spec})
 	}
+	if len(r.spec.InvalidWhen) > 0 {
+		vs = append(vs, invalidWhenValidator{spec: r.spec})
+	}
 	return vs
+}
+
+// invalidWhenValidator enforces ResourceSpec.InvalidWhen: a rule whose conditions
+// all hold rejects the config at plan time, so a combination the API would refuse
+// never reaches apply.
+type invalidWhenValidator struct{ spec ResourceSpec }
+
+func (v invalidWhenValidator) Description(_ context.Context) string {
+	return "Rejects attribute combinations the API refuses, as declared in the resource spec."
+}
+func (v invalidWhenValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v invalidWhenValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	for _, rule := range v.spec.InvalidWhen {
+		if !v.holds(ctx, req.Config, rule.When) {
+			continue
+		}
+		at := rule.Attribute
+		if at == "" {
+			at = rule.When[0].Attribute
+		}
+		resp.Diagnostics.AddAttributeError(dottedPath(at), "Invalid attribute combination", rule.Message)
+	}
+}
+
+// holds reports whether every condition matches (logical AND). An unknown value
+// stops evaluation: it is a reference to another resource in the same apply, so the
+// combination cannot be judged yet and must not be reported as invalid.
+func (v invalidWhenValidator) holds(ctx context.Context, cfg attrReader, conds []RequiredIfCondition) bool {
+	for _, c := range conds {
+		target := v.spec.leafAt(c.Attribute)
+		if target == nil {
+			return false
+		}
+		p := dottedPath(c.Attribute)
+		if readPathUnknown(ctx, cfg, *target, p) {
+			return false
+		}
+		switch {
+		case c.GreaterThan != nil, c.LessThan != nil, c.LessThanAttribute != "":
+			left, ok := readPathNumber(ctx, cfg, *target, p)
+			if !ok {
+				return false
+			}
+			switch {
+			case c.GreaterThan != nil:
+				if !(left > *c.GreaterThan) {
+					return false
+				}
+			case c.LessThan != nil:
+				if !(left < *c.LessThan) {
+					return false
+				}
+			default:
+				other := v.spec.leafAt(c.LessThanAttribute)
+				if other == nil {
+					return false
+				}
+				op := dottedPath(c.LessThanAttribute)
+				if readPathUnknown(ctx, cfg, *other, op) {
+					return false
+				}
+				right, ok := readPathNumber(ctx, cfg, *other, op)
+				if !ok || !(left < right) {
+					return false
+				}
+			}
+		default:
+			val := readPathString(ctx, cfg, *target, p)
+			if val == "" {
+				val = defaultString(*target)
+			}
+			switch {
+			case c.IsEmpty:
+				if val != "" {
+					return false
+				}
+			case c.NotEquals != "":
+				if val == c.NotEquals {
+					return false
+				}
+			default:
+				if val != c.Equals {
+					return false
+				}
+			}
+		}
+	}
+	return len(conds) > 0
+}
+
+// dottedPath turns "upgrade_settings.max_surge_type" into the framework path
+// Root("upgrade_settings").AtName("max_surge_type").
+func dottedPath(dotted string) path.Path {
+	segs := strings.Split(dotted, ".")
+	p := path.Root(segs[0])
+	for _, seg := range segs[1:] {
+		p = p.AtName(seg)
+	}
+	return p
 }
 
 // conflictsWithValidator enforces ResourceSpec.ConflictsWith: within each group,
@@ -1354,6 +1459,116 @@ func readConfigString(ctx context.Context, cfg attrReader, a AttributeSpec) stri
 	return toStringValue(v)
 }
 
+// readPathUnknown reports whether the value at p is unknown. Same distinction as
+// readConfigUnknown, but at an arbitrary path so a leaf inside an object can be
+// tested.
+func readPathUnknown(ctx context.Context, cfg attrReader, a AttributeSpec, p path.Path) bool {
+	switch a.Type {
+	case "string":
+		var v types.String
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "bool":
+		var v types.Bool
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "int":
+		var v types.Int64
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "number":
+		var v types.Float64
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "list(string)":
+		var v types.List
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "set(string)":
+		var v types.Set
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "map(string)":
+		var v types.Map
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "object":
+		var v types.Object
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	default:
+		return false
+	}
+}
+
+// readPathString renders the leaf value at p as a string, or "" when it is null,
+// unknown or not a leaf type.
+func readPathString(ctx context.Context, cfg attrReader, a AttributeSpec, p path.Path) string {
+	switch a.Type {
+	case "string":
+		var v types.String
+		cfg.GetAttribute(ctx, p, &v)
+		if v.IsNull() || v.IsUnknown() {
+			return ""
+		}
+		return v.ValueString()
+	case "bool":
+		var v types.Bool
+		cfg.GetAttribute(ctx, p, &v)
+		if v.IsNull() || v.IsUnknown() {
+			return ""
+		}
+		return toStringValue(v.ValueBool())
+	case "int":
+		var v types.Int64
+		cfg.GetAttribute(ctx, p, &v)
+		if v.IsNull() || v.IsUnknown() {
+			return ""
+		}
+		return toStringValue(v.ValueInt64())
+	case "number":
+		var v types.Float64
+		cfg.GetAttribute(ctx, p, &v)
+		if v.IsNull() || v.IsUnknown() {
+			return ""
+		}
+		return toStringValue(v.ValueFloat64())
+	default:
+		return ""
+	}
+}
+
+// readPathNumber reads the numeric leaf at p, falling back to the attribute's
+// static default when the config leaves it null — so a rule comparing an explicit
+// value against a defaulted one still evaluates. Reports false when there is no
+// value to compare at all.
+func readPathNumber(ctx context.Context, cfg attrReader, a AttributeSpec, p path.Path) (float64, bool) {
+	switch a.Type {
+	case "int":
+		var v types.Int64
+		cfg.GetAttribute(ctx, p, &v)
+		if !v.IsNull() && !v.IsUnknown() {
+			return float64(v.ValueInt64()), true
+		}
+	case "number":
+		var v types.Float64
+		cfg.GetAttribute(ctx, p, &v)
+		if !v.IsNull() && !v.IsUnknown() {
+			return v.ValueFloat64(), true
+		}
+	default:
+		return 0, false
+	}
+	if a.Default == nil {
+		return 0, false
+	}
+	var d float64
+	if err := json.Unmarshal(*a.Default, &d); err != nil {
+		return 0, false
+	}
+	return d, true
+}
+
 // readConfigUnknown reports whether a's value in cfg is unknown — an
 // unresolved reference to another resource being created in the same apply
 // (e.g. network_baseline_id = duploai_network_baseline.x.network_id). Unlike
@@ -1361,42 +1576,7 @@ func readConfigString(ctx context.Context, cfg attrReader, a AttributeSpec) stri
 // null value, this lets requiredIf condition checks distinguish the two —
 // the same distinction configAttrNull makes for ConflictsWith.
 func readConfigUnknown(ctx context.Context, cfg attrReader, a AttributeSpec) bool {
-	switch a.Type {
-	case "string":
-		var v types.String
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	case "bool":
-		var v types.Bool
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	case "int":
-		var v types.Int64
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	case "number":
-		var v types.Float64
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	case "list(string)":
-		var v types.List
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	case "set(string)":
-		var v types.Set
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	case "map(string)":
-		var v types.Map
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	case "object":
-		var v types.Object
-		cfg.GetAttribute(ctx, path.Root(a.Name), &v)
-		return v.IsUnknown()
-	default:
-		return false
-	}
+	return readPathUnknown(ctx, cfg, a, path.Root(a.Name))
 }
 
 // configAttrNull reports whether a top-level attribute is genuinely unset (null)

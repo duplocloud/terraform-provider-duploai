@@ -38,7 +38,7 @@ output "status" {
 - `api_version` (String) Flux HelmRelease CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. helm.toolkit.fluxcd.io/v2beta2).
 - `chart_interval` (String) Interval at which the chart source is checked for updates.
 - `chart_name` (String) Chart name (or path) within the referenced HelmRepository source. Use with chart_source_ref_*.
-- `chart_reconcile_strategy` (String) When to reconcile the chart: ChartVersion or Revision.
+- `chart_reconcile_strategy` (String) When to reconcile the chart: ChartVersion or Revision. Server-defaulted to ChartVersion by Flux when omitted.
 - `chart_ref_kind` (String) Kind of a directly-referenced chart source (e.g. OCIRepository or HelmChart). Alternative to chart_name/chart_source_ref_*.
 - `chart_ref_name` (String) Name of the directly-referenced chart source object.
 - `chart_ref_namespace` (String) Namespace of the directly-referenced chart source object.
