@@ -107,9 +107,9 @@ output "blob_dns" {
 - `environment_id` (String) ID of the environment in which the private endpoint is provisioned.
 - `name` (String) Private endpoint name. Also names the private-link service connection inside it.
 - `resource_group_id` (String) ID of the resource group in which the private endpoint is provisioned. Its Azure resource group is where the endpoint is created unless `azure_resource_group_name` overrides it.
-- `sub_resource_name` (String) Which part of the target resource the endpoint exposes — Azure calls it the private-link group ID. One endpoint serves one sub-resource, so a storage account needing both blob and file access needs two endpoints.
+- `sub_resource_name` (String) Which part of the target resource the endpoint exposes — Azure calls it the private-link group ID, and it must be one the target resource type actually offers. One endpoint serves one sub-resource, so a storage account needing both blob and file access needs two endpoints.
 
-The value also decides the Private DNS zone the platform attaches:
+The value also decides the Private DNS zone the platform attaches, and it knows these:
 
 | `sub_resource_name` | Target | DNS zone |
 |---|---|---|
@@ -117,7 +117,7 @@ The value also decides the Private DNS zone the platform attaches:
 | `vault` | Key Vault | `privatelink.vaultcore.azure.net` |
 | `redisenterprise` | Azure Managed Redis | `privatelink.redis.azure.net` |
 
-Only these values are accepted. The platform derives the zone name from a fixed table, and for anything else it would fall back to `privatelink.<value>.core.windows.net` — wrong for every service that does not live under that suffix, leaving an endpoint whose DNS never resolves.
+Any other value is accepted, and the endpoint is still created with a working private IP — but the platform derives the zone name by pattern, `privatelink.<value>.core.windows.net`, which is wrong for every service that does not live under that suffix. A `sqlServer` endpoint needs `privatelink.database.windows.net` and would instead get a `privatelink.sqlserver.core.windows.net` zone that resolves nothing. For those services the endpoint works at the IP level and private DNS has to be arranged separately, so check `dns_zone_name` after creating one.
 - `subnet_id` (String) Full Azure resource ID (ARM ID) of the subnet that holds the endpoint's network interface, available as `duploai_network_baseline.azure_subnet_ids`. The subnet must allow private endpoints, and each endpoint consumes one private IP address from it.
 - `target_resource_arm_id` (String) Full Azure resource ID (ARM ID) of the PaaS resource the endpoint connects to. Other resources in this provider expose theirs: `duploai_storage_account.azure_resource_id`, `duploai_azure_key_vault.key_vault_id`, `duploai_azure_managed_redis.cluster_id`.
 
@@ -142,13 +142,13 @@ Changing a tag replaces the endpoint, since the API has no update path at all.
 - `dns_zone_group_provisioned` (Boolean) Whether the Private DNS zone group is attached. The endpoint only reaches Complete once this is true, so a Complete endpoint always resolves privately; while it is false the endpoint exists but the target's hostname still resolves publicly.
 - `dns_zone_name` (String) Private DNS zone attached to the endpoint, derived from `sub_resource_name` — e.g. `privatelink.blob.core.windows.net`.
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `private_endpoint_arm_id` (String) Full Azure resource ID (ARM ID) of the private endpoint, as reported after creation.
+- `private_endpoint_arm_id` (String) Full Azure resource ID (ARM ID) of the private endpoint, as reported in the creation result. Normally identical to `unique_cloud_resource_id` — prefer that one, which is the value the platform's own delete and refresh operations use.
 - `private_endpoint_id` (String) ID of this private endpoint, for reference by dependent resources.
 - `private_ip_address` (String) Private IP address assigned to the endpoint's network interface, and the address its DNS zone resolves the target's hostname to. Allocated from `subnet_id`'s range. Empty until Azure finishes provisioning, since it is read from the interface rather than chosen up front.
 - `provisioning_state` (String) Azure provisioning state of the endpoint, e.g. Succeeded or Creating, refreshed from Azure on each read.
 - `scope_ids` (List of String) Scope IDs linking this private endpoint to a cloud provider account, inherited from the resource group.
 - `status` (String) Current provisioning status of the private endpoint. Complete means the endpoint exists in Azure and its DNS zone group is attached.
-- `unique_cloud_resource_id` (String) Full Azure resource ID (ARM ID) of the private endpoint, as the platform records it on the resource itself. It is what the delete and refresh operations use to reach the endpoint.
+- `unique_cloud_resource_id` (String) Full Azure resource ID (ARM ID) of the private endpoint, as the platform records it on the resource itself. It is what the delete and refresh operations use to reach the endpoint, so prefer this one when referencing the endpoint's ARM ID. Normally identical to `private_endpoint_arm_id`; the two are separate because the platform reads one and falls back to the other, which can differ for an endpoint it discovered in Azure rather than created.
 
 <a id="nestedblock--timeouts"></a>
 ### Nested Schema for `timeouts`

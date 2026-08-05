@@ -63,18 +63,8 @@
       "type": "string",
       "required": true,
       "forceNew": true,
-      "oneOf": [
-        "blob",
-        "file",
-        "queue",
-        "table",
-        "dfs",
-        "web",
-        "vault",
-        "redisenterprise"
-      ],
       "apiPath": "spec.subResourceName",
-      "description": "Which part of the target resource the endpoint exposes — Azure calls it the private-link group ID. One endpoint serves one sub-resource, so a storage account needing both blob and file access needs two endpoints.\n\nThe value also decides the Private DNS zone the platform attaches:\n\n| `sub_resource_name` | Target | DNS zone |\n|---|---|---|\n| `blob`, `file`, `queue`, `table`, `dfs`, `web` | Storage account | `privatelink.<name>.core.windows.net` |\n| `vault` | Key Vault | `privatelink.vaultcore.azure.net` |\n| `redisenterprise` | Azure Managed Redis | `privatelink.redis.azure.net` |\n\nOnly these values are accepted. The platform derives the zone name from a fixed table, and for anything else it would fall back to `privatelink.<value>.core.windows.net` — wrong for every service that does not live under that suffix, leaving an endpoint whose DNS never resolves."
+      "description": "Which part of the target resource the endpoint exposes — Azure calls it the private-link group ID, and it must be one the target resource type actually offers. One endpoint serves one sub-resource, so a storage account needing both blob and file access needs two endpoints.\n\nThe value also decides the Private DNS zone the platform attaches, and it knows these:\n\n| `sub_resource_name` | Target | DNS zone |\n|---|---|---|\n| `blob`, `file`, `queue`, `table`, `dfs`, `web` | Storage account | `privatelink.<name>.core.windows.net` |\n| `vault` | Key Vault | `privatelink.vaultcore.azure.net` |\n| `redisenterprise` | Azure Managed Redis | `privatelink.redis.azure.net` |\n\nAny other value is accepted, and the endpoint is still created with a working private IP — but the platform derives the zone name by pattern, `privatelink.<value>.core.windows.net`, which is wrong for every service that does not live under that suffix. A `sqlServer` endpoint needs `privatelink.database.windows.net` and would instead get a `privatelink.sqlserver.core.windows.net` zone that resolves nothing. For those services the endpoint works at the IP level and private DNS has to be arranged separately, so check `dns_zone_name` after creating one."
     },
     {
       "name": "subnet_id",
@@ -151,7 +141,7 @@
       "computed": true,
       "stable": true,
       "apiPath": "spec.uniqueCloudResourceId",
-      "description": "Full Azure resource ID (ARM ID) of the private endpoint, as the platform records it on the resource itself. It is what the delete and refresh operations use to reach the endpoint."
+      "description": "Full Azure resource ID (ARM ID) of the private endpoint, as the platform records it on the resource itself. It is what the delete and refresh operations use to reach the endpoint, so prefer this one when referencing the endpoint's ARM ID. Normally identical to `private_endpoint_arm_id`; the two are separate because the platform reads one and falls back to the other, which can differ for an endpoint it discovered in Azure rather than created."
     },
     {
       "name": "private_endpoint_arm_id",
@@ -159,7 +149,7 @@
       "computed": true,
       "stable": true,
       "apiPath": "result.privateEndpointArmId",
-      "description": "Full Azure resource ID (ARM ID) of the private endpoint, as reported after creation."
+      "description": "Full Azure resource ID (ARM ID) of the private endpoint, as reported in the creation result. Normally identical to `unique_cloud_resource_id` — prefer that one, which is the value the platform's own delete and refresh operations use."
     },
     {
       "name": "private_ip_address",
