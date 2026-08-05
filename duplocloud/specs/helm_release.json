@@ -168,9 +168,10 @@
       "name": "chart_reconcile_strategy",
       "type": "string",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.k8sResource.spec.chart.spec.reconcileStrategy",
       "responsePath": "result.k8sResource.spec.chart.spec.reconcileStrategy",
-      "description": "When to reconcile the chart: ChartVersion or Revision."
+      "description": "When to reconcile the chart: ChartVersion or Revision. Server-defaulted to ChartVersion by Flux when omitted."
     },
     {
       "name": "chart_source_ref_kind",
