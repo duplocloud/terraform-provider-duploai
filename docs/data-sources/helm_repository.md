@@ -37,7 +37,6 @@ output "status" {
 - `annotations` (Map of String) Kubernetes annotations applied to the Helm repository.
 - `api_version` (String) Flux HelmRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1beta2).
 - `cert_secret_ref_name` (String) Name of a Kubernetes Secret holding TLS certificate data for the repository.
-- `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
 - `helm_repository_id` (String) ID of this Helm repository, for reference by dependent resources.
 - `insecure` (Boolean) Allow connecting to an HTTP (non-TLS) OCI registry.
@@ -45,12 +44,11 @@ output "status" {
 - `labels` (Map of String) Kubernetes labels applied to the Helm repository.
 - `name` (String) Name of the Helm repository resource.
 - `namespace_name` (String) Kubernetes namespace the Helm repository is created in.
-- `oci_provider` (String) OCI provider for authentication (e.g. generic, aws, azure, gcp). Only used when type is oci.
+- `oci_provider` (String) OCI provider for authentication (e.g. generic, aws, azure, gcp). Only used when type is oci. Server-defaulted to generic by Flux when omitted.
 - `pass_credentials` (Boolean) Pass credentials to all domains the repository redirects to.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this Helm repository belongs to.
-- `scope_ids` (List of String) Scope IDs that link this Helm repository to a cloud provider account.
 - `secret_ref_name` (String) Name of a Kubernetes Secret holding credentials for the repository.
 - `status` (String) Current provisioning status.
 - `suspend` (Boolean) Suspend reconciliation of the repository.

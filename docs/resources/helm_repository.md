@@ -60,7 +60,7 @@ resource "duploai_helm_repository" "private_oci" {
 - `name` (String) Name of the Helm repository resource.
 - `namespace_name` (String) Kubernetes namespace the Helm repository is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this Helm repository belongs to.
-- `scope_ids` (List of String) Scope IDs that link this Helm repository to a cloud provider account.
+- `scope_ids` (List of String) Scope IDs that link this Helm repository to a cloud provider account. Not echoed back by the API, so it is never read from the response.
 - `url` (String) URL of the Helm repository (e.g. https://charts.example.com or oci://registry.example.com/charts).
 - `workspace_id` (String) ID of the workspace that owns this Helm repository.
 
@@ -69,12 +69,12 @@ resource "duploai_helm_repository" "private_oci" {
 - `annotations` (Map of String) Kubernetes annotations applied to the Helm repository.
 - `api_version` (String) Flux HelmRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1beta2).
 - `cert_secret_ref_name` (String) Name of a Kubernetes Secret holding TLS certificate data for the repository.
-- `description` (String) Optional description.
+- `description` (String) Optional description. Not echoed back by the API, so it is never read from the response.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `insecure` (Boolean) Allow connecting to an HTTP (non-TLS) OCI registry.
 - `interval` (String) Interval at which the repository index is fetched (Go duration, e.g. 5m, 1h).
 - `labels` (Map of String) Kubernetes labels applied to the Helm repository.
-- `oci_provider` (String) OCI provider for authentication (e.g. generic, aws, azure, gcp). Only used when type is oci.
+- `oci_provider` (String) OCI provider for authentication (e.g. generic, aws, azure, gcp). Only used when type is oci. Server-defaulted to generic by Flux when omitted.
 - `pass_credentials` (Boolean) Pass credentials to all domains the repository redirects to.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
