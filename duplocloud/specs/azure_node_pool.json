@@ -14,6 +14,58 @@
       "value": "Create"
     }
   ],
+  "invalidWhen": [
+    {
+      "attribute": "min_count",
+      "when": [
+        {
+          "attribute": "enable_auto_scaling",
+          "equals": "true"
+        },
+        {
+          "attribute": "min_count",
+          "lessThan": 1
+        }
+      ],
+      "message": "min_count must be at least 1 when enable_auto_scaling is true — the AKS autoscaler cannot scale a pool to zero nodes."
+    },
+    {
+      "attribute": "max_count",
+      "when": [
+        {
+          "attribute": "enable_auto_scaling",
+          "equals": "true"
+        },
+        {
+          "attribute": "max_count",
+          "lessThanAttribute": "min_count"
+        }
+      ],
+      "message": "max_count must be greater than or equal to min_count when enable_auto_scaling is true. Note both default to 1, so setting only min_count leaves max_count below it."
+    },
+    {
+      "attribute": "upgrade_settings",
+      "when": [
+        {
+          "attribute": "upgrade_settings.max_surge_type",
+          "notEquals": "Default"
+        },
+        {
+          "attribute": "upgrade_settings.max_surge_value",
+          "greaterThan": 0
+        },
+        {
+          "attribute": "upgrade_settings.max_unavailable_type",
+          "notEquals": "Default"
+        },
+        {
+          "attribute": "upgrade_settings.max_unavailable_value",
+          "greaterThan": 0
+        }
+      ],
+      "message": "upgrade_settings cannot have both surge and unavailable active: Azure accepts only one. Leave one type as Default, or set its value to 0."
+    }
+  ],
   "waiter": {
     "deprovisionedState": "DeProvisioned",
     "pollIntervalSeconds": 15,
