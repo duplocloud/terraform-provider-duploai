@@ -4,7 +4,7 @@ page_title: "duploai_azure_private_endpoint Resource - duploai"
 subcategory: ""
 description: |-
   Manages an Azure Private Endpoint, giving a PaaS resource a private IP address inside a subnet so it can be reached without traversing the public internet.
-  The platform does two things per endpoint: it creates the Microsoft.Network/privateEndpoints resource, then attaches a Private DNS zone group so the target's public hostname resolves to the private IP from inside the network. The zone is chosen from sub_resource_name — blob gives privatelink.blob.core.windows.net, vault gives privatelink.vaultcore.azure.net, and so on. The resource only reports Complete once both steps have succeeded, so a Complete endpoint always has working private DNS.
+  The platform does two things per endpoint: it creates the Microsoft.Network/privateEndpoints resource, then attaches a Private DNS zone group so the target's public hostname resolves to the private IP from inside the network. The zone is chosen from sub_resource_name — blob gives privatelink.blob.core.windows.net, vault gives privatelink.vaultcore.azure.net, and so on. The resource only reports Complete once both steps have succeeded, so a Complete endpoint always has working private DNS. Verified live 2026-08-05 against a storage account's blob service.
   Everything about an endpoint is immutable: Azure has no in-place update for one, and the API rejects the attempt outright. Any change here — including tags — replaces the endpoint.
 ---
 
@@ -12,7 +12,7 @@ description: |-
 
 Manages an Azure Private Endpoint, giving a PaaS resource a private IP address inside a subnet so it can be reached without traversing the public internet.
 
-The platform does two things per endpoint: it creates the `Microsoft.Network/privateEndpoints` resource, then attaches a Private DNS zone group so the target's public hostname resolves to the private IP from inside the network. The zone is chosen from `sub_resource_name` — `blob` gives `privatelink.blob.core.windows.net`, `vault` gives `privatelink.vaultcore.azure.net`, and so on. The resource only reports Complete once both steps have succeeded, so a Complete endpoint always has working private DNS.
+The platform does two things per endpoint: it creates the `Microsoft.Network/privateEndpoints` resource, then attaches a Private DNS zone group so the target's public hostname resolves to the private IP from inside the network. The zone is chosen from `sub_resource_name` — `blob` gives `privatelink.blob.core.windows.net`, `vault` gives `privatelink.vaultcore.azure.net`, and so on. The resource only reports Complete once both steps have succeeded, so a Complete endpoint always has working private DNS. Verified live 2026-08-05 against a storage account's blob service.
 
 Everything about an endpoint is immutable: Azure has no in-place update for one, and the API rejects the attempt outright. Any change here — including tags — replaces the endpoint.
 
@@ -138,13 +138,13 @@ Changing a tag replaces the endpoint, since the API has no update path at all.
 ### Read-Only
 
 - `created_at` (String) Timestamp when the private endpoint was created (RFC 3339).
-- `dns_zone_arm_id` (String) Full Azure resource ID (ARM ID) of the Private DNS zone created or reused for this endpoint. Zones are shared, so several endpoints for the same sub-resource type report the same value.
+- `dns_zone_arm_id` (String) Full Azure resource ID (ARM ID) of the Private DNS zone created or reused for this endpoint. The zone lives in a platform-shared resource group per subscription (`duplo-shared-rg-<subscription-id>`), not in this endpoint's own resource group, and it is reused — every endpoint for the same sub-resource type across the subscription reports the same value, so deleting one endpoint does not remove the zone.
 - `dns_zone_group_provisioned` (Boolean) Whether the Private DNS zone group is attached. The endpoint only reaches Complete once this is true, so a Complete endpoint always resolves privately; while it is false the endpoint exists but the target's hostname still resolves publicly.
 - `dns_zone_name` (String) Private DNS zone attached to the endpoint, derived from `sub_resource_name` — e.g. `privatelink.blob.core.windows.net`.
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `private_endpoint_arm_id` (String) Full Azure resource ID (ARM ID) of the private endpoint, as reported after creation.
 - `private_endpoint_id` (String) ID of this private endpoint, for reference by dependent resources.
-- `private_ip_address` (String) Private IP address assigned to the endpoint's network interface, and the address its DNS zone resolves the target's hostname to. Empty until Azure finishes provisioning, since it is read from the interface rather than chosen up front.
+- `private_ip_address` (String) Private IP address assigned to the endpoint's network interface, and the address its DNS zone resolves the target's hostname to. Allocated from `subnet_id`'s range. Empty until Azure finishes provisioning, since it is read from the interface rather than chosen up front.
 - `provisioning_state` (String) Azure provisioning state of the endpoint, e.g. Succeeded or Creating, refreshed from Azure on each read.
 - `scope_ids` (List of String) Scope IDs linking this private endpoint to a cloud provider account, inherited from the resource group.
 - `status` (String) Current provisioning status of the private endpoint. Complete means the endpoint exists in Azure and its DNS zone group is attached.
