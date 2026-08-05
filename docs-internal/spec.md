@@ -501,7 +501,10 @@ Conditions reuse the `requiredIf` operators — `equals`, `notEquals`, `isEmpty`
 | `lessThanAttribute` | numeric comparison against another attribute's value |
 
 `attribute` may be a **dot-path** to a leaf inside an object (`upgrade_settings.max_surge_type`),
-which is what makes a rule between two leaves of the same object expressible. The rule's
+which is what makes a rule between two leaves of the same object expressible. A dot-path
+descends through plain `object` attributes only — a leaf inside a `list(object)` or
+`map(object)` needs an index or key that a dot-path cannot carry, so startup validation
+rejects it rather than accepting a rule that would never fire. The rule's
 own `attribute` field decides which field the error is reported against, so the diagnostic
 points at what the user should change; it defaults to the first condition's attribute.
 

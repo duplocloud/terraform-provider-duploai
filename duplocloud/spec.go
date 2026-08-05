@@ -991,15 +991,17 @@ func (s *ResourceSpec) validateAssociation(seen map[string]bool) error {
 	return nil
 }
 
-// leafAt resolves a dot-path to a leaf attribute, walking into object,
-// list(object), set(object) and map(object) attributes. Returns nil when any
-// segment is missing, so a typo in a spec is caught at startup rather than
-// producing a rule that silently never fires.
+// leafAt resolves a dot-path to a leaf attribute, descending only through plain
+// object attributes. A collection of objects is deliberately not traversable: its
+// leaves need an index or key in the framework path, which a dot-path cannot carry,
+// so allowing it would produce a rule that resolves at startup and then never fires.
+// Returns nil when a segment is missing or an intermediate is not an object, so
+// either mistake surfaces as a startup error.
 func (s *ResourceSpec) leafAt(dotted string) *AttributeSpec {
 	segs := strings.Split(dotted, ".")
 	cur := s.attr(segs[0])
 	for _, seg := range segs[1:] {
-		if cur == nil {
+		if cur == nil || cur.Type != "object" {
 			return nil
 		}
 		var next *AttributeSpec

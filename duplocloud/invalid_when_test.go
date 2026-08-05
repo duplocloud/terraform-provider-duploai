@@ -297,6 +297,23 @@ func TestInvalidWhen_Validation(t *testing.T) {
 			"unknown attribute",
 		},
 		{
+			// A leaf inside a collection of objects needs an index or key in the
+			// framework path, which a dot-path cannot carry — so it must be rejected at
+			// startup rather than producing a rule that never fires.
+			"leaf inside a list(object)",
+			func(s *ResourceSpec) {
+				s.Attributes = append(s.Attributes, AttributeSpec{
+					Name: "taints", Type: "list(object)", Optional: true, APIPath: "spec.taints",
+					Attributes: []AttributeSpec{{Name: "effect", Type: "string", Required: true, APIPath: "effect"}},
+				})
+				s.InvalidWhen = []InvalidWhenRule{{
+					When:    []RequiredIfCondition{{Attribute: "taints.effect", Equals: "NoExecute"}},
+					Message: "m",
+				}}
+			},
+			"unknown attribute",
+		},
+		{
 			"unknown nested leaf",
 			func(s *ResourceSpec) {
 				s.InvalidWhen = []InvalidWhenRule{{
@@ -359,6 +376,7 @@ func TestInvalidWhen_Validation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := base
 			s.InvalidWhen = append([]InvalidWhenRule(nil), base.InvalidWhen...)
+			s.Attributes = append([]AttributeSpec(nil), base.Attributes...)
 			tt.mutate(&s)
 			err := s.validateInvalidWhen()
 			switch {
