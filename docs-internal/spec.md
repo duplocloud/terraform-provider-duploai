@@ -61,6 +61,7 @@ Saving this file, running `go generate ./...` (to regenerate docs), and running
 | `updateConstants` | array | no | Fixed pairs injected into **update** (PUT) bodies only. Overrides `requestConstants` for the same path. |
 | `requiredIf` | array | no | Conditional-required rules evaluated at plan time. See [RequiredIf rules](#requiredif-rules). |
 | `conflictsWith` | array | no | Mutually-exclusive attribute groups enforced at plan time. See [ConflictsWith rules](#conflictswith-rules). |
+| `invalidWhen` | array | no | Combinations the API rejects, failed at plan time instead of apply time. Covers numeric bounds, comparisons between attributes, and rules between leaves of one object. See [InvalidWhen rules](#invalidwhen-rules). |
 | `resendCreatePathsOnUpdate` | bool | no | Also write each attribute's **create** path in the PUT body, with the same value. For a backend whose update body is a delta envelope over a record it rebuilds from that body. See [Delta envelopes over a rebuilt record](#delta-envelopes-over-a-rebuilt-record). |
 | `dataSource` | bool | no | When `true`, also registers a read-only `data.duploai_<name>` data source derived automatically from this spec. See [Auto-generated data source](#auto-generated-data-source). |
 | `dataSourceOnly` | bool | no | When `true`, registers **only** a read-only `data.duploai_<name>` data source — no managed resource is registered. Use this for purely read-only APIs (e.g. look-up endpoints with no create/update/delete). Implies data source semantics; `dataSource` need not also be set. |
@@ -458,6 +459,81 @@ Scope and limits:
   Say so in the attribute's `description`.
 - On **import** there is no prior value, so the field lands empty — expected,
   since the secret is unrecoverable from the API.
+
+### InvalidWhen rules
+
+`requiredIf` asks whether a field is set; `conflictsWith` asks whether two fields are
+both set. Neither can express a numeric bound, a comparison between two attributes, or a
+rule between two leaves of the same object — and APIs are full of those. Without a way to
+state them, the spec can only document the rule in a description and let the apply fail
+with a cloud error.
+
+**Reach for the simpler tools first.** An unconditional bound is `min` / `max` on the
+attribute, which the engine already wires to the framework's own validators; a fixed value
+set is `oneOf`; a presence rule is `requiredIf` or `conflictsWith`. `invalidWhen` is for
+what those cannot say — and note that the framework's stock comparison validators
+(`int64validator.AtLeastSumOf` and friends) do not substitute here: they skip null values,
+so a rule comparing an explicit value against a defaulted one never fires, which is
+usually the case most worth catching.
+
+`invalidWhen` states them. Each rule fires when **all** of its conditions hold:
+
+```json
+"invalidWhen": [
+  {
+    "attribute": "max_count",
+    "when": [
+      { "attribute": "enable_auto_scaling", "equals": "true" },
+      { "attribute": "max_count", "lessThanAttribute": "min_count" }
+    ],
+    "message": "max_count must be >= min_count when enable_auto_scaling is true."
+  },
+  {
+    "attribute": "upgrade_settings",
+    "when": [
+      { "attribute": "upgrade_settings.max_surge_type", "notEquals": "Default" },
+      { "attribute": "upgrade_settings.max_surge_value", "greaterThan": 0 },
+      { "attribute": "upgrade_settings.max_unavailable_type", "notEquals": "Default" },
+      { "attribute": "upgrade_settings.max_unavailable_value", "greaterThan": 0 }
+    ],
+    "message": "Only one of surge / unavailable may be active."
+  }
+]
+```
+
+Conditions reuse the `requiredIf` operators — `equals`, `notEquals`, `isEmpty` — plus:
+
+| Operator | Meaning |
+|---|---|
+| `greaterThan` / `lessThan` | numeric comparison against a literal (`int` / `number` attributes) |
+| `lessThanAttribute` | numeric comparison against another attribute's value |
+
+`attribute` may be a **dot-path** to a leaf inside an object (`upgrade_settings.max_surge_type`),
+which is what makes a rule between two leaves of the same object expressible. A dot-path
+descends through plain `object` attributes only — a leaf inside a `list(object)` or
+`map(object)` needs an index or key that a dot-path cannot carry, so startup validation
+rejects it rather than accepting a rule that would never fire. The rule's
+own `attribute` field decides which field the error is reported against, so the diagnostic
+points at what the user should change; it defaults to the first condition's attribute.
+
+Semantics worth knowing:
+
+- **A null value falls back to the attribute's `default`.** This is the difference between
+  catching a bad config and missing it: a user who sets `min_count = 3` and leaves
+  `max_count` alone has an invalid pair, because `max_count` defaults to 1 — and the
+  config carries no value to compare. Only the numeric operators do this; there is no
+  default to compare against when none is declared, and the condition then does not hold.
+- **An unknown value stops evaluation.** A reference to another resource in the same apply
+  is configured but not yet known, so the combination cannot be judged and must not be
+  reported invalid — the same treatment `requiredIf` gives unknowns.
+- **`message` is required**, and it is the whole point of the feature: it should name the
+  attributes and state the rule, because it is all the user gets. Startup validation
+  rejects a rule without one, a condition with more than one operator, a numeric operator
+  on a non-numeric attribute, and any attribute or dot-path that does not resolve — so a
+  typo fails at startup rather than silently never firing.
+- Keep the rule **no stricter than the API**. Mirroring the backend's own check exactly is
+  the goal: `azure_node_pool`'s upgrade rule tests both the type and the value on each
+  side, because a non-`Default` type with a zero value is inert and the API accepts it.
 
 ### Delta envelopes over a rebuilt record
 
