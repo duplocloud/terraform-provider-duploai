@@ -58,11 +58,12 @@ resource "duploai_cluster_baseline" "full" {
 #   - vpc_id / subnet_ids     (AWS-only outputs; Azure exposes azure.* subnet IDs)
 #
 # SPECIFIC-CASE fields and their prerequisites on the linked network:
-#   - azure.network_mode = "AzureCniPodSubnet" → network must have an AksPods subnet
-#   - azure.enable_agic = true                 → network must have an ApplicationGateway subnet
-#   - domain_name_filter                       → the Azure public DNS zone(s) must already exist
-#   - api_server_visibility = "Private"        → private API endpoint only
-#   - cluster_ip_cidr                          → optional K8s service CIDR (AKS default when unset)
+#   - azure.network_mode = "AzureCniPodSubnet"    → network must have an AksPods subnet
+#   - azure.enable_agic = true                    → network must have an ApplicationGateway subnet
+#   - azure.enable_workload_identity = true       → enables the AKS OIDC issuer; see azure_oidc_issuer_url
+#   - domain_name_filter                          → the Azure public DNS zone(s) must already exist
+#   - api_server_visibility = "Private"           → private API endpoint only
+#   - cluster_ip_cidr                             → optional K8s service CIDR (AKS default when unset)
 
 # Minimal Azure cluster — only the required inputs. network_mode defaults to
 # AzureCniOverlay, AGIC is enabled, and the system node pool uses its defaults
@@ -88,8 +89,9 @@ resource "duploai_cluster_baseline" "azure_full" {
   cluster_ip_cidr       = "10.2.0.0/24" # Kubernetes service CIDR (AKS default when unset)
 
   azure = {
-    network_mode = "AzureCniOverlay"
-    enable_agic  = true
+    network_mode             = "AzureCniOverlay"
+    enable_agic              = true
+    enable_workload_identity = true
 
     system_node_pool = {
       vm_size             = "Standard_DS4_v2"
