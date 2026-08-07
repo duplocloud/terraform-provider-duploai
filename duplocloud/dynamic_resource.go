@@ -429,12 +429,30 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 	objID := toStringValue(extractPath(*created, strings.Split(r.spec.IDPath, ".")))
+	id := r.resourceID(scopeVals, objID)
+
+	// From here on, the object exists in the backend. If a later step (the
+	// readiness wait, a post-create refresh, or the updateAfterCreate
+	// follow-up) fails, we must still record its id in state — otherwise
+	// Terraform believes creation never happened, and the next apply issues a
+	// fresh POST that collides with the object still sitting in the backend
+	// (e.g. a Helm release whose install failed: the record was created, but
+	// Flux's Stalled condition trips WaitUntilReady's failure gate). Saving
+	// what we know here lets Terraform track it as tainted and reconcile it
+	// on the next apply instead of requiring a manual delete out of band.
+	saveKnownState := func(obj map[string]any) {
+		state := r.stateFromResponse(ctx, req.Plan.Raw, obj, scope, id, false, &resp.Diagnostics)
+		if !resp.Diagnostics.HasError() {
+			resp.State.Raw = state
+		}
+	}
 
 	final := created
 	if r.spec.Waiter != nil {
 		timeout := r.timeout(ctx, req.Plan, "create", &resp.Diagnostics)
 		final, err = api.WaitUntilReady(ctx, objID, timeout)
 		if err != nil {
+			saveKnownState(*created)
 			resp.Diagnostics.AddError("Error waiting for "+r.spec.Name, err.Error())
 			return
 		}
@@ -443,6 +461,7 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 		// fields). Refresh from a GET so state matches what reads return.
 		final, err = api.Get(objID)
 		if err != nil {
+			saveKnownState(*created)
 			resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after create", err.Error())
 			return
 		}
@@ -456,29 +475,34 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	if r.spec.UpdateAfterCreate {
 		updBody := r.updateBodyFromRaw(req.Plan.Raw, objID, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
+			saveKnownState(*final)
 			return
 		}
 		if _, err = api.Update(objID, &updBody); err != nil {
+			saveKnownState(*final)
 			resp.Diagnostics.AddError("Error applying post-create update for "+r.spec.Name, err.Error())
 			return
 		}
 		if r.spec.Waiter != nil {
 			timeout := r.timeout(ctx, req.Plan, "update", &resp.Diagnostics)
-			final, err = api.WaitUntilReady(ctx, objID, timeout)
-			if err != nil {
-				resp.Diagnostics.AddError("Error waiting for "+r.spec.Name+" post-create update", err.Error())
+			ready, waitErr := api.WaitUntilReady(ctx, objID, timeout)
+			if waitErr != nil {
+				saveKnownState(*final)
+				resp.Diagnostics.AddError("Error waiting for "+r.spec.Name+" post-create update", waitErr.Error())
 				return
 			}
+			final = ready
 		} else {
-			final, err = api.Get(objID)
-			if err != nil {
-				resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after post-create update", err.Error())
+			got, getErr := api.Get(objID)
+			if getErr != nil {
+				saveKnownState(*final)
+				resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after post-create update", getErr.Error())
 				return
 			}
+			final = got
 		}
 	}
 
-	id := r.resourceID(scopeVals, objID)
 	state := r.stateFromResponse(ctx, req.Plan.Raw, *final, scope, id, false, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
