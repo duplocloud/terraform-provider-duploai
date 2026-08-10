@@ -81,6 +81,19 @@ func loadSpecs(dir string) ([]specMeta, error) {
 	return specs, nil
 }
 
+// tableCell reduces a spec description to something safe for a single markdown
+// table cell. A description may span paragraphs — that renders well on the
+// registry page, but in a table a newline ends the row and strands the rest as
+// loose text outside it, and an unescaped pipe ends the cell early. Take only
+// the first paragraph (these tables are an index, not the full reference),
+// collapse whitespace runs to single spaces, and escape any pipe.
+func tableCell(desc string) string {
+	if i := strings.Index(desc, "\n\n"); i >= 0 {
+		desc = desc[:i]
+	}
+	return strings.ReplaceAll(strings.Join(strings.Fields(desc), " "), "|", "\\|")
+}
+
 func buildResourceTable(specs []specMeta) string {
 	var sb strings.Builder
 	sb.WriteString("| Resource | Description |\n")
@@ -89,7 +102,7 @@ func buildResourceTable(specs []specMeta) string {
 		if s.DataSourceOnly {
 			continue
 		}
-		desc := strings.TrimRight(s.Description, ".")
+		desc := strings.TrimRight(tableCell(s.Description), ".")
 		fmt.Fprintf(&sb, "| [`duploai_%s`](docs/resources/%s.md) | %s |\n", s.Name, s.Name, desc)
 	}
 	return sb.String()
@@ -103,7 +116,7 @@ func buildDataSourceTable(specs []specMeta) string {
 		if !s.DataSource && !s.DataSourceOnly {
 			continue
 		}
-		desc := strings.TrimRight(s.Description, ".")
+		desc := strings.TrimRight(tableCell(s.Description), ".")
 		fmt.Fprintf(&sb, "| [`duploai_%s`](docs/data-sources/%s.md) | %s |\n", s.Name, s.Name, desc)
 	}
 	return sb.String()
