@@ -1,6 +1,17 @@
 # Fetch just-in-time Kubernetes credentials for a cluster baseline.
 # The id is the cluster baseline's object id. The cluster must already be
 # provisioned and available — its Kubernetes scope is what mints the token.
+#
+# The cluster must also already exist when this configuration is *planned*.
+# Because the credentials configure the kubernetes/helm providers below,
+# Terraform has to resolve them before it can plan anything using those
+# providers — so an id that is only known after apply (e.g.
+# duploai_cluster_baseline.x.cluster_baseline_id for a cluster created in this
+# same run) fails with "Provider configuration is invalid: value depends on
+# resource attributes that cannot be determined until apply". Provision the
+# cluster in a separate root module or a prior apply, then reference it here by
+# id. This is the standard two-stage pattern for configuring one provider from
+# another provider's output.
 data "duploai_k8s_credentials" "example" {
   workspace_id = "<workspace-id>"
   id           = "<cluster-baseline-id>"

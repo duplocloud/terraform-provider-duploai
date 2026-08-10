@@ -3,12 +3,12 @@
 page_title: "duploai_k8s_credentials Data Source - duploai"
 subcategory: ""
 description: |-
-  Fetches just-in-time Kubernetes credentials for a cluster baseline — the API server endpoint, a short-lived bearer token, and the cluster certificate authority — for use in a kubernetes, helm, or kubectl provider block. Works for every cloud the platform provisions (EKS, AKS, and registered K8S_ONLY clusters) through one endpoint. The cluster must already be provisioned and available: the credentials are minted through the cluster's Kubernetes scope, which does not exist until provisioning completes. The token is minted per read and expires within minutes, so this is a data source only: it is re-fetched on every plan and apply, and the value stored in state is not durable.
+  Fetches just-in-time Kubernetes credentials for a cluster baseline — the API server endpoint, a short-lived bearer token, and the cluster certificate authority — for use in a kubernetes, helm, or kubectl provider block. Works for every cloud the platform provisions (EKS, AKS, and registered K8S_ONLY clusters) through one endpoint. The cluster must already be provisioned and available: the credentials are minted through the cluster's Kubernetes scope, which does not exist until provisioning completes. It must also already exist when the configuration is planned — when these credentials configure a kubernetes or helm provider, Terraform resolves that provider's arguments before planning anything that uses it, so an id known only after apply fails with Provider configuration is invalid. Provision the cluster in a separate root module or a prior apply. The token is minted per read and expires within minutes, so this is a data source only: it is re-fetched on every plan and apply, and it is written to state in plain text — sensitive redacts CLI output, not state.
 ---
 
 # duploai_k8s_credentials (Data Source)
 
-Fetches just-in-time Kubernetes credentials for a cluster baseline — the API server endpoint, a short-lived bearer token, and the cluster certificate authority — for use in a `kubernetes`, `helm`, or `kubectl` provider block. Works for every cloud the platform provisions (EKS, AKS, and registered K8S_ONLY clusters) through one endpoint. The cluster must already be provisioned and available: the credentials are minted through the cluster's Kubernetes scope, which does not exist until provisioning completes. The token is minted per read and expires within minutes, so this is a data source only: it is re-fetched on every plan and apply, and the value stored in state is not durable.
+Fetches just-in-time Kubernetes credentials for a cluster baseline — the API server endpoint, a short-lived bearer token, and the cluster certificate authority — for use in a `kubernetes`, `helm`, or `kubectl` provider block. Works for every cloud the platform provisions (EKS, AKS, and registered K8S_ONLY clusters) through one endpoint. The cluster must already be provisioned and available: the credentials are minted through the cluster's Kubernetes scope, which does not exist until provisioning completes. It must also already exist when the configuration is planned — when these credentials configure a `kubernetes` or `helm` provider, Terraform resolves that provider's arguments before planning anything that uses it, so an `id` known only after apply fails with `Provider configuration is invalid`. Provision the cluster in a separate root module or a prior apply. The token is minted per read and expires within minutes, so this is a data source only: it is re-fetched on every plan and apply, and it is written to state in plain text — `sensitive` redacts CLI output, not state.
 
 ## Example Usage
 
@@ -16,6 +16,17 @@ Fetches just-in-time Kubernetes credentials for a cluster baseline — the API s
 # Fetch just-in-time Kubernetes credentials for a cluster baseline.
 # The id is the cluster baseline's object id. The cluster must already be
 # provisioned and available — its Kubernetes scope is what mints the token.
+#
+# The cluster must also already exist when this configuration is *planned*.
+# Because the credentials configure the kubernetes/helm providers below,
+# Terraform has to resolve them before it can plan anything using those
+# providers — so an id that is only known after apply (e.g.
+# duploai_cluster_baseline.x.cluster_baseline_id for a cluster created in this
+# same run) fails with "Provider configuration is invalid: value depends on
+# resource attributes that cannot be determined until apply". Provision the
+# cluster in a separate root module or a prior apply, then reference it here by
+# id. This is the standard two-stage pattern for configuring one provider from
+# another provider's output.
 data "duploai_k8s_credentials" "example" {
   workspace_id = "<workspace-id>"
   id           = "<cluster-baseline-id>"
