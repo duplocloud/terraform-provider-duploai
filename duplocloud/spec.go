@@ -831,9 +831,13 @@ func (s *ResourceSpec) validate() error {
 	if s.Name == "" {
 		return fmt.Errorf("name is required")
 	}
-	// An association resource has no object of its own, so no idPath to read one
-	// from — its identity is the path parameters.
-	if s.IDPath == "" && s.Association == nil {
+	// idPath names where the object id lives in a create response, so it is
+	// required only for specs that create objects. An association resource has no
+	// object of its own — its identity is the path parameters — and a
+	// dataSourceOnly spec never creates anything: its id is supplied by the user
+	// and read straight from config. Requiring idPath there would force a value
+	// that nothing reads.
+	if s.IDPath == "" && s.Association == nil && !s.DataSourceOnly {
 		return fmt.Errorf("idPath is required")
 	}
 	if s.Endpoint.UriBase == "" {
