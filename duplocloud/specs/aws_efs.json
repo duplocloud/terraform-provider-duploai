@@ -113,6 +113,7 @@
       "type": "string",
       "optional": true,
       "computed": true,
+      "default": "generalPurpose",
       "forceNew": true,
       "createOnly": true,
       "oneOf": [
@@ -148,6 +149,7 @@
       "type": "string",
       "optional": true,
       "computed": true,
+      "default": "bursting",
       "oneOf": [
         "bursting",
         "provisioned",
