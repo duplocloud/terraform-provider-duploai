@@ -304,10 +304,11 @@ func TestBaseDataSourceConfigure(t *testing.T) {
 	}
 }
 
-// Every embedded spec with dataSource:true must register cleanly — endpoint
-// builds, path parameters resolve to string attributes, and the derived data
-// source schema constructs without diagnostics. This mirrors the startup path
-// in provider.DataSources, which panics on any of these failures.
+// Every embedded spec that registers a data source — dataSource:true or
+// dataSourceOnly:true — must do so cleanly: endpoint builds, path parameters
+// resolve to string attributes, and the derived data source schema constructs
+// without diagnostics. The filter mirrors provider.DataSources, which panics on
+// any of these failures at startup.
 func TestEmbeddedDataSourceSpecsRegister(t *testing.T) {
 	specs, err := loadResourceSpecs()
 	if err != nil {
@@ -315,7 +316,7 @@ func TestEmbeddedDataSourceSpecsRegister(t *testing.T) {
 	}
 	var count int
 	for _, spec := range specs {
-		if !spec.DataSource {
+		if !spec.DataSource && !spec.DataSourceOnly {
 			continue
 		}
 		count++
@@ -339,4 +340,67 @@ func TestEmbeddedDataSourceSpecsRegister(t *testing.T) {
 		})
 	}
 	t.Logf("validated %d data source specs", count)
+}
+
+// A dataSourceOnly spec describes a read-only API, so it must register a data
+// source and no managed resource. Without this, a spec whose endpoint has no
+// POST/PUT/DELETE would still expose a resource that fails on the first apply.
+func TestDataSourceOnlySpecsRegisterNoResource(t *testing.T) {
+	specs, err := loadResourceSpecs()
+	if err != nil {
+		t.Fatalf("loadResourceSpecs: %v", err)
+	}
+	p := &duploaiProvider{}
+	gotResources := len(p.Resources(context.Background()))
+	gotDataSources := len(p.DataSources(context.Background()))
+
+	var wantResources, wantDataSources, only int
+	for _, spec := range specs {
+		if spec.DataSourceOnly {
+			only++
+		} else {
+			wantResources++
+		}
+		if spec.DataSource || spec.DataSourceOnly {
+			wantDataSources++
+		}
+	}
+	if only == 0 {
+		t.Skip("no dataSourceOnly specs embedded")
+	}
+	if gotResources != wantResources {
+		t.Errorf("Resources() = %d, want %d (%d dataSourceOnly specs must be excluded)",
+			gotResources, wantResources, only)
+	}
+	if gotDataSources != wantDataSources {
+		t.Errorf("DataSources() = %d, want %d", gotDataSources, wantDataSources)
+	}
+}
+
+// k8s_credentials reads a sub-resource action path rather than the conventional
+// "/{id}", so the endpoint's read override is what makes it hit the right URL.
+// A dropped override would silently GET the cluster object instead, which
+// returns a shape with no token at all.
+func TestK8sCredentialsReadsJitAccessPath(t *testing.T) {
+	specs, err := loadResourceSpecs()
+	if err != nil {
+		t.Fatalf("loadResourceSpecs: %v", err)
+	}
+	for _, spec := range specs {
+		if spec.Name != "k8s_credentials" {
+			continue
+		}
+		if !spec.DataSourceOnly {
+			t.Error("k8s_credentials mints a short-lived token and must stay dataSourceOnly")
+		}
+		endpoint, err := spec.BuildEndpoint()
+		if err != nil {
+			t.Fatalf("BuildEndpoint: %v", err)
+		}
+		if got := endpoint.Read.Path; got != "/{id}/jitAccess" {
+			t.Errorf("read path = %q, want %q", got, "/{id}/jitAccess")
+		}
+		return
+	}
+	t.Fatal("k8s_credentials spec not found")
 }
