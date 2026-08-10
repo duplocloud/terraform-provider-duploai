@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
@@ -345,35 +346,78 @@ func TestEmbeddedDataSourceSpecsRegister(t *testing.T) {
 // A dataSourceOnly spec describes a read-only API, so it must register a data
 // source and no managed resource. Without this, a spec whose endpoint has no
 // POST/PUT/DELETE would still expose a resource that fails on the first apply.
+//
+// Asserted per spec rather than on totals so a failure names the offending
+// spec instead of reporting a count mismatch.
 func TestDataSourceOnlySpecsRegisterNoResource(t *testing.T) {
 	specs, err := loadResourceSpecs()
 	if err != nil {
 		t.Fatalf("loadResourceSpecs: %v", err)
 	}
-	p := &duploaiProvider{}
-	gotResources := len(p.Resources(context.Background()))
-	gotDataSources := len(p.DataSources(context.Background()))
 
-	var wantResources, wantDataSources, only int
+	// TypeName is "<provider>_<spec name>", so the spec name is recoverable from
+	// each registered factory — that is what lets this name the culprit.
+	registered := func(typeNames map[string]bool, name string) bool {
+		return typeNames["duploai_"+name]
+	}
+	resourceNames := map[string]bool{}
+	for _, f := range (&duploaiProvider{}).Resources(context.Background()) {
+		var resp resource.MetadataResponse
+		f().Metadata(context.Background(), resource.MetadataRequest{ProviderTypeName: "duploai"}, &resp)
+		resourceNames[resp.TypeName] = true
+	}
+	dataSourceNames := map[string]bool{}
+	for _, f := range (&duploaiProvider{}).DataSources(context.Background()) {
+		var resp datasource.MetadataResponse
+		f().Metadata(context.Background(), datasource.MetadataRequest{ProviderTypeName: "duploai"}, &resp)
+		dataSourceNames[resp.TypeName] = true
+	}
+
+	var only int
 	for _, spec := range specs {
-		if spec.DataSourceOnly {
-			only++
-		} else {
-			wantResources++
+		if !spec.DataSourceOnly {
+			continue
 		}
-		if spec.DataSource || spec.DataSourceOnly {
-			wantDataSources++
-		}
+		only++
+		t.Run(spec.Name, func(t *testing.T) {
+			if registered(resourceNames, spec.Name) {
+				t.Errorf("dataSourceOnly spec %q registered a managed resource; it has no create/update/delete", spec.Name)
+			}
+			if !registered(dataSourceNames, spec.Name) {
+				t.Errorf("dataSourceOnly spec %q registered no data source", spec.Name)
+			}
+		})
 	}
 	if only == 0 {
 		t.Skip("no dataSourceOnly specs embedded")
 	}
-	if gotResources != wantResources {
-		t.Errorf("Resources() = %d, want %d (%d dataSourceOnly specs must be excluded)",
-			gotResources, wantResources, only)
+}
+
+// idPath names where an object id lives in a create response, so a
+// dataSourceOnly spec — which never creates anything — must not be forced to
+// declare one. Guards the validate() carve-out against a well-meaning
+// simplification back to "idPath is always required".
+func TestDataSourceOnlySpecNeedsNoIDPath(t *testing.T) {
+	base := func() ResourceSpec {
+		return ResourceSpec{
+			Name:     "readonly_thing",
+			Endpoint: EndpointSpec{UriBase: "/v1/things"},
+			Attributes: []AttributeSpec{
+				{Name: "value", Type: "string", Computed: true, APIPath: "value"},
+			},
+		}
 	}
-	if gotDataSources != wantDataSources {
-		t.Errorf("DataSources() = %d, want %d", gotDataSources, wantDataSources)
+
+	s := base()
+	s.DataSourceOnly = true
+	if err := s.validate(); err != nil {
+		t.Errorf("dataSourceOnly spec without idPath must validate, got: %v", err)
+	}
+
+	// A spec that does create objects still needs it.
+	s2 := base()
+	if err := s2.validate(); err == nil {
+		t.Error("a creating spec without idPath must be rejected")
 	}
 }
 
