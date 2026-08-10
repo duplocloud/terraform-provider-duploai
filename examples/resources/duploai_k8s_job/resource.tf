@@ -46,6 +46,30 @@ resource "duploai_k8s_job" "parallel" {
   ]
 }
 
+# Job that opts out of the Resource-Group nodeSelector. By default a job's pods
+# are pinned to nodes labeled for its resource group (key "resourcegroup") — if
+# that resource group has no dedicated node group, the pods stay Pending
+# forever. Set is_any_host_allowed = true to let the pods schedule on any node
+# instead. allocation_tags further narrows that to nodes whose node group was
+# provisioned with a matching allocation tag.
+resource "duploai_k8s_job" "any_host" {
+  workspace_id      = "<workspace-id>"
+  name              = "shared-cleanup"
+  environment_id    = "<environment-id>"
+  resource_group_id = "<resource-group-id>"
+  namespace_name    = "default"
+
+  is_any_host_allowed = true
+  allocation_tags     = "shared-pool"
+
+  containers = [
+    {
+      name  = "cleanup"
+      image = "my-repo/cleanup:latest"
+    },
+  ]
+}
+
 # Full example — Indexed completions, pod failure policy, private-registry pull
 # secret, volumes + mounts, secret/configMap-sourced env, resource limits, probes,
 # init container, and scheduling. Note: restart_policy must be "Never" when
