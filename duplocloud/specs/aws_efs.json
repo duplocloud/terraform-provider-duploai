@@ -122,7 +122,7 @@
       ],
       "requestPath": "spec.createRequest.performanceMode",
       "responsePath": "result.cloudDetails.fileSystem.performanceMode",
-      "description": "Performance mode: generalPurpose (default) or maxIO. Immutable after creation."
+      "description": "Performance mode: generalPurpose (default) or maxIO. Immutable after creation. When importing a maxIO file system, set this to maxIO in the configuration — otherwise the generalPurpose default plans a replacement."
     },
     {
       "name": "creation_token",
