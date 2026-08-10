@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -102,6 +103,33 @@ func primitiveAttrType(elem string) attr.Type {
 
 // ── Schema building ─────────────────────────────────────────────────────────
 
+// stringValidators builds the plan-time validators for a string attribute, so a
+// value the API would reject fails before any call is made rather than as a 400
+// mid-apply. Shared by the resource and data source schemas — a constraint that
+// held on one but not the other would be a trap.
+//
+// Returns nil when nothing is constrained, which is the framework's "no
+// validators" and keeps the common case allocation-free.
+func stringValidators(a AttributeSpec) []validator.String {
+	var out []validator.String
+	if len(a.OneOf) > 0 {
+		out = append(out, stringvalidator.OneOf(a.OneOf...))
+	}
+	if a.MaxLength > 0 {
+		out = append(out, stringvalidator.LengthAtMost(a.MaxLength))
+	}
+	if a.Pattern != "" {
+		// validate() compiles this at spec load, so a spec carrying a bad pattern
+		// never reaches here; MustCompile cannot fire on a loaded spec.
+		msg := a.PatternDescription
+		if msg == "" {
+			msg = "must match " + a.Pattern
+		}
+		out = append(out, stringvalidator.RegexMatches(regexp.MustCompile(a.Pattern), msg))
+	}
+	return out
+}
+
 // attrSchema builds the framework schema.Attribute for one AttributeSpec,
 // recursing through nested objects.
 func attrSchema(a AttributeSpec) schema.Attribute {
@@ -124,9 +152,7 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			_ = json.Unmarshal(*a.Default, &s)
 			o.Default = stringdefault.StaticString(s)
 		}
-		if len(a.OneOf) > 0 {
-			o.Validators = []validator.String{stringvalidator.OneOf(a.OneOf...)}
-		}
+		o.Validators = stringValidators(a)
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, stringplanmodifier.UseStateForUnknown())
 		}
@@ -937,9 +963,7 @@ func dsPrimitiveSchema(a AttributeSpec, elem string) dsschema.Attribute {
 			Required: a.Required, Optional: a.Optional, Computed: a.Computed,
 			Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
-		if len(a.OneOf) > 0 {
-			o.Validators = []validator.String{stringvalidator.OneOf(a.OneOf...)}
-		}
+		o.Validators = stringValidators(a)
 		return o
 	case "bool":
 		return dsschema.BoolAttribute{
