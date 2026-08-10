@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -363,6 +364,20 @@ type AttributeSpec struct {
 
 	// OneOf constrains a string attribute to an enumerated set.
 	OneOf []string `json:"oneOf,omitempty"`
+
+	// Pattern constrains a string attribute to a Go regular expression, and
+	// MaxLength caps its length. Both are validated at plan time, so a value the
+	// API would reject fails before any call is made rather than surfacing as a
+	// 400 mid-apply — e.g. an allocation tag, which the platform validates against
+	// the Kubernetes label-value rule before stamping it into a nodeSelector.
+	//
+	// String attributes only; validate() rejects them on any other type, since a
+	// silently-ignored constraint reads as validation that is not happening.
+	// PatternDescription, when set, replaces the raw regex in the error message —
+	// prefer it, as a regex is rarely actionable to the reader.
+	Pattern            string `json:"pattern,omitempty"`
+	PatternDescription string `json:"patternDescription,omitempty"`
+	MaxLength          int    `json:"maxLength,omitempty"`
 
 	// MinItems, when > 0, requires a list/set attribute to have at least this
 	// many elements (validated at plan time). Use for collections the API
@@ -1138,6 +1153,25 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 		}
 		if !a.Required && !a.Optional && !a.Computed {
 			return nil, fmt.Errorf("attribute %q must be one of required/optional/computed", a.Name)
+		}
+		// Pattern/maxLength are wired only for strings, so on any other type they
+		// would be accepted and silently ignored — validation the spec claims but
+		// does not perform. Reject at load instead.
+		if a.Pattern != "" || a.MaxLength > 0 || a.PatternDescription != "" {
+			if a.Type != "string" {
+				return nil, fmt.Errorf("attribute %q: pattern/maxLength are only valid on a string, got %q", a.Name, a.Type)
+			}
+			if a.PatternDescription != "" && a.Pattern == "" {
+				return nil, fmt.Errorf("attribute %q: patternDescription without pattern has nothing to describe", a.Name)
+			}
+			if a.Pattern != "" {
+				if _, err := regexp.Compile(a.Pattern); err != nil {
+					return nil, fmt.Errorf("attribute %q: invalid pattern: %w", a.Name, err)
+				}
+			}
+			if a.MaxLength < 0 {
+				return nil, fmt.Errorf("attribute %q: maxLength must be positive, got %d", a.Name, a.MaxLength)
+			}
 		}
 		if a.ImmutableOnceTrue {
 			if a.Type != "bool" {

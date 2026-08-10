@@ -1,6 +1,6 @@
 {
   "name": "k8s_cron_job",
-  "description": "Manages a DuploCloud AI Helpdesk Kubernetes CronJob \u2014 a scheduled workload that runs jobs on a recurring cron schedule within an environment or resource group.",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes CronJob — a scheduled workload that runs jobs on a recurring cron schedule within an environment or resource group.",
   "idPath": "id",
   "dataSource": true,
   "endpoint": {
@@ -72,6 +72,9 @@
       "optional": true,
       "computed": true,
       "apiPath": "spec.allocationTags",
+      "pattern": "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$",
+      "patternDescription": "must be a valid Kubernetes label value: alphanumerics, dashes, underscores and dots, starting and ending with an alphanumeric character",
+      "maxLength": 63,
       "description": "Allocation tags used to constrain which hosts the cron job pods run on."
     },
     {
