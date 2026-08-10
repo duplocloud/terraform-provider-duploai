@@ -50,7 +50,7 @@ output "status" {
 - `name` (String) Name of the EFS file system.
 - `performance_mode` (String) Performance mode: generalPurpose (default) or maxIO. Immutable after creation.
 - `provisioned_throughput_in_mibps` (Number) Provisioned throughput in MiB/s. Required when throughput_mode is provisioned; ignored otherwise.
-- `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
+- `provisioner_type` (String) Provisioner type recorded by the backend. Always DirectApiCall for this resource — the server stamps it on every create/update and ignores user input, so it cannot be configured.
 - `provisioner_version` (String) Optional provisioner version.
 - `resource_group_id` (String) ID of the resource group in which the file system is provisioned.
 - `status` (String) Current provisioning status of the file system.
