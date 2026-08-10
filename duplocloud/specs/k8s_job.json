@@ -60,6 +60,25 @@
       "description": "Kubernetes namespace to run the job in."
     },
     {
+      "name": "is_any_host_allowed",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "forceNew": true,
+      "apiPath": "spec.isAnyHostAllowed",
+      "description": "When true, the job's pods may be scheduled on any available host."
+    },
+    {
+      "name": "allocation_tags",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.allocationTags",
+      "description": "Allocation tags used to constrain which hosts the job pods run on."
+    },
+    {
       "name": "provisioner_type",
       "type": "string",
       "optional": true,

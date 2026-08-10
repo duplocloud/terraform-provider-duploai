@@ -187,6 +187,7 @@ resource "duploai_k8s_job" "full" {
 
 - `active_deadline_seconds` (Number) Maximum duration in seconds the job may run before being terminated.
 - `affinity` (Attributes) Node/pod affinity and anti-affinity scheduling rules. (see [below for nested schema](#nestedatt--affinity))
+- `allocation_tags` (String) Allocation tags used to constrain which hosts the job pods run on.
 - `annotations` (Map of String) Annotations to apply to the Kubernetes Job object.
 - `automount_service_account_token` (Boolean) Whether to automount the service account token into the pod.
 - `backoff_limit` (Number) Number of retries before the job is marked as failed. Defaults to 6.
@@ -206,6 +207,7 @@ resource "duploai_k8s_job" "full" {
 - `hostname` (String) Pod hostname (defaults to the pod name).
 - `image_pull_secrets` (Attributes List) Image pull secrets referenced by the pods, for pulling container images from private registries. (see [below for nested schema](#nestedatt--image_pull_secrets))
 - `init_containers` (Attributes List) Init containers that run to completion, in order, before the main containers start. (see [below for nested schema](#nestedatt--init_containers))
+- `is_any_host_allowed` (Boolean) When true, the job's pods may be scheduled on any available host.
 - `labels` (Map of String) Labels to apply to the Kubernetes Job object.
 - `manual_selector` (Boolean) Allow a manually-specified pod selector (advanced).
 - `max_failed_indexes` (Number) Max number of failed indexes before the job is failed (Indexed jobs only).
