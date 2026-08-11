@@ -449,6 +449,8 @@
     }
   ],
   "waiter": {
-    "deprovisionedState": "DeProvisioned"
+    "deprovisionedState": "DeProvisioned",
+    "readyPath": "result.provisioningState",
+    "readyState": "Succeeded"
   }
 }
