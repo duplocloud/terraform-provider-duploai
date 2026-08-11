@@ -48,7 +48,7 @@ output "status" {
 - `file_system_id` (String) AWS ID of the provisioned file system (e.g. fs-0123456789abcdef0).
 - `life_cycle_state` (String) AWS lifecycle state of the file system (e.g. available, creating, deleting).
 - `name` (String) Name of the EFS file system.
-- `performance_mode` (String) Performance mode: generalPurpose (default) or maxIO. Immutable after creation.
+- `performance_mode` (String) Performance mode: generalPurpose (default) or maxIO. Immutable after creation. When importing a maxIO file system, set this to maxIO in the configuration — otherwise the generalPurpose default plans a replacement.
 - `provisioned_throughput_in_mibps` (Number) Provisioned throughput in MiB/s. Required when throughput_mode is provisioned; ignored otherwise.
 - `provisioner_type` (String) Provisioner type recorded by the backend. Always DirectApiCall for this resource — the server stamps it on every create/update and ignores user input, so it cannot be configured.
 - `provisioner_version` (String) Optional provisioner version.
