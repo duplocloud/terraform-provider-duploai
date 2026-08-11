@@ -33,6 +33,14 @@ resource "duploai_helm_release" "app" {
 
   interval = "5m"
 
+  # How long Helm itself waits for install/upgrade to report ready, and how
+  # many times Flux retries a failed attempt before marking the release
+  # Stalled (both default to 5m / 0 retries when unset). Raise these for
+  # charts whose pods are slow to pass readiness on a scaling node pool.
+  timeout         = "15m"
+  install_retries = 2
+  upgrade_retries = 2
+
   chart_ref_kind = "OCIRepository"
   chart_ref_name = "app"
 

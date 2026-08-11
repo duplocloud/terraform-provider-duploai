@@ -47,6 +47,7 @@ output "status" {
 - `chart_version` (String) Chart version or semver range.
 - `environment_id` (String) ID of the environment that owns the resource group.
 - `helm_release_id` (String) ID of this Helm release, for reference by dependent resources.
+- `install_retries` (Number) Number of times Flux retries a failed Helm install before marking the release Stalled and stopping reconciliation. Flux defaults to 0 (no retries) when unset; -1 means retry indefinitely.
 - `interval` (String) Interval at which the release is reconciled (Go duration, e.g. 5m, 1h).
 - `labels` (Map of String) Kubernetes labels applied to the HelmRelease.
 - `name` (String) Name of the Helm release resource.
@@ -56,6 +57,8 @@ output "status" {
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this Helm release belongs to.
 - `status` (String) Current provisioning status.
 - `target_namespace` (String) Namespace the chart is installed into (defaults to the HelmRelease namespace).
+- `timeout` (String) How long Helm waits for install/upgrade/rollback actions to complete before giving up (Go duration, e.g. 15m). Flux defaults to 5m when unset.
+- `upgrade_retries` (Number) Number of times Flux retries a failed Helm upgrade before marking the release Stalled and stopping reconciliation. Flux defaults to 0 (no retries) when unset; -1 means retry indefinitely.
 - `values` (String) Inline Helm values as a YAML or JSON string.
 - `values_from` (Attributes List) Values sourced from ConfigMaps or Secrets. (see [below for nested schema](#nestedatt--values_from))
 

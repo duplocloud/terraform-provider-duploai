@@ -48,6 +48,14 @@ resource "duploai_helm_release" "app" {
 
   interval = "5m"
 
+  # How long Helm itself waits for install/upgrade to report ready, and how
+  # many times Flux retries a failed attempt before marking the release
+  # Stalled (both default to 5m / 0 retries when unset). Raise these for
+  # charts whose pods are slow to pass readiness on a scaling node pool.
+  timeout         = "15m"
+  install_retries = 2
+  upgrade_retries = 2
+
   chart_ref_kind = "OCIRepository"
   chart_ref_name = "app"
 
@@ -92,6 +100,7 @@ resource "duploai_helm_release" "app" {
 - `chart_version` (String) Chart version or semver range.
 - `description` (String) Optional description. Not echoed back by the API, so it is never read from the response.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `install_retries` (Number) Number of times Flux retries a failed Helm install before marking the release Stalled and stopping reconciliation. Flux defaults to 0 (no retries) when unset; -1 means retry indefinitely.
 - `interval` (String) Interval at which the release is reconciled (Go duration, e.g. 5m, 1h).
 - `labels` (Map of String) Kubernetes labels applied to the HelmRelease.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
@@ -99,7 +108,9 @@ resource "duploai_helm_release" "app" {
 - `release_name` (String) Helm release name (defaults to the resource name).
 - `scope_ids` (List of String) Scope IDs that link this Helm release to a cloud provider account. Not echoed back by the API, so it is never read from the response.
 - `target_namespace` (String) Namespace the chart is installed into (defaults to the HelmRelease namespace).
+- `timeout` (String) How long Helm waits for install/upgrade/rollback actions to complete before giving up (Go duration, e.g. 15m). Flux defaults to 5m when unset.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
+- `upgrade_retries` (Number) Number of times Flux retries a failed Helm upgrade before marking the release Stalled and stopping reconciliation. Flux defaults to 0 (no retries) when unset; -1 means retry indefinitely.
 - `values` (String) Inline Helm values as a YAML or JSON string.
 - `values_from` (Attributes List) Values sourced from ConfigMaps or Secrets. (see [below for nested schema](#nestedatt--values_from))
 

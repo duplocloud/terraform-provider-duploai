@@ -102,6 +102,30 @@
       "description": "Helm release name (defaults to the resource name)."
     },
     {
+      "name": "timeout",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.timeout",
+      "responsePath": "result.k8sResource.spec.timeout",
+      "description": "How long Helm waits for install/upgrade/rollback actions to complete before giving up (Go duration, e.g. 15m). Flux defaults to 5m when unset."
+    },
+    {
+      "name": "install_retries",
+      "type": "int",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.install.remediation.retries",
+      "responsePath": "result.k8sResource.spec.install.remediation.retries",
+      "description": "Number of times Flux retries a failed Helm install before marking the release Stalled and stopping reconciliation. Flux defaults to 0 (no retries) when unset; -1 means retry indefinitely."
+    },
+    {
+      "name": "upgrade_retries",
+      "type": "int",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.upgrade.remediation.retries",
+      "responsePath": "result.k8sResource.spec.upgrade.remediation.retries",
+      "description": "Number of times Flux retries a failed Helm upgrade before marking the release Stalled and stopping reconciliation. Flux defaults to 0 (no retries) when unset; -1 means retry indefinitely."
+    },
+    {
       "name": "values",
       "type": "string",
       "optional": true,
