@@ -451,6 +451,11 @@
   "waiter": {
     "deprovisionedState": "DeProvisioned",
     "readyPath": "result.provisioningState",
-    "readyState": "Succeeded"
+    "readyState": "Succeeded",
+    "readyFailurePath": "result.provisioningState",
+    "readyFailureStates": {
+      "Failed": "Azure storage account provisioning failed",
+      "Canceled": "Azure storage account provisioning was canceled"
+    }
   }
 }
