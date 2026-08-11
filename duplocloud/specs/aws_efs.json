@@ -62,17 +62,11 @@
     {
       "name": "provisioner_type",
       "type": "string",
-      "optional": true,
       "computed": true,
-      "forceNew": true,
-      "oneOf": [
-        "Cli",
-        "IacNativeTf",
-        "IacDuploTf",
-        "DirectApiCall"
-      ],
+      "stable": true,
+      "noSend": true,
       "apiPath": "spec.provisioner.type",
-      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+      "description": "Provisioner type recorded by the backend. Always DirectApiCall for this resource — the server stamps it on every create/update and ignores user input, so it cannot be configured."
     },
     {
       "name": "provisioner_version",
