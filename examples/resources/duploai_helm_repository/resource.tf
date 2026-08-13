@@ -1,8 +1,10 @@
-# A public HTTPS Helm repository
+# A public HTTPS Helm repository.
+#
+# scope_ids is omitted here: the server derives it from the parent resource
+# group. Set it explicitly only when you need to override that.
 resource "duploai_helm_repository" "bitnami" {
   workspace_id      = "<workspace-id>"
   name              = "bitnami"
-  scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
   environment_id    = "<environment-id>"
   namespace_name    = "default"
