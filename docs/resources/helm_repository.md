@@ -15,8 +15,7 @@ Manages a DuploCloud AI Helpdesk Kubernetes Helm repository (Flux HelmRepository
 ```terraform
 # A public HTTPS Helm repository.
 #
-# scope_ids is omitted here: the server derives it from the parent resource
-# group. Set it explicitly only when you need to override that.
+# scope_ids is read-only: the server derives it from the parent resource group.
 resource "duploai_helm_repository" "bitnami" {
   workspace_id      = "<workspace-id>"
   name              = "bitnami"
@@ -32,7 +31,6 @@ resource "duploai_helm_repository" "bitnami" {
 resource "duploai_helm_repository" "private_oci" {
   workspace_id      = "<workspace-id>"
   name              = "internal-charts"
-  scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
   environment_id    = "<environment-id>"
   namespace_name    = "default"
@@ -79,7 +77,6 @@ resource "duploai_helm_repository" "private_oci" {
 - `pass_credentials` (Boolean) Pass credentials to all domains the repository redirects to.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
-- `scope_ids` (List of String) Scope IDs that link this Helm repository to a cloud provider account. Leave unset to let the server derive them from the parent resource group. Not echoed back by the API, so it is never read from the response.
 - `secret_ref_name` (String) Name of a Kubernetes Secret holding credentials for the repository.
 - `suspend` (Boolean) Suspend reconciliation of the repository.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
@@ -89,6 +86,7 @@ resource "duploai_helm_repository" "private_oci" {
 
 - `helm_repository_id` (String) ID of this Helm repository, for reference by dependent resources.
 - `id` (String) Composite resource identifier (workspace_id/id).
+- `scope_ids` (List of String) Scope IDs that link this Helm repository to a cloud provider account. Derived by the server from the parent resource group.
 - `status` (String) Current provisioning status.
 
 <a id="nestedblock--timeouts"></a>

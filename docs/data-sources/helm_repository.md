@@ -49,6 +49,7 @@ output "status" {
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this Helm repository belongs to.
+- `scope_ids` (List of String) Scope IDs that link this Helm repository to a cloud provider account. Derived by the server from the parent resource group.
 - `secret_ref_name` (String) Name of a Kubernetes Secret holding credentials for the repository.
 - `status` (String) Current provisioning status.
 - `suspend` (Boolean) Suspend reconciliation of the repository.

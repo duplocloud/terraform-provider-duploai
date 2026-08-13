@@ -35,12 +35,9 @@
     {
       "name": "scope_ids",
       "type": "list(string)",
-      "optional": true,
       "computed": true,
-      "default": [],
-      "forceNew": true,
-      "requestPath": "spec.scopeIds",
-      "description": "Scope IDs that link this Helm repository to a cloud provider account. Leave unset to let the server derive them from the parent resource group. Not echoed back by the API, so it is never read from the response."
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this Helm repository to a cloud provider account. Derived by the server from the parent resource group."
     },
     {
       "name": "resource_group_id",
