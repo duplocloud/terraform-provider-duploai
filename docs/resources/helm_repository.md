@@ -13,11 +13,12 @@ Manages a DuploCloud AI Helpdesk Kubernetes Helm repository (Flux HelmRepository
 ## Example Usage
 
 ```terraform
-# A public HTTPS Helm repository
+# A public HTTPS Helm repository.
+#
+# scope_ids is read-only: the server derives it from the parent resource group.
 resource "duploai_helm_repository" "bitnami" {
   workspace_id      = "<workspace-id>"
   name              = "bitnami"
-  scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
   environment_id    = "<environment-id>"
   namespace_name    = "default"
@@ -30,7 +31,6 @@ resource "duploai_helm_repository" "bitnami" {
 resource "duploai_helm_repository" "private_oci" {
   workspace_id      = "<workspace-id>"
   name              = "internal-charts"
-  scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
   environment_id    = "<environment-id>"
   namespace_name    = "default"
@@ -60,7 +60,6 @@ resource "duploai_helm_repository" "private_oci" {
 - `name` (String) Name of the Helm repository resource.
 - `namespace_name` (String) Kubernetes namespace the Helm repository is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this Helm repository belongs to.
-- `scope_ids` (List of String) Scope IDs that link this Helm repository to a cloud provider account. Not echoed back by the API, so it is never read from the response.
 - `url` (String) URL of the Helm repository (e.g. https://charts.example.com or oci://registry.example.com/charts).
 - `workspace_id` (String) ID of the workspace that owns this Helm repository.
 
@@ -87,6 +86,7 @@ resource "duploai_helm_repository" "private_oci" {
 
 - `helm_repository_id` (String) ID of this Helm repository, for reference by dependent resources.
 - `id` (String) Composite resource identifier (workspace_id/id).
+- `scope_ids` (List of String) Scope IDs that link this Helm repository to a cloud provider account. Derived by the server from the parent resource group.
 - `status` (String) Current provisioning status.
 
 <a id="nestedblock--timeouts"></a>
