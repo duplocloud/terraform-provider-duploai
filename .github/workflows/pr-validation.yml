@@ -27,10 +27,16 @@ jobs:
             const prBody = context.payload.pull_request.body || '';
             let prTitle = context.payload.pull_request.title || '';
 
+            // Accepted ClickUp ticket prefixes: DUPLOAI (product work) and CUST
+            // (customer-reported issues). Keep this list in sync with the
+            // pr-raise and pr-review skills under .claude/skills/.
+            const TICKET_PREFIXES = 'DUPLOAI|CUST';
+
             // Strip ClickUp ID from title if present and update via API
-            const titleClickupMatch = prTitle.match(/\s*DUPLOAI-\d+[:\s-]*/i);
+            const titleTicketRe = new RegExp(`\\s*(?:${TICKET_PREFIXES})-\\d+[:\\s-]*`, 'i');
+            const titleClickupMatch = prTitle.match(titleTicketRe);
             if (titleClickupMatch) {
-              const cleanTitle = prTitle.replace(/\s*DUPLOAI-\d+[:\s-]*/i, '').replace(/ {2,}/g, ' ').trim();
+              const cleanTitle = prTitle.replace(titleTicketRe, '').replace(/ {2,}/g, ' ').trim();
               await github.rest.pulls.update({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -52,10 +58,10 @@ jobs:
             }
 
             // ClickUp ID must be in the body (not the title)
-            const clickupPattern = /DUPLOAI-\d+/;
-            const clickupUrlPattern = /https:\/\/app\.clickup\.com\/t\/\d+\/DUPLOAI-\d+/;
+            const clickupPattern = new RegExp(`(?:${TICKET_PREFIXES})-\\d+`);
+            const clickupUrlPattern = new RegExp(`https://app\\.clickup\\.com/t/\\d+/(?:${TICKET_PREFIXES})-\\d+`);
             if (!clickupPattern.test(prBody) && !clickupUrlPattern.test(prBody)) {
-              core.setFailed('❌ PR validation failed: ClickUp ticket ID (DUPLOAI-XXXXX) is required in the PR description.\n\nAdd it to the "ClickUp Ticket" section.');
+              core.setFailed('❌ PR validation failed: ClickUp ticket ID (DUPLOAI-XXXXX or CUST-XXXXX) is required in the PR description.\n\nAdd it to the "ClickUp Ticket" section.');
               return;
             }
 
