@@ -44,7 +44,7 @@ Parse from the invocation phrase first. Ask for anything missing in **one**
 
 | Input | Rules |
 |---|---|
-| **ClickUp ID** | `DUPLOAI-\d+`. In the body only — never the title. |
+| **ClickUp ID** | `DUPLOAI-\d+` (product work) or `CUST-\d+` (customer-reported issue). In the body only — never the title. Both prefixes are accepted by `pr-validation.yml`; keep this list in sync with that workflow's `TICKET_PREFIXES`. |
 | **PR title** | 20–72 chars. No ClickUp ID. Customer-facing changelog entry. |
 | **Target branch** | `develop`, `hotfix/<ver>`, or `release/<ver>`. `master` is rejected. |
 
@@ -66,7 +66,7 @@ Parse from the invocation phrase first. Ask for anything missing in **one**
 ```
 Title length < 20  → "Title too short ({n} chars, min 20)."
 Title length > 72  → "Title too long ({n} chars, max 72)."
-Title has DUPLOAI-\d+  → "Remove ticket ID from title — it belongs in the body."
+Title has (DUPLOAI|CUST)-\d+  → "Remove ticket ID from title — it belongs in the body."
 Target is master  → "master is CI/CD-only. Target develop, hotfix/<ver>, or release/<ver>."
 ```
 
@@ -76,7 +76,8 @@ Target is master  → "master is CI/CD-only. Target develop, hotfix/<ver>, or re
 
 ### Derive branch name
 
-1. Base: `<DUPLOAI-ID>` (the ClickUp ticket ID alone — e.g. `DUPLOAI-2034`).
+1. Base: `<TICKET-ID>` (the ClickUp ticket ID alone — e.g. `DUPLOAI-2034` or
+   `CUST-11917`).
 2. If taken locally or on remote, try `-01` → `-02` → `-03`. If all taken, ask
    for a custom suffix.
 
@@ -84,7 +85,7 @@ Target is master  → "master is CI/CD-only. Target develop, hotfix/<ver>, or re
 branch_exists() {
   git branch --list "$1" | grep -q "$1" || git ls-remote --heads origin "$1" | grep -q "$1"
 }
-base="DUPLOAI-<id>"; name="$base"; counter=1
+base="<TICKET-ID>"; name="$base"; counter=1
 while branch_exists "$name" && [ $counter -le 3 ]; do
   name=$(printf "%s-%02d" "$base" $counter); counter=$((counter + 1))
 done
@@ -114,7 +115,7 @@ Commit using the PR title as the message:
 ```bash
 git commit -m "<pr-title>
 
-ClickUp: <DUPLOAI-ID>"
+ClickUp: <TICKET-ID>"
 ```
 
 If `git add -A` produces nothing (working tree already clean), skip the commit

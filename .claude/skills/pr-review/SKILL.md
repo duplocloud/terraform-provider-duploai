@@ -230,13 +230,16 @@ For **every** PR:
 
       Flag every hit with file:line and the suggested neutral replacement.
 - [ ] **ClickUp id present in body** — the PR **body** (not the title) contains a
-      `DUPLOAI-\d+` reference. CI auto-strips the ticket ID from the title and
-      rewrites it; the body is the required location.
+      `DUPLOAI-\d+` (product work) or `CUST-\d+` (customer-reported issue)
+      reference. Both prefixes are accepted by `pr-validation.yml` — keep this
+      list in sync with that workflow's `TICKET_PREFIXES`. CI auto-strips the
+      ticket ID from the title and rewrites it; the body is the required
+      location.
 
       ```bash
-      gh pr view <pr> --json body -q '.body' | grep -oE 'DUPLOAI-[0-9]+'
+      gh pr view <pr> --json body -q '.body' | grep -oE '(DUPLOAI|CUST)-[0-9]+'
       # Also confirm the title is clean (no ticket ID remaining after auto-strip):
-      gh pr view <pr> --json title -q '.title' | grep -oE 'DUPLOAI-[0-9]+'  # should be empty
+      gh pr view <pr> --json title -q '.title' | grep -oE '(DUPLOAI|CUST)-[0-9]+'  # should be empty
       ```
 
 - [ ] **PR title hygiene.** Title must have no ClickUp ticket ID and be 20–72
@@ -246,7 +249,7 @@ For **every** PR:
       ```bash
       title=$(gh pr view <pr> --json title -q '.title')
       echo "Length: ${#title}"                   # must be 20–72
-      echo "$title" | grep -oE 'DUPLOAI-[0-9]+'  # must be empty
+      echo "$title" | grep -oE '(DUPLOAI|CUST)-[0-9]+'  # must be empty
       ```
 
       Flag as Major if length is outside 20–72 or ticket ID is still present.
@@ -381,7 +384,7 @@ Prefix each result with a status icon: ✅ pass/clean · 🔴 blocker-level fail
 - schema correctness: <✅ ok | 🔴 build/apply-breaking | 🟠 drift/update risk>
 - apiPath body-field trap: <✅ clean | 🟠 N fields missing apiPath>
 - mongo scan: <✅ clean | 🟠 hits>
-- ClickUp id (body): <✅ DUPLOAI-NNNN | 🟠 MISSING>
+- ClickUp id (body): <✅ DUPLOAI-NNNN | ✅ CUST-NNNNN | 🟠 MISSING>
 - ClickUp id (title): <✅ clean | 🟠 ticket ID present in title>
 - PR title length: <✅ N chars (20–72) | 🟠 too short/long — N chars>
 - PR type checkbox: <✅ enhancement | bug | breaking-change | documentation | 🟠 none checked | 🟠 multiple checked>

@@ -1,8 +1,9 @@
-# A public HTTPS Helm repository
+# A public HTTPS Helm repository.
+#
+# scope_ids is read-only: the server derives it from the parent resource group.
 resource "duploai_helm_repository" "bitnami" {
   workspace_id      = "<workspace-id>"
   name              = "bitnami"
-  scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
   environment_id    = "<environment-id>"
   namespace_name    = "default"
@@ -15,7 +16,6 @@ resource "duploai_helm_repository" "bitnami" {
 resource "duploai_helm_repository" "private_oci" {
   workspace_id      = "<workspace-id>"
   name              = "internal-charts"
-  scope_ids         = ["<scope-id>"]
   resource_group_id = "<eks-resource-group-id>"
   environment_id    = "<environment-id>"
   namespace_name    = "default"

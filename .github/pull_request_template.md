@@ -1,7 +1,7 @@
 ## ClickUp Ticket
 
 <!-- Required: Link to the ClickUp ticket -->
-<!-- Example: https://app.clickup.com/t/8655600/DUPLOAI-12345 -->
+<!-- Example: https://app.clickup.com/t/8655600/DUPLOAI-12345 or https://app.clickup.com/t/8655600/CUST-12345 -->
 
 **ClickUp Ticket ID:**
 
