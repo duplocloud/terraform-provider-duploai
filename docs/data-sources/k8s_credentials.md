@@ -3,16 +3,22 @@
 page_title: "duploai_k8s_credentials Data Source - duploai"
 subcategory: ""
 description: |-
-  Fetches just-in-time Kubernetes credentials for a cluster baseline — the API server endpoint, a short-lived bearer token, and the cluster certificate authority — for use in a kubernetes, helm, or kubectl provider block. One endpoint serves every cloud the platform provisions: EKS, AKS, and registered K8S_ONLY clusters.
-  These credentials are normally passed to a kubernetes, helm, or kubectl provider block. Terraform resolves a provider's arguments before it can plan anything that uses that provider, so the cluster must already exist when this configuration is planned, not merely by apply time: an id that is only known after apply fails with Provider configuration is invalid. Provision the cluster in a separate root module or a prior apply, then reference it here by id.
+  Fetches just-in-time Kubernetes credentials for a scope — the API server endpoint, a short-lived bearer token, and the cluster certificate authority — for use in a kubernetes, helm, or kubectl provider block. One endpoint serves every cloud the platform provisions: EKS, AKS, and registered K8S_ONLY clusters.
+  Look the credentials up by Kubernetes scope id, not cluster id: duploai_cluster_baseline.<name>.scope_id. Access is governed by the scope — the token, the reachable API server, and the namespaces it may touch all follow the scope's Kubernetes filter.
+  Use scope_id (singular), not scope_ids. A cluster carries both: scope_ids holds the cloud scopes it is provisioned into, while scope_id holds the Kubernetes scope the platform creates for the cluster (duplo-cb-<cluster>-full-access). Passing a cloud scope fails with Provider '<name>' (Category: cloud) is not a Kubernetes provider.
+  These credentials are normally passed to a kubernetes, helm, or kubectl provider block. Terraform resolves a provider's arguments before it can plan anything that uses that provider, so the scope must already exist when this configuration is planned, not merely by apply time: an id that is only known after apply fails with Provider configuration is invalid. Provision the cluster in a separate root module or a prior apply, then reference its scope id here.
   The token is minted per read and expires within minutes, so this is a data source only. It is re-fetched on every plan and written to state in plain text; sensitive redacts CLI output, not state.
 ---
 
 # duploai_k8s_credentials (Data Source)
 
-Fetches just-in-time Kubernetes credentials for a cluster baseline — the API server endpoint, a short-lived bearer token, and the cluster certificate authority — for use in a `kubernetes`, `helm`, or `kubectl` provider block. One endpoint serves every cloud the platform provisions: EKS, AKS, and registered K8S_ONLY clusters.
+Fetches just-in-time Kubernetes credentials for a scope — the API server endpoint, a short-lived bearer token, and the cluster certificate authority — for use in a `kubernetes`, `helm`, or `kubectl` provider block. One endpoint serves every cloud the platform provisions: EKS, AKS, and registered K8S_ONLY clusters.
 
-These credentials are normally passed to a `kubernetes`, `helm`, or `kubectl` provider block. Terraform resolves a provider's arguments before it can plan anything that uses that provider, so the cluster must already exist when this configuration is *planned*, not merely by apply time: an `id` that is only known after apply fails with `Provider configuration is invalid`. Provision the cluster in a separate root module or a prior apply, then reference it here by id.
+Look the credentials up by **Kubernetes scope id**, not cluster id: `duploai_cluster_baseline.<name>.scope_id`. Access is governed by the scope — the token, the reachable API server, and the namespaces it may touch all follow the scope's Kubernetes filter.
+
+Use `scope_id` (singular), not `scope_ids`. A cluster carries both: `scope_ids` holds the *cloud* scopes it is provisioned into, while `scope_id` holds the Kubernetes scope the platform creates for the cluster (`duplo-cb-<cluster>-full-access`). Passing a cloud scope fails with `Provider '<name>' (Category: cloud) is not a Kubernetes provider`.
+
+These credentials are normally passed to a `kubernetes`, `helm`, or `kubectl` provider block. Terraform resolves a provider's arguments before it can plan anything that uses that provider, so the scope must already exist when this configuration is *planned*, not merely by apply time: an `id` that is only known after apply fails with `Provider configuration is invalid`. Provision the cluster in a separate root module or a prior apply, then reference its scope id here.
 
 The token is minted per read and expires within minutes, so this is a data source only. It is re-fetched on every plan and written to state in plain text; `sensitive` redacts CLI output, not state.
 
@@ -21,24 +27,40 @@ The token is minted per read and expires within minutes, so this is a data sourc
 ```terraform
 # Just-in-time Kubernetes credentials for an already-provisioned cluster.
 #
-# The credentials are minted through the cluster's Kubernetes scope, so the
-# cluster must exist before this configuration is planned — provision it in a
-# separate root module or a prior apply, then reference it here by id.
+# Look them up by KUBERNETES SCOPE id, not cluster id — the scope decides which
+# API server is reachable, which token is minted, and which namespaces it may
+# touch.
+#
+# The scope must exist before this configuration is planned, so provision the
+# cluster in a separate root module or a prior apply.
 data "duploai_k8s_credentials" "example" {
-  workspace_id = "<workspace-id>"
-  id           = "<cluster-baseline-id>"
+  id = "<kubernetes-scope-id>"
 }
+
+# In practice, reference the owning cluster rather than hardcoding the id:
+#
+#   data "duploai_k8s_credentials" "example" {
+#     id = data.duploai_cluster_baseline.example.scope_id
+#   }
+#
+# Use scope_id (singular), not scope_ids. A cluster carries both: scope_ids are
+# the cloud scopes it runs in, while scope_id is the Kubernetes scope the
+# platform creates for it. Passing a cloud scope fails with
+# "is not a Kubernetes provider".
 
 output "api_server" {
   value = data.duploai_k8s_credentials.example.endpoint
 }
 
+# The first namespace the scope grants access to, per its Kubernetes filter.
 output "namespace" {
   value = data.duploai_k8s_credentials.example.namespace
 }
 
 # Base64-encoded exactly as the API returns it — decode it wherever a PEM is
-# expected, e.g. a kubernetes provider's cluster_ca_certificate.
+# expected, e.g. a kubernetes provider's cluster_ca_certificate. Empty on AKS by
+# design; omit cluster_ca_certificate there and let the connection skip CA
+# verification.
 output "cluster_ca_certificate" {
   value = base64decode(data.duploai_k8s_credentials.example.ca_certificate_data_base64)
 }
@@ -56,12 +78,13 @@ output "token" {
 ### Required
 
 - `id` (String) ID of the object to look up.
-- `workspace_id` (String) ID of the workspace that owns the cluster.
 
 ### Read-Only
 
-- `ca_certificate_data_base64` (String) Cluster certificate authority, base64-encoded exactly as the API returns it. The `kubernetes` provider's `cluster_ca_certificate` expects PEM, so wrap it in `base64decode()`. Known gap: for AWS-provisioned clusters the platform currently returns this empty — fall back to `duploai_cluster_baseline.certificate_authority`, which carries the same value in the same encoding.
+- `ca_certificate_data_base64` (String) Cluster certificate authority, base64-encoded exactly as the API returns it. The `kubernetes` provider's `cluster_ca_certificate` expects PEM, so wrap it in `base64decode()`.
+
+Empty for AKS clusters by design: an AKS API-server CA can carry a duplicate x509 extension that Go and kubectl reject, so the platform leaves it unset and the connection falls back to skipping CA verification — still TLS, still authenticated by the cluster token. Omit `cluster_ca_certificate` in that case.
 - `endpoint` (String) Kubernetes API server URL. Pass to the `kubernetes` provider's `host`.
 - `name` (String) Name of the Kubernetes provider backing the cluster (`<cloud-provider>-full-access`), suitable as a kubeconfig context label. This is not the cluster's own name — use `duploai_cluster_baseline.name` for that.
-- `namespace` (String) Default namespace for the credentials. The cluster-scoped endpoint always returns `default`.
+- `namespace` (String) Namespace the credentials default to. The API returns the first namespace the scope grants access to — governed by the scope's Kubernetes filter, not by this provider. Use it as the `kubernetes` provider's namespace, or ignore it and set namespaces per resource.
 - `token` (String, Sensitive) Short-lived bearer token for the cluster. Minted on each read — an STS presigned token on EKS, an Entra ID token on AKS — and valid only for minutes. Do not persist it or pass it between separate applies.

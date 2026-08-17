@@ -441,8 +441,21 @@ func TestK8sCredentialsReadsJitAccessPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("BuildEndpoint: %v", err)
 		}
-		if got := endpoint.Read.Path; got != "/{id}/jitAccess" {
-			t.Errorf("read path = %q, want %q", got, "/{id}/jitAccess")
+		// Credentials are minted per scope, not per cluster: the scope decides
+		// which API server is reachable, which token is issued, and which
+		// namespaces it may touch. The cluster route hardcodes the namespace to
+		// "default", so it cannot express that.
+		if got := endpoint.Read.Path; got != "/{id}/k8s/jitAccess" {
+			t.Errorf("read path = %q, want %q", got, "/{id}/k8s/jitAccess")
+		}
+		if got := endpoint.UriBase; got != "/v1/aiservicedesk/admin/data/Scopes" {
+			t.Errorf("uriBase = %q, want the Scopes collection", got)
+		}
+		// The scope id is the only lookup key — no workspace path parameter.
+		for _, a := range spec.Attributes {
+			if a.Name == "workspace_id" {
+				t.Error("k8s_credentials is looked up by scope id alone; workspace_id must not be an input")
+			}
 		}
 		return
 	}
