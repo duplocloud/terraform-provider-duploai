@@ -155,6 +155,20 @@ type ResourceSpec struct {
 	// apiPath/responsePath) are excluded entirely.
 	DataSource bool `json:"dataSource,omitempty"`
 
+	// LookupAttribute renames the engine-injected data source lookup key, which
+	// defaults to "id". Use it when the value the API looks the object up by is
+	// not the object's own id and calling it "id" would mislead — e.g.
+	// k8s_credentials is fetched by the cluster's KUBERNETES SCOPE id, and a user
+	// who passes the cluster id (the obvious reading of "id") gets a 400.
+	//
+	// Data sources only; the managed resource's composite "id" is unaffected.
+	LookupAttribute string `json:"lookupAttribute,omitempty"`
+
+	// LookupDescription overrides the description of the lookup attribute. The
+	// default ("ID of the object to look up.") says nothing about WHICH id, which
+	// is exactly the ambiguity LookupAttribute exists to remove.
+	LookupDescription string `json:"lookupDescription,omitempty"`
+
 	// DataSourceOnly, when true, registers ONLY a read-only data source
 	// (data.duploai_<name>) from this spec — no managed resource is registered.
 	// Use this for APIs that are purely read-only and have no create/update/delete
@@ -827,6 +841,24 @@ func loadResourceSpecs() ([]ResourceSpec, error) {
 
 // validate checks a spec for internal consistency before it is used to build a
 // resource. Failing fast at startup beats a confusing runtime panic.
+// lookupName is the data source's lookup attribute name — LookupAttribute when
+// set, otherwise the engine default "id".
+func (s *ResourceSpec) lookupName() string {
+	if s.LookupAttribute != "" {
+		return s.LookupAttribute
+	}
+	return "id"
+}
+
+// lookupDescription is the lookup attribute's description, defaulting to the
+// generic text used before LookupAttribute existed.
+func (s *ResourceSpec) lookupDescription() string {
+	if s.LookupDescription != "" {
+		return s.LookupDescription
+	}
+	return "ID of the object to look up."
+}
+
 func (s *ResourceSpec) validate() error {
 	if s.Name == "" {
 		return fmt.Errorf("name is required")
@@ -853,6 +885,21 @@ func (s *ResourceSpec) validate() error {
 	if seen["id"] {
 		// id is reserved and injected by the engine.
 		return fmt.Errorf("attribute %q is reserved", "id")
+	}
+	if s.LookupAttribute != "" {
+		// Renaming the lookup key only affects the generated data source; a spec
+		// with neither flag would silently ignore it.
+		if !s.DataSource && !s.DataSourceOnly {
+			return fmt.Errorf("lookupAttribute requires dataSource or dataSourceOnly")
+		}
+		// The engine injects the lookup attribute, so a spec attribute of the same
+		// name would be overwritten without warning.
+		if seen[s.LookupAttribute] {
+			return fmt.Errorf("lookupAttribute %q collides with a declared attribute", s.LookupAttribute)
+		}
+	}
+	if s.LookupDescription != "" && s.LookupAttribute == "" {
+		return fmt.Errorf("lookupDescription requires lookupAttribute")
 	}
 	for _, r := range s.RequiredIf {
 		if !seen[r.Attribute] {

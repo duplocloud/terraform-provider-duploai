@@ -65,6 +65,8 @@ Saving this file, running `go generate ./...` (to regenerate docs), and running
 | `resendCreatePathsOnUpdate` | bool | no | Also write each attribute's **create** path in the PUT body, with the same value. For a backend whose update body is a delta envelope over a record it rebuilds from that body. See [Delta envelopes over a rebuilt record](#delta-envelopes-over-a-rebuilt-record). |
 | `dataSource` | bool | no | When `true`, also registers a read-only `data.duploai_<name>` data source derived automatically from this spec. See [Auto-generated data source](#auto-generated-data-source). |
 | `dataSourceOnly` | bool | no | When `true`, registers **only** a read-only `data.duploai_<name>` data source — no managed resource is registered. Use this for purely read-only APIs (e.g. look-up endpoints with no create/update/delete). Implies data source semantics; `dataSource` need not also be set. |
+| `lookupAttribute` | string | no | Renames the data source's engine-injected lookup key from the default `id`. Use when the value the API looks the object up by is not the object's own id, so that `id` would mislead. Requires `dataSource`/`dataSourceOnly`, and must not collide with a declared attribute. See [Renaming the lookup key](#renaming-the-lookup-key). |
+| `lookupDescription` | string | no | Overrides the lookup attribute's description (default: *"ID of the object to look up."*). Requires `lookupAttribute`. |
 | `waiter` | object | no | Async polling config. Required for resources that provision asynchronously. See [Waiter](#waiter). |
 | `association` | object | no | Makes this a link between two existing objects rather than an object of its own. See [Association resources](#association-resources). |
 
@@ -971,6 +973,43 @@ The data source example file must be placed at
 `examples/data-sources/duploai_<name>/data-source.tf`.
 
 ---
+
+### Renaming the lookup key
+
+A data source's lookup key is injected by the engine as a Required `id`, described
+generically as *"ID of the object to look up."* That is fine when the value really
+is the object's own id — but some endpoints look an object up by something else,
+and then `id` actively misleads.
+
+`duploai_k8s_credentials` is the case this exists for: credentials are minted per
+**Kubernetes scope**, so the value is `duploai_cluster_baseline.<name>.scope_id`.
+A user reading "id" reaches for the cluster id and gets a 400, and the neighbouring
+`scope_ids` (the *cloud* scopes) fails the same way.
+
+```json
+{
+  "name": "k8s_credentials",
+  "dataSourceOnly": true,
+  "lookupAttribute": "scope_id",
+  "lookupDescription": "ID of the cluster's Kubernetes scope — ..."
+}
+```
+
+The renamed attribute **replaces** `id` rather than joining it: the schema carries
+`scope_id` and no `id`, so there is one obvious way to address the object. State is
+built without an `id` key too — `buildStateRaw` only writes one when the schema
+declares it.
+
+Scope and limits:
+
+- Data sources only. A managed resource's composite `id` (`workspace_id/id`) is
+  untouched, and `lookupAttribute` on a spec with neither data source flag is a
+  startup error rather than a silent no-op.
+- The name must not collide with a declared attribute — the engine injects the
+  lookup key, so a same-named spec attribute would be overwritten unnoticed.
+- `lookupDescription` without `lookupAttribute` is an error: the default text is
+  only wrong when the key is not really an id.
+
 
 ## Waiter
 

@@ -1649,7 +1649,12 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		next[k] = v
 	}
 
-	next["id"] = tftypes.NewValue(tftypes.String, id)
+	// A data source whose lookup key is renamed (spec.lookupAttribute) has no "id"
+	// attribute at all, and tftypes.NewValue rejects a key the object type does
+	// not declare — so only set it when the schema actually carries one.
+	if _, hasID := objType.AttributeTypes["id"]; hasID {
+		next["id"] = tftypes.NewValue(tftypes.String, id)
+	}
 	// Re-assert each path-parameter attribute from the parsed scope so they
 	// survive import (where only the id is supplied).
 	for name, val := range scope {

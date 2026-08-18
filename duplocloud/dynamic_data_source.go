@@ -60,9 +60,9 @@ func (d *dynamicDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 	}
 
 	attrs := map[string]dsschema.Attribute{
-		"id": dsschema.StringAttribute{
+		d.spec.lookupName(): dsschema.StringAttribute{
 			Required:    true,
-			Description: "ID of the object to look up.",
+			Description: d.spec.lookupDescription(),
 		},
 	}
 
@@ -106,7 +106,7 @@ func (d *dynamicDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	}
 
 	var idVal types.String
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("id"), &idVal)...)
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root(d.spec.lookupName()), &idVal)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
