@@ -7,13 +7,13 @@
 # The scope must exist before this configuration is planned, so provision the
 # cluster in a separate root module or a prior apply.
 data "duploai_k8s_credentials" "example" {
-  id = "<kubernetes-scope-id>"
+  scope_id = "<kubernetes-scope-id>"
 }
 
 # In practice, reference the owning cluster rather than hardcoding the id:
 #
 #   data "duploai_k8s_credentials" "example" {
-#     id = data.duploai_cluster_baseline.example.scope_id
+#     scope_id = data.duploai_cluster_baseline.example.scope_id
 #   }
 #
 # Use scope_id (singular), not scope_ids. A cluster carries both: scope_ids are

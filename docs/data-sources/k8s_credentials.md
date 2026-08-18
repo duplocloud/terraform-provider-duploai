@@ -6,7 +6,7 @@ description: |-
   Fetches just-in-time Kubernetes credentials for a scope — the API server endpoint, a short-lived bearer token, and the cluster certificate authority — for use in a kubernetes, helm, or kubectl provider block. One endpoint serves every cloud the platform provisions: EKS, AKS, and registered K8S_ONLY clusters.
   Look the credentials up by Kubernetes scope id, not cluster id: duploai_cluster_baseline.<name>.scope_id. Access is governed by the scope — the token, the reachable API server, and the namespaces it may touch all follow the scope's Kubernetes filter.
   Use scope_id (singular), not scope_ids. A cluster carries both: scope_ids holds the cloud scopes it is provisioned into, while scope_id holds the Kubernetes scope the platform creates for the cluster (duplo-cb-<cluster>-full-access). Passing a cloud scope fails with Provider '<name>' (Category: cloud) is not a Kubernetes provider.
-  These credentials are normally passed to a kubernetes, helm, or kubectl provider block. Terraform resolves a provider's arguments before it can plan anything that uses that provider, so the scope must already exist when this configuration is planned, not merely by apply time: an id that is only known after apply fails with Provider configuration is invalid. Provision the cluster in a separate root module or a prior apply, then reference its scope id here.
+  These credentials are normally passed to a kubernetes, helm, or kubectl provider block. Terraform resolves a provider's arguments before it can plan anything that uses that provider, so the scope must already exist when this configuration is planned, not merely by apply time: a scope_id that is only known after apply fails with Provider configuration is invalid. Provision the cluster in a separate root module or a prior apply, then reference its scope id here.
   The token is minted per read and expires within minutes, so this is a data source only. It is re-fetched on every plan and written to state in plain text; sensitive redacts CLI output, not state.
 ---
 
@@ -18,7 +18,7 @@ Look the credentials up by **Kubernetes scope id**, not cluster id: `duploai_clu
 
 Use `scope_id` (singular), not `scope_ids`. A cluster carries both: `scope_ids` holds the *cloud* scopes it is provisioned into, while `scope_id` holds the Kubernetes scope the platform creates for the cluster (`duplo-cb-<cluster>-full-access`). Passing a cloud scope fails with `Provider '<name>' (Category: cloud) is not a Kubernetes provider`.
 
-These credentials are normally passed to a `kubernetes`, `helm`, or `kubectl` provider block. Terraform resolves a provider's arguments before it can plan anything that uses that provider, so the scope must already exist when this configuration is *planned*, not merely by apply time: an `id` that is only known after apply fails with `Provider configuration is invalid`. Provision the cluster in a separate root module or a prior apply, then reference its scope id here.
+These credentials are normally passed to a `kubernetes`, `helm`, or `kubectl` provider block. Terraform resolves a provider's arguments before it can plan anything that uses that provider, so the scope must already exist when this configuration is *planned*, not merely by apply time: a `scope_id` that is only known after apply fails with `Provider configuration is invalid`. Provision the cluster in a separate root module or a prior apply, then reference its scope id here.
 
 The token is minted per read and expires within minutes, so this is a data source only. It is re-fetched on every plan and written to state in plain text; `sensitive` redacts CLI output, not state.
 
@@ -34,13 +34,13 @@ The token is minted per read and expires within minutes, so this is a data sourc
 # The scope must exist before this configuration is planned, so provision the
 # cluster in a separate root module or a prior apply.
 data "duploai_k8s_credentials" "example" {
-  id = "<kubernetes-scope-id>"
+  scope_id = "<kubernetes-scope-id>"
 }
 
 # In practice, reference the owning cluster rather than hardcoding the id:
 #
 #   data "duploai_k8s_credentials" "example" {
-#     id = data.duploai_cluster_baseline.example.scope_id
+#     scope_id = data.duploai_cluster_baseline.example.scope_id
 #   }
 #
 # Use scope_id (singular), not scope_ids. A cluster carries both: scope_ids are
@@ -77,7 +77,7 @@ output "token" {
 
 ### Required
 
-- `id` (String) ID of the object to look up.
+- `scope_id` (String) ID of the cluster's Kubernetes scope — `duploai_cluster_baseline.<name>.scope_id`. Not the cluster id, and not one of `scope_ids` (those are the cloud scopes, and passing one fails with "is not a Kubernetes provider").
 
 ### Read-Only
 
