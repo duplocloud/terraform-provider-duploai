@@ -140,7 +140,10 @@ func (d *dynamicDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	// is safe to pass even though the schema exposes only a subset.
 	// applyPreserveSplit=false: a data source has no user-managed set to split
 	// against, so a PreserveUnmanagedInto attribute reads back the full list.
-	state := buildStateRaw(d.spec.Attributes, req.Config.Raw, *obj, scope, objID, true, false, &resp.Diagnostics)
+	// withoutResponseFilters: for the same reason there is no config for a map to
+	// drift against, so the data source reports what the API returned rather than
+	// hiding platform-stamped keys.
+	state := buildStateRaw(withoutResponseFilters(d.spec.Attributes), req.Config.Raw, *obj, scope, objID, true, false, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}

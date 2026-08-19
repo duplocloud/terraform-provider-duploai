@@ -1896,6 +1896,24 @@ func rawMapKeys(v tftypes.Value) map[string]bool {
 	return out
 }
 
+// withoutResponseFilters returns a copy of attrs with every filterResponseKeys
+// list cleared, at any depth. The data source path uses it: filtering exists to
+// stop a partially-managed map from drifting against config, and a data source
+// has no config — so it reports what the API returned, platform-stamped keys
+// included. Clearing the whole tree keeps a nested map (e.g. azure.tags)
+// consistent with a top-level one.
+func withoutResponseFilters(attrs []AttributeSpec) []AttributeSpec {
+	out := make([]AttributeSpec, len(attrs))
+	for i, a := range attrs {
+		a.FilterResponseKeys = nil
+		if len(a.Attributes) > 0 {
+			a.Attributes = withoutResponseFilters(a.Attributes)
+		}
+		out[i] = a
+	}
+	return out
+}
+
 // matchesFilterKey reports whether key matches any pattern — exact, or prefix
 // when the pattern ends in "*".
 func matchesFilterKey(key string, patterns []string) bool {

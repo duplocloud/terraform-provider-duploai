@@ -491,7 +491,12 @@ type AttributeSpec struct {
 	// keys that do not match a pattern are never dropped, and a matching key the
 	// user explicitly declares (present in the plan on create/update, in prior
 	// state on read) round-trips too — otherwise declaring a server-stamped key
-	// would leave it out of state and re-open the diff on every plan.
+	// would leave it out of state and re-open the diff on every plan. A lone "*"
+	// therefore means "state holds only the keys I declare".
+	//
+	// Rejected at spec load (validateAttributes) on anything but a map(string), on
+	// an attribute that carries nested attributes, and on an empty pattern. Not
+	// applied on the data source path, which reports the API response verbatim.
 	FilterResponseKeys []string `json:"filterResponseKeys,omitempty"`
 
 	// NormalizeCsvOrder, for a string attribute, sorts the comma-separated tokens

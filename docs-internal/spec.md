@@ -328,6 +328,7 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `noSend` | bool | Read from the response but never sent in requests. Use for computed-only output fields. |
 | `sendFromState` | bool | The inverse of `noSend`: send a **computed-only** attribute in request bodies, carrying the value Terraform already holds in state. See [Server-assigned fields the API wants back](#server-assigned-fields-the-api-wants-back). |
 | `normalizeCsvOrder` | bool | For a `string` field, sort its comma-separated tokens into a canonical (lexical) order before storing in state. Use for order-insensitive values the backend returns non-deterministically (e.g. AWS MSK bootstrap broker strings) to prevent perpetual refresh drift. |
+| `filterResponseKeys` | array | For a `map(string)` field, drop matching keys from the response before it reaches state, so keys the backend injects into a map the user only partially manages do not show perpetual drift. See [Server-managed map keys](#server-managed-map-keys). |
 | `preserveOnEmptyResponse` | bool | Keep the value already held for this attribute — the configured plan value on create/update, the prior state value on refresh — whenever the API returns null or empty for it. See [Write-only fields](#write-only-fields). |
 | `deprecated` | string | Marks the attribute deprecated: the message is wired to the framework's `DeprecationMessage` and shown as a warning whenever the attribute is set in config. Use when renaming an attribute — keep the old one with a deprecation message pointing at the replacement (pair with `conflictsWith` + `requiredIf`/`isEmpty` for a backwards-compatible rename). |
 | `attributes` | array | Nested `AttributeSpec` entries. Required when `type` is an object form. Recurses to any depth. |
@@ -461,6 +462,52 @@ Scope and limits:
   Say so in the attribute's `description`.
 - On **import** there is no prior value, so the field lands empty — expected,
   since the secret is unrecoverable from the API.
+
+### Server-managed map keys
+
+Some backends inject their own entries into a map the user only partially
+manages — the AI Helpdesk stamps `nodeSelector.resourcegroup` on every job pod,
+the ALB controller adds `alb.ingress.kubernetes.io/*` annotations, the platform
+stamps `duplocloud-ai-*` tags. Terraform then plans to remove every key it does
+not see in config, which on a `forceNew` attribute means a **replacement on
+every apply**.
+
+List the backend's keys in `filterResponseKeys` and they are dropped from the
+response before it reaches state:
+
+```json
+{
+  "name": "node_selector",
+  "type": "map(string)",
+  "optional": true,
+  "computed": true,
+  "requestPath": "spec.k8sResource.spec.template.spec.nodeSelector",
+  "responsePath": "result.k8sResource.spec.template.spec.nodeSelector",
+  "filterResponseKeys": ["resourcegroup", "allocationtags"]
+}
+```
+
+A pattern is an exact key, or a prefix when it ends in `*` (`duplocloud-ai-*`).
+
+Semantics:
+
+- **A key the user declares is never dropped.** The keep set is the plan value on
+  create/update and the prior state value on refresh, so declaring a stamped key
+  makes it user-managed: it round-trips into state, and real drift on it is still
+  reported. Without this, a config that named a filtered key could never converge
+  — state would permanently lack a key config permanently had.
+- A lone `"*"` therefore means "state holds only the keys I declare".
+- Only the keys the user does **not** declare stay hidden, so partial management
+  works from both directions.
+- **Not applied on the data source path** — a data source has no config to drift
+  against, so it reports the response verbatim, stamped keys included.
+- **Not a substitute for aligning with the backend.** Match the list to what the
+  API actually stamps: filtering a key the backend never sets blocks an imported
+  resource from converging (the read strips a key the config declares), and
+  omitting one it does set leaves the drift in place.
+
+Rejected at spec load on anything but a `map(string)`, on an attribute that
+carries nested `attributes`, and on an empty pattern.
 
 ### InvalidWhen rules
 
