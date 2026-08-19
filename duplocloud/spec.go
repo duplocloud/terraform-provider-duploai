@@ -487,8 +487,11 @@ type AttributeSpec struct {
 	// alb.ingress.kubernetes.io/{security-groups,subnets,...} annotations, or the
 	// platform stamps managed duplocloud-ai-* tags), which would otherwise show
 	// perpetual drift as Terraform tries to remove the server-added keys. Keys the
-	// user sets (not matched here) are preserved, so there is no "cannot remove a
-	// key" limitation for those.
+	// user sets are preserved, so there is no "cannot remove a key" limitation:
+	// keys that do not match a pattern are never dropped, and a matching key the
+	// user explicitly declares (present in the plan on create/update, in prior
+	// state on read) round-trips too — otherwise declaring a server-stamped key
+	// would leave it out of state and re-open the diff on every plan.
 	FilterResponseKeys []string `json:"filterResponseKeys,omitempty"`
 
 	// NormalizeCsvOrder, for a string attribute, sorts the comma-separated tokens

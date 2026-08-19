@@ -1713,7 +1713,14 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		}
 		goVal := extractFirstNonEmpty(resp, respPaths)
 		if len(a.FilterResponseKeys) > 0 {
-			goVal = filterMapKeys(goVal, a.FilterResponseKeys)
+			// Preserve keys the user already manages (prior state on read, the
+			// plan on create/update) so declaring a server-stamped key in config
+			// does not produce a perpetual diff. a is a per-iteration copy, so
+			// clearing the patterns here only disables the duplicate filtering
+			// inside attrFromResponse — which has no access to the base value and
+			// would otherwise drop the keys we just preserved.
+			goVal = filterMapKeys(goVal, a.FilterResponseKeys, rawMapKeys(current[a.Name]))
+			a.FilterResponseKeys = nil
 		}
 		if !computedOnly && !refreshInputs {
 			// Preserve the user's configured (known) leaves and fill only the
@@ -1854,17 +1861,37 @@ func extractPath(cur any, segs []string) any {
 // ALB annotations, platform duplocloud.ai/* labels) that the user does not
 // manage, preventing perpetual drift. A pattern ending in "*" is a prefix match
 // (e.g. "duplocloud.ai/*"); otherwise it's an exact-key match. Non-map values
-// pass through unchanged.
-func filterMapKeys(cur any, keys []string) any {
+// pass through unchanged. Keys present in keep are never dropped: those are keys
+// the user explicitly declared (the plan on create/update, prior state on read),
+// which must round-trip so a value the user manages stays visible in state — and
+// any real drift on it detectable — instead of re-opening the diff every plan.
+func filterMapKeys(cur any, keys []string, keep map[string]bool) any {
 	m, ok := cur.(map[string]any)
 	if !ok {
 		return cur
 	}
 	out := make(map[string]any, len(m))
 	for k, v := range m {
-		if !matchesFilterKey(k, keys) {
+		if keep[k] || !matchesFilterKey(k, keys) {
 			out[k] = v
 		}
+	}
+	return out
+}
+
+// rawMapKeys returns the key set of a map(string) tftypes value, or nil when it
+// is null/unknown (nothing declared yet).
+func rawMapKeys(v tftypes.Value) map[string]bool {
+	if v.IsNull() || !v.IsKnown() {
+		return nil
+	}
+	var m map[string]tftypes.Value
+	if err := v.As(&m); err != nil {
+		return nil
+	}
+	out := make(map[string]bool, len(m))
+	for k := range m {
+		out[k] = true
 	}
 	return out
 }
