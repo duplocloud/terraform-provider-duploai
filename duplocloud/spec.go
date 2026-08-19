@@ -1237,6 +1237,25 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 				return nil, fmt.Errorf("attribute %q: immutableOnceTrue is redundant with forceNew", a.Name)
 			}
 		}
+		// filterResponseKeys is applied to a decoded JSON object, so it only means
+		// something on a map(string) — on any other type it would be accepted and
+		// silently ignored. Nested attributes are rejected because buildStateRaw
+		// filters the parent value and then suppresses the duplicate pass inside
+		// attrFromResponse (see filterMapKeys); a filtered map that carried its own
+		// children would silently lose their filtering.
+		if len(a.FilterResponseKeys) > 0 {
+			if a.Type != "map(string)" {
+				return nil, fmt.Errorf("attribute %q: filterResponseKeys is only valid on a map(string), got %q", a.Name, a.Type)
+			}
+			if len(a.Attributes) > 0 {
+				return nil, fmt.Errorf("attribute %q: filterResponseKeys cannot be combined with nested attributes", a.Name)
+			}
+			for _, pat := range a.FilterResponseKeys {
+				if pat == "" {
+					return nil, fmt.Errorf("attribute %q: filterResponseKeys contains an empty pattern", a.Name)
+				}
+			}
+		}
 		if a.SendFromState {
 			if !a.Computed {
 				return nil, fmt.Errorf("attribute %q: sendFromState is only valid on a computed attribute", a.Name)

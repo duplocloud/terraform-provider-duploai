@@ -145,3 +145,38 @@ func TestBuildStateRaw_ReadMixesDeclaredStampedAndCustomSelectors(t *testing.T) 
 		t.Fatalf("declared + custom keys expected, got %v", got)
 	}
 }
+
+// When the configured map is wholly unknown at plan time (e.g. built by merge()
+// over a value that is itself known-after-apply), there are no declared keys to
+// preserve, so the stamped keys are filtered and state omits them. The plan
+// becomes fully known on the next round, at which point the declared keys are
+// kept — so this converges rather than looping.
+func TestBuildStateRaw_ApplyWithUnknownMapFiltersStampedKeys(t *testing.T) {
+	ot := nodeSelectorType()
+	base := tftypes.NewValue(ot, map[string]tftypes.Value{
+		"id":            tftypes.NewValue(tftypes.String, "job-1"),
+		"node_selector": tftypes.NewValue(ot.AttributeTypes["node_selector"], tftypes.UnknownValue),
+	})
+	var diags diag.Diagnostics
+	// refreshInputs=false — the create/update path, where the plan is the base.
+	out := buildStateRaw(nodeSelectorAttr(), base,
+		nodeSelectorResponse(map[string]any{"nvidia.com/gpu": "true", "resourcegroup": "u10-dev01"}),
+		map[string]string{}, "job-1", false, true, &diags)
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+	m := map[string]tftypes.Value{}
+	if err := out.As(&m); err != nil {
+		t.Fatal(err)
+	}
+	raw := map[string]tftypes.Value{}
+	if err := m["node_selector"].As(&raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, present := raw["resourcegroup"]; present {
+		t.Errorf("an unknown plan declares nothing, so the stamped key must be filtered: %v", raw)
+	}
+	if _, present := raw["nvidia.com/gpu"]; !present {
+		t.Errorf("unfiltered keys still come from the response: %v", raw)
+	}
+}

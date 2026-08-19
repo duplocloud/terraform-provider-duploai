@@ -88,3 +88,49 @@ func TestFilterMapKeys_KeepsUserDeclaredKeys(t *testing.T) {
 		t.Error("undeclared stamped key should still be dropped")
 	}
 }
+
+// filterResponseKeys placement is validated at spec load. The nested-attributes
+// rule is what keeps buildStateRaw's optimisation safe: it filters the parent
+// value and then suppresses the duplicate pass inside attrFromResponse, so a
+// filtered map carrying its own children would silently lose their filtering.
+func TestValidate_FilterResponseKeys(t *testing.T) {
+	valid := []AttributeSpec{
+		{Name: "tags", Type: "map(string)", Optional: true, Computed: true,
+			FilterResponseKeys: []string{"duplocloud-ai-*"}},
+		// A filtered map nested inside an object is fine — the object itself
+		// carries no patterns, so nothing is suppressed for its children.
+		{Name: "azure", Type: "object", Optional: true, Computed: true,
+			Attributes: []AttributeSpec{{
+				Name: "tags", Type: "map(string)", Optional: true, Computed: true,
+				FilterResponseKeys: []string{"duplocloud-ai-*"},
+			}}},
+		// "*" keeps only the keys the user declares — meaningful now that the
+		// filter preserves declared keys.
+		{Name: "annotations", Type: "map(string)", Optional: true, Computed: true,
+			FilterResponseKeys: []string{"*"}},
+	}
+	if _, err := validateAttributes(valid); err != nil {
+		t.Fatalf("valid filterResponseKeys rejected: %v", err)
+	}
+
+	cases := map[string][]AttributeSpec{
+		"non-map type": {{
+			Name: "x", Type: "string", Optional: true,
+			FilterResponseKeys: []string{"a"},
+		}},
+		"map(object) type": {{
+			Name: "x", Type: "map(object)", Optional: true,
+			FilterResponseKeys: []string{"a"},
+			Attributes:         []AttributeSpec{{Name: "y", Type: "string", Required: true}},
+		}},
+		"empty pattern": {{
+			Name: "tags", Type: "map(string)", Optional: true,
+			FilterResponseKeys: []string{""},
+		}},
+	}
+	for name, attrs := range cases {
+		if _, err := validateAttributes(attrs); err == nil {
+			t.Errorf("%s: expected validation error, got nil", name)
+		}
+	}
+}
