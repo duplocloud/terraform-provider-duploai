@@ -8,14 +8,14 @@ import (
 )
 
 // nodeSelectorAttr mirrors the k8s_job node_selector attribute: an
-// optional+computed forceNew map whose "resourcegroup" entry the backend stamps
-// on every job.
+// optional+computed forceNew map whose "resourcegroup" and "allocationtags"
+// entries the backend stamps on every job (ApplyDuploDefaultsAsync).
 func nodeSelectorAttr() []AttributeSpec {
 	return []AttributeSpec{{
 		Name: "node_selector", Type: "map(string)", Optional: true, Computed: true, ForceNew: true,
 		RequestPath:        "spec.k8sResource.spec.template.spec.nodeSelector",
 		ResponsePath:       "result.k8sResource.spec.template.spec.nodeSelector",
-		FilterResponseKeys: []string{"resourcegroup", "environment"},
+		FilterResponseKeys: []string{"resourcegroup", "allocationtags"},
 	}}
 }
 
@@ -112,17 +112,17 @@ func TestBuildStateRaw_ReadReportsDriftOnDeclaredFilteredKey(t *testing.T) {
 
 // Adding your own selectors alongside the platform-stamped ones: the custom keys
 // are managed by the user, every stamped key the user did not declare stays out
-// of state. Before the filter covered "environment", a config carrying only a
-// custom key drifted on it every plan — and node_selector is forceNew, so that
-// planned a replacement.
+// of state. A job that sets allocation_tags gets "allocationtags" stamped too, so
+// a config carrying only a custom key would otherwise drift on it every plan —
+// and node_selector is forceNew, so that planned a replacement.
 func TestBuildStateRaw_ReadKeepsCustomSelectorsAlongsideStampedOnes(t *testing.T) {
 	prior := map[string]tftypes.Value{
 		"nvidia.com/gpu": tftypes.NewValue(tftypes.String, "true"),
 	}
 	got := readNodeSelector(t, prior, map[string]any{
-		"nvidia.com/gpu": "true",          // user's own selector
-		"resourcegroup":  "u10-dev01",     // stamped
-		"environment":    "u10-dev01-env", // stamped
+		"nvidia.com/gpu": "true",      // user's own selector
+		"resourcegroup":  "u10-dev01", // stamped (resource group name)
+		"allocationtags": "batch",     // stamped (mirrors allocation_tags)
 	})
 	if len(got) != 1 || got["nvidia.com/gpu"] != "true" {
 		t.Fatalf("only the user's own selector belongs in state, got %v", got)
@@ -130,18 +130,19 @@ func TestBuildStateRaw_ReadKeepsCustomSelectorsAlongsideStampedOnes(t *testing.T
 }
 
 // Mixing both: declare one platform key explicitly and add a custom one — the
-// declared key round-trips, the rest of the stamped set stays hidden.
+// declared key round-trips, the rest of the stamped set stays hidden. Note
+// "environment" is not stamped on job pods at all, so it needs no filter entry.
 func TestBuildStateRaw_ReadMixesDeclaredStampedAndCustomSelectors(t *testing.T) {
 	prior := map[string]tftypes.Value{
-		"environment":    tftypes.NewValue(tftypes.String, "u10-dev01-env"),
+		"allocationtags": tftypes.NewValue(tftypes.String, "batch"),
 		"nvidia.com/gpu": tftypes.NewValue(tftypes.String, "true"),
 	}
 	got := readNodeSelector(t, prior, map[string]any{
 		"nvidia.com/gpu": "true",
-		"environment":    "u10-dev01-env",
+		"allocationtags": "batch",
 		"resourcegroup":  "u10-dev01",
 	})
-	if len(got) != 2 || got["environment"] != "u10-dev01-env" || got["nvidia.com/gpu"] != "true" {
+	if len(got) != 2 || got["allocationtags"] != "batch" || got["nvidia.com/gpu"] != "true" {
 		t.Fatalf("declared + custom keys expected, got %v", got)
 	}
 }
@@ -178,5 +179,55 @@ func TestBuildStateRaw_ApplyWithUnknownMapFiltersStampedKeys(t *testing.T) {
 	}
 	if _, present := raw["nvidia.com/gpu"]; !present {
 		t.Errorf("unfiltered keys still come from the response: %v", raw)
+	}
+}
+
+// The data source path (managedResource=false) reports the response verbatim:
+// there is no config to drift against, so hiding platform-stamped keys would
+// lose information for no gain.
+func TestBuildStateRaw_DataSourceReportsStampedKeys(t *testing.T) {
+	var diags diag.Diagnostics
+	out := buildStateRaw(withoutResponseFilters(nodeSelectorAttr()), nodeSelectorBase(nil),
+		nodeSelectorResponse(map[string]any{
+			"nvidia.com/gpu": "true",
+			"resourcegroup":  "u10-dev01",
+			"allocationtags": "batch",
+		}),
+		map[string]string{}, "job-1", true, false, &diags)
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+	m := map[string]tftypes.Value{}
+	if err := out.As(&m); err != nil {
+		t.Fatal(err)
+	}
+	raw := map[string]tftypes.Value{}
+	if err := m["node_selector"].As(&raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"nvidia.com/gpu", "resourcegroup", "allocationtags"} {
+		if _, present := raw[k]; !present {
+			t.Errorf("a data source must report %q, got %v", k, raw)
+		}
+	}
+}
+
+// withoutResponseFilters must reach every depth — a nested map (azure.tags) has
+// to behave like a top-level one on the data source path.
+func TestWithoutResponseFilters_ClearsNestedLists(t *testing.T) {
+	in := []AttributeSpec{{
+		Name: "azure", Type: "object", Optional: true, Computed: true,
+		Attributes: []AttributeSpec{{
+			Name: "tags", Type: "map(string)", Optional: true, Computed: true,
+			FilterResponseKeys: []string{"duplocloud-ai-*"},
+		}},
+	}}
+	out := withoutResponseFilters(in)
+	if len(out[0].Attributes[0].FilterResponseKeys) != 0 {
+		t.Errorf("nested filter not cleared: %v", out[0].Attributes[0].FilterResponseKeys)
+	}
+	// The input must not be mutated — the spec is shared with the managed resource.
+	if len(in[0].Attributes[0].FilterResponseKeys) != 1 {
+		t.Error("withoutResponseFilters must not mutate the spec it copies")
 	}
 }
