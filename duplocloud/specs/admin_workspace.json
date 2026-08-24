@@ -99,10 +99,10 @@
     {
       "name": "persona_ids",
       "type": "set(string)",
-      "optional": true,
-      "computed": true,
+      "required": true,
+      "minItems": 1,
       "apiPath": "personaIds",
-      "description": "IDs of the personas available in this workspace. Provide the complete set; on update the full list replaces the previous one."
+      "description": "IDs of the personas available in this workspace. Provide the complete set; on update the full list replaces the previous one. At least one is required — a workspace with no persona has no assistant to answer with."
     },
     {
       "name": "scope_ids",
