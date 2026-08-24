@@ -43,6 +43,6 @@ output "skill_ids" {
 - `metadata` (Map of String) Free-form key/value metadata.
 - `name` (String) Name of the persona.
 - `prompt_md` (String) System prompt for the persona, in Markdown.
-- `skill_ids` (List of String) IDs of the skills assigned to this persona. Each must reference an existing, active skill.
+- `skill_ids` (List of String) IDs of the skills assigned to this persona. Each must reference an existing, active skill. At least one is required — a persona with no skills can do nothing.
 - `updated_at` (String) Timestamp when the persona was last updated (RFC 3339).
 - `version` (Number) Version counter, incremented on each update.
