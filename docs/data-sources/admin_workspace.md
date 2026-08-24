@@ -55,7 +55,7 @@ output "scope_ids" {
 - `knowledge_ids` (Set of String) IDs of the knowledge bases assigned to this workspace. Provide the complete set; on update the full list replaces the previous one.
 - `meta_data` (Map of String) Free-form key/value metadata associated with the workspace.
 - `name` (String) Unique name of the workspace. The server stores the name in lowercase, so supply a lowercase value to avoid configuration drift. Changing the name forces a new resource.
-- `persona_ids` (Set of String) IDs of the personas available in this workspace. Provide the complete set; on update the full list replaces the previous one.
+- `persona_ids` (Set of String) IDs of the personas available in this workspace. Provide the complete set; on update the full list replaces the previous one. At least one is required — a workspace with no persona has no assistant to answer with.
 - `project_ids` (List of String) IDs of the projects assigned to this workspace.
 - `prompt_md` (String) Markdown system prompt applied to interactions within this workspace.
 - `quota_id` (String) ID of the quota definition that limits this workspace's usage.
