@@ -97,6 +97,7 @@
           "name": "tags",
           "type": "list(object)",
           "optional": true,
+          "computed": true,
           "apiPath": "tags",
           "description": "Tag key/value pairs resources must match.",
           "attributes": [

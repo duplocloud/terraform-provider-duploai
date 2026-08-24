@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -222,5 +223,47 @@ func TestReplaceSectionMissingFile(t *testing.T) {
 	err := replaceSection("/nonexistent/readme.md", "<!-- s -->", "<!-- e -->", "x")
 	if err == nil {
 		t.Fatal("expected error for missing file, got nil")
+	}
+}
+
+// A description may span paragraphs — that reads well on the registry page but
+// would break a markdown table, where a newline ends the row and strands the
+// remaining paragraphs as loose text outside the table.
+// These tables are an index, so only the first paragraph is kept — the full
+// text stays on the generated docs page.
+func TestTableCellFlattensMultilineDescriptions(t *testing.T) {
+	got := tableCell("First paragraph.\n\nSecond paragraph.\n\nThird.")
+	want := "First paragraph."
+	if got != want {
+		t.Errorf("tableCell() = %q, want %q", got, want)
+	}
+	if strings.Contains(got, "\n") {
+		t.Error("tableCell() left a newline, which would break the table row")
+	}
+}
+
+// A paragraph that wraps across source lines must still collapse to one line.
+func TestTableCellCollapsesWrappedLines(t *testing.T) {
+	got := tableCell("A description that\nwraps across lines.")
+	want := "A description that wraps across lines."
+	if got != want {
+		t.Errorf("tableCell() = %q, want %q", got, want)
+	}
+}
+
+// An unescaped pipe ends the cell early, silently shifting every later column.
+func TestTableCellEscapesPipes(t *testing.T) {
+	got := tableCell("Valid values: Standard | Fifo")
+	if strings.Contains(strings.ReplaceAll(got, "\\|", ""), "|") {
+		t.Errorf("tableCell() left an unescaped pipe: %q", got)
+	}
+}
+
+// A single-paragraph description must pass through unchanged apart from
+// whitespace normalisation, so this fix does not churn the existing table.
+func TestTableCellLeavesPlainDescriptionsAlone(t *testing.T) {
+	in := "Manages a DuploCloud AI Helpdesk Kubernetes ConfigMap"
+	if got := tableCell(in); got != in {
+		t.Errorf("tableCell() = %q, want unchanged %q", got, in)
 	}
 }

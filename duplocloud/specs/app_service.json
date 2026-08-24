@@ -1880,6 +1880,14 @@
       "description": "Current provisioning status."
     },
     {
+      "name": "app_service_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this app service, for reference by dependent resources."
+    },
+    {
       "name": "service_name",
       "type": "string",
       "computed": true,

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -101,6 +103,33 @@ func primitiveAttrType(elem string) attr.Type {
 
 // ── Schema building ─────────────────────────────────────────────────────────
 
+// stringValidators builds the plan-time validators for a string attribute, so a
+// value the API would reject fails before any call is made rather than as a 400
+// mid-apply. Shared by the resource and data source schemas — a constraint that
+// held on one but not the other would be a trap.
+//
+// Returns nil when nothing is constrained, which is the framework's "no
+// validators" and keeps the common case allocation-free.
+func stringValidators(a AttributeSpec) []validator.String {
+	var out []validator.String
+	if len(a.OneOf) > 0 {
+		out = append(out, stringvalidator.OneOf(a.OneOf...))
+	}
+	if a.MaxLength > 0 {
+		out = append(out, stringvalidator.LengthAtMost(a.MaxLength))
+	}
+	if a.Pattern != "" {
+		// validate() compiles this at spec load, so a spec carrying a bad pattern
+		// never reaches here; MustCompile cannot fire on a loaded spec.
+		msg := a.PatternDescription
+		if msg == "" {
+			msg = "must match " + a.Pattern
+		}
+		out = append(out, stringvalidator.RegexMatches(regexp.MustCompile(a.Pattern), msg))
+	}
+	return out
+}
+
 // attrSchema builds the framework schema.Attribute for one AttributeSpec,
 // recursing through nested objects.
 func attrSchema(a AttributeSpec) schema.Attribute {
@@ -123,9 +152,7 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			_ = json.Unmarshal(*a.Default, &s)
 			o.Default = stringdefault.StaticString(s)
 		}
-		if len(a.OneOf) > 0 {
-			o.Validators = []validator.String{stringvalidator.OneOf(a.OneOf...)}
-		}
+		o.Validators = stringValidators(a)
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, stringplanmodifier.UseStateForUnknown())
 		}
@@ -145,6 +172,9 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, boolplanmodifier.RequiresReplace())
+		}
+		if a.ImmutableOnceTrue {
+			o.PlanModifiers = append(o.PlanModifiers, immutableOnceTrueModifier{attr: a.Name})
 		}
 		return o
 	case "int":
@@ -197,9 +227,13 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 // spuriously forces replacement on unrelated changes — and is the standard
 // behavior for optional+computed (server-defaulted) attributes. It is
 // deliberately NOT applied to pure-output computed fields (e.g. status), which
-// legitimately change on each apply and must stay recomputed.
+// legitimately change on each apply and must stay recomputed — unless the spec
+// marks one Stable (e.g. the resource's own ID), which never changes.
 func useStateForUnknown(a AttributeSpec) bool {
-	return a.Computed && (a.Optional || a.ForceNew)
+	// preserveTarget: a computed sibling of a PreserveUnmanagedInto attribute
+	// must keep its prior-state value at plan time so the union-on-write can
+	// re-send the server-managed entries it holds.
+	return a.Computed && (a.Optional || a.ForceNew || a.preserveTarget || a.Stable || a.SendFromState)
 }
 
 // staticDefaultValue decodes a spec's raw JSON `default` into a framework
@@ -305,6 +339,11 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.RequiresReplace())
 		}
+		if a.OrderByKey != "" {
+			// Sort the planned config by the key so it matches the read side's
+			// canonical order — must run after UseStateForUnknown resolves the value.
+			o.PlanModifiers = append(o.PlanModifiers, orderByKeyModifier{key: a.OrderByKey})
+		}
 		return o
 	case "set":
 		o := schema.SetNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
@@ -352,6 +391,44 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		}
 		return o
 	}
+}
+
+// immutableOnceTrueModifier fails the plan when a one-way boolean is turned back
+// off. See AttributeSpec.ImmutableOnceTrue for why this errors instead of
+// quietly holding the old value.
+type immutableOnceTrueModifier struct{ attr string }
+
+func (m immutableOnceTrueModifier) Description(_ context.Context) string {
+	return "cannot be set back to false once true; the resource must be recreated"
+}
+
+func (m immutableOnceTrueModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m immutableOnceTrueModifier) PlanModifyBool(_ context.Context, req planmodifier.BoolRequest, resp *planmodifier.BoolResponse) {
+	// Null state = create. Unknown either side = nothing decided yet. A NULL plan
+	// means the attribute is not set at all, which is not the same as asking for
+	// false — but ValueBool() reports both as false, so it has to be excluded
+	// explicitly or an unset attribute would look like a request to disable.
+	// (Unreachable on an attribute with a default, and the framework skips plan
+	// modifiers on destroy, but the flag is general.)
+	if req.StateValue.IsNull() || req.StateValue.IsUnknown() ||
+		req.PlanValue.IsNull() || req.PlanValue.IsUnknown() {
+		return
+	}
+	if !req.StateValue.ValueBool() || req.PlanValue.ValueBool() {
+		return // staying off, turning on, or already on — all fine
+	}
+	resp.Diagnostics.AddAttributeError(
+		req.Path,
+		"Cannot disable "+m.attr,
+		"This setting is one-way: once enabled the cloud provider does not allow turning it "+
+			"off again, so the change would fail during apply.\n\n"+
+			"Set it back to true, destroy and recreate the resource, or keep the config as-is "+
+			"and add lifecycle { ignore_changes = ["+m.attr+"] } to stop Terraform planning "+
+			"the change.",
+	)
 }
 
 // ── Generic value bridges (used for everything that is not a nested object) ───
@@ -523,6 +600,18 @@ func normalizeCsvOrder(s string) string {
 	return strings.Join(parts, ",")
 }
 
+// normalizeVersionMinor truncates a version string to its major.minor components
+// (first two dot-separated parts), so a minor-precision config ("1.35") matches a
+// backend that resolves it to a patch version ("1.35.6"). Values with two or
+// fewer components are returned unchanged.
+func normalizeVersionMinor(s string) string {
+	parts := strings.Split(s, ".")
+	if len(parts) <= 2 {
+		return s
+	}
+	return strings.Join(parts[:2], ".")
+}
+
 func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 	if data == nil {
 		return tftypes.NewValue(t, nil)
@@ -534,6 +623,17 @@ func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 				data = normalizeCsvOrder(s)
 			}
 		}
+		if a.NormalizeVersion {
+			if s, ok := data.(string); ok {
+				data = normalizeVersionMinor(s)
+			}
+		}
+		// Honor filterResponseKeys here too (not only in the top-level loop) so a
+		// map(string) attribute nested inside an object (e.g. azure.tags) still
+		// drops server-injected keys before it reaches state.
+		if len(a.FilterResponseKeys) > 0 {
+			data = filterMapKeys(data, a.FilterResponseKeys)
+		}
 		return goToTftypesValue(t, data)
 	}
 	if info.coll == "" {
@@ -542,6 +642,9 @@ func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 	switch tt := t.(type) {
 	case tftypes.List:
 		arr := toAnySlice(data)
+		if a.OrderByKey != "" {
+			arr = sortObjectsByKey(arr, a.orderKeyResponseKey())
+		}
 		elems := make([]tftypes.Value, 0, len(arr))
 		for _, e := range arr {
 			elems = append(elems, objectFromResponse(a.Attributes, tt.ElementType, e))
@@ -600,20 +703,85 @@ func mergeUnknownFromResponse(a AttributeSpec, t tftypes.Type, plan tftypes.Valu
 		// The whole value is unknown — take it from the response.
 		return attrFromResponse(a, t, respData)
 	}
-	// Known at this level but with unknown descendants: only single nested
-	// objects need a per-field merge; anything else is rebuilt from the response.
+	// Known at this level but with unknown descendants: nested objects (single,
+	// or in a list/map) merge per field so a computed child is filled from the
+	// response without discarding its configured siblings. Anything else —
+	// primitive collections, set(object), a shape mismatch — is rebuilt wholesale.
 	info, _ := parseType(a.Type)
-	ot, isObj := t.(tftypes.Object)
-	if info.elem != "object" || info.coll != "" || !isObj {
+	if info.elem != "object" {
 		return attrFromResponse(a, t, respData)
+	}
+	switch info.coll {
+	case "":
+		return mergeObjectUnknown(a.Attributes, t, plan, respData)
+	case "list":
+		lt, ok := t.(tftypes.List)
+		if !ok {
+			return attrFromResponse(a, t, respData)
+		}
+		var cur []tftypes.Value
+		if err := plan.As(&cur); err != nil {
+			return attrFromResponse(a, t, respData)
+		}
+		arr := toAnySlice(respData)
+		if a.OrderByKey != "" {
+			arr = sortObjectsByKey(arr, a.orderKeyResponseKey())
+		}
+		// Elements are paired by index, so a response of a different length
+		// cannot be aligned with the plan — fall back to the response.
+		if len(arr) != len(cur) {
+			return attrFromResponse(a, t, respData)
+		}
+		out := make([]tftypes.Value, 0, len(cur))
+		for i, e := range cur {
+			out = append(out, mergeObjectUnknown(a.Attributes, lt.ElementType, e, arr[i]))
+		}
+		return tftypes.NewValue(t, out)
+	case "map":
+		mt, ok := t.(tftypes.Map)
+		if !ok {
+			return attrFromResponse(a, t, respData)
+		}
+		var cur map[string]tftypes.Value
+		if err := plan.As(&cur); err != nil {
+			return attrFromResponse(a, t, respData)
+		}
+		dm := toAnyMap(respData)
+		if len(dm) != len(cur) {
+			return attrFromResponse(a, t, respData)
+		}
+		out := make(map[string]tftypes.Value, len(cur))
+		for k, e := range cur {
+			re, present := dm[k]
+			if !present {
+				return attrFromResponse(a, t, respData)
+			}
+			out[k] = mergeObjectUnknown(a.Attributes, mt.ElementType, e, re)
+		}
+		return tftypes.NewValue(t, out)
+	default: // set — element order is not meaningful, so plan and response
+		// elements cannot be paired reliably.
+		return attrFromResponse(a, t, respData)
+	}
+}
+
+// mergeObjectUnknown merges one object value field by field: each configured
+// (known) field is kept and each unknown one is filled from the response.
+func mergeObjectUnknown(attrs []AttributeSpec, t tftypes.Type, plan tftypes.Value, respData any) tftypes.Value {
+	if plan.IsFullyKnown() {
+		return plan
+	}
+	ot, isObj := t.(tftypes.Object)
+	if !isObj {
+		return goToTftypesValue(t, respData)
 	}
 	var cur map[string]tftypes.Value
 	if err := plan.As(&cur); err != nil {
-		return attrFromResponse(a, t, respData)
+		return objectFromResponse(attrs, t, respData)
 	}
 	dm, _ := respData.(map[string]any)
 	out := make(map[string]tftypes.Value, len(ot.AttributeTypes))
-	for _, na := range a.Attributes {
+	for _, na := range attrs {
 		ct := ot.AttributeTypes[na.Name]
 		var childResp any
 		if dm != nil {
@@ -626,6 +794,136 @@ func mergeUnknownFromResponse(a AttributeSpec, t tftypes.Type, plan tftypes.Valu
 		out[na.Name] = mergeUnknownFromResponse(na, ct, cur[na.Name], childResp)
 	}
 	return tftypes.NewValue(t, out)
+}
+
+// hasPreserveOnEmptyResponse reports whether an attribute, or any attribute
+// nested below it, is marked PreserveOnEmptyResponse. Used to skip the restore
+// walk entirely for the (overwhelming majority of) attributes that do not need it.
+func hasPreserveOnEmptyResponse(a AttributeSpec) bool {
+	if a.PreserveOnEmptyResponse {
+		return true
+	}
+	for _, na := range a.Attributes {
+		if hasPreserveOnEmptyResponse(na) {
+			return true
+		}
+	}
+	return false
+}
+
+// restorePreservedValues walks a freshly built state value alongside the value
+// it replaces (the plan on create/update, the prior state on refresh) and, at
+// every leaf marked PreserveOnEmptyResponse that the API returned as null or
+// empty, keeps the prior value instead. This is what lets a write-only secret —
+// redacted by the backend on every read — stay in state instead of being
+// blanked. See AttributeSpec.PreserveOnEmptyResponse.
+func restorePreservedValues(a AttributeSpec, prior, next tftypes.Value) tftypes.Value {
+	if !hasPreserveOnEmptyResponse(a) {
+		return next
+	}
+	if a.PreserveOnEmptyResponse {
+		if isEmptyStateValue(next) && prior.IsKnown() && !prior.IsNull() && prior.Type().Is(next.Type()) {
+			return prior
+		}
+		return next
+	}
+	info, _ := parseType(a.Type)
+	if info.elem != "object" || next.IsNull() || !next.IsKnown() {
+		return next
+	}
+	switch info.coll {
+	case "":
+		return restoreObjectPreserved(a.Attributes, prior, next)
+	case "list":
+		var nextElems, priorElems []tftypes.Value
+		if err := next.As(&nextElems); err != nil {
+			return next
+		}
+		if prior.IsKnown() && !prior.IsNull() {
+			_ = prior.As(&priorElems)
+		}
+		out := make([]tftypes.Value, 0, len(nextElems))
+		for i, e := range nextElems {
+			out = append(out, restoreObjectPreserved(a.Attributes, elemAt(priorElems, i, e.Type()), e))
+		}
+		return tftypes.NewValue(next.Type(), out)
+	case "map":
+		var nextElems, priorElems map[string]tftypes.Value
+		if err := next.As(&nextElems); err != nil {
+			return next
+		}
+		if prior.IsKnown() && !prior.IsNull() {
+			_ = prior.As(&priorElems)
+		}
+		out := make(map[string]tftypes.Value, len(nextElems))
+		for k, e := range nextElems {
+			p, ok := priorElems[k]
+			if !ok {
+				p = tftypes.NewValue(e.Type(), nil)
+			}
+			out[k] = restoreObjectPreserved(a.Attributes, p, e)
+		}
+		return tftypes.NewValue(next.Type(), out)
+	default: // set — elements cannot be paired positionally.
+		return next
+	}
+}
+
+// restoreObjectPreserved applies restorePreservedValues to each field of one
+// object value, pairing it with the same field of the prior object.
+func restoreObjectPreserved(attrs []AttributeSpec, prior, next tftypes.Value) tftypes.Value {
+	if next.IsNull() || !next.IsKnown() {
+		return next
+	}
+	var nm map[string]tftypes.Value
+	if err := next.As(&nm); err != nil {
+		return next
+	}
+	var pm map[string]tftypes.Value
+	if prior.IsKnown() && !prior.IsNull() {
+		_ = prior.As(&pm)
+	}
+	out := make(map[string]tftypes.Value, len(nm))
+	for k, v := range nm {
+		out[k] = v
+	}
+	for _, na := range attrs {
+		child, ok := nm[na.Name]
+		if !ok {
+			continue
+		}
+		p, ok := pm[na.Name]
+		if !ok {
+			p = tftypes.NewValue(child.Type(), nil)
+		}
+		out[na.Name] = restorePreservedValues(na, p, child)
+	}
+	return tftypes.NewValue(next.Type(), out)
+}
+
+// elemAt returns the i-th element of elems, or a typed null when the prior
+// collection is shorter (or absent).
+func elemAt(elems []tftypes.Value, i int, t tftypes.Type) tftypes.Value {
+	if i < len(elems) {
+		return elems[i]
+	}
+	return tftypes.NewValue(t, nil)
+}
+
+// isEmptyStateValue reports whether a value carries nothing worth storing —
+// null, unknown, or the empty string a redacting backend returns in place of a
+// secret.
+func isEmptyStateValue(v tftypes.Value) bool {
+	if v.IsNull() || !v.IsKnown() {
+		return true
+	}
+	if v.Type().Is(tftypes.String) {
+		var s string
+		if err := v.As(&s); err == nil {
+			return s == ""
+		}
+	}
+	return false
 }
 
 func toAnySlice(g any) []any        { s, _ := g.([]any); return s }
@@ -665,9 +963,7 @@ func dsPrimitiveSchema(a AttributeSpec, elem string) dsschema.Attribute {
 			Required: a.Required, Optional: a.Optional, Computed: a.Computed,
 			Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
-		if len(a.OneOf) > 0 {
-			o.Validators = []validator.String{stringvalidator.OneOf(a.OneOf...)}
-		}
+		o.Validators = stringValidators(a)
 		return o
 	case "bool":
 		return dsschema.BoolAttribute{

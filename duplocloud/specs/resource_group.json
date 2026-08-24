@@ -137,9 +137,18 @@
       "description": "Current provisioning status."
     },
     {
+      "name": "resource_group_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this resource group, for reference by dependent resources."
+    },
+    {
       "name": "security_group_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.securityGroup.SecurityGroupId",
       "description": "Provisioned main security group ID."
@@ -156,6 +165,7 @@
       "name": "alb_security_group_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.albSecurityGroup.SecurityGroupId",
       "description": "Provisioned ALB security group ID."

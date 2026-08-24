@@ -36,6 +36,7 @@ output "status" {
 
 - `description` (String) Optional description. Namespaces are immutable, so changing this forces replacement.
 - `environment_id` (String) ID of the environment that owns the resource group (EKS cluster) this namespace belongs to.
+- `k8s_namespace_id` (String) ID of this namespace, for reference by dependent resources.
 - `name` (String) Name of the Kubernetes namespace. Must be a DNS-1123 label (lowercase alphanumeric and '-', starting and ending with an alphanumeric, matching ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$), 1-63 characters, and unique within the cluster.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this namespace belongs to.
 - `scope_ids` (List of String) Scope IDs that link this namespace to a cloud provider account. Inherited from the resource group.

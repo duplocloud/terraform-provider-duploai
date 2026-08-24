@@ -192,6 +192,14 @@
       "description": "Current provisioning status."
     },
     {
+      "name": "node_group_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this node group, for reference by dependent resources."
+    },
+    {
       "name": "node_group_name",
       "type": "string",
       "computed": true,
@@ -209,6 +217,7 @@
       "name": "stack_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.stackId",
       "description": "ID of the underlying provisioning stack."
     },

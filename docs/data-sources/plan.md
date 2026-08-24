@@ -3,12 +3,12 @@
 page_title: "duploai_plan Data Source - duploai"
 subcategory: ""
 description: |-
-  Manages a DuploCloud AI Helpdesk plan (region landing zone built on a network baseline).
+  Manages a DuploCloud AI Helpdesk plan (a region landing zone that collects reusable cloud references: a primary hosted zone, certificates, and AMIs). A plan has no provisioning lifecycle of its own — it is created synchronously and its references are edited directly or by the agent.
 ---
 
 # duploai_plan (Data Source)
 
-Manages a DuploCloud AI Helpdesk plan (region landing zone built on a network baseline).
+Manages a DuploCloud AI Helpdesk plan (a region landing zone that collects reusable cloud references: a primary hosted zone, certificates, and AMIs). A plan has no provisioning lifecycle of its own — it is created synchronously and its references are edited directly or by the agent.
 
 ## Example Usage
 
@@ -38,18 +38,37 @@ output "primary_hosted_zone_domain" {
 
 ### Read-Only
 
-- `ami_ids` (List of String) IDs of AMIs registered by the plan.
-- `certificates` (Attributes List) ACM certificates for the plan. Set to bring existing certificates; leave unset to have the platform provision them. (see [below for nested schema](#nestedatt--certificates))
+- `amis` (Attributes List) AMIs registered by the plan. Set to bring existing AMIs; leave unset to have them added later (via the form or the agent). (see [below for nested schema](#nestedatt--amis))
+- `azure_certificates` (Attributes List) Azure Key Vault certificates registered with this plan, for the AGIC Application Gateway to serve. Each entry is a REFERENCE to a certificate that already exists in a Key Vault — the platform does not create or provision certificates, so leaving this unset simply means none are registered. On reconcile the platform reads the referenced secret itself and pushes the PFX into the Application Gateway. Names must be unique within the plan, compared case-insensitively; an entry whose name is already registered by another plan on the same cluster is ignored. A plan targets a single cloud, so this conflicts with `certificates` (the AWS/ACM list) — set at most one. (see [below for nested schema](#nestedatt--azure_certificates))
+- `certificates` (Attributes List) ACM certificates for the plan. Set to bring existing certificates; leave unset to have the platform provision them. A plan targets a single cloud, so this conflicts with `azure_certificates` — set at most one. (see [below for nested schema](#nestedatt--certificates))
 - `description` (String) Optional description.
 - `name` (String) Name of the plan.
-- `network_baseline_id` (String) ID of the network baseline this plan is built on.
+- `network_baseline_id` (String) ID of the network baseline this plan inherits its region from. Mutually exclusive with region — set exactly one. Immutable after creation.
+- `plan_id` (String) ID of this plan, for reference by dependent resources.
 - `primary_hosted_zone_domain` (String) Domain name of the primary hosted zone. Set to bring an existing domain; leave unset to have the platform provision one.
 - `primary_hosted_zone_id` (String) ID of the primary Route 53 hosted zone. Set to bring an existing hosted zone; leave unset to have the platform provision one.
-- `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
-- `provisioner_version` (String) Optional provisioner version.
-- `region` (String) AWS region (e.g. us-east-1).
-- `scope_ids` (List of String) Scope IDs that link this plan to a cloud provider account.
-- `status` (String) Current provisioning status.
+- `region` (String) Cloud region (e.g. us-east-1 for AWS, westus2 for Azure). Mutually exclusive with network_baseline_id — set exactly one. When network_baseline_id is set instead, the region is inherited from the network baseline. Immutable after creation.
+- `scope_ids` (List of String) Scope IDs that link this plan to a cloud provider account. Optional and mutable: leave unset to bind a scope later from the UI via the "Configure using agent" action (the platform auto-creates the agent assist ticket once a scope is set).
+- `status` (String) Current status reported by the platform. A plan has no provisioning lifecycle of its own.
+
+<a id="nestedatt--amis"></a>
+### Nested Schema for `amis`
+
+Read-Only:
+
+- `ami_id` (String) AMI ID (e.g. ami-0abcdef1234567890).
+- `description` (String) Free-form description of the AMI.
+- `name` (String) Friendly name for the AMI.
+
+
+<a id="nestedatt--azure_certificates"></a>
+### Nested Schema for `azure_certificates`
+
+Read-Only:
+
+- `key_vault_secret_id` (String) Key Vault secret URI holding the certificate's PFX, `https://<vault>.vault.azure.net/secrets/<name>` with an optional trailing `/<version>`. Prefer the UNVERSIONED form: the platform resolves the URI on every reconcile, so an unversioned URI picks up certificate rotations automatically while a versioned one pins that exact version forever. The API rejects a URI that is not `https://.../secrets/...` with HTTP 400.
+- `name` (String) Application Gateway SSL certificate name, used verbatim, so it must satisfy Azure's SSL-certificate naming convention: 1-80 characters, starting with a letter or digit and containing only letters, digits, `.`, `_` or `-`. Must be unique within the plan (case-insensitive). The API rejects anything else with HTTP 400.
+
 
 <a id="nestedatt--certificates"></a>
 ### Nested Schema for `certificates`

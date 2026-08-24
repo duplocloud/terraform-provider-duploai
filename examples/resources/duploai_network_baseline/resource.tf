@@ -44,3 +44,165 @@ resource "duploai_network_baseline" "imported" {
   az_count      = 2
   subnet_prefix = 24
 }
+
+# Azure network baseline — provisions a virtual network, subnets, and a NAT
+# gateway. az_count and subnet_prefix are AWS-only and omitted for Azure;
+# per-subnet address prefixes are set explicitly. Delegations and NSG rules are
+# seeded by the platform from each subnet's type.
+resource "duploai_network_baseline" "azure" {
+  workspace_id = "<workspace-id>"
+  name         = "prod-network-azure"
+  cloud        = "Azure"
+  scope_ids    = ["<scope-id>"]
+  region       = "eastus"
+  cidr         = "10.0.0.0/16"
+
+  azure = {
+    preferred_subnet_mask = 22
+
+    nat_gateways = [
+      { name = "egress-nat" }
+    ]
+
+    subnets = [
+      {
+        name           = "general"
+        subnet_type    = "GeneralPurpose"
+        address_prefix = "10.0.1.0/24"
+        # No default outbound — egress through the attached NAT gateway.
+        default_outbound_access = false
+        attach_nat              = true
+        nat_gateway_name        = "egress-nat"
+      },
+      {
+        name           = "app-gateway"
+        subnet_type    = "ApplicationGateway"
+        address_prefix = "10.0.2.0/24"
+        # Azure-managed outbound; no NAT gateway attached.
+        default_outbound_access = true
+        attach_nat              = false
+      }
+    ]
+
+    tags = {
+      team = "platform"
+    }
+  }
+
+  timeouts {
+    create = "45m"
+  }
+}
+
+# Full Azure network baseline — every azure option in use: an explicit resource
+# group, custom DNS servers, additional address spaces, two NAT gateways, and
+# subnets with explicit delegations and NSG security rules. Fields the platform
+# manages (private_endpoint_network_policies, nat gateway sku, subnet/nsg IDs)
+# are computed and never set here.
+resource "duploai_network_baseline" "azure_full" {
+  workspace_id = "<workspace-id>"
+  name         = "prod-network-azure-full"
+  cloud        = "Azure"
+  scope_ids    = ["<scope-id>"]
+  region       = "eastus"
+  cidr         = "10.10.0.0/16"
+
+  # Secondary virtual network address spaces beyond cidr.
+  additional_cidrs = ["10.11.0.0/16"]
+
+  azure = {
+    resource_group_name   = "prod-network-rg"
+    dns_servers           = ["10.10.0.4", "10.10.0.5"]
+    preferred_subnet_mask = 24
+
+    nat_gateways = [
+      {
+        name            = "egress-nat"
+        public_ip_count = 2
+      },
+    ]
+
+    subnets = [
+      # General-purpose subnet: private, egressing through the NAT gateway,
+      # with two custom inbound NSG rules on its own named NSG.
+      {
+        name                    = "general"
+        subnet_type             = "GeneralPurpose"
+        address_prefix          = "10.10.1.0/24"
+        default_outbound_access = false
+        attach_nat              = true
+        nat_gateway_name        = "egress-nat"
+        nsg_name                = "general-nsg"
+
+        security_rules = [
+          {
+            name                       = "allow-https"
+            description                = "Allow inbound HTTPS from anywhere"
+            priority                   = 100
+            direction                  = "Inbound"
+            access                     = "Allow"
+            protocol                   = "Tcp"
+            source_address_prefix      = "*"
+            source_port_range          = "*"
+            destination_address_prefix = "*"
+            destination_port_ranges    = ["443"]
+          },
+          {
+            name                       = "allow-internal-app"
+            description                = "Allow app ports from internal ranges"
+            priority                   = 110
+            direction                  = "Inbound"
+            access                     = "Allow"
+            protocol                   = "Tcp"
+            source_address_prefixes    = ["10.10.0.0/16", "10.11.0.0/16"]
+            source_port_range          = "*"
+            destination_address_prefix = "*"
+            destination_port_ranges    = ["8080", "8443"]
+          },
+        ]
+      },
+      # Delegated subnet for a PostgreSQL Flexible Server. The delegation hands
+      # the subnet to the Azure service; keep it private (no default outbound).
+      {
+        name                    = "postgres"
+        subnet_type             = "PostgresFlexibleServer"
+        address_prefix          = "10.10.2.0/24"
+        default_outbound_access = false
+        attach_nat              = false
+
+        delegations = [
+          {
+            name         = "postgres-delegation"
+            service_name = "Microsoft.DBforPostgreSQL/flexibleServers"
+          },
+        ]
+      },
+    ]
+
+    tags = {
+      team        = "platform"
+      environment = "production"
+    }
+  }
+
+  timeouts {
+    create = "60m"
+    update = "45m"
+    delete = "30m"
+  }
+}
+
+# Import an existing Azure virtual network (mode = "Import"). Set
+# azure.import_vnet_id to the VNet resource ID to adopt.
+resource "duploai_network_baseline" "azure_imported" {
+  workspace_id = "<workspace-id>"
+  name         = "imported-network-azure"
+  cloud        = "Azure"
+  mode         = "Import"
+  scope_ids    = ["<scope-id>"]
+  region       = "eastus"
+
+  azure = {
+    import_vnet_id = "/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<vnet-name>"
+  }
+}

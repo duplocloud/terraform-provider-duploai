@@ -4,7 +4,8 @@
   "idPath": "id",
   "dataSource": true,
   "endpoint": {
-    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sHelmRepositories"
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sHelmRepositories",
+    "deprovision": {}
   },
   "attributes": [
     {
@@ -28,16 +29,15 @@
       "optional": true,
       "computed": true,
       "default": "",
-      "apiPath": "description",
-      "description": "Optional description."
+      "requestPath": "description",
+      "description": "Optional description. Not echoed back by the API, so it is never read from the response."
     },
     {
       "name": "scope_ids",
       "type": "list(string)",
-      "required": true,
-      "forceNew": true,
+      "computed": true,
       "apiPath": "spec.scopeIds",
-      "description": "Scope IDs that link this Helm repository to a cloud provider account."
+      "description": "Scope IDs that link this Helm repository to a cloud provider account. Derived by the server from the parent resource group."
     },
     {
       "name": "resource_group_id",
@@ -70,6 +70,7 @@
       "computed": true,
       "default": "source.toolkit.fluxcd.io/v1",
       "apiPath": "spec.k8sResource.apiVersion",
+      "responsePath": "result.k8sResource.apiVersion",
       "description": "Flux HelmRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1beta2)."
     },
     {
@@ -77,6 +78,7 @@
       "type": "string",
       "required": true,
       "apiPath": "spec.k8sResource.spec.url",
+      "responsePath": "result.k8sResource.spec.url",
       "description": "URL of the Helm repository (e.g. https://charts.example.com or oci://registry.example.com/charts)."
     },
     {
@@ -86,6 +88,7 @@
       "computed": true,
       "default": "5m",
       "apiPath": "spec.k8sResource.spec.interval",
+      "responsePath": "result.k8sResource.spec.interval",
       "description": "Interval at which the repository index is fetched (Go duration, e.g. 5m, 1h)."
     },
     {
@@ -93,20 +96,25 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.type",
+      "responsePath": "result.k8sResource.spec.type",
       "description": "Repository type: \"default\" (HTTP/HTTPS) or \"oci\"."
     },
     {
       "name": "oci_provider",
       "type": "string",
       "optional": true,
+      "computed": true,
+      "default": "generic",
       "apiPath": "spec.k8sResource.spec.provider",
-      "description": "OCI provider for authentication (e.g. generic, aws, azure, gcp). Only used when type is oci."
+      "responsePath": "result.k8sResource.spec.provider",
+      "description": "OCI provider for authentication (e.g. generic, aws, azure, gcp). Only used when type is oci. Server-defaulted to generic by Flux when omitted."
     },
     {
       "name": "secret_ref_name",
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.secretRef.name",
+      "responsePath": "result.k8sResource.spec.secretRef.name",
       "description": "Name of a Kubernetes Secret holding credentials for the repository."
     },
     {
@@ -114,6 +122,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.certSecretRef.name",
+      "responsePath": "result.k8sResource.spec.certSecretRef.name",
       "description": "Name of a Kubernetes Secret holding TLS certificate data for the repository."
     },
     {
@@ -123,6 +132,7 @@
       "computed": true,
       "default": false,
       "apiPath": "spec.k8sResource.spec.passCredentials",
+      "responsePath": "result.k8sResource.spec.passCredentials",
       "description": "Pass credentials to all domains the repository redirects to."
     },
     {
@@ -132,6 +142,7 @@
       "computed": true,
       "default": false,
       "apiPath": "spec.k8sResource.spec.insecure",
+      "responsePath": "result.k8sResource.spec.insecure",
       "description": "Allow connecting to an HTTP (non-TLS) OCI registry."
     },
     {
@@ -141,20 +152,31 @@
       "computed": true,
       "default": false,
       "apiPath": "spec.k8sResource.spec.suspend",
+      "responsePath": "result.k8sResource.spec.suspend",
       "description": "Suspend reconciliation of the repository."
     },
     {
       "name": "labels",
       "type": "map(string)",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.k8sResource.metadata.labels",
+      "responsePath": "result.k8sResource.metadata.labels",
+      "filterResponseKeys": [
+        "duplocloud.ai/*"
+      ],
       "description": "Kubernetes labels applied to the Helm repository."
     },
     {
       "name": "annotations",
       "type": "map(string)",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.k8sResource.metadata.annotations",
+      "responsePath": "result.k8sResource.metadata.annotations",
+      "filterResponseKeys": [
+        "duplocloud.ai/*"
+      ],
       "description": "Kubernetes annotations applied to the Helm repository."
     },
     {
@@ -183,6 +205,14 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "helm_repository_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this Helm repository, for reference by dependent resources."
     }
   ],
   "requestConstants": [
@@ -192,6 +222,7 @@
     }
   ],
   "waiter": {
+    "deprovisionedState": "DeProvisioned",
     "createTimeoutMinutes": 15,
     "updateTimeoutMinutes": 15,
     "deleteTimeoutMinutes": 10

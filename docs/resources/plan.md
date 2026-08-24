@@ -3,44 +3,48 @@
 page_title: "duploai_plan Resource - duploai"
 subcategory: ""
 description: |-
-  Manages a DuploCloud AI Helpdesk plan (region landing zone built on a network baseline).
+  Manages a DuploCloud AI Helpdesk plan (a region landing zone that collects reusable cloud references: a primary hosted zone, certificates, and AMIs). A plan has no provisioning lifecycle of its own — it is created synchronously and its references are edited directly or by the agent.
 ---
 
 # duploai_plan (Resource)
 
-Manages a DuploCloud AI Helpdesk plan (region landing zone built on a network baseline).
+Manages a DuploCloud AI Helpdesk plan (a region landing zone that collects reusable cloud references: a primary hosted zone, certificates, and AMIs). A plan has no provisioning lifecycle of its own — it is created synchronously and its references are edited directly or by the agent.
 
 ## Example Usage
 
 ```terraform
-# A plan built on an existing network baseline.
+# A plan bound to a region directly.
+#
+# region and network_baseline_id are mutually exclusive — set exactly one.
+# Leave scope_ids unset here and bind a scope later from the UI via the
+# "Configure using agent" action.
+resource "duploai_plan" "main" {
+  workspace_id = "<workspace-id>"
+  name         = "prod-plan"
+  region       = "us-east-1"
+}
+
+# A plan that inherits its region from an existing network baseline.
 #
 # network_baseline_id is the raw backend id of the network baseline. Note that a
 # duploai_network_baseline resource's `id` attribute is a COMPOSITE id
 # ("<workspace-id>/<network-baseline-id>"), so pass the bare network baseline id
 # here rather than referencing that resource's `id` directly.
-resource "duploai_plan" "main" {
+resource "duploai_plan" "from_baseline" {
   workspace_id        = "<workspace-id>"
-  name                = "prod-plan"
-  scope_ids           = ["<scope-id>"]
-  region              = "us-east-1"
+  name                = "prod-plan-baseline"
   network_baseline_id = "<network-id>"
-
-  timeouts {
-    create = "30m"
-    delete = "15m"
-  }
 }
 
-# A plan that brings an existing DNS hosted zone and ACM certificates instead of
-# letting the platform provision them. Leave these unset (as in "main" above) to
-# have the platform create the hosted zone and certificates automatically.
-resource "duploai_plan" "byo_dns" {
-  workspace_id        = "<workspace-id>"
-  name                = "prod-plan-byo"
-  scope_ids           = ["<scope-id>"]
-  region              = "us-east-1"
-  network_baseline_id = "<network-id>"
+# An AWS plan that brings an existing DNS hosted zone, ACM certificates, and AMIs
+# instead of letting the platform provision them. Leave these unset (as in
+# "main" above) to have the platform create them automatically. certificates
+# (AWS/ACM) and azure_certificates are mutually exclusive — a plan targets a
+# single cloud.
+resource "duploai_plan" "byo_refs" {
+  workspace_id = "<workspace-id>"
+  name         = "prod-plan-byo"
+  region       = "us-east-1"
 
   # Existing Route 53 hosted zone.
   primary_hosted_zone_id     = "Z3P5QSUBK4POTI"
@@ -58,10 +62,44 @@ resource "duploai_plan" "byo_dns" {
     },
   ]
 
-  timeouts {
-    create = "30m"
-    delete = "15m"
-  }
+  # Existing AMIs to register on the plan.
+  amis = [
+    {
+      ami_id      = "ami-0abcdef1234567890"
+      name        = "base-ubuntu-22.04"
+      description = "Hardened Ubuntu 22.04 base image"
+    },
+  ]
+}
+
+# An Azure plan registering existing Key Vault certificates for the AGIC
+# Application Gateway to serve.
+#
+# These are REFERENCES, not certificates: the platform never creates one. Leaving
+# azure_certificates unset means no certificates are registered, not that the
+# platform will provide them. azure_certificates is mutually exclusive with the
+# AWS `certificates` list.
+resource "duploai_plan" "azure_byo_cert" {
+  workspace_id = "<workspace-id>"
+  name         = "prod-plan-azure"
+  region       = "westus2"
+
+  # Both fields are required on every entry, and `name` is used verbatim as the
+  # App Gateway SSL certificate name.
+  azure_certificates = [
+    # Unversioned URI: the platform re-resolves it on every reconcile, so the
+    # gateway picks up certificate rotations automatically. Prefer this.
+    {
+      name                = "wildcard-cert"
+      key_vault_secret_id = "https://myvault.vault.azure.net/secrets/wildcard-cert"
+    },
+    # Versioned URI: pins that exact version forever. Only use it when you
+    # deliberately do not want rotations picked up.
+    {
+      name                = "pinned-cert"
+      key_vault_secret_id = "https://myvault.vault.azure.net/secrets/pinned-cert/1234567890abcdef1234567890abcdef"
+    },
+  ]
 }
 ```
 
@@ -71,27 +109,44 @@ resource "duploai_plan" "byo_dns" {
 ### Required
 
 - `name` (String) Name of the plan.
-- `network_baseline_id` (String) ID of the network baseline this plan is built on.
-- `region` (String) AWS region (e.g. us-east-1).
-- `scope_ids` (List of String) Scope IDs that link this plan to a cloud provider account.
 - `workspace_id` (String) ID of the workspace that owns this plan.
 
 ### Optional
 
-- `certificates` (Attributes List) ACM certificates for the plan. Set to bring existing certificates; leave unset to have the platform provision them. (see [below for nested schema](#nestedatt--certificates))
+- `amis` (Attributes List) AMIs registered by the plan. Set to bring existing AMIs; leave unset to have them added later (via the form or the agent). (see [below for nested schema](#nestedatt--amis))
+- `azure_certificates` (Attributes List) Azure Key Vault certificates registered with this plan, for the AGIC Application Gateway to serve. Each entry is a REFERENCE to a certificate that already exists in a Key Vault — the platform does not create or provision certificates, so leaving this unset simply means none are registered. On reconcile the platform reads the referenced secret itself and pushes the PFX into the Application Gateway. Names must be unique within the plan, compared case-insensitively; an entry whose name is already registered by another plan on the same cluster is ignored. A plan targets a single cloud, so this conflicts with `certificates` (the AWS/ACM list) — set at most one. (see [below for nested schema](#nestedatt--azure_certificates))
+- `certificates` (Attributes List) ACM certificates for the plan. Set to bring existing certificates; leave unset to have the platform provision them. A plan targets a single cloud, so this conflicts with `azure_certificates` — set at most one. (see [below for nested schema](#nestedatt--certificates))
 - `description` (String) Optional description.
-- `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `network_baseline_id` (String) ID of the network baseline this plan inherits its region from. Mutually exclusive with region — set exactly one. Immutable after creation.
 - `primary_hosted_zone_domain` (String) Domain name of the primary hosted zone. Set to bring an existing domain; leave unset to have the platform provision one.
 - `primary_hosted_zone_id` (String) ID of the primary Route 53 hosted zone. Set to bring an existing hosted zone; leave unset to have the platform provision one.
-- `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
-- `provisioner_version` (String) Optional provisioner version.
-- `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
+- `region` (String) Cloud region (e.g. us-east-1 for AWS, westus2 for Azure). Mutually exclusive with network_baseline_id — set exactly one. When network_baseline_id is set instead, the region is inherited from the network baseline. Immutable after creation.
+- `scope_ids` (List of String) Scope IDs that link this plan to a cloud provider account. Optional and mutable: leave unset to bind a scope later from the UI via the "Configure using agent" action (the platform auto-creates the agent assist ticket once a scope is set).
 
 ### Read-Only
 
-- `ami_ids` (List of String) IDs of AMIs registered by the plan.
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `status` (String) Current provisioning status.
+- `plan_id` (String) ID of this plan, for reference by dependent resources.
+- `status` (String) Current status reported by the platform. A plan has no provisioning lifecycle of its own.
+
+<a id="nestedatt--amis"></a>
+### Nested Schema for `amis`
+
+Optional:
+
+- `ami_id` (String) AMI ID (e.g. ami-0abcdef1234567890).
+- `description` (String) Free-form description of the AMI.
+- `name` (String) Friendly name for the AMI.
+
+
+<a id="nestedatt--azure_certificates"></a>
+### Nested Schema for `azure_certificates`
+
+Required:
+
+- `key_vault_secret_id` (String) Key Vault secret URI holding the certificate's PFX, `https://<vault>.vault.azure.net/secrets/<name>` with an optional trailing `/<version>`. Prefer the UNVERSIONED form: the platform resolves the URI on every reconcile, so an unversioned URI picks up certificate rotations automatically while a versioned one pins that exact version forever. The API rejects a URI that is not `https://.../secrets/...` with HTTP 400.
+- `name` (String) Application Gateway SSL certificate name, used verbatim, so it must satisfy Azure's SSL-certificate naming convention: 1-80 characters, starting with a letter or digit and containing only letters, digits, `.`, `_` or `-`. Must be unique within the plan (case-insensitive). The API rejects anything else with HTTP 400.
+
 
 <a id="nestedatt--certificates"></a>
 ### Nested Schema for `certificates`
@@ -100,16 +155,6 @@ Optional:
 
 - `certificate_arn` (String) ARN of the ACM certificate.
 - `domain` (String) Domain the certificate covers.
-
-
-<a id="nestedblock--timeouts"></a>
-### Nested Schema for `timeouts`
-
-Optional:
-
-- `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
-- `delete` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours). Setting a timeout for a Delete operation is only applicable if changes are saved into state before the destroy operation occurs.
-- `update` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 
 ## Import
 

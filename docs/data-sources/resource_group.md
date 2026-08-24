@@ -57,6 +57,7 @@ output "iam_role_arn" {
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `region` (String) Cloud region (e.g. us-east-1).
+- `resource_group_id` (String) ID of this resource group, for reference by dependent resources.
 - `scope_ids` (List of String) Scope IDs linking this resource group to a cloud provider account. Inherited from the linked network; computed, not user-settable.
 - `security_group_id` (String) Provisioned main security group ID.
 - `security_group_name` (String) Provisioned main security group name.

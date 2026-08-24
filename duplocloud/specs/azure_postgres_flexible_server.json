@@ -1,0 +1,572 @@
+{
+  "name": "azure_postgres_flexible_server",
+  "description": "Manages an Azure Database for PostgreSQL Flexible Server — a managed PostgreSQL instance provisioned within an environment and resource group, with configurable compute, storage, backup, high availability, authentication, and networking.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AzurePostgresFlexibleServers",
+    "deprovision": {}
+  },
+  "createConstants": [
+    { "path": "spec.mode", "value": "Create" }
+  ],
+  "requiredIf": [
+    {
+      "attribute": "administrator_login",
+      "whenAttribute": "password_auth",
+      "whenEquals": "Enabled"
+    },
+    {
+      "attribute": "administrator_password",
+      "whenAttribute": "password_auth",
+      "whenEquals": "Enabled"
+    },
+    {
+      "attribute": "delegated_subnet_resource_id",
+      "whenAttribute": "public_network_access",
+      "whenEquals": "Disabled"
+    }
+  ],
+  "conflictsWith": [
+    ["firewall_rules", "delegated_subnet_resource_id"]
+  ],
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "Workspace that owns this server (path parameter)."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Server name. 3–63 characters, lowercase letters, numbers and hyphens only; cannot start or end with a hyphen. Must be globally unique within Azure."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "Environment the server is provisioned into."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "Resource group the server is provisioned into."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scopes the server is visible to. Inherited from the resource group."
+    },
+
+    {
+      "name": "postgres_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "16",
+      "forceNew": true,
+      "oneOf": ["11", "12", "13", "14", "15", "16", "17", "18"],
+      "apiPath": "spec.version",
+      "description": "PostgreSQL major version. Immutable — Azure does not support in-place major version upgrades."
+    },
+    {
+      "name": "sku_tier",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Burstable",
+      "oneOf": ["Burstable", "GeneralPurpose", "MemoryOptimized"],
+      "createPath": "spec.sku.tier",
+      "updatePath": "spec.updateRequest.sku.tier",
+      "responsePath": "spec.sku.tier",
+      "description": "Compute tier. Burstable is cost-effective for low or variable workloads; GeneralPurpose balances compute and memory; MemoryOptimized suits demanding workloads."
+    },
+    {
+      "name": "sku_name",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Standard_B1ms",
+      "createPath": "spec.sku.name",
+      "updatePath": "spec.updateRequest.sku.name",
+      "responsePath": "spec.sku.name",
+      "description": "Compute size, e.g. Standard_B1ms (1 vCore, 2 GiB) or Standard_B2s (2 vCore, 4 GiB) for Burstable. Must be a size Azure offers for the chosen sku_tier."
+    },
+
+    {
+      "name": "storage_size_gb",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 32,
+      "createPath": "spec.storage.storageSizeGB",
+      "updatePath": "spec.updateRequest.storage.storageSizeGB",
+      "responsePath": "spec.storage.storageSizeGB",
+      "description": "Storage size in GiB. Azure allows growing storage but never shrinking it."
+    },
+    {
+      "name": "storage_auto_grow",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Enabled",
+      "oneOf": ["Enabled", "Disabled"],
+      "createPath": "spec.storage.autoGrow",
+      "updatePath": "spec.updateRequest.storage.autoGrow",
+      "responsePath": "spec.storage.autoGrow",
+      "description": "Whether Azure grows storage automatically as it fills."
+    },
+    {
+      "name": "storage_tier",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "oneOf": ["P1", "P2", "P3", "P4", "P6", "P10", "P15", "P20", "P30", "P40", "P50", "P60", "P70", "P80"],
+      "createPath": "spec.storage.storageTier",
+      "updatePath": "spec.updateRequest.storage.storageTier",
+      "responsePath": "spec.storage.storageTier",
+      "description": "Managed-disk performance tier. Leave unset to let Azure pick the default for the chosen storage size."
+    },
+    {
+      "name": "availability_zone",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.availabilityZone",
+      "description": "Availability zone to place the server in (\"1\", \"2\" or \"3\"). Leave unset for no preference. Immutable after creation."
+    },
+
+    {
+      "name": "backup_retention_days",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 7,
+      "min": 7,
+      "max": 35,
+      "createPath": "spec.backup.backupRetentionDays",
+      "updatePath": "spec.updateRequest.backupRetentionDays",
+      "responsePath": "spec.backup.backupRetentionDays",
+      "description": "Number of days to retain automated backups."
+    },
+    {
+      "name": "geo_redundant_backup",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Disabled",
+      "forceNew": true,
+      "oneOf": ["Enabled", "Disabled"],
+      "apiPath": "spec.backup.geoRedundantBackup",
+      "description": "Whether backups are replicated to the paired region. Immutable after creation."
+    },
+    {
+      "name": "high_availability_mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Disabled",
+      "oneOf": ["Disabled", "SameZone", "ZoneRedundant"],
+      "createPath": "spec.highAvailability.mode",
+      "updatePath": "spec.updateRequest.highAvailability.mode",
+      "responsePath": "spec.highAvailability.mode",
+      "description": "Standby replica placement. SameZone keeps the standby in the same availability zone; ZoneRedundant places it in a different one. Not available on the Burstable tier."
+    },
+    {
+      "name": "standby_availability_zone",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "createPath": "spec.highAvailability.standbyAvailabilityZone",
+      "updatePath": "spec.updateRequest.highAvailability.standbyAvailabilityZone",
+      "responsePath": "spec.highAvailability.standbyAvailabilityZone",
+      "description": "Availability zone for the standby replica when high_availability_mode is ZoneRedundant. Leave unset to let Azure choose."
+    },
+    {
+      "name": "maintenance_window",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "createPath": "spec.maintenanceWindow",
+      "updatePath": "spec.updateRequest.maintenanceWindow",
+      "responsePath": "spec.maintenanceWindow",
+      "description": "When Azure may apply planned maintenance. Leave unset to let Azure pick the window.",
+      "attributes": [
+        {
+          "name": "custom_window",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "oneOf": ["Enabled", "Disabled"],
+          "apiPath": "customWindow",
+          "description": "Set to Enabled to schedule maintenance for a specific day and time."
+        },
+        {
+          "name": "day_of_week",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "min": 0,
+          "max": 6,
+          "apiPath": "dayOfWeek",
+          "description": "Day of the week, 0 (Sunday) through 6 (Saturday)."
+        },
+        {
+          "name": "start_hour",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "min": 0,
+          "max": 23,
+          "apiPath": "startHour",
+          "description": "Hour the window starts, 0–23 UTC."
+        },
+        {
+          "name": "start_minute",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "min": 0,
+          "max": 59,
+          "apiPath": "startMinute",
+          "description": "Minute the window starts, 0–59."
+        }
+      ]
+    },
+    {
+      "name": "tags",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "filterResponseKeys": ["duplocloud-ai-*"],
+      "createPath": "spec.tags",
+      "updatePath": "spec.updateRequest.tags",
+      "responsePath": "spec.tags",
+      "description": "Azure resource tags. Platform-managed duplocloud-ai-* tags are added automatically and are not tracked here."
+    },
+
+    {
+      "name": "administrator_login",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.administratorLogin",
+      "description": "Administrator login name. Required when password_auth is Enabled; leave unset in Microsoft Entra-only mode. Letters, numbers and underscores only, cannot start with 'pg_', and Azure reserves several names. Immutable after creation."
+    },
+    {
+      "name": "administrator_password",
+      "type": "string",
+      "optional": true,
+      "sensitive": true,
+      "preserveOnEmptyResponse": true,
+      "createPath": "spec.administratorLoginPassword",
+      "updatePath": "spec.updateRequest.administratorLoginPassword",
+      "responsePath": "spec.administratorLoginPassword",
+      "description": "Administrator password. Required at creation when password_auth is Enabled; on update the backend treats a blank value as \"keep the current password\". 8–128 characters using at least three of: uppercase, lowercase, numbers, symbols. Write-only — the API never returns it, so the configured value is kept in state and a change made outside Terraform cannot be detected."
+    },
+    {
+      "name": "password_auth",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Enabled",
+      "oneOf": ["Enabled", "Disabled"],
+      "createPath": "spec.authConfig.passwordAuth",
+      "updatePath": "spec.updateRequest.authConfig.passwordAuth",
+      "responsePath": "spec.authConfig.passwordAuth",
+      "description": "Whether PostgreSQL password authentication is accepted. At least one of password_auth and active_directory_auth must be Enabled."
+    },
+    {
+      "name": "active_directory_auth",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Disabled",
+      "oneOf": ["Enabled", "Disabled"],
+      "createPath": "spec.authConfig.activeDirectoryAuth",
+      "updatePath": "spec.updateRequest.authConfig.activeDirectoryAuth",
+      "responsePath": "spec.authConfig.activeDirectoryAuth",
+      "description": "Whether Microsoft Entra authentication is accepted. At least one of password_auth and active_directory_auth must be Enabled."
+    },
+    {
+      "name": "tenant_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "createPath": "spec.authConfig.tenantId",
+      "updatePath": "spec.updateRequest.authConfig.tenantId",
+      "responsePath": "spec.authConfig.tenantId",
+      "description": "Microsoft Entra tenant (a GUID) that backs Entra authentication. Defaults to the subscription's tenant."
+    },
+    {
+      "name": "aad_administrators",
+      "type": "list(object)",
+      "optional": true,
+      "computed": true,
+      "createPath": "spec.aadAdministrators",
+      "updatePath": "spec.updateRequest.aadAdministrators",
+      "responsePath": "spec.aadAdministrators",
+      "description": "Microsoft Entra administrators granted access to the server. Only meaningful when active_directory_auth is Enabled. Applied on a best-effort basis after the server is created: Azure keeps the administrators sub-resource unavailable for a while after the server itself reports Ready, so an administrator may not land on the first apply. This is the requested set — `effective_aad_administrators` reports what Azure actually has, and the two converge once a later update reconciles them. Removals only take effect through that update path.",
+      "attributes": [
+        {
+          "name": "object_id",
+          "type": "string",
+          "required": true,
+          "apiPath": "objectId",
+          "description": "Entra object id of the user, group or service principal (a GUID)."
+        },
+        {
+          "name": "principal_name",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "apiPath": "principalName",
+          "description": "Display name of the principal."
+        },
+        {
+          "name": "principal_type",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "oneOf": ["User", "Group", "ServicePrincipal", "Unknown"],
+          "apiPath": "principalType",
+          "description": "Kind of Entra principal."
+        }
+      ]
+    },
+
+    {
+      "name": "public_network_access",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Enabled",
+      "forceNew": true,
+      "oneOf": ["Enabled", "Disabled"],
+      "apiPath": "spec.network.publicNetworkAccess",
+      "description": "Enabled exposes the server publicly, gated by firewall_rules. Disabled selects private access (VNet integration) and requires delegated_subnet_resource_id. Immutable after creation — Azure does not allow changing the connectivity method, VNet, or private DNS zone afterwards."
+    },
+    {
+      "name": "delegated_subnet_resource_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.network.delegatedSubnetResourceId",
+      "description": "ARM resource id of the delegated subnet for private access. Required when public_network_access is Disabled, and rejected alongside firewall_rules."
+    },
+    {
+      "name": "private_dns_zone_arm_resource_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.network.privateDnsZoneArmResourceId",
+      "description": "ARM resource id of the private DNS zone for private access. Leave unset to let the platform create or reuse the well-known zone."
+    },
+    {
+      "name": "firewall_rules",
+      "type": "list(object)",
+      "optional": true,
+      "computed": true,
+      "orderByKey": "name",
+      "createPath": "spec.firewallRules",
+      "updatePath": "spec.updateRequest.firewallRules",
+      "responsePath": "spec.firewallRules",
+      "description": "Inbound IP ranges allowed to reach port 5432. Only valid with public access; the backend rejects rules when public_network_access is Disabled. Use start 0.0.0.0 / end 0.0.0.0 for the \"allow any Azure service\" rule.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "Firewall rule name."
+        },
+        {
+          "name": "start_ip_address",
+          "type": "string",
+          "required": true,
+          "apiPath": "startIpAddress",
+          "description": "First address in the allowed range."
+        },
+        {
+          "name": "end_ip_address",
+          "type": "string",
+          "required": true,
+          "apiPath": "endIpAddress",
+          "description": "Last address in the allowed range."
+        }
+      ]
+    },
+
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
+      "apiPath": "spec.provisioner.type",
+      "description": "How the platform provisions the server. Defaults to the environment's provisioner."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "spec.provisioner.version",
+      "description": "Provisioner version. Defaults to the environment's version."
+    },
+
+    {
+      "name": "azure_resource_group_name",
+      "type": "string",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.azureResourceGroupName",
+      "description": "Name of the Azure resource group the server lives in."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Provisioning status reported by the platform."
+    },
+    {
+      "name": "server_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "Backend identifier of the server record."
+    },
+    {
+      "name": "postgres_server_id",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.postgresServerId",
+      "description": "ARM resource id of the PostgreSQL Flexible Server in Azure."
+    },
+    {
+      "name": "provisioning_state",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.provisioningState",
+      "description": "Azure-reported provisioning state of the server."
+    },
+    {
+      "name": "effective_aad_administrators",
+      "type": "list(object)",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.aadAdministrators",
+      "description": "Microsoft Entra administrators Azure actually reports for the server, read back from the administrators sub-resource. Compare against aad_administrators: the platform applies them best-effort right after create and reconciles them on the next update, so the two can differ briefly.",
+      "attributes": [
+        {
+          "name": "object_id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "objectId",
+          "description": "Entra object id of the principal."
+        },
+        {
+          "name": "principal_name",
+          "type": "string",
+          "computed": true,
+          "apiPath": "principalName",
+          "description": "Display name of the principal."
+        },
+        {
+          "name": "principal_type",
+          "type": "string",
+          "computed": true,
+          "apiPath": "principalType",
+          "description": "Kind of Entra principal."
+        }
+      ]
+    },
+    {
+      "name": "effective_firewall_rules",
+      "type": "list(object)",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.firewallRules",
+      "description": "Firewall rules Azure actually reports for the server. Applied best-effort immediately after create and reconciled on the next update, so this can lag firewall_rules briefly.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "computed": true,
+          "apiPath": "name",
+          "description": "Firewall rule name."
+        },
+        {
+          "name": "start_ip_address",
+          "type": "string",
+          "computed": true,
+          "apiPath": "startIpAddress",
+          "description": "First address in the allowed range."
+        },
+        {
+          "name": "end_ip_address",
+          "type": "string",
+          "computed": true,
+          "apiPath": "endIpAddress",
+          "description": "Last address in the allowed range."
+        }
+      ]
+    },
+    {
+      "name": "fully_qualified_domain_name",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.fullyQualifiedDomainName",
+      "description": "Hostname clients connect to on port 5432."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the server record was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the server record was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ],
+  "waiter": {
+    "readyPath": "result.provisioningState",
+    "readyState": "Ready",
+    "deprovisionedState": "DeProvisioned"
+  }
+}

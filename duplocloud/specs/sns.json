@@ -127,30 +127,19 @@
       "description": "Tags applied to the topic at creation, as a list of key/value pairs. Platform ownership tags are added automatically."
     },
     {
-      "name": "provisioner_type",
-      "type": "string",
-      "optional": true,
-      "computed": true,
-      "forceNew": true,
-      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
-      "apiPath": "spec.provisioner.type",
-      "description": "Provisioner type. Defaults to DirectApiCall for SNS."
-    },
-    {
-      "name": "provisioner_version",
-      "type": "string",
-      "optional": true,
-      "computed": true,
-      "default": "",
-      "apiPath": "spec.provisioner.version",
-      "description": "Optional provisioner version."
-    },
-    {
       "name": "status",
       "type": "string",
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status of the topic."
+    },
+    {
+      "name": "sns_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this SNS topic, for reference by dependent resources."
     },
     {
       "name": "topic_arn",

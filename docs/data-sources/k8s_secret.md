@@ -35,17 +35,15 @@ output "status" {
 ### Read-Only
 
 - `annotations` (Map of String) Kubernetes annotations applied to the secret.
-- `data` (Map of String, Sensitive) Secret entries with base64-encoded values, keyed by name.
+- `data` (Map of String, Sensitive) Secret entries with base64-encoded values, keyed by name. Populated by the server from string_data if not set directly.
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
-- `immutable` (Boolean) Mark the secret immutable (its data cannot be changed after creation).
+- `k8s_secret_id` (String) ID of this secret, for reference by dependent resources.
 - `labels` (Map of String) Kubernetes labels applied to the secret.
 - `name` (String) Name of the secret resource.
 - `namespace_name` (String) Kubernetes namespace the secret is created in.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this secret belongs to.
-- `scope_ids` (List of String) Scope IDs that link this secret to a cloud provider account.
 - `status` (String) Current provisioning status.
-- `string_data` (Map of String, Sensitive) Secret entries with plaintext (non-encoded) values, keyed by name.
 - `type` (String) Kubernetes secret type (e.g. Opaque, kubernetes.io/dockerconfigjson, kubernetes.io/tls).

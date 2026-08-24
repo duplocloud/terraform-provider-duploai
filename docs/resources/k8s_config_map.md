@@ -47,7 +47,6 @@ resource "duploai_k8s_config_map" "app" {
 - `name` (String) Name of the config map resource.
 - `namespace_name` (String) Kubernetes namespace the config map is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this config map belongs to.
-- `scope_ids` (List of String) Scope IDs that link this config map to a cloud provider account.
 - `workspace_id` (String) ID of the workspace that owns this config map.
 
 ### Optional
@@ -55,17 +54,18 @@ resource "duploai_k8s_config_map" "app" {
 - `annotations` (Map of String) Kubernetes annotations applied to the config map.
 - `binary_data` (Map of String) Binary configuration entries, base64-encoded values keyed by name.
 - `data` (Map of String) Configuration key/value pairs (UTF-8 string data).
-- `description` (String) Optional description.
+- `description` (String) Optional description. Not echoed back by the API, so it is never read from the response.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
-- `immutable` (Boolean) Mark the config map immutable (its data cannot be changed after creation).
 - `labels` (Map of String) Kubernetes labels applied to the config map.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
-- `provisioner_version` (String) Optional provisioner version.
+- `provisioner_version` (String) Optional provisioner version. Not echoed back by the API, so it is never read from the response.
+- `scope_ids` (List of String) Scope IDs that link this config map to a cloud provider account. Not echoed back by the API, so it is never read from the response.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
 
 - `id` (String) Composite resource identifier (workspace_id/id).
+- `k8s_config_map_id` (String) ID of this config map, for reference by dependent resources.
 - `status` (String) Current provisioning status.
 
 <a id="nestedblock--timeouts"></a>

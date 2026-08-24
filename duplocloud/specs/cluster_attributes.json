@@ -316,6 +316,14 @@
       "description": "Current provisioning status."
     },
     {
+      "name": "cluster_attributes_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this cluster attributes resource, for reference by dependent resources."
+    },
+    {
       "name": "cf_stack_name",
       "type": "string",
       "computed": true,

@@ -136,6 +136,14 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "k8s_pvc_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this persistent volume claim, for reference by dependent resources."
     }
   ],
   "requestConstants": [

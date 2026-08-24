@@ -35,7 +35,7 @@ output "status" {
 ### Read-Only
 
 - `annotations` (Map of String) Kubernetes annotations applied to the OCI repository.
-- `api_version` (String) Flux OCIRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1).
+- `api_version` (String) Flux OCIRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1beta2).
 - `cert_secret_ref_name` (String) Name of a Kubernetes Secret holding TLS certificate data.
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
@@ -48,6 +48,7 @@ output "status" {
 - `name` (String) Name of the OCI repository resource.
 - `namespace_name` (String) Kubernetes namespace the OCI repository is created in.
 - `oci_provider` (String) Provider used for authentication (e.g. generic, aws, azure, gcp).
+- `oci_repository_id` (String) ID of this OCI repository, for reference by dependent resources.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `proxy_secret_ref_name` (String) Name of a Kubernetes Secret holding proxy configuration.

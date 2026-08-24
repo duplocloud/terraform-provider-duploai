@@ -46,10 +46,9 @@ output "status" {
 - `environment_id` (String) ID of the environment in which the topic is provisioned.
 - `kms_master_key_id` (String) KMS key ID or ARN used when encryption_mode is SseKms. Required when encryption_mode is SseKms. Can be changed in place.
 - `name` (String) Topic name. Letters, numbers, hyphens, and underscores. For a FIFO topic (topic_type = Fifo) the platform appends the required ".fifo" suffix automatically. Cannot be changed after creation.
-- `provisioner_type` (String) Provisioner type. Defaults to DirectApiCall for SNS.
-- `provisioner_version` (String) Optional provisioner version.
 - `resource_group_id` (String) ID of the resource group in which the topic is provisioned.
 - `scope_ids` (List of String) Scope IDs that link this topic to a cloud provider account.
+- `sns_id` (String) ID of this SNS topic, for reference by dependent resources.
 - `status` (String) Current provisioning status of the topic.
 - `topic_arn` (String) ARN of the provisioned SNS topic.
 - `topic_type` (String) Topic type: Standard (best-effort ordering, at-least-once delivery) or Fifo (strict ordering, exactly-once). Immutable after creation.

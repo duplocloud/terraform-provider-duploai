@@ -1,0 +1,313 @@
+{
+  "name": "azure_key_vault",
+  "description": "Manages an Azure Key Vault — a managed store for secrets, keys and certificates, provisioned within an environment and resource group. Platform-provisioned vaults always use Azure RBAC: the resource group's managed identity is granted Key Vault Administrator at resource-group scope, so workloads bound to that group can read secrets with no per-vault permission setup.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AzureKeyVaults",
+    "deprovision": {}
+  },
+  "createConstants": [
+    { "path": "spec.mode", "value": "Create" }
+  ],
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "Workspace that owns this vault (path parameter)."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Vault name. 3–24 characters, letters, numbers and hyphens only; must start with a letter, end with a letter or number, and contain no consecutive hyphens. Must be globally unique within Azure — note that a soft-deleted vault keeps its name reserved until it is purged."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "Environment the vault is provisioned into."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "Resource group the vault is provisioned into. Its managed identity is what gets Key Vault Administrator on the vault."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scopes the vault is visible to. Inherited from the resource group."
+    },
+
+    {
+      "name": "sku_name",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Standard",
+      "oneOf": ["Standard", "Premium"],
+      "createPath": "spec.skuName",
+      "updatePath": "spec.updateRequest.skuName",
+      "responsePath": "spec.skuName",
+      "description": "Pricing tier. Standard is sufficient for secrets and certificates; Premium adds HSM-backed keys."
+    },
+
+    {
+      "name": "soft_delete_retention_days",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "default": 90,
+      "min": 7,
+      "max": 90,
+      "createPath": "spec.softDeleteRetentionInDays",
+      "updatePath": "spec.updateRequest.softDeleteRetentionInDays",
+      "responsePath": "spec.softDeleteRetentionInDays",
+      "description": "How long a deleted vault or secret stays recoverable before Azure permanently removes it. Soft delete itself cannot be disabled."
+    },
+    {
+      "name": "enable_purge_protection",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "immutableOnceTrue": true,
+      "createPath": "spec.enablePurgeProtection",
+      "updatePath": "spec.updateRequest.enablePurgeProtection",
+      "responsePath": "spec.enablePurgeProtection",
+      "description": "Prevent permanent deletion during the retention period. One-way in Azure: it can be turned on, but turning it off is rejected — the vault has to be recreated. Setting it back to false is refused at plan time rather than failing mid-apply; use `lifecycle { ignore_changes = [enable_purge_protection] }` if you want Terraform to leave an already-protected vault alone. Note it also blocks purge_on_deprovision, so the name stays reserved for the full retention period after a destroy."
+    },
+    {
+      "name": "purge_on_deprovision",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": true,
+      "createPath": "spec.purgeOnDeprovision",
+      "updatePath": "spec.updateRequest.purgeOnDeprovision",
+      "responsePath": "spec.purgeOnDeprovision",
+      "description": "Purge the vault after deleting it so its name is immediately reusable. A platform behaviour, not an Azure setting. Leave off to keep deprovisioned vaults recoverable — but vault names are globally unique, so an unpurged vault blocks reuse of its name for the whole retention period."
+    },
+
+    {
+      "name": "enabled_for_deployment",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "createPath": "spec.enabledForDeployment",
+      "updatePath": "spec.updateRequest.enabledForDeployment",
+      "responsePath": "spec.enabledForDeployment",
+      "description": "Allow Azure Virtual Machines to retrieve certificates stored as secrets. Kubernetes workloads do not need this — they use the Secrets Store CSI driver with workload identity."
+    },
+    {
+      "name": "enabled_for_disk_encryption",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "createPath": "spec.enabledForDiskEncryption",
+      "updatePath": "spec.updateRequest.enabledForDiskEncryption",
+      "responsePath": "spec.enabledForDiskEncryption",
+      "description": "Allow Azure Disk Encryption to retrieve secrets and unwrap keys."
+    },
+    {
+      "name": "enabled_for_template_deployment",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "createPath": "spec.enabledForTemplateDeployment",
+      "updatePath": "spec.updateRequest.enabledForTemplateDeployment",
+      "responsePath": "spec.enabledForTemplateDeployment",
+      "description": "Allow ARM template deployments to retrieve secrets during deployment."
+    },
+
+    {
+      "name": "network_acls",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "createPath": "spec.networkAcls",
+      "updatePath": "spec.updateRequest.networkAcls",
+      "responsePath": "spec.networkAcls",
+      "description": "Network rules controlling who can reach the vault's data plane.",
+      "attributes": [
+        {
+          "name": "public_network_access",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "default": "Enabled",
+          "oneOf": ["Enabled", "Disabled"],
+          "apiPath": "publicNetworkAccess",
+          "description": "Enabled makes the vault reachable over its public endpoint, subject to default_action. Disabled allows private endpoints only."
+        },
+        {
+          "name": "default_action",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "default": "Allow",
+          "oneOf": ["Allow", "Deny"],
+          "apiPath": "defaultAction",
+          "description": "What to do with traffic that matches no rule. Allow accepts any network; Deny accepts only the addresses in ip_rules and the subnets in vnet_rules."
+        },
+        {
+          "name": "ip_rules",
+          "type": "list(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "ipRules",
+          "description": "IPv4 addresses or CIDR ranges allowed through when default_action is Deny."
+        },
+        {
+          "name": "vnet_rules",
+          "type": "list(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "vNetRules",
+          "description": "ARM resource ids of subnets allowed through when default_action is Deny."
+        },
+        {
+          "name": "bypass_azure_services",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": true,
+          "apiPath": "bypassAzureServices",
+          "description": "Let trusted Microsoft services bypass the firewall."
+        }
+      ]
+    },
+    {
+      "name": "tags",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "filterResponseKeys": ["duplocloud-ai-*"],
+      "createPath": "spec.tags",
+      "updatePath": "spec.updateRequest.tags",
+      "responsePath": "spec.tags",
+      "description": "Azure resource tags. Platform-managed duplocloud-ai-* tags are added automatically and are not tracked here."
+    },
+
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
+      "apiPath": "spec.provisioner.type",
+      "description": "How the platform provisions the vault. Defaults to the environment's provisioner."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "spec.provisioner.version",
+      "description": "Provisioner version. Defaults to the environment's version."
+    },
+
+    {
+      "name": "enable_rbac_authorization",
+      "type": "bool",
+      "computed": true,
+      "apiPath": "spec.enableRbacAuthorization",
+      "description": "Whether the vault's data plane uses Azure RBAC. Always true for platform-provisioned vaults, and immutable — flipping it would silently change who can read every secret, so the platform requires a recreate instead."
+    },
+    {
+      "name": "azure_resource_group_name",
+      "type": "string",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.azureResourceGroupName",
+      "description": "Name of the Azure resource group the vault lives in."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Provisioning status reported by the platform."
+    },
+    {
+      "name": "vault_record_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "Backend identifier of the vault record."
+    },
+    {
+      "name": "key_vault_id",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.keyVaultId",
+      "description": "ARM resource id of the Key Vault in Azure."
+    },
+    {
+      "name": "vault_uri",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.vaultUri",
+      "description": "Data-plane URI clients use to read secrets, e.g. https://my-app-vault.vault.azure.net/."
+    },
+    {
+      "name": "provisioning_state",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.provisioningState",
+      "description": "Azure-reported provisioning state of the vault."
+    },
+    {
+      "name": "tenant_id",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.tenantId",
+      "description": "Microsoft Entra tenant that backs the vault's authentication."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the vault record was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the vault record was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned"
+  }
+}

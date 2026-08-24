@@ -1,6 +1,6 @@
 {
   "name": "k8s_job",
-  "description": "Manages a DuploCloud AI Helpdesk Kubernetes Job \u2014 a batch workload that runs one or more containers to completion within an environment or resource group.",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes Job — a batch workload that runs one or more containers to completion within an environment or resource group.",
   "idPath": "id",
   "dataSource": true,
   "endpoint": {
@@ -58,6 +58,28 @@
       "forceNew": true,
       "apiPath": "spec.namespaceName",
       "description": "Kubernetes namespace to run the job in."
+    },
+    {
+      "name": "is_any_host_allowed",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "forceNew": true,
+      "apiPath": "spec.isAnyHostAllowed",
+      "description": "When true, the job's pods may be scheduled on any available host."
+    },
+    {
+      "name": "allocation_tags",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.allocationTags",
+      "pattern": "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$",
+      "patternDescription": "must be a valid Kubernetes label value: alphanumerics, dashes, underscores and dots, starting and ending with an alphanumeric character",
+      "maxLength": 63,
+      "description": "Allocation tags used to constrain which hosts the job pods run on."
     },
     {
       "name": "provisioner_type",
@@ -3589,6 +3611,14 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status of the job resource."
+    },
+    {
+      "name": "k8s_job_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this job, for reference by dependent resources."
     },
     {
       "name": "job_active",

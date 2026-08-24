@@ -37,14 +37,11 @@ output "status" {
 - `annotations` (Map of String) Kubernetes annotations applied to the config map.
 - `binary_data` (Map of String) Binary configuration entries, base64-encoded values keyed by name.
 - `data` (Map of String) Configuration key/value pairs (UTF-8 string data).
-- `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
-- `immutable` (Boolean) Mark the config map immutable (its data cannot be changed after creation).
+- `k8s_config_map_id` (String) ID of this config map, for reference by dependent resources.
 - `labels` (Map of String) Kubernetes labels applied to the config map.
 - `name` (String) Name of the config map resource.
 - `namespace_name` (String) Kubernetes namespace the config map is created in.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
-- `provisioner_version` (String) Optional provisioner version.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this config map belongs to.
-- `scope_ids` (List of String) Scope IDs that link this config map to a cloud provider account.
 - `status` (String) Current provisioning status.

@@ -27,6 +27,23 @@ func TestNormalizeCsvOrder(t *testing.T) {
 	}
 }
 
+// A minor-precision version config must not drift when the backend resolves it to
+// a patch version (e.g. AKS "1.35.6" → "1.35"); minor-only values pass through.
+func TestNormalizeVersionMinor(t *testing.T) {
+	cases := map[string]string{
+		"1.35.6":   "1.35", // AKS resolved patch
+		"1.35":     "1.35", // EKS / already minor
+		"1":        "1",    // single component
+		"1.35.6.7": "1.35", // extra components
+		"":         "",
+	}
+	for in, want := range cases {
+		if got := normalizeVersionMinor(in); got != want {
+			t.Errorf("normalizeVersionMinor(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 // Two API responses that differ only in broker order must yield identical state
 // values, so a refresh sees no drift.
 func TestAttrFromResponseNormalizesCsvOrder(t *testing.T) {

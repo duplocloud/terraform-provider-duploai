@@ -54,17 +54,137 @@ Saving this file, running `go generate ./...` (to regenerate docs), and running
 | `description` | string | **yes** | User-facing description shown in generated docs and the Terraform schema. |
 | `idPath` | string | **yes** | Dot-path into the create/read response that contains the backend-assigned object ID (e.g. `"id"`, `"result.id"`). The engine composes the Terraform resource ID as `<scope_values>/<backend_id>`. |
 | `endpoint` | object | **yes** | API endpoint configuration. See [Endpoint config](#endpoint-config). |
+| `idRequestPath` | string | no | Dot-path at which to write the backend object id into the **update** body (normally `"id"`). For APIs that validate a full-document update against the id in the body rather than the route. See [Sending the id on update](#sending-the-id-on-update). |
 | `attributes` | array | **yes** | Schema attributes. See [Attributes](#attributes). |
 | `requestConstants` | array | no | Fixed key/value pairs injected into every request body. See [Request constants](#request-constants). |
 | `createConstants` | array | no | Fixed pairs injected into **create** (POST) bodies only. Overrides `requestConstants` for the same path. |
 | `updateConstants` | array | no | Fixed pairs injected into **update** (PUT) bodies only. Overrides `requestConstants` for the same path. |
 | `requiredIf` | array | no | Conditional-required rules evaluated at plan time. See [RequiredIf rules](#requiredif-rules). |
 | `conflictsWith` | array | no | Mutually-exclusive attribute groups enforced at plan time. See [ConflictsWith rules](#conflictswith-rules). |
+| `invalidWhen` | array | no | Combinations the API rejects, failed at plan time instead of apply time. Covers numeric bounds, comparisons between attributes, and rules between leaves of one object. See [InvalidWhen rules](#invalidwhen-rules). |
+| `resendCreatePathsOnUpdate` | bool | no | Also write each attribute's **create** path in the PUT body, with the same value. For a backend whose update body is a delta envelope over a record it rebuilds from that body. See [Delta envelopes over a rebuilt record](#delta-envelopes-over-a-rebuilt-record). |
 | `dataSource` | bool | no | When `true`, also registers a read-only `data.duploai_<name>` data source derived automatically from this spec. See [Auto-generated data source](#auto-generated-data-source). |
 | `dataSourceOnly` | bool | no | When `true`, registers **only** a read-only `data.duploai_<name>` data source — no managed resource is registered. Use this for purely read-only APIs (e.g. look-up endpoints with no create/update/delete). Implies data source semantics; `dataSource` need not also be set. |
 | `waiter` | object | no | Async polling config. Required for resources that provision asynchronously. See [Waiter](#waiter). |
+| `association` | object | no | Makes this a link between two existing objects rather than an object of its own. See [Association resources](#association-resources). |
 
 ---
+
+## Association resources
+
+Some endpoints link two objects that already exist rather than creating one:
+
+```
+POST   /v1/aiservicedesk/admin/data/workspaces/{workspace_id}/scopes/{scope_id}
+DELETE /v1/aiservicedesk/admin/data/workspaces/{workspace_id}/scopes/{scope_id}
+```
+
+These break every assumption the normal CRUD shape makes. Both ids are in the
+path, there is no request body, the response is empty (so the usual decode
+rejects it as "no data"), there is no object id to append, and — critically —
+there is **no GET for the link itself**. Whether the link exists can only be
+learned by reading the parent and looking for the member.
+
+Set `association` and the engine switches to that shape:
+
+```json
+{
+  "name": "admin_workspace_scope_mapping",
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/workspaces/{workspace_id}/scopes/{scope_id}"
+  },
+  "association": {
+    "readPath": "/v1/aiservicedesk/admin/data/workspaces/{workspace_id}",
+    "memberPath": "scopeIds",
+    "memberAttribute": "scope_id"
+  },
+  "attributes": [
+    { "name": "workspace_id", "type": "string", "required": true, "forceNew": true },
+    { "name": "scope_id",     "type": "string", "required": true, "forceNew": true }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `readPath` | Absolute path of the object that owns the list, sharing `uriBase`'s path parameters. **Not** appended to `uriBase` — the parent normally sits above it. |
+| `memberPath` | Dot-path to the list within that response, e.g. `"scopeIds"`. |
+| `memberAttribute` | The attribute whose value is looked for in the list, e.g. `"scope_id"`. |
+
+Behaviour:
+
+- **create** — POSTs the resolved `uriBase` and ignores the empty response.
+- **delete** — DELETEs the same path; no `/{id}` is appended.
+- **read** — GETs `readPath` and treats the link as present only while
+  `memberAttribute`'s value appears at `memberPath`. If it is gone, or the parent
+  404s, the resource leaves state and the next plan recreates it. This is what
+  makes detaching in the console show up as drift instead of silently persisting.
+- **id** — the path parameters joined (`<workspace_id>/<scope_id>`), which is also
+  the import id.
+- **update** — never happens; there is nothing to change in place.
+
+Rules enforced at startup:
+
+- `readPath`, `memberPath` and `memberAttribute` are all required, and
+  `memberAttribute` must name a real attribute.
+- Every `{placeholder}` in `readPath` must be a path parameter of `uriBase`. An
+  unknown one substitutes to empty, giving a URL that 404s — which reads as "link
+  gone" and silently recreates the resource on every apply.
+- Every attribute must be a `string`, `required`, `forceNew`, and a path
+  parameter of `uriBase`. There is no body, so anything else could never be sent;
+  and changing either end means a different link, not an edit.
+- `endpoint.update` must not be declared.
+- No `waiter` — the link is created synchronously.
+- No `dataSource` / `dataSourceOnly` — a generated data source would GET the link
+  path, which is exactly the endpoint that does not exist. Read the parent
+  instead.
+
+One caveat is the spec's job to document, not the engine's: if the parent
+resource also manages the same list (e.g. `duploai_admin_workspace.scope_ids`),
+the two will fight over it on every apply. Pick one owner per link and say so in
+the resource description.
+
+## Sending the id on update
+
+The engine puts the object id in the URL (`PUT {uriBase}/{id}`) and never in the
+body — `id` is injected into the schema, not declared as an attribute. Some APIs
+need it in the body anyway.
+
+DuploAI's admin entity endpoints are one: the update path loads the existing
+record by route id but validates the *deserialized body*, and `Entity.Id`
+self-generates a fresh identifier when the body omits it. A uniqueness check that
+self-excludes by that id then excludes nothing, and the record collides with
+itself:
+
+```
+status 400: Validation error
+ShortName 'INSTALLER' is already used by workspace 'xforge-installer'.
+```
+
+— where `xforge-installer` *is* the workspace being updated. The console never
+hits this because it PUTs the whole object, id included.
+
+Set `idRequestPath` at the top level of the spec to match:
+
+```json
+{
+  "name": "admin_workspace",
+  "idPath": "id",
+  "idRequestPath": "id",
+  "endpoint": { "uriBase": "/v1/aiservicedesk/admin/data/Workspaces" }
+}
+```
+
+Notes:
+
+- **Update only.** The create body never carries an id — the backend assigns it.
+- Applies to every real update: the normal `PUT`, the `updateAfterCreate`
+  follow-up, and each `singleIntentUpdate` call.
+- It is also written into the prior-state body used for the
+  "nothing the API cares about changed" comparison, so an injected id cannot make
+  the two sides differ and turn every apply into a pointless `PUT`.
+- Opt-in. Leave it unset unless an API actually needs it; a stray `id` in the
+  body is at best ignored and at worst rejected.
 
 ## Endpoint config
 
@@ -194,6 +314,7 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `computed` | bool | Attribute may be set by the provider (server-returned). |
 | `sensitive` | bool | Value is masked in plan output and state. Use for passwords, tokens, keys. |
 | `forceNew` | bool | Changing this attribute destroys and recreates the resource (`RequiresReplace`). |
+| `immutableOnceTrue` | bool | For a `bool`: reject a `true` → `false` change at plan time. See [One-way switches](#one-way-switches). |
 | `default` | any | Static default value (JSON literal). Requires `computed: true` — the framework errors if `computed` is false and a default is set. |
 | `oneOf` | array of strings | Enum constraint on a `string` attribute. Bad values fail at plan time. Only wired for `string` — on any other type it is silently ignored. |
 | `apiPath` | string | Dot-path in the API body this attribute reads/writes (e.g. `"spec.region"`). See [Path mapping](#path-mapping). |
@@ -203,7 +324,9 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `updatePath` | string | Override for PUT (update) body. Falls back to `requestPath`, then `apiPath`. |
 | `createOnly` | bool | Send this field in POST (create) only; never in PUT (update). Useful for fields immutable after creation that do not trigger replacement. |
 | `noSend` | bool | Read from the response but never sent in requests. Use for computed-only output fields. |
+| `sendFromState` | bool | The inverse of `noSend`: send a **computed-only** attribute in request bodies, carrying the value Terraform already holds in state. See [Server-assigned fields the API wants back](#server-assigned-fields-the-api-wants-back). |
 | `normalizeCsvOrder` | bool | For a `string` field, sort its comma-separated tokens into a canonical (lexical) order before storing in state. Use for order-insensitive values the backend returns non-deterministically (e.g. AWS MSK bootstrap broker strings) to prevent perpetual refresh drift. |
+| `preserveOnEmptyResponse` | bool | Keep the value already held for this attribute — the configured plan value on create/update, the prior state value on refresh — whenever the API returns null or empty for it. See [Write-only fields](#write-only-fields). |
 | `deprecated` | string | Marks the attribute deprecated: the message is wired to the framework's `DeprecationMessage` and shown as a warning whenever the attribute is set in config. Use when renaming an attribute — keep the old one with a deprecation message pointing at the replacement (pair with `conflictsWith` + `requiredIf`/`isEmpty` for a backwards-compatible rename). |
 | `attributes` | array | Nested `AttributeSpec` entries. Required when `type` is an object form. Recurses to any depth. |
 
@@ -247,6 +370,242 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 - `required + computed` is invalid (framework rejects it).
 - `required + optional` is invalid.
 - `default` requires `computed: true` — the framework hard-errors otherwise.
+
+### One-way switches
+
+Some cloud settings can be turned on but never off. Azure Key Vault purge
+protection is the canonical case: enable it and the vault must be destroyed and
+recreated to get rid of it. Setting it back to `false` plans cleanly and then
+fails deep in the apply with the provider's own error.
+
+`immutableOnceTrue` moves that failure to plan time:
+
+```json
+{
+  "name": "enable_purge_protection",
+  "type": "bool",
+  "optional": true,
+  "computed": true,
+  "default": false,
+  "immutableOnceTrue": true
+}
+```
+
+```
+Error: Cannot disable enable_purge_protection
+
+  This setting is one-way: once enabled the cloud provider does not allow
+  turning it off again, so the change would fail during apply.
+
+  Set it back to true, destroy and recreate the resource, or keep the config
+  as-is and add lifecycle { ignore_changes = [enable_purge_protection] } to
+  stop Terraform planning the change.
+```
+
+**Why it errors instead of suppressing the diff.** The obvious alternative —
+quietly keep the old `true` — is not available. The plugin framework has no
+`DiffSuppressFunc` (that was SDKv2); the nearest equivalent is a plan modifier,
+and a plan modifier that returns a value differing from a *set config value*
+makes Terraform reject the plan outright:
+
+```
+Provider produced invalid plan: planned value cty.True does not match
+config value cty.False
+```
+
+So suppression would trade an apply-time error for a plan-time framework error,
+and would leave config and reality silently diverged. A user who genuinely wants
+the drift ignored can say so explicitly with `lifecycle.ignore_changes`, which is
+the supported way to express "I know, leave it".
+
+Rules enforced at startup: only valid on a `bool`, and rejected alongside
+`forceNew` (which recreates on any change, so the plan-time check would never be
+reached).
+
+### Write-only fields
+
+Some backends accept a value but never return it. The AI Helpdesk redacts every
+sensitive credential value to `""` on the way out — on `GET`, and on the `POST`
+/ `PUT` response too. Storing that empty value fails the apply with
+*"provider produced inconsistent result after apply: … inconsistent values for
+sensitive attribute"*, and, once past create, shows perpetual drift.
+
+Mark such a leaf `preserveOnEmptyResponse: true`:
+
+```json
+{
+  "name": "value",
+  "type": "string",
+  "optional": true,
+  "sensitive": true,
+  "apiPath": "value",
+  "preserveOnEmptyResponse": true
+}
+```
+
+The engine then keeps what it already had — the configured plan value on
+create/update, the prior state value on refresh — whenever the response is null
+or an empty string. A **non-empty** response value always wins, so a rotation
+the API does surface is still picked up.
+
+Scope and limits:
+
+- Valid on a leaf (`string` / `bool` / `number`), top-level or nested inside an
+  `object`, `list(object)` or `map(object)`. Inside a collection the prior value
+  is paired positionally — list by index, map by key.
+- Not applied inside `set(object)`: element order is not stable, so a prior
+  element cannot be matched to a response element.
+- Terraform cannot detect an out-of-band change to a field the API won't return.
+  Say so in the attribute's `description`.
+- On **import** there is no prior value, so the field lands empty — expected,
+  since the secret is unrecoverable from the API.
+
+### InvalidWhen rules
+
+`requiredIf` asks whether a field is set; `conflictsWith` asks whether two fields are
+both set. Neither can express a numeric bound, a comparison between two attributes, or a
+rule between two leaves of the same object — and APIs are full of those. Without a way to
+state them, the spec can only document the rule in a description and let the apply fail
+with a cloud error.
+
+**Reach for the simpler tools first.** An unconditional bound is `min` / `max` on the
+attribute, which the engine already wires to the framework's own validators; a fixed value
+set is `oneOf`; a presence rule is `requiredIf` or `conflictsWith`. `invalidWhen` is for
+what those cannot say — and note that the framework's stock comparison validators
+(`int64validator.AtLeastSumOf` and friends) do not substitute here: they skip null values,
+so a rule comparing an explicit value against a defaulted one never fires, which is
+usually the case most worth catching.
+
+`invalidWhen` states them. Each rule fires when **all** of its conditions hold:
+
+```json
+"invalidWhen": [
+  {
+    "attribute": "max_count",
+    "when": [
+      { "attribute": "enable_auto_scaling", "equals": "true" },
+      { "attribute": "max_count", "lessThanAttribute": "min_count" }
+    ],
+    "message": "max_count must be >= min_count when enable_auto_scaling is true."
+  },
+  {
+    "attribute": "upgrade_settings",
+    "when": [
+      { "attribute": "upgrade_settings.max_surge_type", "notEquals": "Default" },
+      { "attribute": "upgrade_settings.max_surge_value", "greaterThan": 0 },
+      { "attribute": "upgrade_settings.max_unavailable_type", "notEquals": "Default" },
+      { "attribute": "upgrade_settings.max_unavailable_value", "greaterThan": 0 }
+    ],
+    "message": "Only one of surge / unavailable may be active."
+  }
+]
+```
+
+Conditions reuse the `requiredIf` operators — `equals`, `notEquals`, `isEmpty` — plus:
+
+| Operator | Meaning |
+|---|---|
+| `greaterThan` / `lessThan` | numeric comparison against a literal (`int` / `number` attributes) |
+| `lessThanAttribute` | numeric comparison against another attribute's value |
+
+`attribute` may be a **dot-path** to a leaf inside an object (`upgrade_settings.max_surge_type`),
+which is what makes a rule between two leaves of the same object expressible. A dot-path
+descends through plain `object` attributes only — a leaf inside a `list(object)` or
+`map(object)` needs an index or key that a dot-path cannot carry, so startup validation
+rejects it rather than accepting a rule that would never fire. The rule's
+own `attribute` field decides which field the error is reported against, so the diagnostic
+points at what the user should change; it defaults to the first condition's attribute.
+
+Semantics worth knowing:
+
+- **A null value falls back to the attribute's `default`.** This is the difference between
+  catching a bad config and missing it: a user who sets `min_count = 3` and leaves
+  `max_count` alone has an invalid pair, because `max_count` defaults to 1 — and the
+  config carries no value to compare. Only the numeric operators do this; there is no
+  default to compare against when none is declared, and the condition then does not hold.
+- **An unknown value stops evaluation.** A reference to another resource in the same apply
+  is configured but not yet known, so the combination cannot be judged and must not be
+  reported invalid — the same treatment `requiredIf` gives unknowns.
+- **`message` is required**, and it is the whole point of the feature: it should name the
+  attributes and state the rule, because it is all the user gets. Startup validation
+  rejects a rule without one, a condition with more than one operator, a numeric operator
+  on a non-numeric attribute, and any attribute or dot-path that does not resolve — so a
+  typo fails at startup rather than silently never firing.
+- Keep the rule **no stricter than the API**. Mirroring the backend's own check exactly is
+  the goal: `azure_node_pool`'s upgrade rule tests both the type and the value on each
+  side, because a non-`Default` type with a zero value is inert and the API accepts it.
+
+### Delta envelopes over a rebuilt record
+
+A sibling of the problem above, for an API whose update body is a **delta envelope**
+(`spec.updateRequest.*`) applied against the stored record — while the record itself is
+replaced by the body's create-shape fields (`spec.cluster.*`, `spec.database.*`).
+
+Send only the envelope and the backend keeps the fields it recognises as *changed* and
+resets every other one to its type default. Azure Managed Redis reset a non-default
+`eviction_policy` to `NoEviction` on any unrelated update: Terraform state and Azure
+still agreed, but the platform's stored record did not — and because the backend decides
+whether to patch the cloud by diffing the envelope against that record, a later change
+back to `NoEviction` was a no-op that reported success and never reached Azure.
+
+Set it at the spec level:
+
+```json
+{
+  "name": "azure_managed_redis",
+  "resendCreatePathsOnUpdate": true
+}
+```
+
+The PUT body then carries each attribute's create path **and** its update path with the
+same value — the shape the platform's own console sends. Notes:
+
+- Attributes with a single path (`apiPath` only) are written once; nothing is duplicated.
+- `createOnly` attributes are still skipped on update — they opt out explicitly, and a
+  field the API refuses on update must not reappear because of this flag.
+- Only the update body changes; create is untouched.
+
+### Server-assigned fields the API wants back
+
+Computed-only attributes are outputs, so the engine never sends them (see the
+`!a.Required && !a.Optional` gate in `bodyFromRaw`). That breaks against a backend
+that **rebuilds its stored document from the request body**: anything the body
+omits is dropped from the record.
+
+Azure Managed Redis is such an API. `spec.scopeIds` links the instance to its
+cloud provider account and is assigned by the platform, so it was modelled
+computed-only — and every update silently wiped it from the stored record.
+Confirmed live 2026-08-04.
+
+`sendFromState: true` makes the engine send the value Terraform already holds:
+
+```json
+{
+  "name": "scope_ids",
+  "type": "list(string)",
+  "computed": true,
+  "sendFromState": true,
+  "apiPath": "spec.scopeIds"
+}
+```
+
+The alternative — marking the field `optional` purely so the body builder picks it
+up — misrepresents a server-assigned value as user-settable and invites someone to
+set it. `sendFromState` keeps the attribute honestly read-only.
+
+Notes:
+
+- Implies `UseStateForUnknown`: the value must be **known at plan time** to be
+  sendable. (An earlier attempt using `stable: true` failed for exactly this
+  reason.)
+- On **create** there is no prior state, so the value is unknown and correctly
+  omitted — which is what the API wants, since the server has not assigned it yet.
+- Rejected at startup on a non-computed attribute, alongside `noSend`
+  (contradictory), or on an `optional`/`required` attribute (redundant — those are
+  already sent).
+- This is a workaround for backend behaviour. The durable fix is for the API to
+  merge updates into the stored entity instead of replacing it; until then, every
+  server-assigned field in that resource's write path needs the flag.
 
 ### Path mapping
 
@@ -661,6 +1020,8 @@ Default `failureStates` map (identical across all resources):
 | `deprovisionedState` | string | — | **No default.** Terminal status after the deprovision step completes (e.g. `"DeProvisioned"`). Required when `endpoint.deprovision` is set — the delete flow waits for this state before issuing the final delete call. |
 | `failureDetailPath` | string | `"blockedReason"` | Dot-path to a field with extra error context. Appended to the error message when the status is a failure state. |
 | `failureRetries` | int | `0` | **No default.** Extra polls to tolerate after first seeing a failure state before treating it as terminal. Use for backends that report a transient failure and then self-recover. |
+| `readyPath` / `readyState` | string | — | **No default.** Optional secondary success gate: the resource is only ready once `statusPath` reaches `successState` **and** the value at `readyPath` equals `readyState`. Use when the wrapper status flips to `"Complete"` before a downstream signal is actually ready (e.g. an EC2 host whose status is `Complete` but `result.liveState` is not yet `"running"`). Must be set together. |
+| `readyFailurePath` / `readyFailureStates` | string / object | — | **No default.** Optional failure gate on a second signal, independent of `statusPath`/`failureStates`. When the value at `readyFailurePath` is a key in `readyFailureStates`, the wait aborts immediately instead of polling to timeout. Use when the wrapper status reaches `successState` well before a downstream controller (e.g. Flux) reports whether it actually succeeded — e.g. a Kubernetes-style Ready condition's `reason` field. Must be set together. |
 | `pollIntervalSeconds` | int | `10` | Seconds between status polls. |
 | `failurePollIntervalSeconds` | int | *(same as `pollIntervalSeconds`)* | Override the poll interval when the resource is in a failure state during a retry. Use a longer value to give the backend more time to self-recover between checks. Falls back to `pollIntervalSeconds` when unset. |
 | `createTimeoutMinutes` | int | `30` | Default create timeout. Overridable per-instance via the `timeouts` block. |
@@ -716,6 +1077,39 @@ a `timeouts` block is automatically added to the schema.
   "failureRetries": 3
 }
 ```
+
+**Gated on a Kubernetes-style Ready condition (Flux CRDs — HelmRelease, GitRepository, OCIRepository, …):**
+the wrapper `status` reaches `Complete` as soon as the CR is applied to the cluster, well before Flux
+finishes reconciling it. Use `readyPath`/`readyState` to hold success until the CR's own `Ready`
+condition is `True`, and `readyFailurePath`/`readyFailureStates` to fail fast on a terminal signal
+instead of polling to timeout. A path segment of the form `key[filterKey=filterValue]` (e.g.
+`conditions[type=Ready]`) selects the first array element matching that field — this is the only place
+dot-paths support filtering, everywhere else a path is a plain series of key lookups (with `[]` to spread
+over every element instead of matching one).
+```json
+"waiter": {
+  "deprovisionedState": "DeProvisioned",
+  "readyPath": "result.k8sResource.status.conditions[type=Ready].status",
+  "readyState": "True",
+  "readyFailurePath": "result.k8sResource.status.conditions[type=Stalled].status",
+  "readyFailureStates": {
+    "True": "Helm release failed to reconcile and Flux is not retrying further"
+  },
+  "failureDetailPath": "result.k8sResource.status.conditions[type=Ready].message"
+}
+```
+
+**Why `Stalled`, not `Ready`'s `reason`:** kstatus's `Stalled` condition is Flux's
+dedicated "reconciliation cannot make further progress, human intervention needed"
+signal — it only becomes `True` once every configured retry (`remediation.retries`)
+is exhausted. `Ready`'s `reason` (e.g. `InstallFailed`) can appear on a single
+failed attempt that Flux is still going to retry automatically; gating on it
+directly would abort the wait prematurely on a retry Flux was about to recover
+from. Gating on `Stalled` instead is correct regardless of how many retries are
+configured — including if a future spec exposes `remediation.retries` as an
+attribute. `Ready`'s own `message` (rich, attempt-specific detail) is still worth
+surfacing via `failureDetailPath` once `Stalled` has confirmed the failure is
+final.
 
 ---
 

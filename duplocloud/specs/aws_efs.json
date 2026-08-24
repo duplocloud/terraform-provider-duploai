@@ -62,17 +62,11 @@
     {
       "name": "provisioner_type",
       "type": "string",
-      "optional": true,
       "computed": true,
-      "forceNew": true,
-      "oneOf": [
-        "Cli",
-        "IacNativeTf",
-        "IacDuploTf",
-        "DirectApiCall"
-      ],
+      "stable": true,
+      "noSend": true,
       "apiPath": "spec.provisioner.type",
-      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+      "description": "Provisioner type recorded by the backend. Always DirectApiCall for this resource — the server stamps it on every create/update and ignores user input, so it cannot be configured."
     },
     {
       "name": "provisioner_version",
@@ -113,6 +107,7 @@
       "type": "string",
       "optional": true,
       "computed": true,
+      "default": "generalPurpose",
       "forceNew": true,
       "createOnly": true,
       "oneOf": [
@@ -121,7 +116,7 @@
       ],
       "requestPath": "spec.createRequest.performanceMode",
       "responsePath": "result.cloudDetails.fileSystem.performanceMode",
-      "description": "Performance mode: generalPurpose (default) or maxIO. Immutable after creation."
+      "description": "Performance mode: generalPurpose (default) or maxIO. Immutable after creation. When importing a maxIO file system, set this to maxIO in the configuration — otherwise the generalPurpose default plans a replacement."
     },
     {
       "name": "creation_token",
@@ -148,6 +143,7 @@
       "type": "string",
       "optional": true,
       "computed": true,
+      "default": "bursting",
       "oneOf": [
         "bursting",
         "provisioned",
@@ -200,9 +196,18 @@
       "description": "Current provisioning status of the file system."
     },
     {
+      "name": "aws_efs_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this EFS file system resource, for reference by dependent resources."
+    },
+    {
       "name": "file_system_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.cloudDetails.fileSystem.fileSystemId",
       "description": "AWS ID of the provisioned file system (e.g. fs-0123456789abcdef0)."

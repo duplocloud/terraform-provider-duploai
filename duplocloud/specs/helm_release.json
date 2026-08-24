@@ -4,7 +4,8 @@
   "idPath": "id",
   "dataSource": true,
   "endpoint": {
-    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sHelmReleases"
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sHelmReleases",
+    "deprovision": {}
   },
   "attributes": [
     {
@@ -28,16 +29,17 @@
       "optional": true,
       "computed": true,
       "default": "",
-      "apiPath": "description",
-      "description": "Optional description."
+      "requestPath": "description",
+      "description": "Optional description. Not echoed back by the API, so it is never read from the response."
     },
     {
       "name": "scope_ids",
       "type": "list(string)",
-      "required": true,
-      "forceNew": true,
-      "apiPath": "spec.scopeIds",
-      "description": "Scope IDs that link this Helm release to a cloud provider account."
+      "optional": true,
+      "computed": true,
+      "default": [],
+      "requestPath": "spec.scopeIds",
+      "description": "Scope IDs that link this Helm release to a cloud provider account. Not echoed back by the API, so it is never read from the response."
     },
     {
       "name": "resource_group_id",
@@ -70,6 +72,7 @@
       "computed": true,
       "default": "helm.toolkit.fluxcd.io/v2",
       "apiPath": "spec.k8sResource.apiVersion",
+      "responsePath": "result.k8sResource.apiVersion",
       "description": "Flux HelmRelease CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. helm.toolkit.fluxcd.io/v2beta2)."
     },
     {
@@ -79,6 +82,7 @@
       "computed": true,
       "default": "5m",
       "apiPath": "spec.k8sResource.spec.interval",
+      "responsePath": "result.k8sResource.spec.interval",
       "description": "Interval at which the release is reconciled (Go duration, e.g. 5m, 1h)."
     },
     {
@@ -86,6 +90,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.targetNamespace",
+      "responsePath": "result.k8sResource.spec.targetNamespace",
       "description": "Namespace the chart is installed into (defaults to the HelmRelease namespace)."
     },
     {
@@ -93,13 +98,151 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.releaseName",
+      "responsePath": "result.k8sResource.spec.releaseName",
       "description": "Helm release name (defaults to the resource name)."
+    },
+    {
+      "name": "storage_namespace",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.storageNamespace",
+      "responsePath": "result.k8sResource.spec.storageNamespace",
+      "description": "Namespace Helm stores its release history in (defaults to the HelmRelease namespace)."
+    },
+    {
+      "name": "depends_on_releases",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.dependsOn",
+      "responsePath": "result.k8sResource.spec.dependsOn",
+      "description": "Other HelmReleases that must be ready before this one reconciles. Ordering only — no data flows between them. Named depends_on_releases because depends_on is a reserved Terraform meta-argument.",
+      "attributes": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "apiPath": "name",
+          "description": "Name of the HelmRelease depended on."
+        },
+        {
+          "name": "namespace",
+          "type": "string",
+          "optional": true,
+          "apiPath": "namespace",
+          "description": "Namespace of the dependency. Defaults to this release's namespace."
+        },
+        {
+          "name": "ready_expr",
+          "type": "string",
+          "optional": true,
+          "apiPath": "readyExpr",
+          "description": "CEL expression overriding what \"ready\" means for the dependency."
+        }
+      ]
+    },
+    {
+      "name": "service_account_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.serviceAccountName",
+      "responsePath": "result.k8sResource.spec.serviceAccountName",
+      "description": "Kubernetes ServiceAccount, in the HelmRelease namespace, that Flux impersonates when running Helm actions."
+    },
+    {
+      "name": "timeout",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.timeout",
+      "responsePath": "result.k8sResource.spec.timeout",
+      "description": "Time to wait for any individual Kubernetes operation during a Helm action (Go duration, e.g. 5m). Flux defaults to 5m when omitted, and each action block below may override it. This is the in-cluster Helm timeout and is unrelated to the `timeouts` block, which bounds how long Terraform itself waits."
+    },
+    {
+      "name": "max_history",
+      "type": "int",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.maxHistory",
+      "responsePath": "result.k8sResource.spec.maxHistory",
+      "description": "Number of Helm release revisions to keep in storage. Flux defaults to 5 when omitted."
+    },
+    {
+      "name": "suspend",
+      "type": "bool",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.suspend",
+      "responsePath": "result.k8sResource.spec.suspend",
+      "description": "Suspend reconciliation of the release. The Helm release itself is left in place."
+    },
+    {
+      "name": "persistent_client",
+      "type": "bool",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.persistentClient",
+      "responsePath": "result.k8sResource.spec.persistentClient",
+      "description": "Re-use one Helm client across reconciles. Flux defaults to true."
+    },
+    {
+      "name": "post_render_strategy",
+      "type": "string",
+      "optional": true,
+      "oneOf": [
+        "nohooks",
+        "combined",
+        "separate"
+      ],
+      "apiPath": "spec.k8sResource.spec.postRenderStrategy",
+      "responsePath": "result.k8sResource.spec.postRenderStrategy",
+      "description": "How post-renderers interact with Helm hooks: nohooks, combined, or separate. Flux defaults to combined."
+    },
+    {
+      "name": "wait_strategy_name",
+      "type": "string",
+      "optional": true,
+      "oneOf": [
+        "poller",
+        "legacy"
+      ],
+      "apiPath": "spec.k8sResource.spec.waitStrategy.name",
+      "responsePath": "result.k8sResource.spec.waitStrategy.name",
+      "description": "Implementation Flux uses to wait for resources to become ready: poller or legacy. Flux defaults to poller."
+    },
+    {
+      "name": "common_metadata_labels",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.commonMetadata.labels",
+      "responsePath": "result.k8sResource.spec.commonMetadata.labels",
+      "description": "Labels applied to every object the chart renders."
+    },
+    {
+      "name": "common_metadata_annotations",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.commonMetadata.annotations",
+      "responsePath": "result.k8sResource.spec.commonMetadata.annotations",
+      "description": "Annotations applied to every object the chart renders."
+    },
+    {
+      "name": "kube_config_secret_ref_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.kubeConfig.secretRef.name",
+      "responsePath": "result.k8sResource.spec.kubeConfig.secretRef.name",
+      "description": "Name of a Secret holding a kubeconfig, so the release targets a remote cluster."
+    },
+    {
+      "name": "kube_config_secret_ref_key",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.kubeConfig.secretRef.key",
+      "responsePath": "result.k8sResource.spec.kubeConfig.secretRef.key",
+      "description": "Key within the kubeconfig Secret."
     },
     {
       "name": "values",
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.values",
+      "responsePath": "result.k8sResource.spec.values",
       "description": "Inline Helm values as a YAML or JSON string."
     },
     {
@@ -107,6 +250,7 @@
       "type": "list(object)",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.valuesFrom",
+      "responsePath": "result.k8sResource.spec.valuesFrom",
       "description": "Values sourced from ConfigMaps or Secrets.",
       "attributes": [
         {
@@ -129,6 +273,799 @@
           "optional": true,
           "apiPath": "valuesKey",
           "description": "Key in the source holding the values (defaults to values.yaml)."
+        },
+        {
+          "name": "target_path",
+          "type": "string",
+          "optional": true,
+          "apiPath": "targetPath",
+          "description": "Where in the values tree to graft the referenced data, as a dot-separated path. When set, the referenced value is treated as a single value rather than a values map to merge."
+        },
+        {
+          "name": "optional",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "optional",
+          "description": "Tolerate a missing ConfigMap or Secret instead of failing the reconcile."
+        }
+      ]
+    },
+    {
+      "name": "install",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.install",
+      "responsePath": "result.k8sResource.spec.install",
+      "description": "Options for the Helm install action — the first release of the chart, and any re-install after an uninstall remediation.",
+      "attributes": [
+        {
+          "name": "timeout",
+          "type": "string",
+          "optional": true,
+          "apiPath": "timeout",
+          "description": "Timeout for the install action (Go duration). Overrides the release-level timeout."
+        },
+        {
+          "name": "crds",
+          "type": "string",
+          "optional": true,
+          "oneOf": [
+            "Skip",
+            "Create",
+            "CreateReplace"
+          ],
+          "apiPath": "crds",
+          "description": "How the chart's CRDs are handled on install: Skip (never apply), Create (apply only if absent), or CreateReplace (apply and update existing). Flux defaults to Create."
+        },
+        {
+          "name": "create_namespace",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "createNamespace",
+          "description": "Create target_namespace if it does not already exist."
+        },
+        {
+          "name": "replace",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "replace",
+          "description": "Re-use the name of a deleted release still present in Helm history."
+        },
+        {
+          "name": "disable_wait",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableWait",
+          "description": "Do not wait for the installed resources to become ready before marking the release successful."
+        },
+        {
+          "name": "disable_wait_for_jobs",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableWaitForJobs",
+          "description": "Do not wait for Jobs created by the chart to complete."
+        },
+        {
+          "name": "disable_hooks",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableHooks",
+          "description": "Skip the chart's install hooks."
+        },
+        {
+          "name": "disable_open_api_validation",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableOpenAPIValidation",
+          "description": "Skip validating rendered templates against the cluster's OpenAPI schema."
+        },
+        {
+          "name": "disable_schema_validation",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableSchemaValidation",
+          "description": "Skip validating the supplied values against the chart's values.schema.json. Requires Flux 2.4 or later."
+        },
+        {
+          "name": "remediation",
+          "type": "object",
+          "optional": true,
+          "apiPath": "remediation",
+          "description": "What Flux does when the install fails.",
+          "attributes": [
+            {
+              "name": "retries",
+              "type": "int",
+              "optional": true,
+              "apiPath": "retries",
+              "description": "Number of retries after a failed install. Use -1 to retry indefinitely. Flux defaults to 0."
+            },
+            {
+              "name": "remediate_last_failure",
+              "type": "bool",
+              "optional": true,
+              "apiPath": "remediateLastFailure",
+              "description": "Remediate (uninstall) after the final retry is exhausted, instead of leaving the failed release in place."
+            },
+            {
+              "name": "ignore_test_failures",
+              "type": "bool",
+              "optional": true,
+              "apiPath": "ignoreTestFailures",
+              "description": "Treat a Helm test failure as success, so it does not trigger remediation. Only meaningful when test.enable is true."
+            }
+          ]
+        },
+        {
+          "name": "strategy",
+          "type": "object",
+          "optional": true,
+          "apiPath": "strategy",
+          "description": "Retry strategy for the install action.",
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "optional": true,
+              "apiPath": "name",
+              "description": "Name of the install strategy."
+            },
+            {
+              "name": "retry_interval",
+              "type": "string",
+              "optional": true,
+              "apiPath": "retryInterval",
+              "description": "Interval between retries (Go duration). Applies to the retry strategy only."
+            }
+          ]
+        },
+        {
+          "name": "disable_take_ownership",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableTakeOwnership",
+          "description": "Do not take ownership of existing resources that are not tracked by this release."
+        },
+        {
+          "name": "server_side_apply",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "serverSideApply",
+          "description": "Apply the rendered manifests server-side instead of client-side."
+        },
+        {
+          "name": "skip_crds",
+          "type": "bool",
+          "optional": true,
+          "deprecated": "Deprecated by Flux. Use crds = \"Skip\" instead.",
+          "apiPath": "skipCRDs",
+          "description": "Skip installing the chart's CRDs. Deprecated by Flux in favour of crds."
+        }
+      ]
+    },
+    {
+      "name": "upgrade",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.upgrade",
+      "responsePath": "result.k8sResource.spec.upgrade",
+      "description": "Options for the Helm upgrade action, run whenever the chart version or values change.",
+      "attributes": [
+        {
+          "name": "timeout",
+          "type": "string",
+          "optional": true,
+          "apiPath": "timeout",
+          "description": "Timeout for the upgrade action (Go duration). Overrides the release-level timeout."
+        },
+        {
+          "name": "crds",
+          "type": "string",
+          "optional": true,
+          "oneOf": [
+            "Skip",
+            "Create",
+            "CreateReplace"
+          ],
+          "apiPath": "crds",
+          "description": "How the chart's CRDs are handled on upgrade: Skip (never apply), Create (apply only if absent), or CreateReplace (apply and update existing). Flux defaults to Skip."
+        },
+        {
+          "name": "force",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "force",
+          "description": "Replace resources through delete/recreate when a patch would fail."
+        },
+        {
+          "name": "preserve_values",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "preserveValues",
+          "description": "Merge the last release's values on top of the supplied ones (helm upgrade --reuse-values)."
+        },
+        {
+          "name": "cleanup_on_fail",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "cleanupOnFail",
+          "description": "Delete newly created resources when the upgrade fails."
+        },
+        {
+          "name": "disable_wait",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableWait",
+          "description": "Do not wait for the upgraded resources to become ready before marking the release successful."
+        },
+        {
+          "name": "disable_wait_for_jobs",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableWaitForJobs",
+          "description": "Do not wait for Jobs created by the chart to complete."
+        },
+        {
+          "name": "disable_hooks",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableHooks",
+          "description": "Skip the chart's upgrade hooks."
+        },
+        {
+          "name": "disable_open_api_validation",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableOpenAPIValidation",
+          "description": "Skip validating rendered templates against the cluster's OpenAPI schema."
+        },
+        {
+          "name": "disable_schema_validation",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableSchemaValidation",
+          "description": "Skip validating the supplied values against the chart's values.schema.json. Requires Flux 2.4 or later."
+        },
+        {
+          "name": "remediation",
+          "type": "object",
+          "optional": true,
+          "apiPath": "remediation",
+          "description": "What Flux does when the upgrade fails.",
+          "attributes": [
+            {
+              "name": "retries",
+              "type": "int",
+              "optional": true,
+              "apiPath": "retries",
+              "description": "Number of retries after a failed upgrade. Use -1 to retry indefinitely. Flux defaults to 0."
+            },
+            {
+              "name": "strategy",
+              "type": "string",
+              "optional": true,
+              "oneOf": [
+                "rollback",
+                "uninstall"
+              ],
+              "apiPath": "strategy",
+              "description": "How a failed upgrade is remediated: rollback to the previous revision, or uninstall the release. Flux defaults to rollback."
+            },
+            {
+              "name": "remediate_last_failure",
+              "type": "bool",
+              "optional": true,
+              "apiPath": "remediateLastFailure",
+              "description": "Remediate after the final retry is exhausted, instead of leaving the failed release in place. Flux defaults to true when retries is greater than 0."
+            },
+            {
+              "name": "ignore_test_failures",
+              "type": "bool",
+              "optional": true,
+              "apiPath": "ignoreTestFailures",
+              "description": "Treat a Helm test failure as success, so it does not trigger remediation. Only meaningful when test.enable is true."
+            }
+          ]
+        },
+        {
+          "name": "strategy",
+          "type": "object",
+          "optional": true,
+          "apiPath": "strategy",
+          "description": "Retry strategy for the upgrade action.",
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "optional": true,
+              "apiPath": "name",
+              "description": "Name of the upgrade strategy."
+            },
+            {
+              "name": "retry_interval",
+              "type": "string",
+              "optional": true,
+              "apiPath": "retryInterval",
+              "description": "Interval between retries (Go duration). Applies to the retry strategy only."
+            }
+          ]
+        },
+        {
+          "name": "disable_take_ownership",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableTakeOwnership",
+          "description": "Do not take ownership of existing resources that are not tracked by this release."
+        },
+        {
+          "name": "server_side_apply",
+          "type": "string",
+          "optional": true,
+          "oneOf": [
+            "enabled",
+            "disabled",
+            "auto"
+          ],
+          "apiPath": "serverSideApply",
+          "description": "Server-side apply mode for the upgrade. Note this is a string here, unlike install.server_side_apply."
+        },
+        {
+          "name": "chart_name_change_strategy",
+          "type": "string",
+          "optional": true,
+          "oneOf": [
+            "Reinstall",
+            "InPlaceUpdate"
+          ],
+          "apiPath": "chartNameChangeStrategy",
+          "description": "What to do when the chart name changes: Reinstall the release, or apply an InPlaceUpdate."
+        }
+      ]
+    },
+    {
+      "name": "rollback",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.rollback",
+      "responsePath": "result.k8sResource.spec.rollback",
+      "description": "Options for the Helm rollback action, run when upgrade.remediation.strategy is rollback.",
+      "attributes": [
+        {
+          "name": "timeout",
+          "type": "string",
+          "optional": true,
+          "apiPath": "timeout",
+          "description": "Timeout for the rollback action (Go duration). Overrides the release-level timeout."
+        },
+        {
+          "name": "force",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "force",
+          "description": "Replace resources through delete/recreate when a patch would fail."
+        },
+        {
+          "name": "recreate",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "recreate",
+          "description": "Recreate the Pods of the rolled-back resources.",
+          "deprecated": "No effect on Helm 3; modeled for round-trip fidelity only."
+        },
+        {
+          "name": "cleanup_on_fail",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "cleanupOnFail",
+          "description": "Delete newly created resources when the rollback fails."
+        },
+        {
+          "name": "disable_wait",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableWait",
+          "description": "Do not wait for the rolled-back resources to become ready."
+        },
+        {
+          "name": "disable_wait_for_jobs",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableWaitForJobs",
+          "description": "Do not wait for Jobs created by the chart to complete."
+        },
+        {
+          "name": "disable_hooks",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableHooks",
+          "description": "Skip the chart's rollback hooks."
+        },
+        {
+          "name": "server_side_apply",
+          "type": "string",
+          "optional": true,
+          "oneOf": [
+            "enabled",
+            "disabled",
+            "auto"
+          ],
+          "apiPath": "serverSideApply",
+          "description": "Server-side apply mode for the rollback."
+        }
+      ]
+    },
+    {
+      "name": "uninstall",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.uninstall",
+      "responsePath": "result.k8sResource.spec.uninstall",
+      "description": "Options for the Helm uninstall action, run on remediation and when the release is deleted.",
+      "attributes": [
+        {
+          "name": "timeout",
+          "type": "string",
+          "optional": true,
+          "apiPath": "timeout",
+          "description": "Timeout for the uninstall action (Go duration). Overrides the release-level timeout."
+        },
+        {
+          "name": "deletion_propagation",
+          "type": "string",
+          "optional": true,
+          "oneOf": [
+            "background",
+            "foreground",
+            "orphan"
+          ],
+          "apiPath": "deletionPropagation",
+          "description": "Cascading delete policy applied to the release's resources. Flux defaults to background."
+        },
+        {
+          "name": "keep_history",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "keepHistory",
+          "description": "Keep the Helm release history after uninstalling, so the release can be rolled back."
+        },
+        {
+          "name": "disable_wait",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableWait",
+          "description": "Do not wait for the release's resources to be removed."
+        },
+        {
+          "name": "disable_hooks",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "disableHooks",
+          "description": "Skip the chart's uninstall hooks."
+        }
+      ]
+    },
+    {
+      "name": "test",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.test",
+      "responsePath": "result.k8sResource.spec.test",
+      "description": "Options for the Helm test action, run after a successful install or upgrade.",
+      "attributes": [
+        {
+          "name": "enable",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "enable",
+          "description": "Run the chart's tests after install and upgrade. A test failure triggers remediation unless the matching remediation.ignore_test_failures is true."
+        },
+        {
+          "name": "timeout",
+          "type": "string",
+          "optional": true,
+          "apiPath": "timeout",
+          "description": "Timeout for the test action (Go duration). Overrides the release-level timeout."
+        },
+        {
+          "name": "ignore_failures",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "ignoreFailures",
+          "description": "Treat test failures as success for both install and upgrade, without setting remediation.ignore_test_failures on each."
+        },
+        {
+          "name": "filters",
+          "type": "list(object)",
+          "optional": true,
+          "apiPath": "filters",
+          "description": "Restrict which of the chart's tests are run. When any include filter is present, only the named tests run.",
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "apiPath": "name",
+              "description": "Name of the test to filter on."
+            },
+            {
+              "name": "exclude",
+              "type": "bool",
+              "optional": true,
+              "apiPath": "exclude",
+              "description": "Exclude the named test instead of including it."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "drift_detection",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.driftDetection",
+      "responsePath": "result.k8sResource.spec.driftDetection",
+      "description": "Detect, and optionally correct, cluster-side drift from the rendered manifests.",
+      "attributes": [
+        {
+          "name": "mode",
+          "type": "string",
+          "optional": true,
+          "oneOf": [
+            "enabled",
+            "warn",
+            "disabled"
+          ],
+          "apiPath": "mode",
+          "description": "Drift handling: enabled (correct it), warn (report only), or disabled. Flux defaults to disabled."
+        },
+        {
+          "name": "ignore",
+          "type": "list(object)",
+          "optional": true,
+          "apiPath": "ignore",
+          "description": "Paths excluded from drift comparison, optionally scoped to particular objects.",
+          "attributes": [
+            {
+              "name": "paths",
+              "type": "list(string)",
+              "optional": true,
+              "apiPath": "paths",
+              "description": "RFC 6901 JSON pointers to ignore, e.g. /spec/replicas."
+            },
+            {
+              "name": "target",
+              "type": "object",
+              "optional": true,
+              "apiPath": "target",
+              "description": "Restrict the rule to matching objects. Omit to apply it to every object.",
+              "attributes": [
+                {
+                  "name": "group",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "group",
+                  "description": "API group of the objects to match."
+                },
+                {
+                  "name": "version",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "version",
+                  "description": "API version of the objects to match."
+                },
+                {
+                  "name": "kind",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "kind",
+                  "description": "Kind of the objects to match."
+                },
+                {
+                  "name": "name",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "name",
+                  "description": "Name of the objects to match."
+                },
+                {
+                  "name": "namespace",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "namespace",
+                  "description": "Namespace of the objects to match."
+                },
+                {
+                  "name": "annotation_selector",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "annotationSelector",
+                  "description": "Annotation selector expression, e.g. env in (staging, prod)."
+                },
+                {
+                  "name": "label_selector",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "labelSelector",
+                  "description": "Label selector expression, e.g. app.kubernetes.io/name=podinfo."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "post_renderers",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.postRenderers",
+      "responsePath": "result.k8sResource.spec.postRenderers",
+      "description": "Kustomize post-render steps applied to the manifests the chart renders.",
+      "attributes": [
+        {
+          "name": "kustomize",
+          "type": "object",
+          "optional": true,
+          "apiPath": "kustomize",
+          "description": "Kustomize patches and image overrides.",
+          "attributes": [
+            {
+              "name": "patches",
+              "type": "list(object)",
+              "optional": true,
+              "apiPath": "patches",
+              "description": "Patches applied to the rendered manifests.",
+              "attributes": [
+                {
+                  "name": "patch",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "patch",
+                  "description": "The patch document as inline YAML or JSON — either a strategic-merge patch or a JSON6902 patch list."
+                },
+                {
+                  "name": "target",
+                  "type": "object",
+                  "optional": true,
+                  "apiPath": "target",
+                  "description": "Which rendered objects to patch. Omit to patch every object.",
+                  "attributes": [
+                    {
+                      "name": "group",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "group",
+                      "description": "API group of the objects to match."
+                    },
+                    {
+                      "name": "version",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "version",
+                      "description": "API version of the objects to match."
+                    },
+                    {
+                      "name": "kind",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "kind",
+                      "description": "Kind of the objects to match."
+                    },
+                    {
+                      "name": "name",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "name",
+                      "description": "Name of the objects to match."
+                    },
+                    {
+                      "name": "namespace",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "namespace",
+                      "description": "Namespace of the objects to match."
+                    },
+                    {
+                      "name": "annotation_selector",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "annotationSelector",
+                      "description": "Annotation selector expression, e.g. env in (staging, prod)."
+                    },
+                    {
+                      "name": "label_selector",
+                      "type": "string",
+                      "optional": true,
+                      "apiPath": "labelSelector",
+                      "description": "Label selector expression, e.g. app.kubernetes.io/name=podinfo."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "images",
+              "type": "list(object)",
+              "optional": true,
+              "apiPath": "images",
+              "description": "Container image overrides applied to the rendered manifests.",
+              "attributes": [
+                {
+                  "name": "name",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "name",
+                  "description": "Image name to match, e.g. ghcr.io/stefanprodan/podinfo."
+                },
+                {
+                  "name": "new_name",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "newName",
+                  "description": "Replacement image name."
+                },
+                {
+                  "name": "new_tag",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "newTag",
+                  "description": "Replacement image tag. Mutually exclusive with digest."
+                },
+                {
+                  "name": "digest",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "digest",
+                  "description": "Replacement image digest. Mutually exclusive with new_tag."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "health_check_exprs",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.healthCheckExprs",
+      "responsePath": "result.k8sResource.spec.healthCheckExprs",
+      "description": "Custom CEL readiness rules, so Flux can judge health for kinds it has no built-in rules for.",
+      "attributes": [
+        {
+          "name": "api_version",
+          "type": "string",
+          "optional": true,
+          "apiPath": "apiVersion",
+          "description": "API version of the kind these rules apply to."
+        },
+        {
+          "name": "kind",
+          "type": "string",
+          "optional": true,
+          "apiPath": "kind",
+          "description": "Kind these rules apply to."
+        },
+        {
+          "name": "current",
+          "type": "string",
+          "optional": true,
+          "apiPath": "current",
+          "description": "CEL expression that evaluates true when the resource is ready."
+        },
+        {
+          "name": "in_progress",
+          "type": "string",
+          "optional": true,
+          "apiPath": "inProgress",
+          "description": "CEL expression that evaluates true while the resource is still reconciling."
+        },
+        {
+          "name": "failed",
+          "type": "string",
+          "optional": true,
+          "apiPath": "failed",
+          "description": "CEL expression that evaluates true when the resource has failed."
         }
       ]
     },
@@ -137,6 +1074,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chart.spec.chart",
+      "responsePath": "result.k8sResource.spec.chart.spec.chart",
       "description": "Chart name (or path) within the referenced HelmRepository source. Use with chart_source_ref_*."
     },
     {
@@ -144,6 +1082,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chart.spec.version",
+      "responsePath": "result.k8sResource.spec.chart.spec.version",
       "description": "Chart version or semver range."
     },
     {
@@ -151,20 +1090,24 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chart.spec.interval",
+      "responsePath": "result.k8sResource.spec.chart.spec.interval",
       "description": "Interval at which the chart source is checked for updates."
     },
     {
       "name": "chart_reconcile_strategy",
       "type": "string",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.k8sResource.spec.chart.spec.reconcileStrategy",
-      "description": "When to reconcile the chart: ChartVersion or Revision."
+      "responsePath": "result.k8sResource.spec.chart.spec.reconcileStrategy",
+      "description": "When to reconcile the chart: ChartVersion or Revision. Server-defaulted to ChartVersion by Flux when omitted."
     },
     {
       "name": "chart_source_ref_kind",
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chart.spec.sourceRef.kind",
+      "responsePath": "result.k8sResource.spec.chart.spec.sourceRef.kind",
       "description": "Kind of the chart source (e.g. HelmRepository)."
     },
     {
@@ -172,6 +1115,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chart.spec.sourceRef.name",
+      "responsePath": "result.k8sResource.spec.chart.spec.sourceRef.name",
       "description": "Name of the chart source object."
     },
     {
@@ -179,6 +1123,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chartRef.kind",
+      "responsePath": "result.k8sResource.spec.chartRef.kind",
       "description": "Kind of a directly-referenced chart source (e.g. OCIRepository or HelmChart). Alternative to chart_name/chart_source_ref_*."
     },
     {
@@ -186,6 +1131,7 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chartRef.name",
+      "responsePath": "result.k8sResource.spec.chartRef.name",
       "description": "Name of the directly-referenced chart source object."
     },
     {
@@ -193,20 +1139,107 @@
       "type": "string",
       "optional": true,
       "apiPath": "spec.k8sResource.spec.chartRef.namespace",
+      "responsePath": "result.k8sResource.spec.chartRef.namespace",
       "description": "Namespace of the directly-referenced chart source object."
+    },
+    {
+      "name": "chart_values_files",
+      "type": "list(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chart.spec.valuesFiles",
+      "responsePath": "result.k8sResource.spec.chart.spec.valuesFiles",
+      "description": "Values files to merge, as paths relative to the chart root. Later entries win."
+    },
+    {
+      "name": "chart_ignore_missing_values_files",
+      "type": "bool",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chart.spec.ignoreMissingValuesFiles",
+      "responsePath": "result.k8sResource.spec.chart.spec.ignoreMissingValuesFiles",
+      "description": "Skip missing entries in chart_values_files instead of failing the reconcile."
+    },
+    {
+      "name": "chart_source_ref_api_version",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chart.spec.sourceRef.apiVersion",
+      "responsePath": "result.k8sResource.spec.chart.spec.sourceRef.apiVersion",
+      "description": "API version of the chart source object."
+    },
+    {
+      "name": "chart_source_ref_namespace",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chart.spec.sourceRef.namespace",
+      "responsePath": "result.k8sResource.spec.chart.spec.sourceRef.namespace",
+      "description": "Namespace of the chart source object."
+    },
+    {
+      "name": "chart_ref_api_version",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chartRef.apiVersion",
+      "responsePath": "result.k8sResource.spec.chartRef.apiVersion",
+      "description": "API version of the directly-referenced chart source object."
+    },
+    {
+      "name": "chart_verify_provider",
+      "type": "string",
+      "optional": true,
+      "oneOf": [
+        "cosign",
+        "notation"
+      ],
+      "apiPath": "spec.k8sResource.spec.chart.spec.verify.provider",
+      "responsePath": "result.k8sResource.spec.chart.spec.verify.provider",
+      "description": "Signature verification provider for an OCI-backed chart: cosign or notation."
+    },
+    {
+      "name": "chart_verify_secret_ref_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chart.spec.verify.secretRef.name",
+      "responsePath": "result.k8sResource.spec.chart.spec.verify.secretRef.name",
+      "description": "Name of the Secret holding the trusted public keys used to verify the chart."
+    },
+    {
+      "name": "chart_metadata_labels",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chart.metadata.labels",
+      "responsePath": "result.k8sResource.spec.chart.metadata.labels",
+      "description": "Labels stamped onto the generated HelmChart object (not onto the rendered workloads — that is common_metadata_labels)."
+    },
+    {
+      "name": "chart_metadata_annotations",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.chart.metadata.annotations",
+      "responsePath": "result.k8sResource.spec.chart.metadata.annotations",
+      "description": "Annotations stamped onto the generated HelmChart object (not onto the rendered workloads — that is common_metadata_annotations)."
     },
     {
       "name": "labels",
       "type": "map(string)",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.k8sResource.metadata.labels",
+      "responsePath": "result.k8sResource.metadata.labels",
+      "filterResponseKeys": [
+        "duplocloud.ai/*"
+      ],
       "description": "Kubernetes labels applied to the HelmRelease."
     },
     {
       "name": "annotations",
       "type": "map(string)",
       "optional": true,
+      "computed": true,
       "apiPath": "spec.k8sResource.metadata.annotations",
+      "responsePath": "result.k8sResource.metadata.annotations",
+      "filterResponseKeys": [
+        "duplocloud.ai/*"
+      ],
       "description": "Kubernetes annotations applied to the HelmRelease."
     },
     {
@@ -226,8 +1259,8 @@
       "computed": true,
       "default": "",
       "forceNew": true,
-      "apiPath": "spec.provisioner.version",
-      "description": "Optional provisioner version."
+      "requestPath": "spec.provisioner.version",
+      "description": "Optional provisioner version. Not echoed back by the API, so it is never read from the response."
     },
     {
       "name": "status",
@@ -235,6 +1268,14 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "helm_release_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this Helm release, for reference by dependent resources."
     }
   ],
   "requestConstants": [
@@ -244,6 +1285,17 @@
     }
   ],
   "waiter": {
-    "pollIntervalSeconds": 15
+    "deprovisionedState": "DeProvisioned",
+    "pollIntervalSeconds": 15,
+    "createTimeoutMinutes": 20,
+    "updateTimeoutMinutes": 20,
+    "deleteTimeoutMinutes": 20,
+    "readyPath": "result.k8sResource.status.conditions[type=Ready].status",
+    "readyState": "True",
+    "readyFailurePath": "result.k8sResource.status.conditions[type=Stalled].status",
+    "readyFailureStates": {
+      "True": "Helm release failed to reconcile and Flux is not retrying further"
+    },
+    "failureDetailPath": "result.k8sResource.status.conditions[type=Ready].message"
   }
 }

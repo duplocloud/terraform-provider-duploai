@@ -281,6 +281,7 @@
       "name": "instance_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.instanceId",
       "description": "AWS EC2 instance ID of the provisioned host."
     },
@@ -311,6 +312,14 @@
       "computed": true,
       "apiPath": "status",
       "description": "Provisioning status of the host."
+    },
+    {
+      "name": "native_host_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this native host, for reference by dependent resources."
     },
     {
       "name": "sub_status",

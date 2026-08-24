@@ -39,6 +39,7 @@ output "status" {
 ### Read-Only
 
 - `availability_zone_name` (String) AWS Availability Zone to create a One Zone file system in (e.g. us-east-1a). Omit for a Regional (multi-AZ) file system. Immutable after creation.
+- `aws_efs_id` (String) ID of this EFS file system resource, for reference by dependent resources.
 - `creation_token` (String) Idempotency token used at creation. Defaults to the file system name if omitted. Immutable after creation.
 - `description` (String) Optional description of the EFS file system.
 - `encryption` (String) Encryption at rest mode. NoEncryption disables encryption; AwsManagedKey uses the AWS-managed EFS key; ResourceGroupKmsKey uses the resource group's KMS key. Immutable after creation.
@@ -47,9 +48,9 @@ output "status" {
 - `file_system_id` (String) AWS ID of the provisioned file system (e.g. fs-0123456789abcdef0).
 - `life_cycle_state` (String) AWS lifecycle state of the file system (e.g. available, creating, deleting).
 - `name` (String) Name of the EFS file system.
-- `performance_mode` (String) Performance mode: generalPurpose (default) or maxIO. Immutable after creation.
+- `performance_mode` (String) Performance mode: generalPurpose (default) or maxIO. Immutable after creation. When importing a maxIO file system, set this to maxIO in the configuration — otherwise the generalPurpose default plans a replacement.
 - `provisioned_throughput_in_mibps` (Number) Provisioned throughput in MiB/s. Required when throughput_mode is provisioned; ignored otherwise.
-- `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
+- `provisioner_type` (String) Provisioner type recorded by the backend. Always DirectApiCall for this resource — the server stamps it on every create/update and ignores user input, so it cannot be configured.
 - `provisioner_version` (String) Optional provisioner version.
 - `resource_group_id` (String) ID of the resource group in which the file system is provisioned.
 - `status` (String) Current provisioning status of the file system.

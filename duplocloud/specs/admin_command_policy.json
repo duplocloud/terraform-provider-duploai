@@ -1,0 +1,94 @@
+{
+  "name": "admin_command_policy",
+  "description": "Manages a DuploCloud AI Helpdesk command policy — reusable allow/block regular-expression lists that govern which agent-proposed commands are auto-approved or denied (deny-wins). A policy has no effect on its own; it takes effect once bound to a scope (System, Workspace, or Project) by a command policy mapping.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/CommandPolicies"
+  },
+  "attributes": [
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "apiPath": "name",
+      "description": "Name of the command policy."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "description",
+      "description": "Human-readable description of the policy."
+    },
+    {
+      "name": "allow_list",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "allowList",
+      "description": "Regular-expression patterns for commands that are auto-approved. A command matching any pattern here (and not matching the block list) is approved without human intervention. Each entry must be a valid regular expression; invalid patterns are rejected by the server."
+    },
+    {
+      "name": "block_list",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "blockList",
+      "description": "Regular-expression patterns for commands that are always denied. Block takes precedence over allow (deny-wins). Each entry must be a valid regular expression; invalid patterns are rejected by the server."
+    },
+    {
+      "name": "metadata",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "description": "Arbitrary key/value metadata attached to the policy."
+    },
+    {
+      "name": "is_active",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": true,
+      "apiPath": "isActive",
+      "description": "Whether the policy is active. Defaults to true."
+    },
+    {
+      "name": "created_by",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdBy",
+      "description": "Identifier of the user who created the policy."
+    },
+    {
+      "name": "updated_by",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedBy",
+      "description": "Identifier of the user who last updated the policy."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the policy was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the policy was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Server-incremented version of the policy."
+    }
+  ]
+}

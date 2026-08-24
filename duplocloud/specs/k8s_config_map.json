@@ -29,16 +29,17 @@
       "optional": true,
       "computed": true,
       "default": "",
-      "apiPath": "description",
-      "description": "Optional description."
+      "requestPath": "description",
+      "description": "Optional description. Not echoed back by the API, so it is never read from the response."
     },
     {
       "name": "scope_ids",
       "type": "list(string)",
-      "required": true,
-      "forceNew": true,
-      "apiPath": "spec.scopeIds",
-      "description": "Scope IDs that link this config map to a cloud provider account."
+      "optional": true,
+      "computed": true,
+      "default": [],
+      "requestPath": "spec.scopeIds",
+      "description": "Scope IDs that link this config map to a cloud provider account. Not echoed back by the API, so it is never read from the response."
     },
     {
       "name": "resource_group_id",
@@ -81,16 +82,6 @@
       "description": "Binary configuration entries, base64-encoded values keyed by name."
     },
     {
-      "name": "immutable",
-      "type": "bool",
-      "optional": true,
-      "computed": true,
-      "default": false,
-      "apiPath": "spec.k8sResource.immutable",
-      "responsePath": "result.k8sResource.immutable",
-      "description": "Mark the config map immutable (its data cannot be changed after creation)."
-    },
-    {
       "name": "labels",
       "type": "map(string)",
       "optional": true,
@@ -121,8 +112,8 @@
       "computed": true,
       "default": "",
       "forceNew": true,
-      "apiPath": "spec.provisioner.version",
-      "description": "Optional provisioner version."
+      "requestPath": "spec.provisioner.version",
+      "description": "Optional provisioner version. Not echoed back by the API, so it is never read from the response."
     },
     {
       "name": "status",
@@ -130,6 +121,14 @@
       "computed": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "k8s_config_map_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this config map, for reference by dependent resources."
     }
   ],
   "requestConstants": [

@@ -59,9 +59,8 @@ resource "duploai_aws_efs" "db_backups" {
 - `description` (String) Optional description of the EFS file system.
 - `encryption` (String) Encryption at rest mode. NoEncryption disables encryption; AwsManagedKey uses the AWS-managed EFS key; ResourceGroupKmsKey uses the resource group's KMS key. Immutable after creation.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
-- `performance_mode` (String) Performance mode: generalPurpose (default) or maxIO. Immutable after creation.
+- `performance_mode` (String) Performance mode: generalPurpose (default) or maxIO. Immutable after creation. When importing a maxIO file system, set this to maxIO in the configuration — otherwise the generalPurpose default plans a replacement.
 - `provisioned_throughput_in_mibps` (Number) Provisioned throughput in MiB/s. Required when throughput_mode is provisioned; ignored otherwise.
-- `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `tags` (Attributes List) Tags applied to the file system at creation. (see [below for nested schema](#nestedatt--tags))
 - `throughput_mode` (String) Throughput mode: bursting (default), provisioned, or elastic. Mutable.
@@ -69,10 +68,12 @@ resource "duploai_aws_efs" "db_backups" {
 
 ### Read-Only
 
+- `aws_efs_id` (String) ID of this EFS file system resource, for reference by dependent resources.
 - `file_system_arn` (String) ARN of the provisioned file system.
 - `file_system_id` (String) AWS ID of the provisioned file system (e.g. fs-0123456789abcdef0).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `life_cycle_state` (String) AWS lifecycle state of the file system (e.g. available, creating, deleting).
+- `provisioner_type` (String) Provisioner type recorded by the backend. Always DirectApiCall for this resource — the server stamps it on every create/update and ignores user input, so it cannot be configured.
 - `status` (String) Current provisioning status of the file system.
 
 <a id="nestedatt--tags"></a>

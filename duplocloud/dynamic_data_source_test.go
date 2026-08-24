@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
@@ -205,7 +206,7 @@ func TestBuildStateRaw_RefreshInputsReplacesValues(t *testing.T) {
 	var diags diag.Diagnostics
 	out := buildStateRaw(attrs, base,
 		map[string]any{"name": "live-name", "status": "Complete"},
-		map[string]string{}, "obj-1", true, &diags)
+		map[string]string{}, "obj-1", true, true, &diags)
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
@@ -250,7 +251,7 @@ func TestBuildStateRaw_SkipsAttrsAbsentFromType(t *testing.T) {
 	var diags diag.Diagnostics
 	out := buildStateRaw(attrs, base,
 		map[string]any{"name": "n", "spec": map[string]any{"password": "hunter2"}},
-		map[string]string{}, "obj-1", true, &diags)
+		map[string]string{}, "obj-1", true, true, &diags)
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
@@ -304,10 +305,11 @@ func TestBaseDataSourceConfigure(t *testing.T) {
 	}
 }
 
-// Every embedded spec with dataSource:true must register cleanly — endpoint
-// builds, path parameters resolve to string attributes, and the derived data
-// source schema constructs without diagnostics. This mirrors the startup path
-// in provider.DataSources, which panics on any of these failures.
+// Every embedded spec that registers a data source — dataSource:true or
+// dataSourceOnly:true — must do so cleanly: endpoint builds, path parameters
+// resolve to string attributes, and the derived data source schema constructs
+// without diagnostics. The filter mirrors provider.DataSources, which panics on
+// any of these failures at startup.
 func TestEmbeddedDataSourceSpecsRegister(t *testing.T) {
 	specs, err := loadResourceSpecs()
 	if err != nil {
@@ -315,7 +317,7 @@ func TestEmbeddedDataSourceSpecsRegister(t *testing.T) {
 	}
 	var count int
 	for _, spec := range specs {
-		if !spec.DataSource {
+		if !spec.DataSource && !spec.DataSourceOnly {
 			continue
 		}
 		count++
@@ -339,4 +341,110 @@ func TestEmbeddedDataSourceSpecsRegister(t *testing.T) {
 		})
 	}
 	t.Logf("validated %d data source specs", count)
+}
+
+// A dataSourceOnly spec describes a read-only API, so it must register a data
+// source and no managed resource. Without this, a spec whose endpoint has no
+// POST/PUT/DELETE would still expose a resource that fails on the first apply.
+//
+// Asserted per spec rather than on totals so a failure names the offending
+// spec instead of reporting a count mismatch.
+func TestDataSourceOnlySpecsRegisterNoResource(t *testing.T) {
+	specs, err := loadResourceSpecs()
+	if err != nil {
+		t.Fatalf("loadResourceSpecs: %v", err)
+	}
+
+	// TypeName is "<provider>_<spec name>", so the spec name is recoverable from
+	// each registered factory — that is what lets this name the culprit.
+	registered := func(typeNames map[string]bool, name string) bool {
+		return typeNames["duploai_"+name]
+	}
+	resourceNames := map[string]bool{}
+	for _, f := range (&duploaiProvider{}).Resources(context.Background()) {
+		var resp resource.MetadataResponse
+		f().Metadata(context.Background(), resource.MetadataRequest{ProviderTypeName: "duploai"}, &resp)
+		resourceNames[resp.TypeName] = true
+	}
+	dataSourceNames := map[string]bool{}
+	for _, f := range (&duploaiProvider{}).DataSources(context.Background()) {
+		var resp datasource.MetadataResponse
+		f().Metadata(context.Background(), datasource.MetadataRequest{ProviderTypeName: "duploai"}, &resp)
+		dataSourceNames[resp.TypeName] = true
+	}
+
+	var only int
+	for _, spec := range specs {
+		if !spec.DataSourceOnly {
+			continue
+		}
+		only++
+		t.Run(spec.Name, func(t *testing.T) {
+			if registered(resourceNames, spec.Name) {
+				t.Errorf("dataSourceOnly spec %q registered a managed resource; it has no create/update/delete", spec.Name)
+			}
+			if !registered(dataSourceNames, spec.Name) {
+				t.Errorf("dataSourceOnly spec %q registered no data source", spec.Name)
+			}
+		})
+	}
+	if only == 0 {
+		t.Skip("no dataSourceOnly specs embedded")
+	}
+}
+
+// idPath names where an object id lives in a create response, so a
+// dataSourceOnly spec — which never creates anything — must not be forced to
+// declare one. Guards the validate() carve-out against a well-meaning
+// simplification back to "idPath is always required".
+func TestDataSourceOnlySpecNeedsNoIDPath(t *testing.T) {
+	base := func() ResourceSpec {
+		return ResourceSpec{
+			Name:     "readonly_thing",
+			Endpoint: EndpointSpec{UriBase: "/v1/things"},
+			Attributes: []AttributeSpec{
+				{Name: "value", Type: "string", Computed: true, APIPath: "value"},
+			},
+		}
+	}
+
+	s := base()
+	s.DataSourceOnly = true
+	if err := s.validate(); err != nil {
+		t.Errorf("dataSourceOnly spec without idPath must validate, got: %v", err)
+	}
+
+	// A spec that does create objects still needs it.
+	s2 := base()
+	if err := s2.validate(); err == nil {
+		t.Error("a creating spec without idPath must be rejected")
+	}
+}
+
+// k8s_credentials reads a sub-resource action path rather than the conventional
+// "/{id}", so the endpoint's read override is what makes it hit the right URL.
+// A dropped override would silently GET the cluster object instead, which
+// returns a shape with no token at all.
+func TestK8sCredentialsReadsJitAccessPath(t *testing.T) {
+	specs, err := loadResourceSpecs()
+	if err != nil {
+		t.Fatalf("loadResourceSpecs: %v", err)
+	}
+	for _, spec := range specs {
+		if spec.Name != "k8s_credentials" {
+			continue
+		}
+		if !spec.DataSourceOnly {
+			t.Error("k8s_credentials mints a short-lived token and must stay dataSourceOnly")
+		}
+		endpoint, err := spec.BuildEndpoint()
+		if err != nil {
+			t.Fatalf("BuildEndpoint: %v", err)
+		}
+		if got := endpoint.Read.Path; got != "/{id}/jitAccess" {
+			t.Errorf("read path = %q, want %q", got, "/{id}/jitAccess")
+		}
+		return
+	}
+	t.Fatal("k8s_credentials spec not found")
 }

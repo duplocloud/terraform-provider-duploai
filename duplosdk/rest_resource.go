@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -17,6 +18,28 @@ type RESTResource[T any] struct {
 	endpoint Endpoint
 	scope    map[string]string
 	waiter   *Waiter[T] // nil for synchronous resources
+
+	// callTimeout, when > 0, overrides the client's default per-request deadline
+	// for the operation-initiating calls (create/update/deprovision/delete). Set
+	// it via WithCallTimeout.
+	callTimeout time.Duration
+}
+
+// WithCallTimeout returns a copy of the resource whose operation-initiating
+// calls use the given per-request deadline instead of the client default.
+//
+// The engine passes the operation's own timeout — the same value the waiter
+// polls for — so a create/update/delete whose backend work takes minutes is not
+// cut off after the default 60s. Without this the waiter would be patient while
+// the call that starts it was not, and on a synchronous backend the client
+// disconnect cancels the work rather than just losing the response.
+func (r *RESTResource[T]) WithCallTimeout(d time.Duration) *RESTResource[T] {
+	if d <= 0 {
+		return r
+	}
+	c := *r
+	c.callTimeout = d
+	return &c
 }
 
 // NewRESTResource binds a client, endpoint, and scope into a resource client.
@@ -29,8 +52,17 @@ func NewRESTResource[T any](c *Client, endpoint Endpoint, scope map[string]strin
 // API returned data:null, a non-enveloped body, or an empty body) is reported
 // as an error rather than a nil pointer the caller would dereference.
 func (r *RESTResource[T]) decode(verb, path string, req *T) (*T, ClientError) {
+	// Reads keep the client default: the waiter polls on the same (possibly
+	// widened) resource, and a wedged GET should retry on the next poll rather
+	// than hold the whole operation's deadline open.
+	return r.decodeWithTimeout(0, verb, path, req)
+}
+
+// decodeWithTimeout is decode under an explicit per-request deadline. Used by
+// the operation-initiating calls, which may legitimately block for minutes.
+func (r *RESTResource[T]) decodeWithTimeout(timeout time.Duration, verb, path string, req *T) (*T, ClientError) {
 	var resp apiResponse[T]
-	if err := r.client.callAPI(verb, path, req, &resp); err != nil {
+	if err := r.client.callAPIWithTimeout(timeout, verb, path, req, &resp); err != nil {
 		return nil, err
 	}
 	if resp.Data == nil {
@@ -41,12 +73,28 @@ func (r *RESTResource[T]) decode(verb, path string, req *T) (*T, ClientError) {
 
 // Create POSTs req to the create path and returns the created object.
 func (r *RESTResource[T]) Create(req *T) (*T, ClientError) {
-	return r.decode(r.endpoint.createVerb(), r.endpoint.createPath(r.scope), req)
+	return r.decodeWithTimeout(r.callTimeout, r.endpoint.createVerb(), r.endpoint.createPath(r.scope), req)
+}
+
+// CreateNoContent issues the create call and ignores the response body. Use for
+// endpoints that return 200 with no content — an association resource's POST
+// (".../workspaces/{id}/scopes/{scopeId}") carries both ids in the path and
+// returns nothing, so decode's "no data" check would reject a perfectly good
+// response.
+func (r *RESTResource[T]) CreateNoContent() ClientError {
+	return r.client.callAPIWithTimeout(r.callTimeout, r.endpoint.createVerb(), r.endpoint.createPath(r.scope), nil, nil)
 }
 
 // Get fetches a single object by id.
 func (r *RESTResource[T]) Get(id string) (*T, ClientError) {
 	return r.decode(r.endpoint.readVerb(), r.endpoint.readPath(r.scope, id), nil)
+}
+
+// GetPath fetches and decodes an already-resolved absolute path. Use when the
+// object to read is not the resource's own path — an association resource reads
+// its parent and checks membership, since the mapping itself has no GET.
+func (r *RESTResource[T]) GetPath(path string) (*T, ClientError) {
+	return r.decode(http.MethodGet, path, nil)
 }
 
 // retryBaseDelay is the initial backoff between GetWithRetry attempts; it
@@ -94,12 +142,12 @@ func isRetryableRead(err ClientError) bool {
 
 // Update writes req to the update path and returns the updated object.
 func (r *RESTResource[T]) Update(id string, req *T) (*T, ClientError) {
-	return r.decode(r.endpoint.updateVerb(), r.endpoint.updatePath(r.scope, id), req)
+	return r.decodeWithTimeout(r.callTimeout, r.endpoint.updateVerb(), r.endpoint.updatePath(r.scope, id), req)
 }
 
 // Delete removes the object. A 404 is treated as success (already gone).
 func (r *RESTResource[T]) Delete(id string) ClientError {
-	err := r.client.callAPI(r.endpoint.deleteVerb(), r.endpoint.deletePath(r.scope, id), nil, nil)
+	err := r.client.callAPIWithTimeout(r.callTimeout, r.endpoint.deleteVerb(), r.endpoint.deletePath(r.scope, id), nil, nil)
 	if err != nil && err.IsNotFound() {
 		return nil
 	}
@@ -110,7 +158,7 @@ func (r *RESTResource[T]) Delete(id string) ClientError {
 // without removing the record itself. It is the pre-delete step for resources
 // the API will not delete while live. A 404 is treated as success (already gone).
 func (r *RESTResource[T]) Deprovision(id string) ClientError {
-	err := r.client.callAPI(r.endpoint.deprovisionVerb(), r.endpoint.deprovisionPath(r.scope, id), map[string]any{}, nil)
+	err := r.client.callAPIWithTimeout(r.callTimeout, r.endpoint.deprovisionVerb(), r.endpoint.deprovisionPath(r.scope, id), map[string]any{}, nil)
 	if err != nil && err.IsNotFound() {
 		return nil
 	}

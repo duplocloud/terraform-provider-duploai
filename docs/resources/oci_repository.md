@@ -62,14 +62,13 @@ resource "duploai_oci_repository" "internal" {
 - `name` (String) Name of the OCI repository resource.
 - `namespace_name` (String) Kubernetes namespace the OCI repository is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this OCI repository belongs to.
-- `scope_ids` (List of String) Scope IDs that link this OCI repository to a cloud provider account.
 - `url` (String) URL of the OCI repository (e.g. oci://ghcr.io/org/charts).
 - `workspace_id` (String) ID of the workspace that owns this OCI repository.
 
 ### Optional
 
 - `annotations` (Map of String) Kubernetes annotations applied to the OCI repository.
-- `api_version` (String) Flux OCIRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1).
+- `api_version` (String) Flux OCIRepository CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. source.toolkit.fluxcd.io/v1beta2).
 - `cert_secret_ref_name` (String) Name of a Kubernetes Secret holding TLS certificate data.
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
@@ -87,6 +86,7 @@ resource "duploai_oci_repository" "internal" {
 - `ref_semver` (String) Semver range used to select the artifact tag.
 - `ref_semver_filter` (String) Regex filter applied to tags before the semver range is evaluated.
 - `ref_tag` (String) OCI artifact tag to pull (mutually exclusive with ref_semver/ref_digest).
+- `scope_ids` (List of String) Scope IDs that link this OCI repository to a cloud provider account.
 - `secret_ref_name` (String) Name of a Kubernetes Secret holding registry credentials.
 - `service_account_name` (String) Service account used for workload-identity authentication to the registry.
 - `suspend` (Boolean) Suspend reconciliation of the repository.
@@ -95,6 +95,7 @@ resource "duploai_oci_repository" "internal" {
 ### Read-Only
 
 - `id` (String) Composite resource identifier (workspace_id/id).
+- `oci_repository_id` (String) ID of this OCI repository, for reference by dependent resources.
 - `status` (String) Current provisioning status.
 
 <a id="nestedblock--timeouts"></a>

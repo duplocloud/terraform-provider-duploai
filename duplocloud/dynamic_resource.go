@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -62,10 +63,16 @@ func (r *dynamicResource) Metadata(_ context.Context, req resource.MetadataReque
 // ── Schema ──────────────────────────────────────────────────────────────────
 
 func (r *dynamicResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	idDescription := "Composite resource identifier (workspace_id/id)."
+	if r.spec.Association != nil {
+		// A link has no object id — it is identified by its path parameters alone.
+		idDescription = "Composite resource identifier (" +
+			strings.Join(r.endpoint.PathParams(), "/") + ")."
+	}
 	attrs := map[string]schema.Attribute{
 		"id": schema.StringAttribute{
 			Computed:      true,
-			Description:   "Composite resource identifier (workspace_id/id).",
+			Description:   idDescription,
 			PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 		},
 	}
@@ -209,6 +216,16 @@ func composeID(scopeValues []string, objID string) string {
 	return strings.Join(append(append([]string{}, scopeValues...), objID), "/")
 }
 
+// resourceID composes the state id. An association resource has no object id —
+// its identity is exactly its path parameters — so the id is just those values
+// joined ("<workspace_id>/<scope_id>"), with no trailing empty segment.
+func (r *dynamicResource) resourceID(scopeValues []string, objID string) string {
+	if r.spec.Association != nil {
+		return strings.Join(scopeValues, "/")
+	}
+	return composeID(scopeValues, objID)
+}
+
 // specFailureRetries is the waiter.failureRetries declared in the spec (0 when
 // no waiter). It is the default when the config doesn't override it.
 func (r *dynamicResource) specFailureRetries() int {
@@ -269,6 +286,13 @@ func (r *dynamicResource) waiter(failureRetries int) *duplosdk.Waiter[map[string
 		waiter.ReadyFn = func(m *map[string]any) string {
 			return toStringValue(extractPath(*m, readySegs))
 		}
+	}
+	if w.ReadyFailurePath != "" && len(w.ReadyFailureStates) > 0 {
+		readyFailureSegs := strings.Split(w.ReadyFailurePath, ".")
+		waiter.ReadyFailureFn = func(m *map[string]any) string {
+			return toStringValue(extractPath(*m, readyFailureSegs))
+		}
+		waiter.ReadyFailureStates = w.ReadyFailureStates
 	}
 	return waiter
 }
@@ -360,6 +384,27 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 
 func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	scope, scopeVals := r.scopeFromReader(ctx, req.Plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// An association is created by POSTing the link path itself — both ids are in
+	// the URL, there is no body, and the response carries no content.
+	if r.spec.Association != nil {
+		id := r.resourceID(scopeVals, "")
+		log.Printf("[TRACE] dynamic %s Create(%s): association", r.spec.Name, id)
+		if clientErr := r.api(scope, r.specFailureRetries()).CreateNoContent(); clientErr != nil {
+			resp.Diagnostics.AddError("Error creating "+r.spec.Name, clientErr.Error())
+			return
+		}
+		state := r.stateFromResponse(ctx, req.Plan.Raw, map[string]any{}, scope, id, false, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		resp.State.Raw = state
+		return
+	}
+
 	body := r.bodyFromRaw(req.Plan.Raw, "create", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -371,19 +416,43 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	api := r.apiWaitingForPopulated(scope, retries, waitPopulated)
+	// The create call itself gets the create timeout, not the client's 60s
+	// default — a backend that provisions synchronously can block for minutes.
+	api := r.apiWaitingForPopulated(scope, retries, waitPopulated).
+		WithCallTimeout(r.operationTimeout(ctx, req.Plan, "create", &resp.Diagnostics))
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	created, err := api.Create(&body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating "+r.spec.Name, err.Error())
 		return
 	}
 	objID := toStringValue(extractPath(*created, strings.Split(r.spec.IDPath, ".")))
+	id := r.resourceID(scopeVals, objID)
+
+	// From here on, the object exists in the backend. If a later step (the
+	// readiness wait, a post-create refresh, or the updateAfterCreate
+	// follow-up) fails, we must still record its id in state — otherwise
+	// Terraform believes creation never happened, and the next apply issues a
+	// fresh POST that collides with the object still sitting in the backend
+	// (e.g. a Helm release whose install failed: the record was created, but
+	// Flux's Stalled condition trips WaitUntilReady's failure gate). Saving
+	// what we know here lets Terraform track it as tainted and reconcile it
+	// on the next apply instead of requiring a manual delete out of band.
+	saveKnownState := func(obj map[string]any) {
+		state := r.stateFromResponse(ctx, req.Plan.Raw, obj, scope, id, false, &resp.Diagnostics)
+		if !resp.Diagnostics.HasError() {
+			resp.State.Raw = state
+		}
+	}
 
 	final := created
 	if r.spec.Waiter != nil {
 		timeout := r.timeout(ctx, req.Plan, "create", &resp.Diagnostics)
 		final, err = api.WaitUntilReady(ctx, objID, timeout)
 		if err != nil {
+			saveKnownState(*created)
 			resp.Diagnostics.AddError("Error waiting for "+r.spec.Name, err.Error())
 			return
 		}
@@ -392,12 +461,48 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 		// fields). Refresh from a GET so state matches what reads return.
 		final, err = api.Get(objID)
 		if err != nil {
+			saveKnownState(*created)
 			resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after create", err.Error())
 			return
 		}
 	}
 
-	id := composeID(scopeVals, objID)
+	// Some backends apply a subset of fields only on the update path, never on
+	// create (e.g. Azure storage account data protection is applied by
+	// UpdateInCloud, not CreateInCloud). When updateAfterCreate is set, issue a
+	// follow-up update once the resource is ready so those fields take effect on
+	// first apply. The update body is idempotent for fields create already applied.
+	if r.spec.UpdateAfterCreate {
+		updBody := r.updateBodyFromRaw(req.Plan.Raw, objID, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			saveKnownState(*final)
+			return
+		}
+		if _, err = api.Update(objID, &updBody); err != nil {
+			saveKnownState(*final)
+			resp.Diagnostics.AddError("Error applying post-create update for "+r.spec.Name, err.Error())
+			return
+		}
+		if r.spec.Waiter != nil {
+			timeout := r.timeout(ctx, req.Plan, "update", &resp.Diagnostics)
+			ready, waitErr := api.WaitUntilReady(ctx, objID, timeout)
+			if waitErr != nil {
+				saveKnownState(*final)
+				resp.Diagnostics.AddError("Error waiting for "+r.spec.Name+" post-create update", waitErr.Error())
+				return
+			}
+			final = ready
+		} else {
+			got, getErr := api.Get(objID)
+			if getErr != nil {
+				saveKnownState(*final)
+				resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after post-create update", getErr.Error())
+				return
+			}
+			final = got
+		}
+	}
+
 	state := r.stateFromResponse(ctx, req.Plan.Raw, *final, scope, id, false, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -412,6 +517,11 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 	log.Printf("[TRACE] dynamic %s Read(%s): start", r.spec.Name, id)
+
+	if r.spec.Association != nil {
+		r.readAssociation(ctx, req, resp, scope, id)
+		return
+	}
 
 	obj, clientErr := r.api(scope, r.specFailureRetries()).Get(objID)
 	if clientErr != nil {
@@ -431,9 +541,55 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 	log.Printf("[TRACE] dynamic %s Read(%s): end", r.spec.Name, id)
 }
 
+// readAssociation refreshes a link-only resource. The API offers no GET for the
+// link itself, so the parent is fetched and the link counts as present only
+// while the member value still appears in the parent's list. When it does not —
+// the link was removed out of band, or the parent is gone — the resource is
+// dropped from state so the next plan recreates it, rather than reporting a
+// mapping that no longer exists.
+func (r *dynamicResource) readAssociation(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse, scope map[string]string, id string) {
+	as := r.spec.Association
+	parentPath := r.endpoint.ResolvePath(as.ReadPath, scope)
+
+	parent, clientErr := r.api(scope, r.specFailureRetries()).GetPath(parentPath)
+	if clientErr != nil {
+		if clientErr.IsNotFound() {
+			// Parent gone ⇒ the link cannot exist either.
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError("Error reading "+r.spec.Name, clientErr.Error())
+		return
+	}
+
+	want := scope[as.MemberAttribute]
+	members := anyToStringSlice(extractPath(*parent, strings.Split(as.MemberPath, ".")))
+	if !slices.Contains(members, want) {
+		log.Printf("[TRACE] dynamic %s Read(%s): %s no longer in %s, removing from state",
+			r.spec.Name, id, want, as.MemberPath)
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	// Still linked. Nothing is read back into attributes — every one of them is a
+	// path parameter — but rebuilding state re-asserts them from the parsed id,
+	// which is what makes import work.
+	resp.State.Raw = r.stateFromResponse(ctx, req.State.Raw, map[string]any{}, scope, id, true, &resp.Diagnostics)
+	log.Printf("[TRACE] dynamic %s Read(%s): end", r.spec.Name, id)
+}
+
 func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	scope, objID, id, err := r.parseID(ctx, req.State, &resp.Diagnostics)
 	if err != nil || resp.Diagnostics.HasError() {
+		return
+	}
+
+	// An association has no readable object and nothing to update — every
+	// attribute is a forceNew path parameter, so a real change replaces the link.
+	// Any diff reaching here is config-only; persist the plan as-is.
+	if r.spec.Association != nil {
+		resp.State.Raw = req.Plan.Raw
+		log.Printf("[TRACE] dynamic %s Update(%s): association, nothing to update", r.spec.Name, id)
 		return
 	}
 
@@ -464,7 +620,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	body := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
+	body := r.updateBodyFromRaw(req.Plan.Raw, objID, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -475,7 +631,9 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	// waiter entirely — issuing a PUT would re-trigger provisioning for a
 	// metadata-only change. ModifyPlan has already carried prior computed values
 	// into the plan, so it is fully known and safe to persist directly.
-	stateBody := r.bodyFromRaw(req.State.Raw, "update", &resp.Diagnostics)
+	// Built the same way as the plan body (id included) so the injected id cannot
+	// make the two differ and defeat the skip.
+	stateBody := r.updateBodyFromRaw(req.State.Raw, objID, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -490,7 +648,11 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	api := r.apiWaitingForPopulated(scope, retries, waitPopulated)
+	api := r.apiWaitingForPopulated(scope, retries, waitPopulated).
+		WithCallTimeout(r.operationTimeout(ctx, req.Plan, "update", &resp.Diagnostics))
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	updated, clientErr := api.Update(objID, &body)
 	if clientErr != nil {
 		resp.Diagnostics.AddError("Error updating "+r.spec.Name, clientErr.Error())
@@ -594,7 +756,7 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 		// environment_id, resource_group_id, …) the backend needs to resolve the
 		// resource are present, then overlay this one update intent. Create-only
 		// and other update-intent fields are excluded by bodyFromRaw.
-		body := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
+		body := r.updateBodyFromRaw(req.Plan.Raw, objID, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -634,13 +796,15 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	var timeout time.Duration
-	if r.spec.Waiter != nil {
-		timeout = r.timeout(ctx, req.State, "delete", &resp.Diagnostics)
-		if resp.Diagnostics.HasError() {
-			return
-		}
+	// The delete timeout governs both the waiter and the HTTP deadline of the
+	// calls that start the teardown. Deprovision/delete can run for minutes on a
+	// synchronous backend, and cutting the connection at the client's 60s default
+	// cancels the server's work rather than merely losing the reply.
+	timeout := r.operationTimeout(ctx, req.State, "delete", &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
 	}
+	api = api.WithCallTimeout(timeout)
 
 	// Resources the API refuses to delete while live declare a Deprovision
 	// operation: tear down the underlying cloud resources and wait for the
@@ -727,7 +891,112 @@ func (r *dynamicResource) ConfigValidators(_ context.Context) []resource.ConfigV
 	if len(r.spec.ConflictsWith) > 0 {
 		vs = append(vs, conflictsWithValidator{spec: r.spec})
 	}
+	if len(r.spec.InvalidWhen) > 0 {
+		vs = append(vs, invalidWhenValidator{spec: r.spec})
+	}
 	return vs
+}
+
+// invalidWhenValidator enforces ResourceSpec.InvalidWhen: a rule whose conditions
+// all hold rejects the config at plan time, so a combination the API would refuse
+// never reaches apply.
+type invalidWhenValidator struct{ spec ResourceSpec }
+
+func (v invalidWhenValidator) Description(_ context.Context) string {
+	return "Rejects attribute combinations the API refuses, as declared in the resource spec."
+}
+func (v invalidWhenValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v invalidWhenValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	for _, rule := range v.spec.InvalidWhen {
+		if !v.holds(ctx, req.Config, rule.When) {
+			continue
+		}
+		at := rule.Attribute
+		if at == "" {
+			at = rule.When[0].Attribute
+		}
+		resp.Diagnostics.AddAttributeError(dottedPath(at), "Invalid attribute combination", rule.Message)
+	}
+}
+
+// holds reports whether every condition matches (logical AND). An unknown value
+// stops evaluation: it is a reference to another resource in the same apply, so the
+// combination cannot be judged yet and must not be reported as invalid.
+func (v invalidWhenValidator) holds(ctx context.Context, cfg attrReader, conds []RequiredIfCondition) bool {
+	for _, c := range conds {
+		target := v.spec.leafAt(c.Attribute)
+		if target == nil {
+			return false
+		}
+		p := dottedPath(c.Attribute)
+		if readPathUnknown(ctx, cfg, *target, p) {
+			return false
+		}
+		switch {
+		case c.GreaterThan != nil, c.LessThan != nil, c.LessThanAttribute != "":
+			left, ok := readPathNumber(ctx, cfg, *target, p)
+			if !ok {
+				return false
+			}
+			switch {
+			case c.GreaterThan != nil:
+				if !(left > *c.GreaterThan) {
+					return false
+				}
+			case c.LessThan != nil:
+				if !(left < *c.LessThan) {
+					return false
+				}
+			default:
+				other := v.spec.leafAt(c.LessThanAttribute)
+				if other == nil {
+					return false
+				}
+				op := dottedPath(c.LessThanAttribute)
+				if readPathUnknown(ctx, cfg, *other, op) {
+					return false
+				}
+				right, ok := readPathNumber(ctx, cfg, *other, op)
+				if !ok || !(left < right) {
+					return false
+				}
+			}
+		default:
+			val := readPathString(ctx, cfg, *target, p)
+			if val == "" {
+				val = defaultString(*target)
+			}
+			switch {
+			case c.IsEmpty:
+				if val != "" {
+					return false
+				}
+			case c.NotEquals != "":
+				if val == c.NotEquals {
+					return false
+				}
+			default:
+				if val != c.Equals {
+					return false
+				}
+			}
+		}
+	}
+	return len(conds) > 0
+}
+
+// dottedPath turns "upgrade_settings.max_surge_type" into the framework path
+// Root("upgrade_settings").AtName("max_surge_type").
+func dottedPath(dotted string) path.Path {
+	segs := strings.Split(dotted, ".")
+	p := path.Root(segs[0])
+	for _, seg := range segs[1:] {
+		p = p.AtName(seg)
+	}
+	return p
 }
 
 // conflictsWithValidator enforces ResourceSpec.ConflictsWith: within each group,
@@ -796,6 +1065,15 @@ func (v requiredIfValidator) conditionsHold(ctx context.Context, cfg attrReader,
 		if when == nil {
 			return false
 		}
+		if readConfigUnknown(ctx, cfg, *when) {
+			// Unresolved reference to another resource created in the same apply
+			// (e.g. network_baseline_id = duploai_network_baseline.x.network_id).
+			// It is configured, just not yet known — don't evaluate conditions
+			// against it, matching configAttrNull's treatment of unknown as "set"
+			// for ConflictsWith. Otherwise IsEmpty would wrongly hold (readConfigString
+			// collapses unknown to "" the same as null) and fire a false requiredIf error.
+			return false
+		}
 		val := readConfigString(ctx, cfg, *when)
 		if val == "" {
 			val = defaultString(*when) // user omitted it — use the spec default
@@ -860,6 +1138,98 @@ type attrReader interface {
 // (createPath vs updatePath; see AttributeSpec). Working from the raw tftypes
 // lets one code path serialize attributes of any type — scalars, collections,
 // and arbitrarily nested objects — without per-type plan reads.
+// findAttr returns the attribute with the given name, or nil.
+func findAttr(attrs []AttributeSpec, name string) *AttributeSpec {
+	for i := range attrs {
+		if attrs[i].Name == name {
+			return &attrs[i]
+		}
+	}
+	return nil
+}
+
+// anyToStringSlice coerces a decoded JSON value (or tftypesToGo output) into a
+// []string, ignoring non-string elements.
+func anyToStringSlice(v any) []string {
+	out := []string{}
+	arr, ok := v.([]any)
+	if !ok {
+		return out
+	}
+	for _, e := range arr {
+		if s, ok := e.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// rawStringSet decodes a tftypes list/set of strings into a membership set,
+// returning an empty set for null/unknown values.
+func rawStringSet(v tftypes.Value) map[string]bool {
+	out := map[string]bool{}
+	if v.IsNull() || !v.IsKnown() {
+		return out
+	}
+	var elems []tftypes.Value
+	if err := v.As(&elems); err != nil {
+		return out
+	}
+	for _, e := range elems {
+		if e.IsNull() || !e.IsKnown() {
+			continue
+		}
+		var s string
+		if err := e.As(&s); err == nil {
+			out[s] = true
+		}
+	}
+	return out
+}
+
+// preserveUnion returns the de-duplicated union of a PreserveUnmanagedInto
+// attribute's own values and those of its computed sibling, as a []any of
+// strings ready for the request body. Either side may be null/unknown.
+func preserveUnion(a AttributeSpec, attrs []AttributeSpec, top map[string]tftypes.Value) []any {
+	seen := map[string]bool{}
+	out := []any{}
+	add := func(spec AttributeSpec) {
+		v, ok := top[spec.Name]
+		if !ok {
+			return
+		}
+		g, ok := attrToRequest(spec, v)
+		if !ok {
+			return
+		}
+		for _, s := range anyToStringSlice(g) {
+			if !seen[s] {
+				seen[s] = true
+				out = append(out, s)
+			}
+		}
+	}
+	add(a)
+	if sib := findAttr(attrs, a.PreserveUnmanagedInto); sib != nil {
+		add(*sib)
+	}
+	return out
+}
+
+// resendCreatePath writes an attribute's CREATE path into an update body as well,
+// when the spec sets ResendCreatePathsOnUpdate. Backends that rebuild their stored
+// document from the request body need the create shape alongside the update
+// envelope, or every field the envelope does not treat as changed falls back to a
+// type default. No-op on create, and on any attribute whose two paths coincide.
+func (r *dynamicResource) resendCreatePath(body map[string]any, a AttributeSpec, val any, verb, reqPath string) {
+	if verb != "update" || !r.spec.ResendCreatePathsOnUpdate {
+		return
+	}
+	if cp := a.effectiveCreatePath(); cp != "" && cp != reqPath {
+		setPath(body, strings.Split(cp, "."), val)
+	}
+}
+
 func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *diag.Diagnostics) map[string]any {
 	var top map[string]tftypes.Value
 	if err := raw.As(&top); err != nil {
@@ -874,7 +1244,17 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *dia
 		} else {
 			reqPath = a.effectiveCreatePath()
 		}
-		if reqPath == "" || a.NoSend || (!a.Required && !a.Optional) {
+		if reqPath == "" || a.NoSend || (!a.Required && !a.Optional && !a.SendFromState) {
+			continue
+		}
+		if a.PreserveUnmanagedInto != "" {
+			// Send the union of this attribute and its computed sibling so the
+			// server-managed entries the sibling holds survive a full-document
+			// update instead of being cleared.
+			if union := preserveUnion(a, r.spec.Attributes, top); len(union) > 0 {
+				setPath(body, strings.Split(reqPath, "."), union)
+				r.resendCreatePath(body, a, union, verb, reqPath)
+			}
 			continue
 		}
 		child, ok := top[a.Name]
@@ -885,13 +1265,37 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *dia
 		if !ok {
 			continue
 		}
+		// The create shape keeps the untransformed value: UpdateBoolTrueValue rewrites
+		// what the UPDATE path carries, not what the create path expects.
+		createVal := val
+		// String-enum → bool on update: e.g. image_tag_mutability "IMMUTABLE"
+		// (create string) maps to enableTagImmutability true (update bool).
+		if verb == "update" && a.UpdateBoolTrueValue != "" {
+			s, _ := val.(string)
+			val = s == a.UpdateBoolTrueValue
+		}
 		setPath(body, strings.Split(reqPath, "."), val)
+		r.resendCreatePath(body, a, createVal, verb, reqPath)
 	}
 	applyConstants(body, r.spec.RequestConstants, diags)
 	if verb == "update" {
 		applyConstants(body, r.spec.UpdateConstants, diags)
 	} else {
 		applyConstants(body, r.spec.CreateConstants, diags)
+	}
+	return body
+}
+
+// updateBodyFromRaw builds the PUT body and, when the spec sets idRequestPath,
+// writes the backend object id into it. Required by APIs that validate a
+// full-document update against the id in the BODY rather than the one in the
+// route — see ResourceSpec.IDRequestPath. Used by every real update call; the
+// no-op comparison in ModifyPlan deliberately skips it, since the id is equal on
+// both sides and would only add noise.
+func (r *dynamicResource) updateBodyFromRaw(raw tftypes.Value, objID string, diags *diag.Diagnostics) map[string]any {
+	body := r.bodyFromRaw(raw, "update", diags)
+	if body != nil && r.spec.IDRequestPath != "" && objID != "" {
+		setPath(body, strings.Split(r.spec.IDRequestPath, "."), objID)
 	}
 	return body
 }
@@ -908,6 +1312,29 @@ func applyConstants(body map[string]any, constants []ConstantField, diags *diag.
 			continue
 		}
 		setPath(body, strings.Split(c.Path, "."), v)
+	}
+}
+
+// operationTimeout is timeout() for callers that must work whether or not the
+// resource declares a waiter. Without a waiter there is no timeouts block in the
+// schema to read, so the engine default for the operation applies.
+//
+// It doubles as the per-request HTTP deadline for the call that STARTS the
+// operation (see RESTResource.WithCallTimeout). The client default is 60s, which
+// is fine for metadata calls but far too short for a backend that performs a
+// cloud create or teardown synchronously — and a client disconnect there does
+// not merely lose the response, it cancels the server's work.
+func (r *dynamicResource) operationTimeout(ctx context.Context, reader attrReader, op string, diags *diag.Diagnostics) time.Duration {
+	if r.spec.Waiter != nil {
+		return r.timeout(ctx, reader, op, diags)
+	}
+	switch op {
+	case "create":
+		return defaultCreateTimeout
+	case "update":
+		return defaultUpdateTimeout
+	default:
+		return defaultDeleteTimeout
 	}
 }
 
@@ -941,7 +1368,13 @@ func (r *dynamicResource) parseID(ctx context.Context, state attrReader, diags *
 	id = idVal.ValueString()
 
 	params := r.endpoint.PathParams()
-	parts, splitErr := splitID(id, len(params)+1)
+	// An association id carries only the path parameters — there is no object id
+	// segment to account for.
+	want := len(params) + 1
+	if r.spec.Association != nil {
+		want = len(params)
+	}
+	parts, splitErr := splitID(id, want)
 	if splitErr != nil {
 		diags.AddError("Invalid resource ID", splitErr.Error())
 		return nil, "", id, splitErr
@@ -950,7 +1383,9 @@ func (r *dynamicResource) parseID(ctx context.Context, state attrReader, diags *
 	for i, p := range params {
 		scope[p] = parts[i]
 	}
-	objID = parts[len(params)]
+	if r.spec.Association == nil {
+		objID = parts[len(params)]
+	}
 	return scope, objID, id, nil
 }
 
@@ -1048,6 +1483,126 @@ func readConfigString(ctx context.Context, cfg attrReader, a AttributeSpec) stri
 	return toStringValue(v)
 }
 
+// readPathUnknown reports whether the value at p is unknown. Same distinction as
+// readConfigUnknown, but at an arbitrary path so a leaf inside an object can be
+// tested.
+func readPathUnknown(ctx context.Context, cfg attrReader, a AttributeSpec, p path.Path) bool {
+	switch a.Type {
+	case "string":
+		var v types.String
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "bool":
+		var v types.Bool
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "int":
+		var v types.Int64
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "number":
+		var v types.Float64
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "list(string)":
+		var v types.List
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "set(string)":
+		var v types.Set
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "map(string)":
+		var v types.Map
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	case "object":
+		var v types.Object
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsUnknown()
+	default:
+		return false
+	}
+}
+
+// readPathString renders the leaf value at p as a string, or "" when it is null,
+// unknown or not a leaf type.
+func readPathString(ctx context.Context, cfg attrReader, a AttributeSpec, p path.Path) string {
+	switch a.Type {
+	case "string":
+		var v types.String
+		cfg.GetAttribute(ctx, p, &v)
+		if v.IsNull() || v.IsUnknown() {
+			return ""
+		}
+		return v.ValueString()
+	case "bool":
+		var v types.Bool
+		cfg.GetAttribute(ctx, p, &v)
+		if v.IsNull() || v.IsUnknown() {
+			return ""
+		}
+		return toStringValue(v.ValueBool())
+	case "int":
+		var v types.Int64
+		cfg.GetAttribute(ctx, p, &v)
+		if v.IsNull() || v.IsUnknown() {
+			return ""
+		}
+		return toStringValue(v.ValueInt64())
+	case "number":
+		var v types.Float64
+		cfg.GetAttribute(ctx, p, &v)
+		if v.IsNull() || v.IsUnknown() {
+			return ""
+		}
+		return toStringValue(v.ValueFloat64())
+	default:
+		return ""
+	}
+}
+
+// readPathNumber reads the numeric leaf at p, falling back to the attribute's
+// static default when the config leaves it null — so a rule comparing an explicit
+// value against a defaulted one still evaluates. Reports false when there is no
+// value to compare at all.
+func readPathNumber(ctx context.Context, cfg attrReader, a AttributeSpec, p path.Path) (float64, bool) {
+	switch a.Type {
+	case "int":
+		var v types.Int64
+		cfg.GetAttribute(ctx, p, &v)
+		if !v.IsNull() && !v.IsUnknown() {
+			return float64(v.ValueInt64()), true
+		}
+	case "number":
+		var v types.Float64
+		cfg.GetAttribute(ctx, p, &v)
+		if !v.IsNull() && !v.IsUnknown() {
+			return v.ValueFloat64(), true
+		}
+	default:
+		return 0, false
+	}
+	if a.Default == nil {
+		return 0, false
+	}
+	var d float64
+	if err := json.Unmarshal(*a.Default, &d); err != nil {
+		return 0, false
+	}
+	return d, true
+}
+
+// readConfigUnknown reports whether a's value in cfg is unknown — an
+// unresolved reference to another resource being created in the same apply
+// (e.g. network_baseline_id = duploai_network_baseline.x.network_id). Unlike
+// readConfigString, which collapses unknown to "" the same as a genuinely
+// null value, this lets requiredIf condition checks distinguish the two —
+// the same distinction configAttrNull makes for ConflictsWith.
+func readConfigUnknown(ctx context.Context, cfg attrReader, a AttributeSpec) bool {
+	return readPathUnknown(ctx, cfg, a, path.Root(a.Name))
+}
+
 // configAttrNull reports whether a top-level attribute is genuinely unset (null)
 // in the raw config. An UNKNOWN value — e.g. a reference to another resource
 // created in the same apply (network_id = duploai_network_baseline.x.network_id)
@@ -1078,7 +1633,7 @@ func configAttrNull(raw tftypes.Value, name string) bool {
 // computed-only and still-unknown fields from the response.
 // refreshInputs=true (Read / data source): replace all API-mapped attributes
 // with live response values.
-func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string]any, scope map[string]string, id string, refreshInputs bool, diags *diag.Diagnostics) tftypes.Value {
+func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string]any, scope map[string]string, id string, refreshInputs, applyPreserveSplit bool, diags *diag.Diagnostics) tftypes.Value {
 	objType, ok := baseRaw.Type().(tftypes.Object)
 	if !ok {
 		diags.AddError("Internal error", "state is not an object")
@@ -1104,8 +1659,36 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 	}
 
 	for _, a := range attrs {
-		respPath := a.responsePath()
-		if respPath == "" {
+		if applyPreserveSplit && a.PreserveUnmanagedInto != "" {
+			// Split the server's full list into the user-managed set (this
+			// attribute) and the server-managed remainder (the computed
+			// sibling). The managed set is whatever is already in baseRaw — the
+			// plan on create/update, prior state on read.
+			attrType, hasType := objType.AttributeTypes[a.Name]
+			sib := findAttr(attrs, a.PreserveUnmanagedInto)
+			if hasType && sib != nil {
+				managed := rawStringSet(next[a.Name])
+				server := anyToStringSlice(extractPath(resp, strings.Split(a.responsePath(), ".")))
+				scopeSlice, otherSlice := []any{}, []any{}
+				for _, s := range server {
+					if managed[s] {
+						scopeSlice = append(scopeSlice, s)
+					} else {
+						otherSlice = append(otherSlice, s)
+					}
+				}
+				// Keep the configured plan value when fully known (avoids
+				// "inconsistent result after apply"); otherwise fill from the
+				// response. On read, always reflect the server intersection.
+				if refreshInputs || !next[a.Name].IsFullyKnown() {
+					next[a.Name] = attrFromResponse(a, attrType, scopeSlice)
+				}
+				next[sib.Name] = attrFromResponse(*sib, objType.AttributeTypes[sib.Name], otherSlice)
+			}
+			continue
+		}
+		respPaths := a.responsePathList()
+		if len(respPaths) == 0 {
 			continue
 		}
 		computedOnly := a.Computed && !a.Required && !a.Optional
@@ -1123,7 +1706,7 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		if !hasType {
 			continue
 		}
-		goVal := extractPath(resp, strings.Split(respPath, "."))
+		goVal := extractFirstNonEmpty(resp, respPaths)
 		if len(a.FilterResponseKeys) > 0 {
 			goVal = filterMapKeys(goVal, a.FilterResponseKeys)
 		}
@@ -1135,13 +1718,17 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		} else {
 			next[a.Name] = attrFromResponse(a, attrType, goVal)
 		}
+		// Write-only leaves (e.g. a credential secret the API redacts on every
+		// read) keep whatever the base value already held rather than the empty
+		// value the response carries.
+		next[a.Name] = restorePreservedValues(a, current[a.Name], next[a.Name])
 	}
 
 	return tftypes.NewValue(objType, next)
 }
 
 func (r *dynamicResource) stateFromResponse(_ context.Context, baseRaw tftypes.Value, resp map[string]any, scope map[string]string, id string, refreshInputs bool, diags *diag.Diagnostics) tftypes.Value {
-	return buildStateRaw(r.spec.Attributes, baseRaw, resp, scope, id, refreshInputs, diags)
+	return buildStateRaw(r.spec.Attributes, baseRaw, resp, scope, id, refreshInputs, true, diags)
 }
 
 // ── value conversion helpers ──────────────────────────────────────────────────
@@ -1185,9 +1772,39 @@ func toStringValue(v any) string {
 
 // ── path helpers ──────────────────────────────────────────────────────────────
 
+// extractFirstNonEmpty returns the value at the first path (of an ordered list)
+// that yields something present — non-nil, and, for a string, non-empty. It
+// backs AttributeSpec.ResponsePaths, letting a single cloud-agnostic output read
+// from whichever per-cloud path is populated. Returns nil when none match.
+func extractFirstNonEmpty(resp map[string]any, paths []string) any {
+	var firstPresent any
+	seen := false
+	for _, p := range paths {
+		v := extractPath(resp, strings.Split(p, "."))
+		if v == nil {
+			continue
+		}
+		if !seen {
+			firstPresent, seen = v, true
+		}
+		// An empty string is "present but empty" — prefer a later path that may
+		// hold a real value, but fall back to it if none does (so a legitimately
+		// empty single-path value like description="" is preserved, not dropped).
+		if s, ok := v.(string); ok && s == "" {
+			continue
+		}
+		return v
+	}
+	return firstPresent
+}
+
 // extractPath walks a decoded JSON value following dot-separated segments. A
 // segment suffixed with "[]" treats the current value as an array and maps the
-// remaining path over each element, yielding []any.
+// remaining path over each element, yielding []any. A segment of the form
+// "key[filterKey=filterValue]" instead selects the first element of the array
+// at key whose filterKey field stringifies to filterValue — e.g. a
+// Kubernetes-style conditions array: "conditions[type=Ready]" — and continues
+// extraction from that single matched element.
 func extractPath(cur any, segs []string) any {
 	if len(segs) == 0 {
 		return cur
@@ -1206,6 +1823,23 @@ func extractPath(cur any, segs []string) any {
 			}
 		}
 		return out
+	}
+	if open := strings.IndexByte(seg, '['); open >= 0 && strings.HasSuffix(seg, "]") {
+		key := seg[:open]
+		filter := seg[open+1 : len(seg)-1]
+		if eq := strings.IndexByte(filter, '='); eq >= 0 {
+			filterKey, filterVal := filter[:eq], filter[eq+1:]
+			arr, ok := mapIndex(cur, key).([]any)
+			if !ok {
+				return nil
+			}
+			for _, el := range arr {
+				if m, ok := el.(map[string]any); ok && toStringValue(m[filterKey]) == filterVal {
+					return extractPath(m, segs[1:])
+				}
+			}
+			return nil
+		}
 	}
 	return extractPath(mapIndex(cur, seg), segs[1:])
 }

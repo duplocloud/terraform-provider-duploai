@@ -197,6 +197,14 @@
       "description": "Current provisioning status."
     },
     {
+      "name": "s3_bucket_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this S3 bucket, for reference by dependent resources."
+    },
+    {
       "name": "bucket_arn",
       "type": "string",
       "computed": true,

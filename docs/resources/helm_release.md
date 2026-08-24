@@ -37,6 +37,88 @@ resource "duploai_helm_release" "podinfo" {
   YAML
 }
 
+# Helm release with install / upgrade behaviour tuned.
+#
+# `timeout` is the in-cluster Helm timeout Flux applies to each action; the
+# `timeouts` block below is how long Terraform waits for the apply. Set both.
+resource "duploai_helm_release" "ingress_nginx" {
+  workspace_id      = "<workspace-id>"
+  name              = "ingress-nginx"
+  scope_ids         = ["<scope-id>"]
+  resource_group_id = "<eks-resource-group-id>"
+  environment_id    = "<environment-id>"
+  namespace_name    = "default"
+
+  interval         = "10m"
+  target_namespace = "ingress-nginx"
+  timeout          = "10m"
+  max_history      = 10
+
+  chart_name            = "ingress-nginx"
+  chart_version         = "4.x"
+  chart_source_ref_kind = "HelmRepository"
+  chart_source_ref_name = "ingress-nginx"
+
+  install = {
+    create_namespace = true
+    crds             = "CreateReplace"
+    timeout          = "15m"
+
+    remediation = {
+      retries = 3
+    }
+  }
+
+  upgrade = {
+    cleanup_on_fail = true
+    crds            = "CreateReplace"
+
+    remediation = {
+      retries  = 2
+      strategy = "rollback"
+    }
+  }
+
+  rollback = {
+    cleanup_on_fail = true
+  }
+
+  uninstall = {
+    keep_history         = false
+    deletion_propagation = "background"
+  }
+
+  test = {
+    enable  = true
+    timeout = "5m"
+
+    filters = [
+      {
+        name = "ingress-nginx-test"
+      }
+    ]
+  }
+
+  # Correct cluster-side drift, but let the HPA own replica counts.
+  drift_detection = {
+    mode = "enabled"
+
+    ignore = [
+      {
+        paths = ["/spec/replicas"]
+        target = {
+          kind = "Deployment"
+        }
+      }
+    ]
+  }
+
+  timeouts {
+    create = "30m"
+    update = "30m"
+  }
+}
+
 # Helm release from an OCIRepository chart, with values from a ConfigMap
 resource "duploai_helm_release" "app" {
   workspace_id      = "<workspace-id>"
@@ -75,38 +157,255 @@ resource "duploai_helm_release" "app" {
 - `name` (String) Name of the Helm release resource.
 - `namespace_name` (String) Kubernetes namespace the HelmRelease object is created in.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this Helm release belongs to.
-- `scope_ids` (List of String) Scope IDs that link this Helm release to a cloud provider account.
 - `workspace_id` (String) ID of the workspace that owns this Helm release.
 
 ### Optional
 
 - `annotations` (Map of String) Kubernetes annotations applied to the HelmRelease.
 - `api_version` (String) Flux HelmRelease CRD apiVersion. Override if your cluster's Flux serves a different version (e.g. helm.toolkit.fluxcd.io/v2beta2).
+- `chart_ignore_missing_values_files` (Boolean) Skip missing entries in chart_values_files instead of failing the reconcile.
 - `chart_interval` (String) Interval at which the chart source is checked for updates.
+- `chart_metadata_annotations` (Map of String) Annotations stamped onto the generated HelmChart object (not onto the rendered workloads — that is common_metadata_annotations).
+- `chart_metadata_labels` (Map of String) Labels stamped onto the generated HelmChart object (not onto the rendered workloads — that is common_metadata_labels).
 - `chart_name` (String) Chart name (or path) within the referenced HelmRepository source. Use with chart_source_ref_*.
-- `chart_reconcile_strategy` (String) When to reconcile the chart: ChartVersion or Revision.
+- `chart_reconcile_strategy` (String) When to reconcile the chart: ChartVersion or Revision. Server-defaulted to ChartVersion by Flux when omitted.
+- `chart_ref_api_version` (String) API version of the directly-referenced chart source object.
 - `chart_ref_kind` (String) Kind of a directly-referenced chart source (e.g. OCIRepository or HelmChart). Alternative to chart_name/chart_source_ref_*.
 - `chart_ref_name` (String) Name of the directly-referenced chart source object.
 - `chart_ref_namespace` (String) Namespace of the directly-referenced chart source object.
+- `chart_source_ref_api_version` (String) API version of the chart source object.
 - `chart_source_ref_kind` (String) Kind of the chart source (e.g. HelmRepository).
 - `chart_source_ref_name` (String) Name of the chart source object.
+- `chart_source_ref_namespace` (String) Namespace of the chart source object.
+- `chart_values_files` (List of String) Values files to merge, as paths relative to the chart root. Later entries win.
+- `chart_verify_provider` (String) Signature verification provider for an OCI-backed chart: cosign or notation.
+- `chart_verify_secret_ref_name` (String) Name of the Secret holding the trusted public keys used to verify the chart.
 - `chart_version` (String) Chart version or semver range.
-- `description` (String) Optional description.
+- `common_metadata_annotations` (Map of String) Annotations applied to every object the chart renders.
+- `common_metadata_labels` (Map of String) Labels applied to every object the chart renders.
+- `depends_on_releases` (Attributes List) Other HelmReleases that must be ready before this one reconciles. Ordering only — no data flows between them. Named depends_on_releases because depends_on is a reserved Terraform meta-argument. (see [below for nested schema](#nestedatt--depends_on_releases))
+- `description` (String) Optional description. Not echoed back by the API, so it is never read from the response.
+- `drift_detection` (Attributes) Detect, and optionally correct, cluster-side drift from the rendered manifests. (see [below for nested schema](#nestedatt--drift_detection))
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `health_check_exprs` (Attributes List) Custom CEL readiness rules, so Flux can judge health for kinds it has no built-in rules for. (see [below for nested schema](#nestedatt--health_check_exprs))
+- `install` (Attributes) Options for the Helm install action — the first release of the chart, and any re-install after an uninstall remediation. (see [below for nested schema](#nestedatt--install))
 - `interval` (String) Interval at which the release is reconciled (Go duration, e.g. 5m, 1h).
+- `kube_config_secret_ref_key` (String) Key within the kubeconfig Secret.
+- `kube_config_secret_ref_name` (String) Name of a Secret holding a kubeconfig, so the release targets a remote cluster.
 - `labels` (Map of String) Kubernetes labels applied to the HelmRelease.
+- `max_history` (Number) Number of Helm release revisions to keep in storage. Flux defaults to 5 when omitted.
+- `persistent_client` (Boolean) Re-use one Helm client across reconciles. Flux defaults to true.
+- `post_render_strategy` (String) How post-renderers interact with Helm hooks: nohooks, combined, or separate. Flux defaults to combined.
+- `post_renderers` (Attributes List) Kustomize post-render steps applied to the manifests the chart renders. (see [below for nested schema](#nestedatt--post_renderers))
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
-- `provisioner_version` (String) Optional provisioner version.
+- `provisioner_version` (String) Optional provisioner version. Not echoed back by the API, so it is never read from the response.
 - `release_name` (String) Helm release name (defaults to the resource name).
+- `rollback` (Attributes) Options for the Helm rollback action, run when upgrade.remediation.strategy is rollback. (see [below for nested schema](#nestedatt--rollback))
+- `scope_ids` (List of String) Scope IDs that link this Helm release to a cloud provider account. Not echoed back by the API, so it is never read from the response.
+- `service_account_name` (String) Kubernetes ServiceAccount, in the HelmRelease namespace, that Flux impersonates when running Helm actions.
+- `storage_namespace` (String) Namespace Helm stores its release history in (defaults to the HelmRelease namespace).
+- `suspend` (Boolean) Suspend reconciliation of the release. The Helm release itself is left in place.
 - `target_namespace` (String) Namespace the chart is installed into (defaults to the HelmRelease namespace).
+- `test` (Attributes) Options for the Helm test action, run after a successful install or upgrade. (see [below for nested schema](#nestedatt--test))
+- `timeout` (String) Time to wait for any individual Kubernetes operation during a Helm action (Go duration, e.g. 5m). Flux defaults to 5m when omitted, and each action block below may override it. This is the in-cluster Helm timeout and is unrelated to the `timeouts` block, which bounds how long Terraform itself waits.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
+- `uninstall` (Attributes) Options for the Helm uninstall action, run on remediation and when the release is deleted. (see [below for nested schema](#nestedatt--uninstall))
+- `upgrade` (Attributes) Options for the Helm upgrade action, run whenever the chart version or values change. (see [below for nested schema](#nestedatt--upgrade))
 - `values` (String) Inline Helm values as a YAML or JSON string.
 - `values_from` (Attributes List) Values sourced from ConfigMaps or Secrets. (see [below for nested schema](#nestedatt--values_from))
+- `wait_strategy_name` (String) Implementation Flux uses to wait for resources to become ready: poller or legacy. Flux defaults to poller.
 
 ### Read-Only
 
+- `helm_release_id` (String) ID of this Helm release, for reference by dependent resources.
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `status` (String) Current provisioning status.
+
+<a id="nestedatt--depends_on_releases"></a>
+### Nested Schema for `depends_on_releases`
+
+Required:
+
+- `name` (String) Name of the HelmRelease depended on.
+
+Optional:
+
+- `namespace` (String) Namespace of the dependency. Defaults to this release's namespace.
+- `ready_expr` (String) CEL expression overriding what "ready" means for the dependency.
+
+
+<a id="nestedatt--drift_detection"></a>
+### Nested Schema for `drift_detection`
+
+Optional:
+
+- `ignore` (Attributes List) Paths excluded from drift comparison, optionally scoped to particular objects. (see [below for nested schema](#nestedatt--drift_detection--ignore))
+- `mode` (String) Drift handling: enabled (correct it), warn (report only), or disabled. Flux defaults to disabled.
+
+<a id="nestedatt--drift_detection--ignore"></a>
+### Nested Schema for `drift_detection.ignore`
+
+Optional:
+
+- `paths` (List of String) RFC 6901 JSON pointers to ignore, e.g. /spec/replicas.
+- `target` (Attributes) Restrict the rule to matching objects. Omit to apply it to every object. (see [below for nested schema](#nestedatt--drift_detection--ignore--target))
+
+<a id="nestedatt--drift_detection--ignore--target"></a>
+### Nested Schema for `drift_detection.ignore.target`
+
+Optional:
+
+- `annotation_selector` (String) Annotation selector expression, e.g. env in (staging, prod).
+- `group` (String) API group of the objects to match.
+- `kind` (String) Kind of the objects to match.
+- `label_selector` (String) Label selector expression, e.g. app.kubernetes.io/name=podinfo.
+- `name` (String) Name of the objects to match.
+- `namespace` (String) Namespace of the objects to match.
+- `version` (String) API version of the objects to match.
+
+
+
+
+<a id="nestedatt--health_check_exprs"></a>
+### Nested Schema for `health_check_exprs`
+
+Optional:
+
+- `api_version` (String) API version of the kind these rules apply to.
+- `current` (String) CEL expression that evaluates true when the resource is ready.
+- `failed` (String) CEL expression that evaluates true when the resource has failed.
+- `in_progress` (String) CEL expression that evaluates true while the resource is still reconciling.
+- `kind` (String) Kind these rules apply to.
+
+
+<a id="nestedatt--install"></a>
+### Nested Schema for `install`
+
+Optional:
+
+- `crds` (String) How the chart's CRDs are handled on install: Skip (never apply), Create (apply only if absent), or CreateReplace (apply and update existing). Flux defaults to Create.
+- `create_namespace` (Boolean) Create target_namespace if it does not already exist.
+- `disable_hooks` (Boolean) Skip the chart's install hooks.
+- `disable_open_api_validation` (Boolean) Skip validating rendered templates against the cluster's OpenAPI schema.
+- `disable_schema_validation` (Boolean) Skip validating the supplied values against the chart's values.schema.json. Requires Flux 2.4 or later.
+- `disable_take_ownership` (Boolean) Do not take ownership of existing resources that are not tracked by this release.
+- `disable_wait` (Boolean) Do not wait for the installed resources to become ready before marking the release successful.
+- `disable_wait_for_jobs` (Boolean) Do not wait for Jobs created by the chart to complete.
+- `remediation` (Attributes) What Flux does when the install fails. (see [below for nested schema](#nestedatt--install--remediation))
+- `replace` (Boolean) Re-use the name of a deleted release still present in Helm history.
+- `server_side_apply` (Boolean) Apply the rendered manifests server-side instead of client-side.
+- `skip_crds` (Boolean, Deprecated) Skip installing the chart's CRDs. Deprecated by Flux in favour of crds.
+- `strategy` (Attributes) Retry strategy for the install action. (see [below for nested schema](#nestedatt--install--strategy))
+- `timeout` (String) Timeout for the install action (Go duration). Overrides the release-level timeout.
+
+<a id="nestedatt--install--remediation"></a>
+### Nested Schema for `install.remediation`
+
+Optional:
+
+- `ignore_test_failures` (Boolean) Treat a Helm test failure as success, so it does not trigger remediation. Only meaningful when test.enable is true.
+- `remediate_last_failure` (Boolean) Remediate (uninstall) after the final retry is exhausted, instead of leaving the failed release in place.
+- `retries` (Number) Number of retries after a failed install. Use -1 to retry indefinitely. Flux defaults to 0.
+
+
+<a id="nestedatt--install--strategy"></a>
+### Nested Schema for `install.strategy`
+
+Optional:
+
+- `name` (String) Name of the install strategy.
+- `retry_interval` (String) Interval between retries (Go duration). Applies to the retry strategy only.
+
+
+
+<a id="nestedatt--post_renderers"></a>
+### Nested Schema for `post_renderers`
+
+Optional:
+
+- `kustomize` (Attributes) Kustomize patches and image overrides. (see [below for nested schema](#nestedatt--post_renderers--kustomize))
+
+<a id="nestedatt--post_renderers--kustomize"></a>
+### Nested Schema for `post_renderers.kustomize`
+
+Optional:
+
+- `images` (Attributes List) Container image overrides applied to the rendered manifests. (see [below for nested schema](#nestedatt--post_renderers--kustomize--images))
+- `patches` (Attributes List) Patches applied to the rendered manifests. (see [below for nested schema](#nestedatt--post_renderers--kustomize--patches))
+
+<a id="nestedatt--post_renderers--kustomize--images"></a>
+### Nested Schema for `post_renderers.kustomize.images`
+
+Optional:
+
+- `digest` (String) Replacement image digest. Mutually exclusive with new_tag.
+- `name` (String) Image name to match, e.g. ghcr.io/stefanprodan/podinfo.
+- `new_name` (String) Replacement image name.
+- `new_tag` (String) Replacement image tag. Mutually exclusive with digest.
+
+
+<a id="nestedatt--post_renderers--kustomize--patches"></a>
+### Nested Schema for `post_renderers.kustomize.patches`
+
+Optional:
+
+- `patch` (String) The patch document as inline YAML or JSON — either a strategic-merge patch or a JSON6902 patch list.
+- `target` (Attributes) Which rendered objects to patch. Omit to patch every object. (see [below for nested schema](#nestedatt--post_renderers--kustomize--patches--target))
+
+<a id="nestedatt--post_renderers--kustomize--patches--target"></a>
+### Nested Schema for `post_renderers.kustomize.patches.target`
+
+Optional:
+
+- `annotation_selector` (String) Annotation selector expression, e.g. env in (staging, prod).
+- `group` (String) API group of the objects to match.
+- `kind` (String) Kind of the objects to match.
+- `label_selector` (String) Label selector expression, e.g. app.kubernetes.io/name=podinfo.
+- `name` (String) Name of the objects to match.
+- `namespace` (String) Namespace of the objects to match.
+- `version` (String) API version of the objects to match.
+
+
+
+
+
+<a id="nestedatt--rollback"></a>
+### Nested Schema for `rollback`
+
+Optional:
+
+- `cleanup_on_fail` (Boolean) Delete newly created resources when the rollback fails.
+- `disable_hooks` (Boolean) Skip the chart's rollback hooks.
+- `disable_wait` (Boolean) Do not wait for the rolled-back resources to become ready.
+- `disable_wait_for_jobs` (Boolean) Do not wait for Jobs created by the chart to complete.
+- `force` (Boolean) Replace resources through delete/recreate when a patch would fail.
+- `recreate` (Boolean, Deprecated) Recreate the Pods of the rolled-back resources.
+- `server_side_apply` (String) Server-side apply mode for the rollback.
+- `timeout` (String) Timeout for the rollback action (Go duration). Overrides the release-level timeout.
+
+
+<a id="nestedatt--test"></a>
+### Nested Schema for `test`
+
+Optional:
+
+- `enable` (Boolean) Run the chart's tests after install and upgrade. A test failure triggers remediation unless the matching remediation.ignore_test_failures is true.
+- `filters` (Attributes List) Restrict which of the chart's tests are run. When any include filter is present, only the named tests run. (see [below for nested schema](#nestedatt--test--filters))
+- `ignore_failures` (Boolean) Treat test failures as success for both install and upgrade, without setting remediation.ignore_test_failures on each.
+- `timeout` (String) Timeout for the test action (Go duration). Overrides the release-level timeout.
+
+<a id="nestedatt--test--filters"></a>
+### Nested Schema for `test.filters`
+
+Required:
+
+- `name` (String) Name of the test to filter on.
+
+Optional:
+
+- `exclude` (Boolean) Exclude the named test instead of including it.
+
+
 
 <a id="nestedblock--timeouts"></a>
 ### Nested Schema for `timeouts`
@@ -116,6 +415,60 @@ Optional:
 - `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 - `delete` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours). Setting a timeout for a Delete operation is only applicable if changes are saved into state before the destroy operation occurs.
 - `update` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+
+
+<a id="nestedatt--uninstall"></a>
+### Nested Schema for `uninstall`
+
+Optional:
+
+- `deletion_propagation` (String) Cascading delete policy applied to the release's resources. Flux defaults to background.
+- `disable_hooks` (Boolean) Skip the chart's uninstall hooks.
+- `disable_wait` (Boolean) Do not wait for the release's resources to be removed.
+- `keep_history` (Boolean) Keep the Helm release history after uninstalling, so the release can be rolled back.
+- `timeout` (String) Timeout for the uninstall action (Go duration). Overrides the release-level timeout.
+
+
+<a id="nestedatt--upgrade"></a>
+### Nested Schema for `upgrade`
+
+Optional:
+
+- `chart_name_change_strategy` (String) What to do when the chart name changes: Reinstall the release, or apply an InPlaceUpdate.
+- `cleanup_on_fail` (Boolean) Delete newly created resources when the upgrade fails.
+- `crds` (String) How the chart's CRDs are handled on upgrade: Skip (never apply), Create (apply only if absent), or CreateReplace (apply and update existing). Flux defaults to Skip.
+- `disable_hooks` (Boolean) Skip the chart's upgrade hooks.
+- `disable_open_api_validation` (Boolean) Skip validating rendered templates against the cluster's OpenAPI schema.
+- `disable_schema_validation` (Boolean) Skip validating the supplied values against the chart's values.schema.json. Requires Flux 2.4 or later.
+- `disable_take_ownership` (Boolean) Do not take ownership of existing resources that are not tracked by this release.
+- `disable_wait` (Boolean) Do not wait for the upgraded resources to become ready before marking the release successful.
+- `disable_wait_for_jobs` (Boolean) Do not wait for Jobs created by the chart to complete.
+- `force` (Boolean) Replace resources through delete/recreate when a patch would fail.
+- `preserve_values` (Boolean) Merge the last release's values on top of the supplied ones (helm upgrade --reuse-values).
+- `remediation` (Attributes) What Flux does when the upgrade fails. (see [below for nested schema](#nestedatt--upgrade--remediation))
+- `server_side_apply` (String) Server-side apply mode for the upgrade. Note this is a string here, unlike install.server_side_apply.
+- `strategy` (Attributes) Retry strategy for the upgrade action. (see [below for nested schema](#nestedatt--upgrade--strategy))
+- `timeout` (String) Timeout for the upgrade action (Go duration). Overrides the release-level timeout.
+
+<a id="nestedatt--upgrade--remediation"></a>
+### Nested Schema for `upgrade.remediation`
+
+Optional:
+
+- `ignore_test_failures` (Boolean) Treat a Helm test failure as success, so it does not trigger remediation. Only meaningful when test.enable is true.
+- `remediate_last_failure` (Boolean) Remediate after the final retry is exhausted, instead of leaving the failed release in place. Flux defaults to true when retries is greater than 0.
+- `retries` (Number) Number of retries after a failed upgrade. Use -1 to retry indefinitely. Flux defaults to 0.
+- `strategy` (String) How a failed upgrade is remediated: rollback to the previous revision, or uninstall the release. Flux defaults to rollback.
+
+
+<a id="nestedatt--upgrade--strategy"></a>
+### Nested Schema for `upgrade.strategy`
+
+Optional:
+
+- `name` (String) Name of the upgrade strategy.
+- `retry_interval` (String) Interval between retries (Go duration). Applies to the retry strategy only.
+
 
 
 <a id="nestedatt--values_from"></a>
@@ -128,6 +481,8 @@ Required:
 
 Optional:
 
+- `optional` (Boolean) Tolerate a missing ConfigMap or Secret instead of failing the reconcile.
+- `target_path` (String) Where in the values tree to graft the referenced data, as a dot-separated path. When set, the referenced value is treated as a single value rather than a values map to merge.
 - `values_key` (String) Key in the source holding the values (defaults to values.yaml).
 
 ## Import

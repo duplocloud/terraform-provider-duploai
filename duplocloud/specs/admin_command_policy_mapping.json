@@ -1,0 +1,115 @@
+{
+  "name": "admin_command_policy_mapping",
+  "description": "Manages a DuploCloud AI Helpdesk command policy mapping — binds a command policy to a scope (System, Workspace, or Project), putting the policy's allow/block command rules into effect for tickets in that scope. Only one active mapping may exist per System scope, and per Workspace/Project target.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/CommandPolicyMappings"
+  },
+  "requiredIf": [
+    {
+      "attribute": "target_ids",
+      "when": [
+        {
+          "attribute": "level",
+          "notEquals": "System"
+        }
+      ]
+    }
+  ],
+  "attributes": [
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "apiPath": "name",
+      "description": "Name of the command policy mapping."
+    },
+    {
+      "name": "policy_id",
+      "type": "string",
+      "required": true,
+      "apiPath": "policyId",
+      "description": "ID of the command policy this mapping applies. Must reference an existing, active command policy."
+    },
+    {
+      "name": "level",
+      "type": "string",
+      "required": true,
+      "oneOf": [
+        "System",
+        "Workspace",
+        "Project"
+      ],
+      "apiPath": "level",
+      "description": "Scope level the policy is bound to: System (platform-wide), Workspace, or Project."
+    },
+    {
+      "name": "target_ids",
+      "type": "set(string)",
+      "optional": true,
+      "apiPath": "targetIds",
+      "description": "IDs of the targets this mapping applies to: workspace IDs when level is Workspace, project IDs when level is Project. Required for Workspace and Project levels; must be omitted for System level."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "description",
+      "description": "Human-readable description of the mapping."
+    },
+    {
+      "name": "metadata",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "description": "Arbitrary key/value metadata attached to the mapping."
+    },
+    {
+      "name": "is_active",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": true,
+      "apiPath": "isActive",
+      "description": "Whether the mapping is active. Defaults to true. Only active mappings take effect and are checked for scope conflicts."
+    },
+    {
+      "name": "created_by",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdBy",
+      "description": "Identifier of the user who created the mapping."
+    },
+    {
+      "name": "updated_by",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedBy",
+      "description": "Identifier of the user who last updated the mapping."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "createdAt",
+      "description": "Timestamp when the mapping was created (RFC 3339)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "apiPath": "updatedAt",
+      "description": "Timestamp when the mapping was last updated (RFC 3339)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "apiPath": "version",
+      "description": "Server-incremented version of the mapping."
+    }
+  ]
+}

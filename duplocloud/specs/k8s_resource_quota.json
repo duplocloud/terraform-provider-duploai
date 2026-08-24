@@ -94,6 +94,14 @@
       "noSend": true,
       "apiPath": "status",
       "description": "Current provisioning status."
+    },
+    {
+      "name": "k8s_resource_quota_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this resource quota, for reference by dependent resources."
     }
   ],
   "requestConstants": [

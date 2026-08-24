@@ -61,6 +61,30 @@ resource "duploai_k8s_job" "parallel" {
   ]
 }
 
+# Job that opts out of the Resource-Group nodeSelector. By default a job's pods
+# are pinned to nodes labeled for its resource group (key "resourcegroup") — if
+# that resource group has no dedicated node group, the pods stay Pending
+# forever. Set is_any_host_allowed = true to let the pods schedule on any node
+# instead. allocation_tags further narrows that to nodes whose node group was
+# provisioned with a matching allocation tag.
+resource "duploai_k8s_job" "any_host" {
+  workspace_id      = "<workspace-id>"
+  name              = "shared-cleanup"
+  environment_id    = "<environment-id>"
+  resource_group_id = "<resource-group-id>"
+  namespace_name    = "default"
+
+  is_any_host_allowed = true
+  allocation_tags     = "shared-pool"
+
+  containers = [
+    {
+      name  = "cleanup"
+      image = "my-repo/cleanup:latest"
+    },
+  ]
+}
+
 # Full example — Indexed completions, pod failure policy, private-registry pull
 # secret, volumes + mounts, secret/configMap-sourced env, resource limits, probes,
 # init container, and scheduling. Note: restart_policy must be "Never" when
@@ -187,6 +211,7 @@ resource "duploai_k8s_job" "full" {
 
 - `active_deadline_seconds` (Number) Maximum duration in seconds the job may run before being terminated.
 - `affinity` (Attributes) Node/pod affinity and anti-affinity scheduling rules. (see [below for nested schema](#nestedatt--affinity))
+- `allocation_tags` (String) Allocation tags used to constrain which hosts the job pods run on.
 - `annotations` (Map of String) Annotations to apply to the Kubernetes Job object.
 - `automount_service_account_token` (Boolean) Whether to automount the service account token into the pod.
 - `backoff_limit` (Number) Number of retries before the job is marked as failed. Defaults to 6.
@@ -206,6 +231,7 @@ resource "duploai_k8s_job" "full" {
 - `hostname` (String) Pod hostname (defaults to the pod name).
 - `image_pull_secrets` (Attributes List) Image pull secrets referenced by the pods, for pulling container images from private registries. (see [below for nested schema](#nestedatt--image_pull_secrets))
 - `init_containers` (Attributes List) Init containers that run to completion, in order, before the main containers start. (see [below for nested schema](#nestedatt--init_containers))
+- `is_any_host_allowed` (Boolean) When true, the job's pods may be scheduled on any available host.
 - `labels` (Map of String) Labels to apply to the Kubernetes Job object.
 - `manual_selector` (Boolean) Allow a manually-specified pod selector (advanced).
 - `max_failed_indexes` (Number) Max number of failed indexes before the job is failed (Indexed jobs only).
@@ -239,6 +265,7 @@ resource "duploai_k8s_job" "full" {
 - `job_active` (Number) Number of pods actively running for the job.
 - `job_failed` (Number) Number of pods that have failed.
 - `job_succeeded` (Number) Number of pods that have successfully completed.
+- `k8s_job_id` (String) ID of this job, for reference by dependent resources.
 - `scope_ids` (List of String) Scope IDs inherited from the linked environment or resource group.
 - `status` (String) Current provisioning status of the job resource.
 
