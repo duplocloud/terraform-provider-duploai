@@ -487,8 +487,16 @@ type AttributeSpec struct {
 	// alb.ingress.kubernetes.io/{security-groups,subnets,...} annotations, or the
 	// platform stamps managed duplocloud-ai-* tags), which would otherwise show
 	// perpetual drift as Terraform tries to remove the server-added keys. Keys the
-	// user sets (not matched here) are preserved, so there is no "cannot remove a
-	// key" limitation for those.
+	// user sets are preserved, so there is no "cannot remove a key" limitation:
+	// keys that do not match a pattern are never dropped, and a matching key the
+	// user explicitly declares (present in the plan on create/update, in prior
+	// state on read) round-trips too — otherwise declaring a server-stamped key
+	// would leave it out of state and re-open the diff on every plan. A lone "*"
+	// therefore means "state holds only the keys I declare".
+	//
+	// Rejected at spec load (validateAttributes) on anything but a map(string), on
+	// an attribute that carries nested attributes, and on an empty pattern. Not
+	// applied on the data source path, which reports the API response verbatim.
 	FilterResponseKeys []string `json:"filterResponseKeys,omitempty"`
 
 	// NormalizeCsvOrder, for a string attribute, sorts the comma-separated tokens
@@ -1232,6 +1240,25 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 				// RequiresReplace already recreates on any change, so the plan-time
 				// rejection would never be reached.
 				return nil, fmt.Errorf("attribute %q: immutableOnceTrue is redundant with forceNew", a.Name)
+			}
+		}
+		// filterResponseKeys is applied to a decoded JSON object, so it only means
+		// something on a map(string) — on any other type it would be accepted and
+		// silently ignored. Nested attributes are rejected because buildStateRaw
+		// filters the parent value and then suppresses the duplicate pass inside
+		// attrFromResponse (see filterMapKeys); a filtered map that carried its own
+		// children would silently lose their filtering.
+		if len(a.FilterResponseKeys) > 0 {
+			if a.Type != "map(string)" {
+				return nil, fmt.Errorf("attribute %q: filterResponseKeys is only valid on a map(string), got %q", a.Name, a.Type)
+			}
+			if len(a.Attributes) > 0 {
+				return nil, fmt.Errorf("attribute %q: filterResponseKeys cannot be combined with nested attributes", a.Name)
+			}
+			for _, pat := range a.FilterResponseKeys {
+				if pat == "" {
+					return nil, fmt.Errorf("attribute %q: filterResponseKeys contains an empty pattern", a.Name)
+				}
 			}
 		}
 		if a.SendFromState {
