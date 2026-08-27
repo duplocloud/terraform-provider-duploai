@@ -46,6 +46,7 @@ output "iam_role_arn" {
 - `aws_resource_name` (String) AWS resource name prefix for provisioned resources.
 - `cloud` (String) Cloud provider the resource group targets. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
 - `cluster_id` (String) Cluster ID to associate with this resource group.
+- `delete_protection` (Boolean) Guards the resource group against teardown. The platform enables this on every new resource group unless the request says otherwise, and while it is enabled the API refuses both deprovision and delete — so `terraform destroy` fails by design. To tear the group down, set this to false and `terraform apply` first, then destroy. Leave it unset to inherit the platform default (enabled). Stored as the `delete_protection` metadata key.
 - `description` (String) Optional description.
 - `environment_id` (String) Environment ID to associate with this resource group.
 - `iam_role_arn` (String) Provisioned IAM role ARN.

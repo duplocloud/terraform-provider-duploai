@@ -34,6 +34,7 @@ output "status" {
 
 ### Read-Only
 
+- `delete_protection` (Boolean) Guards the namespace against teardown. The platform enables this on every new namespace unless the request says otherwise, and while it is enabled the API refuses both deprovision and delete — so `terraform destroy` fails by design. To tear the namespace down, set this to false and `terraform apply` first, then destroy. Leave it unset to inherit the platform default (enabled). Stored as the `delete_protection` metadata key; it is the only namespace field that can change in place — every other change replaces the namespace.
 - `description` (String) Optional description. Namespaces are immutable, so changing this forces replacement.
 - `environment_id` (String) ID of the environment that owns the resource group (EKS cluster) this namespace belongs to.
 - `k8s_namespace_id` (String) ID of this namespace, for reference by dependent resources.

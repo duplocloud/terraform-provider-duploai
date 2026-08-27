@@ -16,3 +16,19 @@ resource "duploai_k8s_namespace" "app" {
     delete = "10m"
   }
 }
+
+# Disposable namespace — delete protection turned off up front so
+# `terraform destroy` works without a second apply. Leaving delete_protection
+# unset inherits the platform default (on), which makes destroy a two-step
+# operation: set false, apply, then destroy.
+#
+# delete_protection is the only namespace field that changes in place; every
+# other change replaces the namespace.
+resource "duploai_k8s_namespace" "disposable" {
+  workspace_id      = "<workspace-id>"
+  name              = "ci-ephemeral-ns"
+  environment_id    = "<environment-id>"
+  resource_group_id = "<eks-resource-group-id>"
+
+  delete_protection = false
+}

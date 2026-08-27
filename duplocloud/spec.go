@@ -493,6 +493,19 @@ type AttributeSpec struct {
 	// components (e.g. EKS "1.34") are returned unchanged.
 	NormalizeVersion bool `json:"normalizeVersion,omitempty"`
 
+	// StringBool, for a bool attribute, carries the value over the wire as the
+	// STRING "true"/"false" instead of a JSON boolean, and parses the string back
+	// to a bool on read. Use when the field lives in a string-valued container the
+	// API cannot hold a real boolean in — chiefly a Dictionary<string,string>
+	// metadata map, where a JSON bool fails to deserialize.
+	//
+	// On read, "true" matches case-insensitively; every other non-null value is
+	// false. That mirrors the platform's own convention for these keys, where only
+	// an explicit "true" enables the behaviour (see delete_protection). A key that
+	// is absent from the response stays null rather than becoming false, so a value
+	// the user set but the server dropped still surfaces as drift.
+	StringBool bool `json:"stringBool,omitempty"`
+
 	// PreserveOnEmptyResponse keeps the value already held for this attribute —
 	// the configured plan value on create/update, the prior state value on
 	// refresh — whenever the API response comes back null or empty for it. Use
@@ -1211,6 +1224,15 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			}
 			if a.UpdatePath == "" {
 				return nil, fmt.Errorf("attribute %q: updateBoolTrueValue requires updatePath", a.Name)
+			}
+		}
+		if a.StringBool {
+			if a.Type != "bool" {
+				return nil, fmt.Errorf("attribute %q: stringBool requires a bool type, got %q", a.Name, a.Type)
+			}
+			if a.UpdateBoolTrueValue != "" {
+				return nil, fmt.Errorf("attribute %q: stringBool and updateBoolTrueValue are mutually exclusive — "+
+					"both rewrite the wire representation of the same value", a.Name)
 			}
 		}
 		if a.OrderByKey != "" {
