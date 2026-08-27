@@ -210,7 +210,7 @@ have been replaced by this block.
 |-------|---------|-------------|
 | `verb` | see table below | HTTP method (e.g. `"POST"`, `"PUT"`, `"DELETE"`). |
 | `path` | see table below | Path suffix appended to `uriBase`. May contain `{id}`. |
-| `skipWhen` | absent | **Deprovision only.** Array of conditions (`attribute` + one of `equals`/`notEquals`/`isEmpty`) evaluated against prior state at delete time. When **all** hold (logical AND), the engine skips the pre-delete deprovision step and deletes directly. Use for modes with no cloud infrastructure to tear down, e.g. `"skipWhen": [{"attribute": "cloud", "equals": "K8S_ONLY"}]`. Ignored on create/read/update/delete. |
+| `skipWhen` | absent | **Deprovision only.** Array of conditions (`attribute` + one of `equals`/`notEquals`/`isEmpty`/`isNotEmpty`) evaluated against prior state at delete time. When **all** hold (logical AND), the engine skips the pre-delete deprovision step and deletes directly. Use for modes with no cloud infrastructure to tear down, e.g. `"skipWhen": [{"attribute": "cloud", "equals": "K8S_ONLY"}]`. Ignored on create/read/update/delete. |
 
 ### Default REST conventions
 
@@ -501,7 +501,7 @@ usually the case most worth catching.
 ]
 ```
 
-Conditions reuse the `requiredIf` operators — `equals`, `notEquals`, `isEmpty` — plus:
+Conditions reuse the `requiredIf` operators — `equals`, `notEquals`, `isEmpty`, `isNotEmpty` — plus:
 
 | Operator | Meaning |
 |---|---|
@@ -867,7 +867,7 @@ Two forms are supported:
 
 Use the `when` array when the requirement depends on more than one condition.
 All conditions must hold (logical AND). Each condition targets one attribute and
-uses exactly one of `equals`, `notEquals`, or `isEmpty`.
+uses exactly one of `equals`, `notEquals`, `isEmpty`, or `isNotEmpty`.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -882,8 +882,14 @@ Each condition object:
 | `equals` | string | Condition holds when the attribute equals this value. |
 | `notEquals` | string | Condition holds when the attribute does **not** equal this value. |
 | `isEmpty` | bool | Condition holds when the attribute is unset or empty. |
+| `isNotEmpty` | bool | Condition holds when the attribute **is** set. Note that `"isEmpty": false` does *not* mean this — an unset bool reads as "no operator at all", so the presence test needs its own key. |
 
-Exactly one of `equals`, `notEquals`, or `isEmpty` must be set per condition.
+Exactly one of `equals`, `notEquals`, `isEmpty`, or `isNotEmpty` must be set per condition.
+
+`isEmpty` / `isNotEmpty` answer a **collection** by element count, so an explicitly
+empty `list`/`set`/`map` counts as *not set* — matching an API that tests the list's
+length. Scalars compare on their string value, with the attribute's `default` applied
+first. An `object` attribute counts as set when the block is present at all.
 
 When evaluating, if the user omitted an attribute that has a `default`, the
 default value is used — so conditions on defaulted fields work correctly
@@ -909,6 +915,26 @@ without the user explicitly setting them.
     "attribute": "engine_version",
     "when": [
       { "attribute": "snapshot_name", "isEmpty": true }
+    ]
+  }
+]
+```
+
+**Example** — an **all-or-nothing pair**: two rules pointing at each other make either
+list mandatory once the other is set, so the API never sees one without the other
+(`network_baseline`'s custom subnet CIDRs). Setting neither stays valid:
+```json
+"requiredIf": [
+  {
+    "attribute": "custom_private_subnet_cidrs",
+    "when": [
+      { "attribute": "custom_public_subnet_cidrs", "isNotEmpty": true }
+    ]
+  },
+  {
+    "attribute": "custom_public_subnet_cidrs",
+    "when": [
+      { "attribute": "custom_private_subnet_cidrs", "isNotEmpty": true }
     ]
   }
 ]

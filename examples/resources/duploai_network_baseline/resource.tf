@@ -31,6 +31,32 @@ resource "duploai_network_baseline" "with_nat_and_logs" {
   }
 }
 
+# Custom subnet CIDRs — pick the subnet ranges yourself instead of letting the
+# platform carve the VPC automatically. Both lists must be set, each with exactly
+# az_count entries in AZ order: entry 0 lands in the first AZ, entry 1 in the
+# second, and so on. Every range must sit inside cidr and not overlap any other.
+# subnet_prefix is still required (the platform derives a template parameter from
+# it) but is ignored for the carve-up once these lists are present.
+resource "duploai_network_baseline" "custom_subnet_cidrs" {
+  workspace_id  = "<workspace-id>"
+  name          = "prod-network-custom-cidrs"
+  scope_ids     = ["<scope-id>"]
+  region        = "us-east-1"
+  cidr          = "10.2.0.0/16"
+  az_count      = 3
+  subnet_prefix = 24
+
+  custom_public_subnet_cidrs  = ["10.2.0.0/24", "10.2.1.0/24", "10.2.2.0/24"]
+  custom_private_subnet_cidrs = ["10.2.16.0/20", "10.2.32.0/20", "10.2.48.0/20"]
+
+  nat_mode   = "MultiAz"
+  enable_dns = true
+
+  timeouts {
+    create = "45m"
+  }
+}
+
 # Import an existing VPC (mode = "Import") — adopts a VPC the platform did not
 # provision instead of creating one. Set vpc_id to the existing VPC; cidr and the
 # other VPC details are read from it, so cidr is omitted.

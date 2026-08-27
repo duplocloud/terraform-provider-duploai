@@ -855,15 +855,18 @@ func (r *dynamicResource) deprovisionSkipped(ctx context.Context, state attrRead
 		if a == nil {
 			return false
 		}
+		if c.IsEmpty || c.IsNotEmpty {
+			// Collection-aware presence test — an empty list is "not set".
+			if attrEmptyAtPath(ctx, state, *a, path.Root(a.Name)) != c.IsEmpty {
+				return false
+			}
+			continue
+		}
 		val := readConfigString(ctx, state, *a)
 		if val == "" {
 			val = defaultString(*a) // attribute omitted — fall back to its spec default
 		}
 		switch {
-		case c.IsEmpty:
-			if val != "" {
-				return false
-			}
 		case c.NotEquals != "":
 			if val == c.NotEquals {
 				return false
@@ -964,16 +967,17 @@ func (v invalidWhenValidator) holds(ctx context.Context, cfg attrReader, conds [
 					return false
 				}
 			}
+		case c.IsEmpty, c.IsNotEmpty:
+			// Collection-aware presence test — an empty list is "not set".
+			if attrEmptyAtPath(ctx, cfg, *target, p) != c.IsEmpty {
+				return false
+			}
 		default:
 			val := readPathString(ctx, cfg, *target, p)
 			if val == "" {
 				val = defaultString(*target)
 			}
 			switch {
-			case c.IsEmpty:
-				if val != "" {
-					return false
-				}
 			case c.NotEquals != "":
 				if val == c.NotEquals {
 					return false
@@ -1074,15 +1078,18 @@ func (v requiredIfValidator) conditionsHold(ctx context.Context, cfg attrReader,
 			// collapses unknown to "" the same as null) and fire a false requiredIf error.
 			return false
 		}
+		if c.IsEmpty || c.IsNotEmpty {
+			// Collection-aware presence test — an empty list is "not set".
+			if attrEmptyAtPath(ctx, cfg, *when, path.Root(when.Name)) != c.IsEmpty {
+				return false
+			}
+			continue
+		}
 		val := readConfigString(ctx, cfg, *when)
 		if val == "" {
 			val = defaultString(*when) // user omitted it — use the spec default
 		}
 		switch {
-		case c.IsEmpty:
-			if val != "" {
-				return false
-			}
 		case c.NotEquals != "":
 			if val == c.NotEquals {
 				return false
@@ -1115,6 +1122,8 @@ func requiredIfMessage(rule RequiredIfRule) string {
 		switch {
 		case c.IsEmpty:
 			parts = append(parts, fmt.Sprintf("%s is not set", c.Attribute))
+		case c.IsNotEmpty:
+			parts = append(parts, fmt.Sprintf("%s is set", c.Attribute))
 		case c.NotEquals != "":
 			parts = append(parts, fmt.Sprintf("%s is not %q", c.Attribute, c.NotEquals))
 		default:
@@ -1481,6 +1490,42 @@ func readConfigString(ctx context.Context, cfg attrReader, a AttributeSpec) stri
 		return ""
 	}
 	return toStringValue(v)
+}
+
+// attrEmptyAtPath reports whether the value at p is empty, for isEmpty /
+// isNotEmpty conditions. Collections are answered by element count rather than by
+// their string rendering: readPathString renders every non-scalar as "" and
+// readConfigString renders an empty list as "[]", so neither form tells an empty
+// collection apart from an unset one. Scalars fall back to the string render with
+// the attribute's static default applied, so a condition on a defaulted field
+// still evaluates. An unknown value reads as empty here, which is only safe
+// because the config-time callers bail out on unknown first (readConfigUnknown /
+// readPathUnknown) and the deprovision caller reads prior state, where nothing is
+// unknown.
+func attrEmptyAtPath(ctx context.Context, cfg attrReader, a AttributeSpec, p path.Path) bool {
+	switch {
+	case strings.HasPrefix(a.Type, "list("):
+		var v types.List
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsNull() || v.IsUnknown() || len(v.Elements()) == 0
+	case strings.HasPrefix(a.Type, "set("):
+		var v types.Set
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsNull() || v.IsUnknown() || len(v.Elements()) == 0
+	case strings.HasPrefix(a.Type, "map("):
+		var v types.Map
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsNull() || v.IsUnknown() || len(v.Elements()) == 0
+	case a.Type == "object":
+		var v types.Object
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsNull() || v.IsUnknown()
+	}
+	val := readPathString(ctx, cfg, a, p)
+	if val == "" {
+		val = defaultString(a)
+	}
+	return val == ""
 }
 
 // readPathUnknown reports whether the value at p is unknown. Same distinction as
