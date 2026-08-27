@@ -486,6 +486,114 @@
       ]
     },
     {
+      "name": "helpdesk_vpc_peering_enabled",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.enabled",
+      "description": "AWS only. Whether to peer this network's VPC with the helpdesk platform's own VPC, so the platform can reach an EKS cluster that has a private API server endpoint. When on, provisioning creates the peering connection, routes the helpdesk CIDR back through it, and opens inbound 443 from the helpdesk security group. Leave unset to take the platform default (on). Note the platform turns this off by itself when the only helpdesk VPC it could find was auto-detected from the machine hosting the backend rather than configured deliberately \u2014 so the value read back may be false even though you asked for true, and that is not drift."
+    },
+    {
+      "name": "helpdesk_vpc_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskVpcId",
+      "description": "AWS only. ID of the helpdesk VPC this network peers with. Resolved and stamped by the platform; never accepted from the client."
+    },
+    {
+      "name": "helpdesk_account_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskAccountId",
+      "description": "AWS only. AWS account that owns the helpdesk VPC. Stamped by the platform."
+    },
+    {
+      "name": "helpdesk_region",
+      "type": "string",
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskRegion",
+      "description": "AWS only. Region of the helpdesk VPC. Stamped by the platform; only meaningful when the peering crosses regions."
+    },
+    {
+      "name": "helpdesk_vpc_cidr_blocks",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskVpcCidrBlocks",
+      "description": "AWS only. CIDR blocks of the helpdesk VPC \u2014 the ranges routed back through the peering connection and allowed inbound on 443. Stamped by the platform."
+    },
+    {
+      "name": "helpdesk_vpc_peering",
+      "type": "object",
+      "computed": true,
+      "responsePath": "result.helpdeskVpcPeering",
+      "description": "AWS only. Live state of the peering connection with the helpdesk VPC. Populated once provisioning creates the connection and the platform's peering worker accepts it; null when peering is off, unresolved, or the network is not on AWS. Written by two independent processes \u2014 provisioning owns the requester side, the worker owns acceptance and the helpdesk side \u2014 so fields appear at different times.",
+      "attributes": [
+        {
+          "name": "peering_connection_id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "peeringConnectionId",
+          "description": "The pcx-* VPC peering connection ID."
+        },
+        {
+          "name": "state",
+          "type": "string",
+          "computed": true,
+          "apiPath": "state",
+          "description": "AWS peering connection state, verbatim (e.g. pending-acceptance, active, rejected, failed). Reaches active once the platform's worker has accepted the request."
+        },
+        {
+          "name": "state_message",
+          "type": "string",
+          "computed": true,
+          "apiPath": "stateMessage",
+          "description": "AWS's explanation for the current state. Worth reading when state is not active."
+        },
+        {
+          "name": "requester_vpc_id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "requesterVpcId",
+          "description": "This network's own VPC \u2014 the requester side of the connection."
+        },
+        {
+          "name": "requester_cidr_blocks",
+          "type": "list(string)",
+          "computed": true,
+          "apiPath": "requesterCidrBlocks",
+          "description": "This network's CIDR blocks, which the platform allows on the helpdesk side."
+        },
+        {
+          "name": "accepter_vpc_id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "accepterVpcId",
+          "description": "The helpdesk VPC \u2014 the accepter side of the connection."
+        },
+        {
+          "name": "accepter_cidr_blocks",
+          "type": "list(string)",
+          "computed": true,
+          "apiPath": "accepterCidrBlocks",
+          "description": "CIDR blocks of the helpdesk VPC, as resolved when the connection was created."
+        },
+        {
+          "name": "helpdesk_route_stack_status",
+          "type": "string",
+          "computed": true,
+          "apiPath": "helpdeskRouteStackStatus",
+          "description": "How far the platform got adding return routes on its own side: ACTIVE (all present), PARTIAL (at least one route collided with an unrelated existing route and was left alone), or SKIPPED (nothing resolved yet). PARTIAL is the one to investigate \u2014 traffic may work in only one direction."
+        },
+        {
+          "name": "last_error",
+          "type": "string",
+          "computed": true,
+          "apiPath": "lastError",
+          "description": "Most recent error from the platform's peering worker, if it is stuck. Empty when healthy."
+        }
+      ]
+    },
+    {
       "name": "status",
       "type": "string",
       "computed": true,

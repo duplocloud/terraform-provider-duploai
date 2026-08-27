@@ -199,3 +199,15 @@ resource "duploai_cluster_baseline" "imported" {
 
   # version / region / vpc / subnets are auto-discovered — leave unset.
 }
+
+# helpdesk_vpc_peering on a cluster is read-only: the platform copies it from
+# the linked network on every write and uses it to open inbound 443 for the
+# helpdesk CIDR on the EKS control-plane security group. Change the setting on
+# the network baseline (helpdesk_vpc_peering_enabled), not here.
+output "cluster_helpdesk_peering_enabled" {
+  value = duploai_cluster_baseline.basic.helpdesk_vpc_peering.enabled
+}
+
+output "cluster_helpdesk_allowed_cidrs" {
+  value = duploai_cluster_baseline.basic.helpdesk_vpc_peering.helpdesk_vpc_cidr_blocks
+}

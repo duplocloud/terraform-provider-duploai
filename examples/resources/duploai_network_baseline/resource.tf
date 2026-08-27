@@ -206,3 +206,44 @@ resource "duploai_network_baseline" "azure_imported" {
     import_vnet_id = "/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<vnet-name>"
   }
 }
+
+# Private-EKS network — peered with the helpdesk platform's own VPC so the
+# platform can reach a cluster whose Kubernetes API server has no public
+# endpoint. Provisioning creates the peering connection, routes the helpdesk
+# CIDR back through it, and opens inbound 443 from the helpdesk security group.
+#
+# helpdesk_vpc_peering_enabled defaults to on, so this block is only needed to
+# turn it OFF. It is shown explicitly here because that is the setting that makes
+# a private cluster manageable.
+#
+# Note the platform disables peering by itself when the only helpdesk VPC it
+# could find was auto-detected from the machine hosting the backend rather than
+# configured deliberately — so reading back false after asking for true is
+# expected in that case, not drift.
+resource "duploai_network_baseline" "private_eks" {
+  workspace_id  = "<workspace-id>"
+  name          = "prod-private-eks"
+  scope_ids     = ["<scope-id>"]
+  region        = "us-east-1"
+  cidr          = "10.4.0.0/16"
+  az_count      = 3
+  subnet_prefix = 24
+  nat_mode      = "SingleAz"
+
+  helpdesk_vpc_peering_enabled = true
+
+  timeouts {
+    create = "45m"
+  }
+}
+
+# The peering connection's live state is computed. Watch `state` for "active"
+# and `helpdesk_route_stack_status` for "ACTIVE"; "PARTIAL" means a return route
+# collided with an existing one and traffic may flow only one way.
+output "private_eks_peering_state" {
+  value = duploai_network_baseline.private_eks.helpdesk_vpc_peering.state
+}
+
+output "private_eks_peering_connection_id" {
+  value = duploai_network_baseline.private_eks.helpdesk_vpc_peering.peering_connection_id
+}
