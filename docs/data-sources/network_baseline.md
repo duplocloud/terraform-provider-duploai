@@ -80,6 +80,12 @@ output "azure_nat_gateway_ids" {
 - `enable_flow_logs` (Boolean) Enable VPC flow logs. AWS only.
 - `env_tag` (String) Environment tag applied to provisioned resources. AWS only; Azure virtual network tags are set via azure.tags.
 - `flow_logs_retention_days` (Number) Flow logs retention in days. AWS only. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default).
+- `helpdesk_account_id` (String) AWS only. AWS account that owns the helpdesk VPC. Stamped by the platform.
+- `helpdesk_region` (String) AWS only. Region of the helpdesk VPC. Stamped by the platform; only meaningful when the peering crosses regions.
+- `helpdesk_vpc_cidr_blocks` (List of String) AWS only. CIDR blocks of the helpdesk VPC — the ranges routed back through the peering connection and allowed inbound on 443. Stamped by the platform.
+- `helpdesk_vpc_id` (String) AWS only. ID of the helpdesk VPC this network peers with. Resolved and stamped by the platform; never accepted from the client.
+- `helpdesk_vpc_peering` (Attributes) AWS only. Live state of the peering connection with the helpdesk VPC. Populated once provisioning creates the connection and the platform's peering worker accepts it; null when peering is off, unresolved, or the network is not on AWS. Written by two independent processes — provisioning owns the requester side, the worker owns acceptance and the helpdesk side — so fields appear at different times. (see [below for nested schema](#nestedatt--helpdesk_vpc_peering))
+- `helpdesk_vpc_peering_enabled` (Boolean) AWS only. Whether to peer this network's VPC with the helpdesk platform's own VPC, so the platform can reach an EKS cluster that has a private API server endpoint. When on, provisioning creates the peering connection, routes the helpdesk CIDR back through it, and opens inbound 443 from the helpdesk security group. Prefer leaving this unset: the platform default is on, and the value it settles on is then read back as computed state. Setting it to true explicitly risks a diff that never settles — on an install where the helpdesk VPC was only auto-detected from the machine hosting the backend, rather than configured via the vpc-peering-config setting, the platform downgrades the setting to false, so a config of true differs from the stored value on every plan and re-applying does not converge. Set it explicitly only to turn peering off (false), which the platform always honours.
 - `mode` (String) Provisioning mode: Create (the platform provisions a new network) or Import (adopt an existing network not provisioned by the platform — on AWS set vpc_id, on Azure set azure.import_vnet_id). Immutable after creation.
 - `name` (String) Name of the network baseline. On Azure this also seeds the virtual network name and the default resource group name.
 - `nat_gateway_ids` (List of String) AWS only. Provisioned NAT gateway IDs.
@@ -159,3 +165,21 @@ Read-Only:
 - `source_address_prefix` (String) Source address prefix (CIDR, tag, or *). Use this or source_address_prefixes.
 - `source_address_prefixes` (List of String) List of source address prefixes. Use this or source_address_prefix.
 - `source_port_range` (String) Source port or range (e.g. '*', '443', '1000-2000').
+
+
+
+
+<a id="nestedatt--helpdesk_vpc_peering"></a>
+### Nested Schema for `helpdesk_vpc_peering`
+
+Read-Only:
+
+- `accepter_cidr_blocks` (List of String) CIDR blocks of the helpdesk VPC, as resolved when the connection was created.
+- `accepter_vpc_id` (String) The helpdesk VPC — the accepter side of the connection.
+- `helpdesk_route_stack_status` (String) How far the platform got adding return routes on its own side: ACTIVE (all present), PARTIAL (at least one route collided with an unrelated existing route and was left alone), or SKIPPED (nothing resolved yet). PARTIAL is the one to investigate — traffic may work in only one direction.
+- `last_error` (String) Most recent error from the platform's peering worker, if it is stuck. Empty when healthy.
+- `peering_connection_id` (String) The pcx-* VPC peering connection ID.
+- `requester_cidr_blocks` (List of String) This network's CIDR blocks, which the platform allows on the helpdesk side.
+- `requester_vpc_id` (String) This network's own VPC — the requester side of the connection.
+- `state` (String) AWS peering connection state, verbatim (e.g. pending-acceptance, active, rejected, failed). Reaches active once the platform's worker has accepted the request.
+- `state_message` (String) AWS's explanation for the current state. Worth reading when state is not active.
