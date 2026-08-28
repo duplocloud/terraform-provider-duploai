@@ -198,6 +198,15 @@
       "description": "AMI type for the nodes. Accepted values are defined by the backend EksNodeGroupAmiType enum; confirm the exact value against your tenant."
     },
     {
+      "name": "image_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.imageId",
+      "description": "Existing AMI ID to use for the nodes, typically one declared on the parent duploai_plan (amis attribute). Leave unset to let AWS pick the latest AMI for ami_type. Immutable after creation."
+    },
+    {
       "name": "additional_labels",
       "type": "map(string)",
       "optional": true,

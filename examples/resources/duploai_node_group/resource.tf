@@ -29,6 +29,7 @@ resource "duploai_node_group" "spot" {
   kms_key_id     = "<kms-key-arn>"
   capacity_type  = "<capacity-type>"
   ami_type       = "<ami-type>"
+  image_id       = "<ami-id>"
 
   additional_labels = {
     workload = "batch"

@@ -44,6 +44,7 @@ resource "duploai_node_group" "spot" {
   kms_key_id     = "<kms-key-arn>"
   capacity_type  = "<capacity-type>"
   ami_type       = "<ami-type>"
+  image_id       = "<ami-id>"
 
   additional_labels = {
     workload = "batch"
@@ -104,6 +105,7 @@ resource "duploai_node_group" "spot" {
 - `disk_size_gb` (Number) Root EBS volume size in GiB for each node.
 - `enable_cluster_autoscaler` (Boolean) Tag this node group's Auto Scaling group for discovery by the Kubernetes Cluster Autoscaler. The cluster_autoscaler component must also be enabled on the cluster via duploai_cluster_attributes for autoscaling to take effect.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `image_id` (String) Existing AMI ID to use for the nodes, typically one declared on the parent duploai_plan (amis attribute). Leave unset to let AWS pick the latest AMI for ami_type. Immutable after creation.
 - `instance_visibility` (String) Node placement visibility (public vs. private subnets). Accepted values are defined by the backend InstanceVisibilityType enum; confirm the exact value against your tenant.
 - `kms_key_id` (String) KMS key ARN or ID used to encrypt the node group's EBS volumes. Leave unset to use the AWS-managed default key. Immutable after creation.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
