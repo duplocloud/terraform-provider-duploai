@@ -232,10 +232,11 @@
       "computed": true,
       "requestPath": "spec.k8sResource.spec.template.spec.nodeSelector",
       "responsePath": "result.k8sResource.spec.template.spec.nodeSelector",
-      "description": "Node label selector constraints for pod scheduling.",
+      "description": "Node label selector constraints for pod scheduling. The platform stamps two selectors of its own: `resourcegroup` (the resource group's name, so the pods land on its nodes — opt out with `is_any_host_allowed` rather than by setting the key here, which the backend overwrites) and `allocationtags` (mirrors `allocation_tags` when it is set). Both are hidden from state unless you list them here, so you can add your own selectors without fighting a perpetual diff.",
       "forceNew": true,
       "filterResponseKeys": [
-        "resourcegroup"
+        "resourcegroup",
+        "allocationtags"
       ]
     },
     {

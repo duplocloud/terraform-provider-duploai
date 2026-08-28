@@ -240,8 +240,14 @@ resource "duploai_cluster_baseline" "imported" {
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `region` (String) Cloud region (e.g. us-east-1). For Create, inherited from the linked network (network_id) — leave unset. Required for Import (identifies where the existing cluster runs).
-- `scope_id` (String) Scope ID for the cluster, sent as a top-level request field. Required (and only applicable) when cloud is K8S_ONLY and mode is Import — importing an existing installer-provisioned cluster by its scope. For all other cloud/mode combinations use scope_ids instead.
-- `scope_ids` (List of String) Scope IDs for the cluster. For cloud clusters leave unset — inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from. Not used when cloud is K8S_ONLY and mode is Import — use scope_id instead.
+- `scope_id` (String) Kubernetes scope ID for the cluster, sent as a top-level request field.
+
+As an input it is required (and only applicable) when cloud is K8S_ONLY and mode is Import — importing an existing installer-provisioned cluster by its scope. For all other cloud/mode combinations set scope_ids instead.
+
+As an output it is populated for every provisioned cluster: the platform creates a Kubernetes provider and scope for the cluster and stamps the scope's ID here. This is the scope `duploai_k8s_credentials` expects — pass `scope_id`, not `scope_ids`, which holds the cloud scopes and is rejected with "is not a Kubernetes provider".
+- `scope_ids` (List of String) Cloud scope IDs for the cluster — the cloud-provider accounts it is provisioned into. For cloud clusters leave unset — inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from. Not used when cloud is K8S_ONLY and mode is Import — use scope_id instead.
+
+These are cloud-category scopes, not Kubernetes ones: passing one to `duploai_k8s_credentials` fails with "is not a Kubernetes provider". Use scope_id for that.
 - `skip_attribute_auto_creation` (Boolean) Skip automatic creation of cluster attributes (add-ons/managed components) during provisioning. When unset, follows the server default; set true to fully self-manage cluster attributes.
 - `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. AWS (EKS) only — for Azure (AKS) use azure.system_node_pool instead. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))

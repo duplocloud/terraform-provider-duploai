@@ -42,8 +42,9 @@
       "name": "skill_ids",
       "type": "list(string)",
       "required": true,
+      "minItems": 1,
       "apiPath": "skillIds",
-      "description": "IDs of the skills assigned to this persona. Each must reference an existing, active skill."
+      "description": "IDs of the skills assigned to this persona. Each must reference an existing, active skill. At least one is required — a persona with no skills can do nothing."
     },
     {
       "name": "is_active",

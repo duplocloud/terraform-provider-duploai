@@ -13,9 +13,13 @@ Manages a DuploCloud AI Helpdesk workspace — the top-level container that grou
 ## Example Usage
 
 ```terraform
-# Minimal workspace — only the required name.
+# Minimal workspace — the required name and at least one persona.
 resource "duploai_admin_workspace" "basic" {
   name = "support-team"
+
+  persona_ids = [
+    "<persona-id>",
+  ]
 }
 
 # Full workspace — labels, a system prompt, a quota, and persona/scope links.
@@ -52,6 +56,10 @@ resource "duploai_admin_workspace" "with_prompts" {
   name        = "prompt-workspace"
   description = "Workspace with curated prompt suggestions and templates"
 
+  persona_ids = [
+    "<persona-id>",
+  ]
+
   meta_data = {
     prompt_suggestions = jsonencode([
       {
@@ -86,6 +94,7 @@ resource "duploai_admin_workspace" "with_prompts" {
 ### Required
 
 - `name` (String) Unique name of the workspace. The server stores the name in lowercase, so supply a lowercase value to avoid configuration drift. Changing the name forces a new resource.
+- `persona_ids` (Set of String) IDs of the personas available in this workspace. Provide the complete set; on update the full list replaces the previous one. At least one is required — a workspace with no persona has no assistant to answer with.
 
 ### Optional
 
@@ -95,7 +104,6 @@ resource "duploai_admin_workspace" "with_prompts" {
 - `guardrail_id` (String) ID of an optional guardrail that constrains this workspace's capabilities.
 - `knowledge_ids` (Set of String) IDs of the knowledge bases assigned to this workspace. Provide the complete set; on update the full list replaces the previous one.
 - `meta_data` (Map of String) Free-form key/value metadata associated with the workspace.
-- `persona_ids` (Set of String) IDs of the personas available in this workspace. Provide the complete set; on update the full list replaces the previous one.
 - `prompt_md` (String) Markdown system prompt applied to interactions within this workspace.
 - `quota_id` (String) ID of the quota definition that limits this workspace's usage.
 - `role` (String) Role label associated with the workspace.
