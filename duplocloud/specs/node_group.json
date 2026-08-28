@@ -86,6 +86,14 @@
       "description": "Desired number of nodes (between min_size and max_size)."
     },
     {
+      "name": "enable_cluster_autoscaler",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.enableClusterAutoscaler",
+      "description": "Tag this node group's Auto Scaling group for discovery by the Kubernetes Cluster Autoscaler. The cluster_autoscaler component must also be enabled on the cluster via duploai_cluster_attributes for autoscaling to take effect."
+    },
+    {
       "name": "disk_size_gb",
       "type": "int",
       "optional": true,
@@ -93,6 +101,83 @@
       "forceNew": true,
       "apiPath": "spec.diskSizeGb",
       "description": "Root EBS volume size in GiB for each node."
+    },
+    {
+      "name": "kms_key_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.kmsKeyId",
+      "description": "KMS key ARN or ID used to encrypt the node group's EBS volumes. Leave unset to use the AWS-managed default key. Immutable after creation."
+    },
+    {
+      "name": "volumes",
+      "type": "list(object)",
+      "optional": true,
+      "forceNew": true,
+      "apiPath": "spec.volumes",
+      "description": "Additional EBS volumes attached to every node, beyond the root volume sized by disk_size_gb. Maximum 4 entries; device_name must be unique per entry and cannot be /dev/xvda (the root device). Per-volume KMS encryption is not supported here — disk encryption is controlled by the node group's own kms_key_id/encryption settings.",
+      "attributes": [
+        {
+          "name": "device_name",
+          "type": "string",
+          "required": true,
+          "apiPath": "DeviceName",
+          "description": "Device name as it appears on the instance (e.g. /dev/xvdb)."
+        },
+        {
+          "name": "volume_size_gb",
+          "type": "int",
+          "required": true,
+          "apiPath": "Ebs.VolumeSize",
+          "description": "Volume size in GiB."
+        },
+        {
+          "name": "volume_type",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "default": "gp3",
+          "apiPath": "Ebs.VolumeType",
+          "description": "EBS volume type: gp2, gp3, io1, io2, st1, or sc1. Defaults to gp3."
+        },
+        {
+          "name": "iops",
+          "type": "int",
+          "optional": true,
+          "apiPath": "Ebs.Iops",
+          "description": "Provisioned IOPS. Only valid for gp3, io1, and io2 volume types."
+        },
+        {
+          "name": "throughput",
+          "type": "int",
+          "optional": true,
+          "apiPath": "Ebs.Throughput",
+          "description": "Provisioned throughput in MiB/s. Only valid for gp3 volumes."
+        },
+        {
+          "name": "delete_on_termination",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "Ebs.DeleteOnTermination",
+          "description": "Whether the volume is deleted when the node is terminated."
+        },
+        {
+          "name": "encrypted",
+          "type": "bool",
+          "optional": true,
+          "apiPath": "Ebs.Encrypted",
+          "description": "Whether the volume is encrypted at rest."
+        },
+        {
+          "name": "snapshot_id",
+          "type": "string",
+          "optional": true,
+          "apiPath": "Ebs.SnapshotId",
+          "description": "Snapshot ID to restore the volume from."
+        }
+      ]
     },
     {
       "name": "capacity_type",
@@ -148,6 +233,13 @@
           "description": "Taint effect. Accepted values are defined by the backend EksNodeGroupTaintEffect enum (e.g. NoSchedule/PreferNoSchedule/NoExecute); confirm the exact value against your tenant."
         }
       ]
+    },
+    {
+      "name": "tags",
+      "type": "map(string)",
+      "optional": true,
+      "apiPath": "spec.tags",
+      "description": "AWS tags applied to the node group, its Auto Scaling Group, and its EC2 instances/EBS volumes. Keys cannot use the reserved prefixes duplocloud.ai/ or k8s.io/cluster-autoscaler/, or the reserved names resourcegroup, environment, allocationtags, or duplo-resource-id (use enable_cluster_autoscaler instead of setting a cluster-autoscaler tag directly). Subject to AWS limits: max 50 tags, keys up to 128 characters, values up to 256 characters."
     },
     {
       "name": "allocation_tag",
@@ -241,6 +333,13 @@
       "computed": true,
       "apiPath": "result.asgName",
       "description": "Name of the backing Auto Scaling group."
+    },
+    {
+      "name": "live_cluster_autoscaler_enabled",
+      "type": "bool",
+      "computed": true,
+      "apiPath": "result.liveClusterAutoscalerEnabled",
+      "description": "Whether the cluster autoscaler currently recognizes and manages this node group's Auto Scaling group, as observed live from AWS."
     },
     {
       "name": "subnet_ids",
