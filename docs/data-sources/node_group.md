@@ -43,6 +43,7 @@ output "status" {
 - `desired_size` (Number) Desired number of nodes (between min_size and max_size).
 - `disk_size_gb` (Number) Root EBS volume size in GiB for each node.
 - `environment_id` (String) ID of the environment that owns the resource group.
+- `image_id` (String) Existing AMI ID to use for the nodes, typically one declared on the parent duploai_plan (amis attribute). Leave unset to let AWS pick the latest AMI for ami_type. Immutable after creation.
 - `instance_types` (List of String) EC2 instance types for the node group (e.g. t3.medium).
 - `instance_visibility` (String) Node placement visibility (public vs. private subnets). Accepted values are defined by the backend InstanceVisibilityType enum; confirm the exact value against your tenant.
 - `kubernetes_version` (String) Kubernetes version of the node group.

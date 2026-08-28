@@ -42,6 +42,7 @@ resource "duploai_node_group" "spot" {
   disk_size_gb   = 100
   capacity_type  = "<capacity-type>"
   ami_type       = "<ami-type>"
+  image_id       = "<ami-id>"
 
   additional_labels = {
     workload = "batch"
@@ -89,6 +90,7 @@ resource "duploai_node_group" "spot" {
 - `description` (String) Optional description.
 - `disk_size_gb` (Number) Root EBS volume size in GiB for each node.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `image_id` (String) Existing AMI ID to use for the nodes, typically one declared on the parent duploai_plan (amis attribute). Leave unset to let AWS pick the latest AMI for ami_type. Immutable after creation.
 - `instance_visibility` (String) Node placement visibility (public vs. private subnets). Accepted values are defined by the backend InstanceVisibilityType enum; confirm the exact value against your tenant.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.

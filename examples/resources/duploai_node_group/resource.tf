@@ -27,6 +27,7 @@ resource "duploai_node_group" "spot" {
   disk_size_gb   = 100
   capacity_type  = "<capacity-type>"
   ami_type       = "<ami-type>"
+  image_id       = "<ami-id>"
 
   additional_labels = {
     workload = "batch"
