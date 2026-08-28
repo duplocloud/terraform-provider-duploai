@@ -1,0 +1,61 @@
+{
+  "name": "resource_group_kms_key",
+  "description": "Registers an existing, customer-managed KMS key against a duploai_resource_group. Downstream resources (e.g. duploai_ecr, duploai_aws_efs, duploai_elasticache, duploai_node_group) can then reference the key via their own kms_key_id attribute; the backend resolves it against this registry. Registering a key does not grant the resource group's IAM role any permissions on it — the key's own key policy must already trust the account/role.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/resource-groups/{resource_group_id}/kms-keys",
+    "immutable": true
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns the parent resource group."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the duploai_resource_group to register this key against."
+    },
+    {
+      "name": "key_name",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "keyName",
+      "description": "Friendly label for this key registration."
+    },
+    {
+      "name": "key_arn",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "keyArn",
+      "description": "ARN of the existing customer-managed KMS key. Its key policy must already grant access to this resource group's account/role — registering it here does not modify the key's policy."
+    },
+    {
+      "name": "key_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "keyId",
+      "description": "Raw AWS KMS key ID, if it differs from what can be derived from key_arn. Some downstream resources accept either key_id or key_arn to reference this registration."
+    },
+    {
+      "name": "key_entry_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "noSend": true,
+      "apiPath": "id",
+      "description": "This registration's own backend record ID (distinct from key_id, which is the AWS KMS key's ID)."
+    }
+  ]
+}
