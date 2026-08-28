@@ -491,7 +491,7 @@
       "optional": true,
       "computed": true,
       "apiPath": "spec.helpdeskVpcPeeringConfig.enabled",
-      "description": "AWS only. Whether to peer this network's VPC with the helpdesk platform's own VPC, so the platform can reach an EKS cluster that has a private API server endpoint. When on, provisioning creates the peering connection, routes the helpdesk CIDR back through it, and opens inbound 443 from the helpdesk security group. Leave unset to take the platform default (on). Note the platform turns this off by itself when the only helpdesk VPC it could find was auto-detected from the machine hosting the backend rather than configured deliberately \u2014 so the value read back may be false even though you asked for true, and that is not drift."
+      "description": "AWS only. Whether to peer this network's VPC with the helpdesk platform's own VPC, so the platform can reach an EKS cluster that has a private API server endpoint. When on, provisioning creates the peering connection, routes the helpdesk CIDR back through it, and opens inbound 443 from the helpdesk security group. Prefer leaving this unset: the platform default is on, and the value it settles on is then read back as computed state. Setting it to true explicitly risks a diff that never settles \u2014 on an install where the helpdesk VPC was only auto-detected from the machine hosting the backend, rather than configured via the vpc-peering-config setting, the platform downgrades the setting to false, so a config of true differs from the stored value on every plan and re-applying does not converge. Set it explicitly only to turn peering off (false), which the platform always honours."
     },
     {
       "name": "helpdesk_vpc_id",

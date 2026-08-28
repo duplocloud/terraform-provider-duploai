@@ -212,14 +212,16 @@ resource "duploai_network_baseline" "azure_imported" {
 # endpoint. Provisioning creates the peering connection, routes the helpdesk
 # CIDR back through it, and opens inbound 443 from the helpdesk security group.
 #
-# helpdesk_vpc_peering_enabled defaults to on, so this block is only needed to
-# turn it OFF. It is shown explicitly here because that is the setting that makes
-# a private cluster manageable.
+# helpdesk_vpc_peering_enabled is deliberately NOT set here. It defaults to on,
+# so leaving it unset already gives you peering — and it avoids a trap: on an
+# install where the platform can only auto-detect its own VPC (rather than being
+# told which one via the vpc-peering-config setting) it downgrades the setting to
+# false. Config that says true would then differ from the stored false on every
+# plan, and re-applying never settles it. Left unset, the attribute is computed
+# and whatever the platform decided is simply read back as the truth.
 #
-# Note the platform disables peering by itself when the only helpdesk VPC it
-# could find was auto-detected from the machine hosting the backend rather than
-# configured deliberately — so reading back false after asking for true is
-# expected in that case, not drift.
+# Set it explicitly only to turn peering OFF (helpdesk_vpc_peering_enabled =
+# false), which the platform always honours.
 resource "duploai_network_baseline" "private_eks" {
   workspace_id  = "<workspace-id>"
   name          = "prod-private-eks"
@@ -229,8 +231,6 @@ resource "duploai_network_baseline" "private_eks" {
   az_count      = 3
   subnet_prefix = 24
   nat_mode      = "SingleAz"
-
-  helpdesk_vpc_peering_enabled = true
 
   timeouts {
     create = "45m"

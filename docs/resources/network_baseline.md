@@ -227,14 +227,16 @@ resource "duploai_network_baseline" "azure_imported" {
 # endpoint. Provisioning creates the peering connection, routes the helpdesk
 # CIDR back through it, and opens inbound 443 from the helpdesk security group.
 #
-# helpdesk_vpc_peering_enabled defaults to on, so this block is only needed to
-# turn it OFF. It is shown explicitly here because that is the setting that makes
-# a private cluster manageable.
+# helpdesk_vpc_peering_enabled is deliberately NOT set here. It defaults to on,
+# so leaving it unset already gives you peering — and it avoids a trap: on an
+# install where the platform can only auto-detect its own VPC (rather than being
+# told which one via the vpc-peering-config setting) it downgrades the setting to
+# false. Config that says true would then differ from the stored false on every
+# plan, and re-applying never settles it. Left unset, the attribute is computed
+# and whatever the platform decided is simply read back as the truth.
 #
-# Note the platform disables peering by itself when the only helpdesk VPC it
-# could find was auto-detected from the machine hosting the backend rather than
-# configured deliberately — so reading back false after asking for true is
-# expected in that case, not drift.
+# Set it explicitly only to turn peering OFF (helpdesk_vpc_peering_enabled =
+# false), which the platform always honours.
 resource "duploai_network_baseline" "private_eks" {
   workspace_id  = "<workspace-id>"
   name          = "prod-private-eks"
@@ -244,8 +246,6 @@ resource "duploai_network_baseline" "private_eks" {
   az_count      = 3
   subnet_prefix = 24
   nat_mode      = "SingleAz"
-
-  helpdesk_vpc_peering_enabled = true
 
   timeouts {
     create = "45m"
@@ -287,7 +287,7 @@ output "private_eks_peering_connection_id" {
 - `env_tag` (String) Environment tag applied to provisioned resources. AWS only; Azure virtual network tags are set via azure.tags.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `flow_logs_retention_days` (Number) Flow logs retention in days. AWS only. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default).
-- `helpdesk_vpc_peering_enabled` (Boolean) AWS only. Whether to peer this network's VPC with the helpdesk platform's own VPC, so the platform can reach an EKS cluster that has a private API server endpoint. When on, provisioning creates the peering connection, routes the helpdesk CIDR back through it, and opens inbound 443 from the helpdesk security group. Leave unset to take the platform default (on). Note the platform turns this off by itself when the only helpdesk VPC it could find was auto-detected from the machine hosting the backend rather than configured deliberately — so the value read back may be false even though you asked for true, and that is not drift.
+- `helpdesk_vpc_peering_enabled` (Boolean) AWS only. Whether to peer this network's VPC with the helpdesk platform's own VPC, so the platform can reach an EKS cluster that has a private API server endpoint. When on, provisioning creates the peering connection, routes the helpdesk CIDR back through it, and opens inbound 443 from the helpdesk security group. Prefer leaving this unset: the platform default is on, and the value it settles on is then read back as computed state. Setting it to true explicitly risks a diff that never settles — on an install where the helpdesk VPC was only auto-detected from the machine hosting the backend, rather than configured via the vpc-peering-config setting, the platform downgrades the setting to false, so a config of true differs from the stored value on every plan and re-applying does not converge. Set it explicitly only to turn peering off (false), which the platform always honours.
 - `mode` (String) Provisioning mode: Create (the platform provisions a new network) or Import (adopt an existing network not provisioned by the platform — on AWS set vpc_id, on Azure set azure.import_vnet_id). Immutable after creation.
 - `nat_mode` (String) NAT gateway mode: None, SingleAz, or MultiAz. AWS only; Azure NAT gateways are declared in azure.nat_gateways.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
