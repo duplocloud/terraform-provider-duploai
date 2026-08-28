@@ -35,3 +35,22 @@ resource "duploai_resource_group" "custom" {
     delete = "20m"
   }
 }
+
+# Disposable resource group — delete protection turned off up front so
+# `terraform destroy` works without a second apply.
+#
+# The platform enables delete protection on every new resource group unless the
+# create request says otherwise, and while it is on the API refuses both
+# deprovision and delete. Leaving delete_protection unset therefore inherits the
+# platform default (on), and tearing the group down then takes two steps: set it
+# to false, apply, and only then destroy. Setting it here at create time skips
+# that dance — appropriate for ephemeral/CI environments, not for production.
+resource "duploai_resource_group" "disposable" {
+  workspace_id   = "<workspace-id>"
+  name           = "ci-ephemeral-rg"
+  environment_id = "<environment-id>"
+  region         = ""
+  network_id     = "<network-id>"
+
+  delete_protection = false
+}

@@ -5,7 +5,9 @@
   "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Namespaces",
-    "immutable": true,
+    "update": {
+      "verb": "PATCH"
+    },
     "deprovision": {}
   },
   "attributes": [
@@ -57,6 +59,15 @@
       "forceNew": true,
       "apiPath": "spec.scopeIds",
       "description": "Scope IDs that link this namespace to a cloud provider account. Inherited from the resource group."
+    },
+    {
+      "name": "delete_protection",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "stringBool": true,
+      "apiPath": "metaData.delete_protection",
+      "description": "Guards the namespace against teardown. The platform enables this on every new namespace unless the request says otherwise, and while it is enabled the API refuses both deprovision and delete \u2014 so `terraform destroy` fails by design. To tear the namespace down, set this to false and `terraform apply` first, then destroy. Leave it unset to inherit the platform default (enabled). Stored as the `delete_protection` metadata key; it is the only namespace field that can change in place \u2014 every other change replaces the namespace."
     },
     {
       "name": "status",

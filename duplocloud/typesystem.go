@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
@@ -533,7 +534,16 @@ func attrToRequest(a AttributeSpec, v tftypes.Value) (any, bool) {
 	}
 	info, _ := parseType(a.Type)
 	if info.elem != "object" {
-		return tftypesToGo(v), true
+		g := tftypesToGo(v)
+		if a.StringBool {
+			// The API holds this field in a string-valued container (e.g. a
+			// Dictionary<string,string> metadata map), so send "true"/"false"
+			// rather than a JSON boolean it cannot deserialize.
+			if b, ok := g.(bool); ok {
+				return strconv.FormatBool(b), true
+			}
+		}
+		return g, true
 	}
 	switch info.coll {
 	case "":
@@ -618,6 +628,17 @@ func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 	}
 	info, _ := parseType(a.Type)
 	if info.elem != "object" {
+		if a.StringBool {
+			// Wire form is the string "true"/"false" (see AttributeSpec.StringBool).
+			// Only an explicit "true" is true, matching the platform's own reading of
+			// these keys; a real bool is tolerated in case the API ever sends one.
+			switch s := data.(type) {
+			case string:
+				data = strings.EqualFold(s, "true")
+			case bool:
+				data = s
+			}
+		}
 		if a.NormalizeCsvOrder {
 			if s, ok := data.(string); ok {
 				data = normalizeCsvOrder(s)

@@ -130,6 +130,15 @@
       "description": "Optional provisioner version."
     },
     {
+      "name": "delete_protection",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "stringBool": true,
+      "apiPath": "metaData.delete_protection",
+      "description": "Guards the resource group against teardown. The platform enables this on every new resource group unless the request says otherwise, and while it is enabled the API refuses both deprovision and delete \u2014 so `terraform destroy` fails by design. To tear the group down, set this to false and `terraform apply` first, then destroy. Leave it unset to inherit the platform default (enabled). Stored as the `delete_protection` metadata key."
+    },
+    {
       "name": "status",
       "type": "string",
       "computed": true,
