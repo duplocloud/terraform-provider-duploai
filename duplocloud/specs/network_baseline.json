@@ -102,7 +102,25 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.subnetPrefix",
-      "description": "Subnet prefix length (e.g. 24). Required on AWS; ignored on Azure, which sets per-subnet address prefixes via the `azure` block."
+      "description": "Subnet prefix length (e.g. 24). Required on AWS; ignored on Azure, which sets per-subnet address prefixes via the `azure` block. Also ignored when `custom_public_subnet_cidrs`/`custom_private_subnet_cidrs` are set — those replace the automatic carve-up — but still required, since the platform derives its subnet host-bits parameter from it either way."
+    },
+    {
+      "name": "custom_public_subnet_cidrs",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.customPublicSubnetCidrs",
+      "description": "AWS only, mode Create only. Public subnet CIDRs chosen explicitly instead of letting the platform carve the VPC automatically — one entry per availability zone, in AZ order, so entry `i` becomes the public subnet in AZ `i`. Must be set together with `custom_private_subnet_cidrs`; when both are set they override the `subnet_prefix` carve-up entirely. Each list must contain exactly `az_count` entries. Every CIDR must be a canonical network address with a prefix of /28 or shorter (e.g. 10.0.0.0/24, not 10.0.0.5/24), fall inside `cidr`, and not overlap any other entry in either list. Immutable after creation."
+    },
+    {
+      "name": "custom_private_subnet_cidrs",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.customPrivateSubnetCidrs",
+      "description": "AWS only, mode Create only. Private subnet CIDRs chosen explicitly, one per availability zone in AZ order. Must be set together with `custom_public_subnet_cidrs`; see that attribute for the full rules. Immutable after creation."
     },
     {
       "name": "nat_mode",
@@ -579,6 +597,82 @@
       "attribute": "cidr",
       "whenAttribute": "mode",
       "whenEquals": "Create"
+    },
+    {
+      "attribute": "custom_private_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "custom_public_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ]
+    },
+    {
+      "attribute": "custom_public_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "custom_private_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ]
+    }
+  ],
+  "invalidWhen": [
+    {
+      "attribute": "custom_public_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "custom_public_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "custom_public_subnet_cidrs is AWS only. On Azure declare each subnet's range with azure.subnets[].address_prefix instead; set cloud = \"Aws\" to use custom subnet CIDRs."
+    },
+    {
+      "attribute": "custom_private_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "custom_private_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "custom_private_subnet_cidrs is AWS only. On Azure declare each subnet's range with azure.subnets[].address_prefix instead; set cloud = \"Aws\" to use custom subnet CIDRs."
+    },
+    {
+      "attribute": "custom_public_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        },
+        {
+          "attribute": "custom_public_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "custom_public_subnet_cidrs cannot be combined with mode = \"Import\": custom subnet CIDRs only apply when the platform provisions a new VPC. An imported VPC keeps the subnets it already has."
+    },
+    {
+      "attribute": "custom_private_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        },
+        {
+          "attribute": "custom_private_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "custom_private_subnet_cidrs cannot be combined with mode = \"Import\": custom subnet CIDRs only apply when the platform provisions a new VPC. An imported VPC keeps the subnets it already has."
     }
   ],
   "conflictsWith": [
@@ -613,6 +707,14 @@
     [
       "azure",
       "subnet_prefix"
+    ],
+    [
+      "azure",
+      "custom_public_subnet_cidrs"
+    ],
+    [
+      "azure",
+      "custom_private_subnet_cidrs"
     ]
   ],
   "waiter": {

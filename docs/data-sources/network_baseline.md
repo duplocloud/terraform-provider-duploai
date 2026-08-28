@@ -73,6 +73,8 @@ output "azure_nat_gateway_ids" {
 - `azure_vnet_id` (String) Azure only. Resource ID of the provisioned or adopted virtual network.
 - `cidr` (String) Primary network CIDR block (e.g. 10.0.0.0/16) — the VPC CIDR on AWS or the primary virtual network address space on Azure. Required when the platform provisions a new network; leave unset when importing an existing one — it is read from the imported network.
 - `cloud` (String) Cloud provider the network is provisioned in. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws. When set to Azure, configure the nested `azure` block.
+- `custom_private_subnet_cidrs` (List of String) AWS only, mode Create only. Private subnet CIDRs chosen explicitly, one per availability zone in AZ order. Must be set together with `custom_public_subnet_cidrs`; see that attribute for the full rules. Immutable after creation.
+- `custom_public_subnet_cidrs` (List of String) AWS only, mode Create only. Public subnet CIDRs chosen explicitly instead of letting the platform carve the VPC automatically — one entry per availability zone, in AZ order, so entry `i` becomes the public subnet in AZ `i`. Must be set together with `custom_private_subnet_cidrs`; when both are set they override the `subnet_prefix` carve-up entirely. Each list must contain exactly `az_count` entries. Every CIDR must be a canonical network address with a prefix of /28 or shorter (e.g. 10.0.0.0/24, not 10.0.0.5/24), fall inside `cidr`, and not overlap any other entry in either list. Immutable after creation.
 - `description` (String) Optional description.
 - `enable_dns` (Boolean) Enable DNS support in the VPC. AWS only; Azure custom DNS is configured via azure.dns_servers.
 - `enable_flow_logs` (Boolean) Enable VPC flow logs. AWS only.
@@ -89,7 +91,7 @@ output "azure_nat_gateway_ids" {
 - `scope_ids` (List of String) Scope IDs that link this network to a cloud provider account. On Azure this resolves the subscription and provider credentials.
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) AWS only. Provisioned subnet IDs.
-- `subnet_prefix` (Number) Subnet prefix length (e.g. 24). Required on AWS; ignored on Azure, which sets per-subnet address prefixes via the `azure` block.
+- `subnet_prefix` (Number) Subnet prefix length (e.g. 24). Required on AWS; ignored on Azure, which sets per-subnet address prefixes via the `azure` block. Also ignored when `custom_public_subnet_cidrs`/`custom_private_subnet_cidrs` are set — those replace the automatic carve-up — but still required, since the platform derives its subnet host-bits parameter from it either way.
 - `vpc_id` (String) AWS only. ID of the VPC. Set this to import an existing VPC that was not provisioned by the platform (the baseline adopts the given VPC instead of creating one); leave unset to have the platform provision a new VPC. Computed to the provisioned or adopted VPC ID.
 
 <a id="nestedatt--azure"></a>

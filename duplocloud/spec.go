@@ -639,6 +639,16 @@ type RequiredIfCondition struct {
 	NotEquals string `json:"notEquals,omitempty"`
 	IsEmpty   bool   `json:"isEmpty,omitempty"`
 
+	// IsNotEmpty is the inverse of IsEmpty: the condition holds when the attribute
+	// IS set. Note that isEmpty:false does NOT mean this — an unset bool reads as
+	// "no operator", so the presence test needs its own key. Use it to express
+	// all-or-nothing pairs, which are otherwise inexpressible: two requiredIf rules
+	// pointing at each other make either field mandatory once the other is set.
+	//
+	// For a collection the answer is by element count, so an explicit empty list
+	// counts as not set — matching an API that tests the list's length.
+	IsNotEmpty bool `json:"isNotEmpty,omitempty"`
+
 	// Numeric comparisons, for int and number attributes. A null config value
 	// falls back to the attribute's default, so a rule still catches a bad
 	// combination of one explicit value and one defaulted one. When no default
@@ -876,8 +886,11 @@ func (s *ResourceSpec) validate() error {
 			if c.IsEmpty {
 				ops++
 			}
+			if c.IsNotEmpty {
+				ops++
+			}
 			if ops != 1 {
-				return fmt.Errorf("requiredIf condition on %q must set exactly one of equals/notEquals/isEmpty", c.Attribute)
+				return fmt.Errorf("requiredIf condition on %q must set exactly one of equals/notEquals/isEmpty/isNotEmpty", c.Attribute)
 			}
 		}
 	}
@@ -1058,7 +1071,7 @@ func (s *ResourceSpec) validateInvalidWhen() error {
 			}
 			ops := 0
 			for _, set := range []bool{
-				c.Equals != "", c.NotEquals != "", c.IsEmpty,
+				c.Equals != "", c.NotEquals != "", c.IsEmpty, c.IsNotEmpty,
 				c.GreaterThan != nil, c.LessThan != nil, c.LessThanAttribute != "",
 			} {
 				if set {

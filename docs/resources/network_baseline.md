@@ -46,6 +46,32 @@ resource "duploai_network_baseline" "with_nat_and_logs" {
   }
 }
 
+# Custom subnet CIDRs — pick the subnet ranges yourself instead of letting the
+# platform carve the VPC automatically. Both lists must be set, each with exactly
+# az_count entries in AZ order: entry 0 lands in the first AZ, entry 1 in the
+# second, and so on. Every range must sit inside cidr and not overlap any other.
+# subnet_prefix is still required (the platform derives a template parameter from
+# it) but is ignored for the carve-up once these lists are present.
+resource "duploai_network_baseline" "custom_subnet_cidrs" {
+  workspace_id  = "<workspace-id>"
+  name          = "prod-network-custom-cidrs"
+  scope_ids     = ["<scope-id>"]
+  region        = "us-east-1"
+  cidr          = "10.2.0.0/16"
+  az_count      = 3
+  subnet_prefix = 24
+
+  custom_public_subnet_cidrs  = ["10.2.0.0/24", "10.2.1.0/24", "10.2.2.0/24"]
+  custom_private_subnet_cidrs = ["10.2.16.0/20", "10.2.32.0/20", "10.2.48.0/20"]
+
+  nat_mode   = "MultiAz"
+  enable_dns = true
+
+  timeouts {
+    create = "45m"
+  }
+}
+
 # Import an existing VPC (mode = "Import") — adopts a VPC the platform did not
 # provision instead of creating one. Set vpc_id to the existing VPC; cidr and the
 # other VPC details are read from it, so cidr is omitted.
@@ -240,6 +266,8 @@ resource "duploai_network_baseline" "azure_imported" {
 - `azure` (Attributes) Azure-specific network configuration. Set only when cloud is Azure; ignored for other clouds. (see [below for nested schema](#nestedatt--azure))
 - `cidr` (String) Primary network CIDR block (e.g. 10.0.0.0/16) — the VPC CIDR on AWS or the primary virtual network address space on Azure. Required when the platform provisions a new network; leave unset when importing an existing one — it is read from the imported network.
 - `cloud` (String) Cloud provider the network is provisioned in. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws. When set to Azure, configure the nested `azure` block.
+- `custom_private_subnet_cidrs` (List of String) AWS only, mode Create only. Private subnet CIDRs chosen explicitly, one per availability zone in AZ order. Must be set together with `custom_public_subnet_cidrs`; see that attribute for the full rules. Immutable after creation.
+- `custom_public_subnet_cidrs` (List of String) AWS only, mode Create only. Public subnet CIDRs chosen explicitly instead of letting the platform carve the VPC automatically — one entry per availability zone, in AZ order, so entry `i` becomes the public subnet in AZ `i`. Must be set together with `custom_private_subnet_cidrs`; when both are set they override the `subnet_prefix` carve-up entirely. Each list must contain exactly `az_count` entries. Every CIDR must be a canonical network address with a prefix of /28 or shorter (e.g. 10.0.0.0/24, not 10.0.0.5/24), fall inside `cidr`, and not overlap any other entry in either list. Immutable after creation.
 - `description` (String) Optional description.
 - `enable_dns` (Boolean) Enable DNS support in the VPC. AWS only; Azure custom DNS is configured via azure.dns_servers.
 - `enable_flow_logs` (Boolean) Enable VPC flow logs. AWS only.
@@ -250,7 +278,7 @@ resource "duploai_network_baseline" "azure_imported" {
 - `nat_mode` (String) NAT gateway mode: None, SingleAz, or MultiAz. AWS only; Azure NAT gateways are declared in azure.nat_gateways.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
-- `subnet_prefix` (Number) Subnet prefix length (e.g. 24). Required on AWS; ignored on Azure, which sets per-subnet address prefixes via the `azure` block.
+- `subnet_prefix` (Number) Subnet prefix length (e.g. 24). Required on AWS; ignored on Azure, which sets per-subnet address prefixes via the `azure` block. Also ignored when `custom_public_subnet_cidrs`/`custom_private_subnet_cidrs` are set — those replace the automatic carve-up — but still required, since the platform derives its subnet host-bits parameter from it either way.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `vpc_id` (String) AWS only. ID of the VPC. Set this to import an existing VPC that was not provisioned by the platform (the baseline adopts the given VPC instead of creating one); leave unset to have the platform provision a new VPC. Computed to the provisioned or adopted VPC ID.
 
