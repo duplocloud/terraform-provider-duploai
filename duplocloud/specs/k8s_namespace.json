@@ -58,7 +58,8 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.scopeIds",
-      "description": "Scope IDs that link this namespace to a cloud provider account. Inherited from the resource group."
+      "description": "Scope IDs that link this namespace to a cloud provider account. Inherited from the resource group.",
+      "sendFromState": true
     },
     {
       "name": "delete_protection",
