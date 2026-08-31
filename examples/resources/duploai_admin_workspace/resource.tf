@@ -1,12 +1,9 @@
-# Minimal workspace — the required name, plus at least one persona and one scope.
+# Minimal workspace — the required name and at least one persona.
 resource "duploai_admin_workspace" "basic" {
   name = "support-team"
 
   persona_ids = [
     "<persona-id>",
-  ]
-  scope_ids = [
-    "<scope-id>",
   ]
 }
 
@@ -46,9 +43,6 @@ resource "duploai_admin_workspace" "with_prompts" {
 
   persona_ids = [
     "<persona-id>",
-  ]
-  scope_ids = [
-    "<scope-id>",
   ]
 
   meta_data = {
