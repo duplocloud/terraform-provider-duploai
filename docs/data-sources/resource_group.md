@@ -53,6 +53,7 @@ output "iam_role_arn" {
 - `iam_role_name` (String) Provisioned IAM role name.
 - `kms_key_alias` (String) Provisioned KMS key alias.
 - `kms_key_arn` (String) Provisioned KMS key ARN.
+- `metadata` (Map of String) Free-form key/value metadata associated with the resource group. Provide the complete map; on update the full map replaces the previous one. The `delete_protection` key is excluded — it is managed by the delete_protection attribute, and setting it here has no effect.
 - `name` (String) Name of the resource group.
 - `network_id` (String) ID of the network baseline this resource group is linked to. At least one of network_id or vpc_id is required.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.

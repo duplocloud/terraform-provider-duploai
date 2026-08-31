@@ -44,6 +44,15 @@ resource "duploai_resource_group" "custom" {
   provisioner_type  = "IacNativeTf"
   aws_resource_name = "prod-rg"
 
+  # Free-form key/value metadata stored on the resource group record. Provide the
+  # complete map — on update it replaces the previous one. Do not put
+  # delete_protection here; that key belongs to the delete_protection attribute
+  # and is filtered out of this map.
+  metadata = {
+    owner       = "platform-team"
+    cost-center = "cc-4417"
+  }
+
   timeouts {
     create = "45m"
     update = "30m"
@@ -88,6 +97,7 @@ resource "duploai_resource_group" "disposable" {
 - `delete_protection` (Boolean) Guards the resource group against teardown. The platform enables this on every new resource group unless the request says otherwise, and while it is enabled the API refuses both deprovision and delete — so `terraform destroy` fails by design. To tear the group down, set this to false and `terraform apply` first, then destroy. Leave it unset to inherit the platform default (enabled). Stored as the `delete_protection` metadata key.
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `metadata` (Map of String) Free-form key/value metadata associated with the resource group. Provide the complete map; on update the full map replaces the previous one. The `delete_protection` key is excluded — it is managed by the delete_protection attribute, and setting it here has no effect.
 - `network_id` (String) ID of the network baseline this resource group is linked to. At least one of network_id or vpc_id is required.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.

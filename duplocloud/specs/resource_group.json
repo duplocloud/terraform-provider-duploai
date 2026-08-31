@@ -130,6 +130,17 @@
       "description": "Optional provisioner version."
     },
     {
+      "name": "metadata",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "filterResponseKeys": [
+        "delete_protection"
+      ],
+      "description": "Free-form key/value metadata associated with the resource group. Provide the complete map; on update the full map replaces the previous one. The `delete_protection` key is excluded — it is managed by the delete_protection attribute, and setting it here has no effect."
+    },
+    {
       "name": "delete_protection",
       "type": "bool",
       "optional": true,

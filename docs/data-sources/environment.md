@@ -50,6 +50,7 @@ output "version" {
 - `ever_completed` (Boolean) Whether the environment has ever reached the Complete state.
 - `faults` (List of String) Provisioning faults.
 - `is_active` (Boolean) Whether the environment is active.
+- `metadata` (Map of String) Free-form key/value metadata associated with the environment. Provide the complete map; on update the full map replaces the previous one.
 - `mode` (String) Resource mode: Create provisions new infrastructure, Import adopts existing infrastructure.
 - `name` (String) Name of the environment.
 - `owner_workspace_id` (String) Workspace that owns the environment.

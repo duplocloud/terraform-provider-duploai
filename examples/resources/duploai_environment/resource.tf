@@ -17,6 +17,13 @@ resource "duploai_environment" "full" {
   provisioner_version = "1.0.0"
   plan_ids            = ["<plan-id>"]
 
+  # Free-form key/value metadata stored on the environment record. Provide the
+  # complete map — on update it replaces the previous one.
+  metadata = {
+    owner       = "platform-team"
+    cost-center = "cc-4417"
+  }
+
   timeouts {
     create = "45m"
     update = "30m"
