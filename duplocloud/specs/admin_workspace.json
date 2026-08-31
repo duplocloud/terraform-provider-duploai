@@ -109,9 +109,10 @@
       "type": "set(string)",
       "optional": true,
       "computed": true,
+      "minItems": 1,
       "apiPath": "scopeIds",
       "preserveUnmanagedInto": "system_scope_ids",
-      "description": "IDs of the scopes you manage on this workspace. Scopes the backend attaches automatically (for example a Kubernetes scope created with a cluster) are not included here — they appear in system_scope_ids and are preserved across updates."
+      "description": "IDs of the scopes you manage on this workspace. Omit the argument to manage the links elsewhere (for example with duploai_admin_workspace_scope_mapping); an empty list is rejected, since a workspace with no scope has nothing to act on. Scopes the backend attaches automatically (for example a Kubernetes scope created with a cluster) are not included here — they appear in system_scope_ids and are preserved across updates."
     },
     {
       "name": "system_scope_ids",
