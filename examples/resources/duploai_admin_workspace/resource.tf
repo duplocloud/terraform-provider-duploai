@@ -1,6 +1,13 @@
-# Minimal workspace — only the required name.
+# Minimal workspace — the required name, plus at least one persona and one scope.
 resource "duploai_admin_workspace" "basic" {
   name = "support-team"
+
+  persona_ids = [
+    "<persona-id>",
+  ]
+  scope_ids = [
+    "<scope-id>",
+  ]
 }
 
 # Full workspace — labels, a system prompt, a quota, and persona/scope links.
@@ -36,6 +43,13 @@ resource "duploai_admin_workspace" "full" {
 resource "duploai_admin_workspace" "with_prompts" {
   name        = "prompt-workspace"
   description = "Workspace with curated prompt suggestions and templates"
+
+  persona_ids = [
+    "<persona-id>",
+  ]
+  scope_ids = [
+    "<scope-id>",
+  ]
 
   meta_data = {
     prompt_suggestions = jsonencode([

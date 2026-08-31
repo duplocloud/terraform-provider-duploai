@@ -99,19 +99,19 @@
     {
       "name": "persona_ids",
       "type": "set(string)",
-      "optional": true,
-      "computed": true,
+      "required": true,
+      "minItems": 1,
       "apiPath": "personaIds",
-      "description": "IDs of the personas available in this workspace. Provide the complete set; on update the full list replaces the previous one."
+      "description": "IDs of the personas available in this workspace. Provide the complete set; on update the full list replaces the previous one. At least one is required — a workspace with no persona has no assistant to answer with."
     },
     {
       "name": "scope_ids",
       "type": "set(string)",
-      "optional": true,
-      "computed": true,
+      "required": true,
+      "minItems": 1,
       "apiPath": "scopeIds",
       "preserveUnmanagedInto": "system_scope_ids",
-      "description": "IDs of the scopes you manage on this workspace. Scopes the backend attaches automatically (for example a Kubernetes scope created with a cluster) are not included here — they appear in system_scope_ids and are preserved across updates."
+      "description": "IDs of the scopes you manage on this workspace. At least one is required — a workspace with no scope has nothing to act on. Scopes the backend attaches automatically (for example a Kubernetes scope created with a cluster) are not included here — they appear in system_scope_ids and are preserved across updates."
     },
     {
       "name": "system_scope_ids",
