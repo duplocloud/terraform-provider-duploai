@@ -29,6 +29,15 @@ resource "duploai_resource_group" "custom" {
   provisioner_type  = "IacNativeTf"
   aws_resource_name = "prod-rg"
 
+  # Free-form key/value metadata stored on the resource group record. Provide the
+  # complete map — on update it replaces the previous one. Do not put
+  # delete_protection here; that key belongs to the delete_protection attribute
+  # and is filtered out of this map.
+  metadata = {
+    owner       = "platform-team"
+    cost-center = "cc-4417"
+  }
+
   timeouts {
     create = "45m"
     update = "30m"

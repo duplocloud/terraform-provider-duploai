@@ -97,6 +97,14 @@
       "description": "Workspace IDs allowed to access this environment in addition to the owner."
     },
     {
+      "name": "metadata",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "description": "Free-form key/value metadata associated with the environment. Provide the complete map; on update the full map replaces the previous one."
+    },
+    {
       "name": "status",
       "type": "string",
       "computed": true,
