@@ -37,7 +37,8 @@
       "type": "list(string)",
       "computed": true,
       "apiPath": "spec.scopeIds",
-      "description": "Scope IDs linking this resource group to a cloud provider account. Inherited from the linked network; computed, not user-settable."
+      "description": "Scope IDs linking this resource group to a cloud provider account. Inherited from the linked network; computed, not user-settable.",
+      "sendFromState": true
     },
     {
       "name": "region",
