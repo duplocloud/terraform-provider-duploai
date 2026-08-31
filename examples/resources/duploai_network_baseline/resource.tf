@@ -31,6 +31,32 @@ resource "duploai_network_baseline" "with_nat_and_logs" {
   }
 }
 
+# Custom subnet CIDRs — pick the subnet ranges yourself instead of letting the
+# platform carve the VPC automatically. Both lists must be set, each with exactly
+# az_count entries in AZ order: entry 0 lands in the first AZ, entry 1 in the
+# second, and so on. Every range must sit inside cidr and not overlap any other.
+# subnet_prefix is still required (the platform derives a template parameter from
+# it) but is ignored for the carve-up once these lists are present.
+resource "duploai_network_baseline" "custom_subnet_cidrs" {
+  workspace_id  = "<workspace-id>"
+  name          = "prod-network-custom-cidrs"
+  scope_ids     = ["<scope-id>"]
+  region        = "us-east-1"
+  cidr          = "10.2.0.0/16"
+  az_count      = 3
+  subnet_prefix = 24
+
+  custom_public_subnet_cidrs  = ["10.2.0.0/24", "10.2.1.0/24", "10.2.2.0/24"]
+  custom_private_subnet_cidrs = ["10.2.16.0/20", "10.2.32.0/20", "10.2.48.0/20"]
+
+  nat_mode   = "MultiAz"
+  enable_dns = true
+
+  timeouts {
+    create = "45m"
+  }
+}
+
 # Import an existing VPC (mode = "Import") — adopts a VPC the platform did not
 # provision instead of creating one. Set vpc_id to the existing VPC; cidr and the
 # other VPC details are read from it, so cidr is omitted.
@@ -205,4 +231,45 @@ resource "duploai_network_baseline" "azure_imported" {
   azure = {
     import_vnet_id = "/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<vnet-name>"
   }
+}
+
+# Private-EKS network — peered with the helpdesk platform's own VPC so the
+# platform can reach a cluster whose Kubernetes API server has no public
+# endpoint. Provisioning creates the peering connection, routes the helpdesk
+# CIDR back through it, and opens inbound 443 from the helpdesk security group.
+#
+# helpdesk_vpc_peering_enabled is deliberately NOT set here. It defaults to on,
+# so leaving it unset already gives you peering — and it avoids a trap: on an
+# install where the platform can only auto-detect its own VPC (rather than being
+# told which one via the vpc-peering-config setting) it downgrades the setting to
+# false. Config that says true would then differ from the stored false on every
+# plan, and re-applying never settles it. Left unset, the attribute is computed
+# and whatever the platform decided is simply read back as the truth.
+#
+# Set it explicitly only to turn peering OFF (helpdesk_vpc_peering_enabled =
+# false), which the platform always honours.
+resource "duploai_network_baseline" "private_eks" {
+  workspace_id  = "<workspace-id>"
+  name          = "prod-private-eks"
+  scope_ids     = ["<scope-id>"]
+  region        = "us-east-1"
+  cidr          = "10.4.0.0/16"
+  az_count      = 3
+  subnet_prefix = 24
+  nat_mode      = "SingleAz"
+
+  timeouts {
+    create = "45m"
+  }
+}
+
+# The peering connection's live state is computed. Watch `state` for "active"
+# and `helpdesk_route_stack_status` for "ACTIVE"; "PARTIAL" means a return route
+# collided with an existing one and traffic may flow only one way.
+output "private_eks_peering_state" {
+  value = duploai_network_baseline.private_eks.helpdesk_vpc_peering.state
+}
+
+output "private_eks_peering_connection_id" {
+  value = duploai_network_baseline.private_eks.helpdesk_vpc_peering.peering_connection_id
 }

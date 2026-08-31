@@ -42,10 +42,14 @@ output "status" {
 - `description` (String) Optional description.
 - `desired_size` (Number) Desired number of nodes (between min_size and max_size).
 - `disk_size_gb` (Number) Root EBS volume size in GiB for each node.
+- `enable_cluster_autoscaler` (Boolean) Tag this node group's Auto Scaling group for discovery by the Kubernetes Cluster Autoscaler. The cluster_autoscaler component must also be enabled on the cluster via duploai_cluster_attributes for autoscaling to take effect.
 - `environment_id` (String) ID of the environment that owns the resource group.
+- `image_id` (String) Existing AMI ID to use for the nodes, typically one declared on the parent duploai_plan (amis attribute). Leave unset to let AWS pick the latest AMI for ami_type. Immutable after creation.
 - `instance_types` (List of String) EC2 instance types for the node group (e.g. t3.medium).
 - `instance_visibility` (String) Node placement visibility (public vs. private subnets). Accepted values are defined by the backend InstanceVisibilityType enum; confirm the exact value against your tenant.
+- `kms_key_id` (String) KMS key ARN or ID used to encrypt the node group's EBS volumes. Leave unset to use the AWS-managed default key. Immutable after creation.
 - `kubernetes_version` (String) Kubernetes version of the node group.
+- `live_cluster_autoscaler_enabled` (Boolean) Whether the cluster autoscaler currently recognizes and manages this node group's Auto Scaling group, as observed live from AWS.
 - `max_size` (Number) Maximum number of nodes.
 - `min_size` (Number) Minimum number of nodes.
 - `name` (String) Name of the node group.
@@ -60,7 +64,9 @@ output "status" {
 - `stack_id` (String) ID of the underlying provisioning stack.
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) Subnets the node group is deployed into.
+- `tags` (Map of String) AWS tags applied to the node group, its Auto Scaling Group, and its EC2 instances/EBS volumes. Keys cannot use the reserved prefixes duplocloud.ai/ or k8s.io/cluster-autoscaler/, or the reserved names resourcegroup, environment, allocationtags, or duplo-resource-id (use enable_cluster_autoscaler instead of setting a cluster-autoscaler tag directly). Subject to AWS limits: max 50 tags, keys up to 128 characters, values up to 256 characters.
 - `taints` (Attributes List) Kubernetes taints applied to the nodes. (see [below for nested schema](#nestedatt--taints))
+- `volumes` (Attributes List) Additional EBS volumes attached to every node, beyond the root volume sized by disk_size_gb. Maximum 4 entries; device_name must be unique per entry and cannot be /dev/xvda (the root device). Per-volume KMS encryption is not supported here — disk encryption is controlled by the node group's own kms_key_id/encryption settings. (see [below for nested schema](#nestedatt--volumes))
 
 <a id="nestedatt--taints"></a>
 ### Nested Schema for `taints`
@@ -70,3 +76,18 @@ Read-Only:
 - `effect` (String) Taint effect. Accepted values are defined by the backend EksNodeGroupTaintEffect enum (e.g. NoSchedule/PreferNoSchedule/NoExecute); confirm the exact value against your tenant.
 - `key` (String) Taint key.
 - `value` (String) Taint value.
+
+
+<a id="nestedatt--volumes"></a>
+### Nested Schema for `volumes`
+
+Read-Only:
+
+- `delete_on_termination` (Boolean) Whether the volume is deleted when the node is terminated.
+- `device_name` (String) Device name as it appears on the instance (e.g. /dev/xvdb).
+- `encrypted` (Boolean) Whether the volume is encrypted at rest.
+- `iops` (Number) Provisioned IOPS. Only valid for gp3, io1, and io2 volume types.
+- `snapshot_id` (String) Snapshot ID to restore the volume from.
+- `throughput` (Number) Provisioned throughput in MiB/s. Only valid for gp3 volumes.
+- `volume_size_gb` (Number) Volume size in GiB.
+- `volume_type` (String) EBS volume type: gp2, gp3, io1, io2, st1, or sc1. Defaults to gp3.

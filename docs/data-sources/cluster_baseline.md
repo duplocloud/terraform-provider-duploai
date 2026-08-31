@@ -68,6 +68,7 @@ output "azure_fqdn" {
 - `control_plane_logging` (List of String) Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler). AWS (EKS) only — not supported for Azure (AKS uses diagnostic settings). When unset, defaults to none (server-assigned; list attributes take no static default).
 - `description` (String) Optional description.
 - `domain_name_filter` (String) Comma-joined list of Route53 hosted-zone names that external-dns should manage for this cluster.
+- `helpdesk_vpc_peering` (Attributes) AWS only. Read-only copy of the linked network's helpdesk VPC peering settings. The platform copies this across from `network_id`'s network on every write — it is never accepted from the client — and uses it to open inbound 443 for the helpdesk CIDR on the EKS control-plane security group, which is created per-cluster and is separate from the network's own security group. Null when the linked network has no peering configured, or when the cluster was given a VPC directly instead of a network. Change the setting on the network baseline, not here. (see [below for nested schema](#nestedatt--helpdesk_vpc_peering))
 - `mode` (String) Provisioning mode: Create (provision a new cluster) or Import (adopt an existing cluster, identified by name + region + cloud; version, VPC, and subnets are auto-discovered). Immutable after creation.
 - `name` (String) Name of the cluster baseline.
 - `network_id` (String) ID of the network baseline whose VPC and subnets this cluster will use. The cluster inherits its region, VPC, subnets, and scope from this network. Required unless cloud is K8S_ONLY (which provisions no cloud network).
@@ -107,6 +108,18 @@ Read-Only:
 - `min_count` (Number) Minimum node count when autoscaling (must be >= 1).
 - `vm_size` (String) Azure VM size for the node pool (e.g. Standard_DS2_v2).
 
+
+
+<a id="nestedatt--helpdesk_vpc_peering"></a>
+### Nested Schema for `helpdesk_vpc_peering`
+
+Read-Only:
+
+- `enabled` (Boolean) Whether helpdesk VPC peering is active for the linked network.
+- `helpdesk_account_id` (String) AWS account that owns the helpdesk VPC.
+- `helpdesk_region` (String) Region of the helpdesk VPC; only meaningful when the peering crosses regions.
+- `helpdesk_vpc_cidr_blocks` (List of String) Helpdesk VPC CIDR blocks allowed inbound on 443 on the EKS control-plane security group.
+- `helpdesk_vpc_id` (String) ID of the helpdesk VPC the linked network peers with.
 
 
 <a id="nestedatt--system_node_group"></a>

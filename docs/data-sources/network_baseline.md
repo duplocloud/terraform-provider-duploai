@@ -73,11 +73,19 @@ output "azure_nat_gateway_ids" {
 - `azure_vnet_id` (String) Azure only. Resource ID of the provisioned or adopted virtual network.
 - `cidr` (String) Primary network CIDR block (e.g. 10.0.0.0/16) — the VPC CIDR on AWS or the primary virtual network address space on Azure. Required when the platform provisions a new network; leave unset when importing an existing one — it is read from the imported network.
 - `cloud` (String) Cloud provider the network is provisioned in. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws. When set to Azure, configure the nested `azure` block.
+- `custom_private_subnet_cidrs` (List of String) AWS only, mode Create only. Private subnet CIDRs chosen explicitly, one per availability zone in AZ order. Must be set together with `custom_public_subnet_cidrs`; see that attribute for the full rules. Immutable after creation.
+- `custom_public_subnet_cidrs` (List of String) AWS only, mode Create only. Public subnet CIDRs chosen explicitly instead of letting the platform carve the VPC automatically — one entry per availability zone, in AZ order, so entry `i` becomes the public subnet in AZ `i`. Must be set together with `custom_private_subnet_cidrs`; when both are set they override the `subnet_prefix` carve-up entirely. Each list must contain exactly `az_count` entries. Every CIDR must be a canonical network address with a prefix of /28 or shorter (e.g. 10.0.0.0/24, not 10.0.0.5/24), fall inside `cidr`, and not overlap any other entry in either list. Immutable after creation.
 - `description` (String) Optional description.
 - `enable_dns` (Boolean) Enable DNS support in the VPC. AWS only; Azure custom DNS is configured via azure.dns_servers.
 - `enable_flow_logs` (Boolean) Enable VPC flow logs. AWS only.
 - `env_tag` (String) Environment tag applied to provisioned resources. AWS only; Azure virtual network tags are set via azure.tags.
 - `flow_logs_retention_days` (Number) Flow logs retention in days. AWS only. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default).
+- `helpdesk_account_id` (String) AWS only. AWS account that owns the helpdesk VPC. Stamped by the platform.
+- `helpdesk_region` (String) AWS only. Region of the helpdesk VPC. Stamped by the platform; only meaningful when the peering crosses regions.
+- `helpdesk_vpc_cidr_blocks` (List of String) AWS only. CIDR blocks of the helpdesk VPC — the ranges routed back through the peering connection and allowed inbound on 443. Stamped by the platform.
+- `helpdesk_vpc_id` (String) AWS only. ID of the helpdesk VPC this network peers with. Resolved and stamped by the platform; never accepted from the client.
+- `helpdesk_vpc_peering` (Attributes) AWS only. Live state of the peering connection with the helpdesk VPC. Populated once provisioning creates the connection and the platform's peering worker accepts it; null when peering is off, unresolved, or the network is not on AWS. Written by two independent processes — provisioning owns the requester side, the worker owns acceptance and the helpdesk side — so fields appear at different times. (see [below for nested schema](#nestedatt--helpdesk_vpc_peering))
+- `helpdesk_vpc_peering_enabled` (Boolean) AWS only. Whether to peer this network's VPC with the helpdesk platform's own VPC, so the platform can reach an EKS cluster that has a private API server endpoint. When on, provisioning creates the peering connection, routes the helpdesk CIDR back through it, and opens inbound 443 from the helpdesk security group. Prefer leaving this unset: the platform default is on, and the value it settles on is then read back as computed state. Setting it to true explicitly risks a diff that never settles — on an install where the helpdesk VPC was only auto-detected from the machine hosting the backend, rather than configured via the vpc-peering-config setting, the platform downgrades the setting to false, so a config of true differs from the stored value on every plan and re-applying does not converge. Set it explicitly only to turn peering off (false), which the platform always honours.
 - `mode` (String) Provisioning mode: Create (the platform provisions a new network) or Import (adopt an existing network not provisioned by the platform — on AWS set vpc_id, on Azure set azure.import_vnet_id). Immutable after creation.
 - `name` (String) Name of the network baseline. On Azure this also seeds the virtual network name and the default resource group name.
 - `nat_gateway_ids` (List of String) AWS only. Provisioned NAT gateway IDs.
@@ -89,7 +97,7 @@ output "azure_nat_gateway_ids" {
 - `scope_ids` (List of String) Scope IDs that link this network to a cloud provider account. On Azure this resolves the subscription and provider credentials.
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) AWS only. Provisioned subnet IDs.
-- `subnet_prefix` (Number) Subnet prefix length (e.g. 24). Required on AWS; ignored on Azure, which sets per-subnet address prefixes via the `azure` block.
+- `subnet_prefix` (Number) Subnet prefix length (e.g. 24). Required on AWS; ignored on Azure, which sets per-subnet address prefixes via the `azure` block. Also ignored when `custom_public_subnet_cidrs`/`custom_private_subnet_cidrs` are set — those replace the automatic carve-up — but still required, since the platform derives its subnet host-bits parameter from it either way.
 - `vpc_id` (String) AWS only. ID of the VPC. Set this to import an existing VPC that was not provisioned by the platform (the baseline adopts the given VPC instead of creating one); leave unset to have the platform provision a new VPC. Computed to the provisioned or adopted VPC ID.
 
 <a id="nestedatt--azure"></a>
@@ -157,3 +165,21 @@ Read-Only:
 - `source_address_prefix` (String) Source address prefix (CIDR, tag, or *). Use this or source_address_prefixes.
 - `source_address_prefixes` (List of String) List of source address prefixes. Use this or source_address_prefix.
 - `source_port_range` (String) Source port or range (e.g. '*', '443', '1000-2000').
+
+
+
+
+<a id="nestedatt--helpdesk_vpc_peering"></a>
+### Nested Schema for `helpdesk_vpc_peering`
+
+Read-Only:
+
+- `accepter_cidr_blocks` (List of String) CIDR blocks of the helpdesk VPC, as resolved when the connection was created.
+- `accepter_vpc_id` (String) The helpdesk VPC — the accepter side of the connection.
+- `helpdesk_route_stack_status` (String) How far the platform got adding return routes on its own side: ACTIVE (all present), PARTIAL (at least one route collided with an unrelated existing route and was left alone), or SKIPPED (nothing resolved yet). PARTIAL is the one to investigate — traffic may work in only one direction.
+- `last_error` (String) Most recent error from the platform's peering worker, if it is stuck. Empty when healthy.
+- `peering_connection_id` (String) The pcx-* VPC peering connection ID.
+- `requester_cidr_blocks` (List of String) This network's CIDR blocks, which the platform allows on the helpdesk side.
+- `requester_vpc_id` (String) This network's own VPC — the requester side of the connection.
+- `state` (String) AWS peering connection state, verbatim (e.g. pending-acceptance, active, rejected, failed). Reaches active once the platform's worker has accepted the request.
+- `state_message` (String) AWS's explanation for the current state. Worth reading when state is not active.
