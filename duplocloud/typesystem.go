@@ -649,6 +649,12 @@ func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 				data = normalizeVersionMinor(s)
 			}
 		}
+		// mapValuePath and filterResponseKeys compose in either order — one
+		// rewrites values, the other selects keys — so it does not matter that
+		// the top-level read loop filters before calling in here.
+		if a.MapValuePath != "" {
+			data = flattenMapValues(data, a.MapValuePath, a.MapDropWhenTrue)
+		}
 		// Honor filterResponseKeys here too (not only in the top-level loop) so a
 		// map(string) attribute nested inside an object (e.g. azure.tags) still
 		// drops server-injected keys before it reaches state.

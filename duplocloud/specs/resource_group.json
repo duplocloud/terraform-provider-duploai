@@ -131,6 +131,16 @@
       "description": "Optional provisioner version."
     },
     {
+      "name": "tags",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "tags",
+      "mapValuePath": "value",
+      "mapDropWhenTrue": "remove",
+      "description": "User-defined tags inherited by every resource provisioned under this resource group — applied to AWS resources as tags and to Kubernetes objects as labels. Because one map feeds both projections, each entry must be legal as an AWS tag and as a Kubernetes label: keys may carry an optional `prefix/` (a lowercase DNS-1123 subdomain up to 253 characters) followed by a name segment of up to 63 characters, values follow the Kubernetes label grammar, and AWS limits still apply (key up to 128 characters, value up to 256). The reserved `duplocloud.ai/` prefix and the `aws:` prefix are rejected. Removing a key from this map removes the tag from every resource in the group; propagation is asynchronous, so a removed tag can linger on cloud resources briefly after apply. Omit the argument entirely to leave the stored tags untouched; set it to an empty map to remove them all."
+    },
+    {
       "name": "metadata",
       "type": "map(string)",
       "optional": true,
