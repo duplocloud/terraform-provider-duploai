@@ -35,7 +35,7 @@ resource "duploai_admin_persona" "basic" {
 ### Required
 
 - `name` (String) Name of the persona.
-- `skill_ids` (List of String) IDs of the skills assigned to this persona. Each must reference an existing, active skill.
+- `skill_ids` (List of String) IDs of the skills assigned to this persona. Each must reference an existing, active skill. At least one is required — a persona with no skills can do nothing.
 
 ### Optional
 
