@@ -1915,7 +1915,9 @@ func filterMapKeys(cur any, keys []string) any {
 // entry the backend still stores but that must not reach state (see
 // AttributeSpec.MapDropWhenTrue). Entries already carrying a plain string pass
 // through unchanged, so a backend that serves both the wrapped and the flat shape
-// is handled; anything else is dropped rather than surfaced as a broken value.
+// is handled; anything else is dropped rather than surfaced as a broken value —
+// and logged, since a tag quietly disappearing is otherwise hard to trace back to
+// a change in the entry shape.
 func flattenMapValues(cur any, valuePath, dropFlag string) any {
 	m, ok := cur.(map[string]any)
 	if !ok {
@@ -1929,12 +1931,16 @@ func flattenMapValues(cur any, valuePath, dropFlag string) any {
 		case map[string]any:
 			if dropFlag != "" {
 				if flag, ok := entry[dropFlag].(bool); ok && flag {
-					continue
+					continue // soft-deleted: expected, and deliberately not logged
 				}
 			}
 			if s, ok := entry[valuePath].(string); ok {
 				out[k] = s
+				continue
 			}
+			log.Printf("[WARN] flattenMapValues: entry %q has no string %q field; dropping it", k, valuePath)
+		default:
+			log.Printf("[WARN] flattenMapValues: entry %q is %T, expected a string or an object; dropping it", k, v)
 		}
 	}
 	return out

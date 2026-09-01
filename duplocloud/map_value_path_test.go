@@ -91,6 +91,34 @@ func TestMapValuePath_AcceptsFlatShorthandAndMixedShapes(t *testing.T) {
 	}
 }
 
+// The two read-side map knobs must compose: mapValuePath rewrites values,
+// filterResponseKeys selects keys, so a filtered key stays gone whichever shape it
+// arrived in — and the top-level read loop applies the filter before calling
+// attrFromResponse, while nested attributes get both in here.
+func TestMapValuePath_ComposesWithFilterResponseKeys(t *testing.T) {
+	a := tagsAttr
+	a.FilterResponseKeys = []string{"internal-*", "duplo-owned"}
+
+	v := attrFromResponse(a, tftypes.Map{ElementType: tftypes.String}, map[string]any{
+		"owner":         map[string]any{"value": "platform-team", "remove": false},
+		"internal-cost": map[string]any{"value": "hidden", "remove": false},
+		"duplo-owned":   "also-hidden",
+		"going":         map[string]any{"value": "bye", "remove": true},
+	})
+	var raw map[string]tftypes.Value
+	if err := v.As(&raw); err != nil {
+		t.Fatalf("As() failed: %v", err)
+	}
+	for _, gone := range []string{"internal-cost", "duplo-owned", "going"} {
+		if _, present := raw[gone]; present {
+			t.Errorf("key %q survived; filtering and flagged-removal must both apply", gone)
+		}
+	}
+	if _, present := raw["owner"]; !present {
+		t.Error("user key owner was dropped")
+	}
+}
+
 // Null must stay null rather than widening to an empty map: the backend reads a
 // null tags map as "not supplied, leave the stored tags alone" and an empty one
 // as "remove them all", so collapsing the two would silently delete every tag.
