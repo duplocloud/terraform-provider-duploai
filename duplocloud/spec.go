@@ -477,6 +477,25 @@ type AttributeSpec struct {
 	// key" limitation for those.
 	FilterResponseKeys []string `json:"filterResponseKeys,omitempty"`
 
+	// MapValuePath, for a map(string) attribute, unwraps a response whose entries
+	// are objects rather than plain strings: each value is replaced by the named
+	// field. Use when the backend stores per-entry bookkeeping alongside the value
+	// but accepts the flat {"key":"value"} shape on write, so Terraform can expose
+	// an ordinary map(string) in both directions — resource_group.tags is the case
+	// this exists for, where the API returns {"cost-center":{"value":"fin-1024",
+	// "remove":false}}. Entries whose named field is missing or not a string are
+	// dropped. Read-side only: requests still send the flat map.
+	MapValuePath string `json:"mapValuePath,omitempty"`
+
+	// MapDropWhenTrue names a sibling boolean field, inside the same wrapped entry
+	// MapValuePath unwraps, that marks an entry as not-really-there. Entries whose
+	// flag is true are dropped from state entirely. Use for a backend that soft-
+	// deletes map entries — resource_group.tags keeps a removed tag in the map with
+	// "remove":true until a reconciler has taken it off every resource, and without
+	// this the key would reappear in state on the next read and diff forever
+	// against a config that no longer lists it. Requires MapValuePath.
+	MapDropWhenTrue string `json:"mapDropWhenTrue,omitempty"`
+
 	// NormalizeCsvOrder, for a string attribute, sorts the comma-separated tokens
 	// of the response value into a canonical (lexical) order before storing it in
 	// state. Use for backend fields whose elements are order-insensitive but
@@ -1247,6 +1266,13 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 				return nil, fmt.Errorf("attribute %q: stringBool and updateBoolTrueValue are mutually exclusive — "+
 					"both rewrite the wire representation of the same value", a.Name)
 			}
+		}
+		if a.MapValuePath != "" && a.Type != "map(string)" {
+			return nil, fmt.Errorf("attribute %q: mapValuePath is only valid on map(string), got %q", a.Name, a.Type)
+		}
+		if a.MapDropWhenTrue != "" && a.MapValuePath == "" {
+			return nil, fmt.Errorf("attribute %q: mapDropWhenTrue requires mapValuePath — "+
+				"the flag lives inside the wrapped entry that mapValuePath unwraps", a.Name)
 		}
 		if a.OrderByKey != "" {
 			if a.Type != "list(object)" {

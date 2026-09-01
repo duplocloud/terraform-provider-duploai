@@ -29,6 +29,19 @@ resource "duploai_resource_group" "custom" {
   provisioner_type  = "IacNativeTf"
   aws_resource_name = "prod-rg"
 
+  # User-defined tags, inherited by every resource provisioned under this group:
+  # stamped on AWS resources as tags and on Kubernetes objects as labels. Each
+  # entry must be legal in both systems, so the Kubernetes label grammar governs
+  # the character set. The duplocloud.ai/ and aws: prefixes are reserved.
+  #
+  # Removing a key here removes the tag from every resource in the group, but
+  # propagation is asynchronous — a removed tag can linger briefly after apply.
+  # Omit the argument to leave stored tags untouched; set {} to remove them all.
+  tags = {
+    owner       = "platform-team"
+    cost-center = "fin-1024"
+  }
+
   # Free-form key/value metadata stored on the resource group record. Provide the
   # complete map — on update it replaces the previous one. Do not put
   # delete_protection here; that key belongs to the delete_protection attribute

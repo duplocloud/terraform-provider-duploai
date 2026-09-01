@@ -1909,6 +1909,37 @@ func filterMapKeys(cur any, keys []string) any {
 	return out
 }
 
+// flattenMapValues unwraps a response map whose entries are objects into a plain
+// key → string map, taking each value from the valuePath field. When dropFlag is
+// set, an entry whose named boolean is true is omitted entirely — a soft-deleted
+// entry the backend still stores but that must not reach state (see
+// AttributeSpec.MapDropWhenTrue). Entries already carrying a plain string pass
+// through unchanged, so a backend that serves both the wrapped and the flat shape
+// is handled; anything else is dropped rather than surfaced as a broken value.
+func flattenMapValues(cur any, valuePath, dropFlag string) any {
+	m, ok := cur.(map[string]any)
+	if !ok {
+		return cur
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		switch entry := v.(type) {
+		case string:
+			out[k] = entry
+		case map[string]any:
+			if dropFlag != "" {
+				if flag, ok := entry[dropFlag].(bool); ok && flag {
+					continue
+				}
+			}
+			if s, ok := entry[valuePath].(string); ok {
+				out[k] = s
+			}
+		}
+	}
+	return out
+}
+
 // matchesFilterKey reports whether key matches any pattern — exact, or prefix
 // when the pattern ends in "*".
 func matchesFilterKey(key string, patterns []string) bool {

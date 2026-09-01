@@ -44,6 +44,19 @@ resource "duploai_resource_group" "custom" {
   provisioner_type  = "IacNativeTf"
   aws_resource_name = "prod-rg"
 
+  # User-defined tags, inherited by every resource provisioned under this group:
+  # stamped on AWS resources as tags and on Kubernetes objects as labels. Each
+  # entry must be legal in both systems, so the Kubernetes label grammar governs
+  # the character set. The duplocloud.ai/ and aws: prefixes are reserved.
+  #
+  # Removing a key here removes the tag from every resource in the group, but
+  # propagation is asynchronous — a removed tag can linger briefly after apply.
+  # Omit the argument to leave stored tags untouched; set {} to remove them all.
+  tags = {
+    owner       = "platform-team"
+    cost-center = "fin-1024"
+  }
+
   # Free-form key/value metadata stored on the resource group record. Provide the
   # complete map — on update it replaces the previous one. Do not put
   # delete_protection here; that key belongs to the delete_protection attribute
@@ -102,6 +115,7 @@ resource "duploai_resource_group" "disposable" {
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `region` (String) Cloud region (e.g. us-east-1).
+- `tags` (Map of String) User-defined tags inherited by every resource provisioned under this resource group — applied to AWS resources as tags and to Kubernetes objects as labels. Because one map feeds both projections, each entry must be legal as an AWS tag and as a Kubernetes label: keys may carry an optional `prefix/` (a lowercase DNS-1123 subdomain up to 253 characters) followed by a name segment of up to 63 characters, values follow the Kubernetes label grammar, and AWS limits still apply (key up to 128 characters, value up to 256). The reserved `duplocloud.ai/` prefix and the `aws:` prefix are rejected. Removing a key from this map removes the tag from every resource in the group; propagation is asynchronous, so a removed tag can linger on cloud resources briefly after apply. Omit the argument entirely to leave the stored tags untouched; set it to an empty map to remove them all.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `vpc_id` (String) VPC ID to associate with this resource group. At least one of vpc_id or network_id is required. The API derives this automatically when network_id is set.
 
