@@ -46,7 +46,7 @@ output "status" {
 - `environment_id` (String) ID of the environment that owns the resource group.
 - `image_id` (String) Existing AMI ID to use for the nodes, typically one declared on the parent duploai_plan (amis attribute). Leave unset to let AWS pick the latest AMI for ami_type. Immutable after creation.
 - `instance_types` (List of String) EC2 instance types for the node group (e.g. t3.medium).
-- `instance_visibility` (String) Node placement visibility (public vs. private subnets). Accepted values are defined by the backend InstanceVisibilityType enum; confirm the exact value against your tenant.
+- `instance_visibility` (String) Node placement visibility: Internal places nodes in private subnets only (the default, and the platform's own default), Public places them in public subnets only. Immutable after creation.
 - `kms_key_id` (String) KMS key ARN or ID used to encrypt the node group's EBS volumes. Leave unset to use the AWS-managed default key. Immutable after creation.
 - `kubernetes_version` (String) Kubernetes version of the node group.
 - `live_cluster_autoscaler_enabled` (Boolean) Whether the cluster autoscaler currently recognizes and manages this node group's Auto Scaling group, as observed live from AWS.

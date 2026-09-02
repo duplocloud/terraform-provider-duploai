@@ -261,9 +261,11 @@
       "name": "instance_visibility",
       "type": "string",
       "optional": true,
+      "computed": true,
+      "default": "Internal",
       "forceNew": true,
       "apiPath": "spec.instanceVisibility",
-      "description": "Node placement visibility (public vs. private subnets). Accepted values are defined by the backend InstanceVisibilityType enum; confirm the exact value against your tenant."
+      "description": "Node placement visibility: Internal places nodes in private subnets only (the default, and the platform's own default), Public places them in public subnets only. Immutable after creation."
     },
     {
       "name": "provisioner_type",
