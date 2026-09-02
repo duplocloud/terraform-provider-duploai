@@ -97,6 +97,24 @@ func (r *RESTResource[T]) GetPath(path string) (*T, ClientError) {
 	return r.decode(http.MethodGet, path, nil)
 }
 
+// GetCollection fetches the collection at the resource's UriBase — no /{id}
+// segment — and returns its elements. Use for a sub-collection the API serves
+// only as a whole, where the per-element GET does not exist (see
+// EndpointSpec.ReadFromList). Elements are returned raw so the caller can pick
+// the one it wants; an empty or absent data array yields no elements and no
+// error, since "the collection is empty" is a legitimate answer.
+func (r *RESTResource[T]) GetCollection() ([]map[string]any, ClientError) {
+	var resp apiResponse[[]map[string]any]
+	path := r.endpoint.ResolvePath(r.endpoint.UriBase, r.scope)
+	if err := r.client.callAPIWithTimeout(0, http.MethodGet, path, nil, &resp); err != nil {
+		return nil, err
+	}
+	if resp.Data == nil {
+		return nil, nil
+	}
+	return *resp.Data, nil
+}
+
 // retryBaseDelay is the initial backoff between GetWithRetry attempts; it
 // doubles per attempt up to retryMaxDelay. Vars (not consts) so tests can
 // shrink them.

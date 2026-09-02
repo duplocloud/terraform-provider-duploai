@@ -523,7 +523,20 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	obj, clientErr := r.api(scope, r.specFailureRetries()).Get(objID)
+	var obj *map[string]any
+	var clientErr duplosdk.ClientError
+	if r.spec.Endpoint.ReadFromList {
+		obj, clientErr = r.readFromCollection(scope, objID)
+		if clientErr == nil && obj == nil {
+			// No longer in the collection — same meaning as a 404 on a
+			// conventional read: gone, so let the next plan recreate it.
+			log.Printf("[TRACE] dynamic %s Read(%s): not in collection, dropping from state", r.spec.Name, id)
+			resp.State.RemoveResource(ctx)
+			return
+		}
+	} else {
+		obj, clientErr = r.api(scope, r.specFailureRetries()).Get(objID)
+	}
 	if clientErr != nil {
 		if clientErr.IsNotFound() {
 			resp.State.RemoveResource(ctx)
@@ -539,6 +552,33 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 	resp.State.Raw = state
 	log.Printf("[TRACE] dynamic %s Read(%s): end", r.spec.Name, id)
+}
+
+// readFromCollection fetches the collection at uriBase and returns the element
+// whose IDPath value equals objID, or nil when the collection no longer holds
+// it. Use for a sub-collection the API exposes only as a whole — see
+// EndpointSpec.ReadFromList. The API does no server-side filtering (query
+// parameters on these routes are ignored), so the match is made here; the list
+// carries each element in full, so nothing further is fetched.
+func (r *dynamicResource) readFromCollection(scope map[string]string, objID string) (*map[string]any, duplosdk.ClientError) {
+	return readCollectionElement(r.api(scope, r.specFailureRetries()), r.spec.IDPath, objID)
+}
+
+// readCollectionElement GETs the collection and returns the element whose
+// idPath value equals objID, or nil when the collection does not hold it.
+// Shared by the resource and data source read paths.
+func readCollectionElement(api *duplosdk.RESTResource[map[string]any], idPath, objID string) (*map[string]any, duplosdk.ClientError) {
+	items, clientErr := api.GetCollection()
+	if clientErr != nil {
+		return nil, clientErr
+	}
+	idSegs := strings.Split(idPath, ".")
+	for i := range items {
+		if fmt.Sprint(extractPath(items[i], idSegs)) == objID {
+			return &items[i], nil
+		}
+	}
+	return nil, nil
 }
 
 // readAssociation refreshes a link-only resource. The API offers no GET for the

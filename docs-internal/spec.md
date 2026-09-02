@@ -203,6 +203,7 @@ have been replaced by this block.
 | `update` | OperationSpec | see below | Override for Update. Ignored when `immutable` is true. |
 | `delete` | OperationSpec | see below | Override for Delete. |
 | `deprovision` | OperationSpec | absent | When present, adds a pre-delete teardown step **before** the Delete call. `{}` uses defaults. |
+| `readFromList` | bool | `false` | Read the **collection** at `uriBase` and select the element whose `idPath` value matches, instead of `GET uriBase/{id}`. Use for a sub-collection the API serves only as a whole: `.../kms-keys` answers `GET` (list) and `POST`, while `.../kms-keys/{id}` answers only `DELETE`, so the conventional read returns **405 Method Not Allowed** and every plan after the first fails. These routes ignore query parameters, so the match is made client-side; the list already carries each element in full, so no extra call is needed. An element missing from the list is treated as gone — the resource leaves state and the next plan recreates it, exactly as a 404 would. Applies to the generated data source too. Used by `plan_kms_key` and `resource_group_kms_key`. |
 
 **OperationSpec fields:**
 

@@ -258,6 +258,19 @@ type EndpointSpec struct {
 	// Deprovision, when non-nil, adds a pre-delete teardown step.
 	// Defaults to POST /{id}/deprovision; set verb/path only to override.
 	Deprovision *OperationSpec `json:"deprovision,omitempty"`
+
+	// ReadFromList makes the read leg GET the COLLECTION at UriBase and select the
+	// element whose IDPath value equals the object id, instead of GETting
+	// UriBase/{id}. Use for a sub-collection the API only exposes as a whole:
+	// .../kms-keys serves GET (list) and POST, while .../kms-keys/{id} serves only
+	// DELETE, so the conventional read gets 405 Method Not Allowed and every plan
+	// after the first fails. The list already carries each element in full, so no
+	// extra call and no server-side filtering are needed.
+	//
+	// An element that is no longer in the list is treated as gone: the resource
+	// leaves state and the next plan recreates it, matching what a 404 on a
+	// conventional read would do.
+	ReadFromList bool `json:"readFromList,omitempty"`
 }
 
 // BuildEndpoint converts this spec's EndpointSpec into a duplosdk.Endpoint
