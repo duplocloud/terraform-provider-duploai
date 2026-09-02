@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -423,7 +424,16 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	created, err := api.Create(&body)
+	var created *map[string]any
+	var err duplosdk.ClientError
+	if r.spec.Endpoint.CreateReturnsList {
+		created, err = r.createFromList(api, &body, &resp.Diagnostics)
+		if err == nil && resp.Diagnostics.HasError() {
+			return
+		}
+	} else {
+		created, err = api.Create(&body)
+	}
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating "+r.spec.Name, err.Error())
 		return
@@ -554,6 +564,31 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 	log.Printf("[TRACE] dynamic %s Read(%s): end", r.spec.Name, id)
 }
 
+// createFromList issues a create whose response is a JSON array and returns the
+// single element it should have produced (see EndpointSpec.CreateReturnsList).
+// An empty array is an error: the object may or may not exist in the backend, and
+// state cannot record an id it never received. More than one element means the
+// spec let a request expand into several backend objects — Terraform can track
+// only the first, so the rest would be orphaned; that is a spec bug, reported as
+// a warning here rather than silently dropped.
+func (r *dynamicResource) createFromList(api *duplosdk.RESTResource[map[string]any], body *map[string]any, diags *diag.Diagnostics) (*map[string]any, duplosdk.ClientError) {
+	items, clientErr := api.CreateList(body)
+	if clientErr != nil {
+		return nil, clientErr
+	}
+	if len(items) == 0 {
+		diags.AddError("Error creating "+r.spec.Name,
+			"the create call succeeded but returned no objects, so there is no id to record in state")
+		return nil, nil
+	}
+	if len(items) > 1 {
+		diags.AddWarning("Multiple objects created",
+			fmt.Sprintf("the create call produced %d objects but Terraform can track only one — "+
+				"the extras are not managed and must be removed out of band", len(items)))
+	}
+	return &items[0], nil
+}
+
 // readFromCollection fetches the collection at uriBase and returns the element
 // whose IDPath value equals objID, or nil when the collection no longer holds
 // it. Use for a sub-collection the API exposes only as a whole — see
@@ -561,14 +596,37 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 // parameters on these routes are ignored), so the match is made here; the list
 // carries each element in full, so nothing further is fetched.
 func (r *dynamicResource) readFromCollection(scope map[string]string, objID string) (*map[string]any, duplosdk.ClientError) {
-	return readCollectionElement(r.api(scope, r.specFailureRetries()), r.spec.IDPath, objID)
+	return readCollectionElementAt(r.api(scope, r.specFailureRetries()),
+		r.spec.Endpoint.ReadListPath, r.spec.IDPath, objID)
 }
 
 // readCollectionElement GETs the collection and returns the element whose
 // idPath value equals objID, or nil when the collection does not hold it.
 // Shared by the resource and data source read paths.
 func readCollectionElement(api *duplosdk.RESTResource[map[string]any], idPath, objID string) (*map[string]any, duplosdk.ClientError) {
-	items, clientErr := api.GetCollection()
+	return readCollectionElementAt(api, "", idPath, objID)
+}
+
+// readCollectionElementAt is readCollectionElement for a collection whose
+// elements are nested under listPath inside the response rather than being the
+// response itself (see EndpointSpec.ReadListPath). An empty listPath reads a
+// bare array.
+func readCollectionElementAt(api *duplosdk.RESTResource[map[string]any], listPath, idPath, objID string) (*map[string]any, duplosdk.ClientError) {
+	var items []map[string]any
+	var clientErr duplosdk.ClientError
+	if listPath == "" {
+		items, clientErr = api.GetCollection()
+	} else {
+		var envelope map[string]any
+		envelope, clientErr = api.GetCollectionEnvelope()
+		if clientErr == nil {
+			for _, e := range toAnySlice(extractPath(envelope, strings.Split(listPath, "."))) {
+				if m, ok := e.(map[string]any); ok {
+					items = append(items, m)
+				}
+			}
+		}
+	}
 	if clientErr != nil {
 		return nil, clientErr
 	}
@@ -2013,6 +2071,10 @@ func mapIndex(cur any, key string) any {
 func setPath(root map[string]any, segs []string, val any) {
 	m := root
 	for _, s := range segs[:len(segs)-1] {
+		if name, idx, ok := parseIndexedSegment(s); ok {
+			m = descendIntoArray(m, name, idx)
+			continue
+		}
 		next, ok := m[s].(map[string]any)
 		if !ok {
 			next = map[string]any{}
@@ -2020,7 +2082,57 @@ func setPath(root map[string]any, segs []string, val any) {
 		}
 		m = next
 	}
-	m[segs[len(segs)-1]] = val
+	last := segs[len(segs)-1]
+	if name, idx, ok := parseIndexedSegment(last); ok {
+		// Terminal index, e.g. "values[0]" — write the value into the slot itself.
+		arr := growArray(m, name, idx)
+		arr[idx] = val
+		m[name] = arr
+		return
+	}
+	m[last] = val
+}
+
+// indexedSegment matches a path segment addressing one element of an array, e.g.
+// "ipv4Ranges[0]".
+var indexedSegment = regexp.MustCompile(`^([^\[\]]+)\[(\d+)\]$`)
+
+// parseIndexedSegment splits "name[3]" into ("name", 3, true). Anything else
+// reports false and is treated as a plain object key.
+func parseIndexedSegment(seg string) (string, int, bool) {
+	m := indexedSegment.FindStringSubmatch(seg)
+	if m == nil {
+		return seg, 0, false
+	}
+	idx, err := strconv.Atoi(m[2])
+	if err != nil {
+		return seg, 0, false
+	}
+	return m[1], idx, true
+}
+
+// growArray returns the array at key, extended with nils so index idx exists.
+func growArray(m map[string]any, key string, idx int) []any {
+	arr, _ := m[key].([]any)
+	for len(arr) <= idx {
+		arr = append(arr, nil)
+	}
+	return arr
+}
+
+// descendIntoArray returns the object at m[key][idx], creating the array and the
+// element as needed. Used for a request path that addresses a field inside an
+// array element — the AWS-shaped bodies do this, e.g. a single CIDR that must be
+// sent as ipv4Ranges[0].cidrIp.
+func descendIntoArray(m map[string]any, key string, idx int) map[string]any {
+	arr := growArray(m, key, idx)
+	elem, ok := arr[idx].(map[string]any)
+	if !ok {
+		elem = map[string]any{}
+		arr[idx] = elem
+	}
+	m[key] = arr
+	return elem
 }
 
 func minutesOr(min int, fallback time.Duration) time.Duration {

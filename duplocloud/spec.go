@@ -271,6 +271,23 @@ type EndpointSpec struct {
 	// leaves state and the next plan recreates it, matching what a 404 on a
 	// conventional read would do.
 	ReadFromList bool `json:"readFromList,omitempty"`
+
+	// ReadListPath names the dot-path, inside the collection response, of the
+	// array ReadFromList selects from. Leave empty when the response body IS the
+	// array (the KMS registries). Set it for a wrapped collection —
+	// security-group ingress answers {"ownSecurityGroupId":…,"rules":[…]}, so the
+	// elements are at "rules". Requires ReadFromList.
+	ReadListPath string `json:"readListPath,omitempty"`
+
+	// CreateReturnsList marks an endpoint whose create response is a JSON array
+	// rather than the created object, so the engine takes the sole element as the
+	// created object. One security-group ingress request carrying several CIDRs
+	// becomes several AWS rules, each with its own id, so the API answers with a
+	// list even for a single source. A spec using this must constrain its request
+	// to produce exactly one element — one source per resource, enforced with
+	// conflictsWith — because state can track only one id. An empty response is
+	// an error; extra elements are ignored with a warning.
+	CreateReturnsList bool `json:"createReturnsList,omitempty"`
 }
 
 // BuildEndpoint converts this spec's EndpointSpec into a duplosdk.Endpoint
