@@ -87,6 +87,34 @@
         }
       ],
       "message": "For tcp and udp, to_port must be greater than or equal to from_port — the rule allows the range from the lower value to the higher one. This does not apply to icmp/icmpv6, where the two fields carry the ICMP type and code (type 8, code 0 is a valid echo request), nor to -1, where ports are ignored."
+    },
+    {
+      "attribute": "from_port",
+      "when": [
+        {
+          "attribute": "ip_protocol",
+          "equals": "-1"
+        },
+        {
+          "attribute": "from_port",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "from_port must not be set when ip_protocol is \"-1\": the rule already allows every protocol and port, so the API ignores the value and reports -1 on read — leaving a diff that no apply can settle. Remove from_port, or name a protocol (tcp/udp) if you want a port range."
+    },
+    {
+      "attribute": "to_port",
+      "when": [
+        {
+          "attribute": "ip_protocol",
+          "equals": "-1"
+        },
+        {
+          "attribute": "to_port",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "to_port must not be set when ip_protocol is \"-1\": the rule already allows every protocol and port, so the API ignores the value and reports -1 on read — leaving a diff that no apply can settle. Remove to_port, or name a protocol (tcp/udp) if you want a port range."
     }
   ],
   "attributes": [
