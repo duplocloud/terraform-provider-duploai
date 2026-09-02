@@ -35,13 +35,10 @@ resource "duploai_resource_group_kms_key" "cmek" {
 ### Required
 
 - `key_arn` (String) ARN of the existing customer-managed KMS key. Its key policy must already grant access to this resource group's account/role — registering it here does not modify the key's policy.
-- `resource_group_id` (String) ID of the duploai_resource_group to register this key against.
-- `workspace_id` (String) ID of the workspace that owns the parent resource group.
-
-### Optional
-
 - `key_id` (String) Raw AWS KMS key ID, if it differs from what can be derived from key_arn. Some downstream resources accept either key_id or key_arn to reference this registration.
 - `key_name` (String) Friendly label for this key registration.
+- `resource_group_id` (String) ID of the duploai_resource_group to register this key against.
+- `workspace_id` (String) ID of the workspace that owns the parent resource group.
 
 ### Read-Only
 

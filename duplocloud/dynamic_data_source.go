@@ -123,7 +123,22 @@ func (d *dynamicDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	}
 
 	api := duplosdk.NewRESTResource[map[string]any](d.Client, d.endpoint, scope, nil)
-	obj, clientErr := api.GetWithRetry(ctx, apiID, dsReadRetryWindow)
+	var obj *map[string]any
+	var clientErr duplosdk.ClientError
+	if d.spec.Endpoint.ReadFromList {
+		// The per-element GET does not exist on these routes (see
+		// EndpointSpec.ReadFromList); select from the collection instead. No
+		// GetWithRetry equivalent: a missing element is reported as not found
+		// rather than waited for, since the collection read itself succeeded.
+		obj, clientErr = readCollectionElement(api, d.spec.IDPath, apiID)
+		if clientErr == nil && obj == nil {
+			resp.Diagnostics.AddError("Object not found",
+				d.spec.Name+" with id "+objID+" does not exist.")
+			return
+		}
+	} else {
+		obj, clientErr = api.GetWithRetry(ctx, apiID, dsReadRetryWindow)
+	}
 	if clientErr != nil {
 		if clientErr.IsNotFound() {
 			resp.Diagnostics.AddError("Object not found",

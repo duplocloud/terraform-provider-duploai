@@ -1,0 +1,60 @@
+{
+  "name": "plan_kms_key",
+  "description": "Registers an existing, customer-managed KMS key against a duploai_plan, making it selectable by every resource group in the environments that plan is attached to. Resources such as duploai_node_group, duploai_s3_bucket and duploai_rds_instance reference it through their own kms_key_id attribute; the backend resolves that value against the resource group's own registry first, then the plan-level registry. Register a key here rather than per resource group when one key should serve a whole environment. Registration does not grant any permissions on the key — its own key policy must already trust the account and role that will use it.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Plans/{plan_id}/kms-keys",
+    "immutable": true,
+    "readFromList": true
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns the parent plan."
+    },
+    {
+      "name": "plan_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the duploai_plan to register this key against. The plan must belong to workspace_id."
+    },
+    {
+      "name": "key_name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "keyName",
+      "description": "Friendly label for this registration. Required by the API, and must be unique within the plan (compared case-insensitively)."
+    },
+    {
+      "name": "key_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "keyId",
+      "description": "Raw AWS KMS key ID, e.g. 1234abcd-12ab-34cd-56ef-1234567890ab. Required by the API even though it also appears inside key_arn, and must be unique within the plan. Consuming resources may pass either this or key_arn as their kms_key_id."
+    },
+    {
+      "name": "key_arn",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "keyArn",
+      "description": "ARN of the existing customer-managed KMS key, e.g. arn:aws:kms:us-west-2:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab. Required, and must be unique within the plan. Prefer wiring this value into a consuming resource's kms_key_id: it is unambiguous across accounts and regions, and it is what the backend stores and hands to the cloud."
+    },
+    {
+      "name": "key_entry_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "noSend": true,
+      "apiPath": "id",
+      "description": "This registration's own backend record ID, distinct from key_id (the AWS KMS key's ID). The API deletes a registration by this value."
+    }
+  ]
+}

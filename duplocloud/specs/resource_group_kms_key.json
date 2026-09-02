@@ -5,7 +5,8 @@
   "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/resource-groups/{resource_group_id}/kms-keys",
-    "immutable": true
+    "immutable": true,
+    "readFromList": true
   },
   "attributes": [
     {
@@ -25,11 +26,10 @@
     {
       "name": "key_name",
       "type": "string",
-      "optional": true,
-      "computed": true,
       "forceNew": true,
       "apiPath": "keyName",
-      "description": "Friendly label for this key registration."
+      "description": "Friendly label for this key registration.",
+      "required": true
     },
     {
       "name": "key_arn",
@@ -42,11 +42,10 @@
     {
       "name": "key_id",
       "type": "string",
-      "optional": true,
-      "computed": true,
       "forceNew": true,
       "apiPath": "keyId",
-      "description": "Raw AWS KMS key ID, if it differs from what can be derived from key_arn. Some downstream resources accept either key_id or key_arn to reference this registration."
+      "description": "Raw AWS KMS key ID, if it differs from what can be derived from key_arn. Some downstream resources accept either key_id or key_arn to reference this registration.",
+      "required": true
     },
     {
       "name": "key_entry_id",
