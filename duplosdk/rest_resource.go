@@ -115,6 +115,41 @@ func (r *RESTResource[T]) GetCollection() ([]map[string]any, ClientError) {
 	return *resp.Data, nil
 }
 
+// GetCollectionEnvelope fetches the collection at UriBase and returns the
+// unwrapped Data as an object, for an endpoint whose collection response wraps
+// the elements rather than being a bare array — security-group ingress answers
+// {"ownSecurityGroupId":…,"rules":[…]}, so the caller extracts the array by
+// path. Pair with EndpointSpec.ReadListPath.
+func (r *RESTResource[T]) GetCollectionEnvelope() (map[string]any, ClientError) {
+	var resp apiResponse[map[string]any]
+	path := r.endpoint.ResolvePath(r.endpoint.UriBase, r.scope)
+	if err := r.client.callAPIWithTimeout(0, http.MethodGet, path, nil, &resp); err != nil {
+		return nil, err
+	}
+	if resp.Data == nil {
+		return nil, nil
+	}
+	return *resp.Data, nil
+}
+
+// CreateList POSTs req to the create path and returns the created elements, for
+// an endpoint whose create response is a JSON array. One security-group ingress
+// request carrying several CIDRs becomes several rules, each with its own id, so
+// the API answers with a list even for a single source. Pair with
+// EndpointSpec.CreateReturnsList, which takes the sole element.
+func (r *RESTResource[T]) CreateList(req *T) ([]map[string]any, ClientError) {
+	verb := r.endpoint.createVerb()
+	path := r.endpoint.createPath(r.scope)
+	var resp apiResponse[[]map[string]any]
+	if err := r.client.callAPIWithTimeout(r.callTimeout, verb, path, req, &resp); err != nil {
+		return nil, err
+	}
+	if resp.Data == nil {
+		return nil, newClientError(0, fmt.Errorf("%s %s: empty or unexpected response body (no data)", verb, path))
+	}
+	return *resp.Data, nil
+}
+
 // retryBaseDelay is the initial backoff between GetWithRetry attempts; it
 // doubles per attempt up to retryMaxDelay. Vars (not consts) so tests can
 // shrink them.
