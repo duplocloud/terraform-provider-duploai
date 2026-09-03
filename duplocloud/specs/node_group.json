@@ -186,7 +186,7 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.capacityType",
-      "description": "Capacity type (e.g. on-demand vs. spot). Accepted values are defined by the backend EksNodeGroupCapacityType enum; confirm the exact value against your tenant."
+      "description": "EC2 purchasing model for the nodes: ON_DEMAND (the server default) for standard pricing, or SPOT for cheaper capacity that AWS can reclaim at any time. Immutable after creation."
     },
     {
       "name": "ami_type",
@@ -195,7 +195,7 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.amiType",
-      "description": "AMI type for the nodes. Accepted values are defined by the backend EksNodeGroupAmiType enum; confirm the exact value against your tenant."
+      "description": "EKS-optimised AMI the nodes boot from. Leave it unset in most cases: the platform then resolves a type that suits both the cluster's Kubernetes version and the instance types' architecture, and records the value it chose. Setting it explicitly overrides that resolution, and the API validates the value against the types it currently supports — so a value this description does not list may still be accepted, and an unsupported one is rejected by the API rather than by AWS minutes into the CloudFormation stack. At the time of writing: the AL2_* types (AL2_x86_64, AL2_x86_64_GPU, AL2_ARM_64) are Amazon Linux 2 and are accepted only through Kubernetes 1.32, while the AL2023_* types (AL2023_x86_64_STANDARD, AL2023_x86_64_NVIDIA, AL2023_ARM_64_STANDARD) are Amazon Linux 2023 and are required from 1.33 onward. Match the variant to the instance types — ARM_64 for Graviton families (those ending in g, such as m7g), the GPU/NVIDIA variants for GPU workloads — since no single AMI boots both architectures. To boot your own image instead, set ami_type = \"CUSTOM\" and image_id to the AMI's id: CUSTOM is the only value that accepts image_id, and it requires it, while every other value rejects it. A custom AMI must derive from an EKS-optimised AL2023 image so that nodeadm is present, because the launch template pins your image and injects nodeadm bootstrap user data — EKS does not supply bootstrap config for custom AMIs, and an image without nodeadm provisions successfully and then never joins the cluster. The platform preflights the id's existence and architecture in the cluster's region, so a wrong-architecture or cross-region id fails early rather than as a late stack rollback. Immutable after creation."
     },
     {
       "name": "image_id",
@@ -204,7 +204,7 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.imageId",
-      "description": "Existing AMI ID to use for the nodes, typically one declared on the parent duploai_plan (amis attribute). Leave unset to let AWS pick the latest AMI for ami_type. Immutable after creation."
+      "description": "AMI ID for the nodes, e.g. ami-0c02fb55956c7d316. Required when ami_type is CUSTOM and rejected for every other ami_type. The AMI must derive from an EKS-optimised AL2023 image so nodeadm is present: the launch template pins the image and injects nodeadm bootstrap user data, because EKS stops supplying bootstrap config for custom AMIs — an AMI without it provisions successfully and then never joins the cluster. The platform preflights the id's existence and architecture in-region, so a wrong-architecture or cross-region id fails early. Immutable after creation."
     },
     {
       "name": "additional_labels",
@@ -364,5 +364,28 @@
     "deprovisionedState": "DeProvisioned",
     "pollIntervalSeconds": 15,
     "deleteTimeoutMinutes": 20
-  }
+  },
+  "requiredIf": [
+    {
+      "attribute": "image_id",
+      "whenAttribute": "ami_type",
+      "whenEquals": "CUSTOM"
+    }
+  ],
+  "invalidWhen": [
+    {
+      "attribute": "image_id",
+      "when": [
+        {
+          "attribute": "ami_type",
+          "notEquals": "CUSTOM"
+        },
+        {
+          "attribute": "image_id",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "image_id may only be set when ami_type is \"CUSTOM\" — every other ami_type selects an AWS-managed EKS AMI and the API rejects an explicit image id alongside it."
+    }
+  ]
 }
