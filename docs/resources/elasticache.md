@@ -110,7 +110,10 @@ resource "duploai_elasticache" "redis_secure" {
   cluster_mode       = "Disabled"
   num_cache_clusters = 2
 
-  encryption_mode            = "ResourceGroupKmsKey" # at-rest via the RG's KMS key
+  encryption_mode = "ResourceGroupKmsKey" # at-rest via a customer-managed key
+  # kms_key_id names which registered key to use; unset means the resource
+  # group's own default key.
+  # kms_key_id               = duploai_resource_group_kms_key.cmek.key_arn
   transit_encryption_enabled = true
   auth_token                 = "<redis-auth-token>" # sensitive
 
@@ -182,6 +185,7 @@ resource "duploai_elasticache" "redis_from_snapshot" {
 - `encryption_mode` (String) At-rest encryption mode: NoEncryption, ResourceGroupKmsKey (uses the resource group's KMS key), or AwsDefaultElastiCacheKey.
 - `engine_version` (String) Engine version (e.g. 7.1). Required unless restoring from a snapshot; when unset and not restoring, the server selects a default.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `kms_key_id` (String) KMS key to encrypt data at rest with, as a key id or ARN, honoured only when encryption_mode is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key); an unregistered key is rejected. Leave it unset to use the resource group's own default key. Immutable after creation.
 - `log_delivery_configurations` (Attributes List) Log delivery configurations (Redis/Valkey slow-log / engine-log). (see [below for nested schema](#nestedatt--log_delivery_configurations))
 - `node_group_configuration` (Attributes List) Redis/Valkey cluster-mode-enabled: per-shard configuration. When provided, length must equal num_node_groups. (see [below for nested schema](#nestedatt--node_group_configuration))
 - `num_cache_clusters` (Number) Redis/Valkey cluster-mode-disabled: number of nodes (primary + replicas), 1-6. Required for cluster_mode=Disabled; not valid for Memcached or cluster_mode=Enabled.
@@ -207,7 +211,6 @@ resource "duploai_elasticache" "redis_from_snapshot" {
 - `configuration_endpoint` (String) Configuration endpoint (cluster-mode-enabled Redis/Valkey and Memcached).
 - `elasticache_id` (String) ID of this ElastiCache resource, for reference by dependent resources.
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `kms_key_id` (String, Sensitive) KMS key ARN for at-rest encryption. Derived from the resource group when encryption_mode = ResourceGroupKmsKey.
 - `multi_az_enabled` (Boolean) Whether Multi-AZ is enabled. Derived from the cluster topology.
 - `primary_endpoint` (String) Primary endpoint address (Redis/Valkey).
 - `reader_endpoint` (String) Reader endpoint address (Redis/Valkey).

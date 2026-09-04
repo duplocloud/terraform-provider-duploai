@@ -38,7 +38,7 @@ Manages a DuploCloud AI Helpdesk AWS ElastiCache cluster (Redis, Valkey, or Memc
 - `engine` (String) Cache engine: Redis, Valkey, or Memcached.
 - `engine_version` (String) Engine version (e.g. 7.1). Required unless restoring from a snapshot; when unset and not restoring, the server selects a default.
 - `environment_id` (String) ID of the environment that owns the resource group.
-- `kms_key_id` (String, Sensitive) KMS key ARN for at-rest encryption. Derived from the resource group when encryption_mode = ResourceGroupKmsKey.
+- `kms_key_id` (String) KMS key to encrypt data at rest with, as a key id or ARN, honoured only when encryption_mode is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key); an unregistered key is rejected. Leave it unset to use the resource group's own default key. Immutable after creation.
 - `log_delivery_configurations` (Attributes List) Log delivery configurations (Redis/Valkey slow-log / engine-log). (see [below for nested schema](#nestedatt--log_delivery_configurations))
 - `multi_az_enabled` (Boolean) Whether Multi-AZ is enabled. Derived from the cluster topology.
 - `name` (String) Name of the ElastiCache cluster.
