@@ -7,6 +7,24 @@
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AWSRdsClusters",
     "deprovision": {}
   },
+  "invalidWhen": [
+    {
+      "attribute": "performance_insights_kms_key_id",
+      "when": [
+        { "attribute": "performance_insights_kms_key_id", "isNotEmpty": true },
+        { "attribute": "enable_performance_insights", "notEquals": "true" }
+      ],
+      "message": "performance_insights_kms_key_id is only honoured when enable_performance_insights is true and performance_insights_encryption_mode is \"ResourceGroupKmsKey\". The platform clears the value otherwise, so it would come back empty on the next read and show as a change on every plan. Enable Performance Insights and set the mode, or remove the key."
+    },
+    {
+      "attribute": "performance_insights_kms_key_id",
+      "when": [
+        { "attribute": "performance_insights_kms_key_id", "isNotEmpty": true },
+        { "attribute": "performance_insights_encryption_mode", "notEquals": "ResourceGroupKmsKey" }
+      ],
+      "message": "performance_insights_kms_key_id is only honoured when enable_performance_insights is true and performance_insights_encryption_mode is \"ResourceGroupKmsKey\". The platform clears the value otherwise, so it would come back empty on the next read and show as a change on every plan. Enable Performance Insights and set the mode, or remove the key."
+    }
+  ],
   "attributes": [
     {
       "name": "workspace_id",
@@ -171,7 +189,7 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.storageKmsKeyId",
-      "description": "KMS key that encrypts storage, as a key id or ARN, honoured only when storage_encrypted is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) — the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Independent of performance_insights_kms_key_id: storage and Performance Insights are keyed separately. Immutable after creation."
+      "description": "KMS key that encrypts storage, as a key id or ARN, honoured only when storage_encrypted is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key); an unregistered key is rejected. Leave it unset to use the resource group's own default key. Independent of performance_insights_kms_key_id: storage and Performance Insights are keyed separately. Immutable after creation."
     },
     {
       "name": "backup_retention_period",
@@ -257,12 +275,9 @@
       "optional": true,
       "computed": true,
       "forceNew": true,
-      "oneOf": [
-        "AwsDefaultRdsKey",
-        "ResourceGroupKmsKey"
-      ],
+      "oneOf": ["AwsDefaultRdsKey", "ResourceGroupKmsKey"],
       "apiPath": "spec.performanceInsightsEncryptionMode",
-      "description": "How Performance Insights data is encrypted: AwsDefaultRdsKey (the default) uses the AWS-managed RDS key, ResourceGroupKmsKey uses a customer-managed key — either the resource group's default key or the one named by performance_insights_kms_key_id. Only meaningful when enable_performance_insights is true. Immutable after creation."
+      "description": "How Performance Insights data is encrypted: AwsDefaultRdsKey (the default) uses the AWS-managed RDS key, ResourceGroupKmsKey uses a customer-managed key \u2014 either the resource group's default key or the one named by performance_insights_kms_key_id. Only meaningful when enable_performance_insights is true. Immutable after creation."
     },
     {
       "name": "performance_insights_kms_key_id",
@@ -271,7 +286,7 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.performanceInsightsKmsKeyId",
-      "description": "KMS key that encrypts Performance Insights data, honoured only when performance_insights_encryption_mode is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key); an unregistered key is rejected. Leave it unset to use the resource group's own default key. Independent of storage_kms_key_id — these are two unrelated keys. Supply the key ARN rather than the bare key id: the platform resolves this field in place and stores the ARN, so a bare id would read back as the ARN and show as a change on the next plan. Immutable after creation."
+      "description": "KMS key that encrypts Performance Insights data, honoured only when performance_insights_encryption_mode is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key); an unregistered key is rejected. Leave it unset to use the resource group's own default key. Independent of kms_key_id. Supply the key ARN rather than the bare key id: the platform resolves this field in place and stores the ARN, so a bare id would read back as the ARN and show as a change on the next plan. Immutable after creation."
     },
     {
       "name": "database_insights_mode",
@@ -480,35 +495,5 @@
     "createTimeoutMinutes": 60,
     "updateTimeoutMinutes": 60,
     "deleteTimeoutMinutes": 30
-  },
-  "invalidWhen": [
-    {
-      "attribute": "performance_insights_kms_key_id",
-      "when": [
-        {
-          "attribute": "performance_insights_kms_key_id",
-          "isNotEmpty": true
-        },
-        {
-          "attribute": "enable_performance_insights",
-          "notEquals": "true"
-        }
-      ],
-      "message": "performance_insights_kms_key_id is only honoured when enable_performance_insights is true and performance_insights_encryption_mode is \"ResourceGroupKmsKey\". The platform clears the value otherwise, so it would come back empty on the next read and show as a change on every plan. Enable Performance Insights and set the mode, or remove the key."
-    },
-    {
-      "attribute": "performance_insights_kms_key_id",
-      "when": [
-        {
-          "attribute": "performance_insights_kms_key_id",
-          "isNotEmpty": true
-        },
-        {
-          "attribute": "performance_insights_encryption_mode",
-          "notEquals": "ResourceGroupKmsKey"
-        }
-      ],
-      "message": "performance_insights_kms_key_id is only honoured when enable_performance_insights is true and performance_insights_encryption_mode is \"ResourceGroupKmsKey\". The platform clears the value otherwise, so it would come back empty on the next read and show as a change on every plan. Enable Performance Insights and set the mode, or remove the key."
-    }
-  ]
+  }
 }

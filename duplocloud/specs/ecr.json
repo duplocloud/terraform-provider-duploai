@@ -77,7 +77,7 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.kmsKeyId",
-      "description": "KMS key to encrypt with, as a key id or ARN, honoured only when encryption is set to ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) — the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Immutable after creation."
+      "description": "KMS key to encrypt with, as a key id or ARN, honoured only when encryption is set to ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) \u2014 the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Immutable after creation."
     },
     {
       "name": "scan_on_push",
