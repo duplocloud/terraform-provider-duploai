@@ -43,6 +43,7 @@ output "repository_arn" {
 - `encryption` (String) Server-side encryption for the repository: NoEncryption / AwsManagedKey (AWS-managed AES256) / ResourceGroupKmsKey (the resource group's KMS key). ResourceGroupKmsKey requires the resource group to have a provisioned KMS key. Immutable after creation.
 - `environment_id` (String) ID of the environment in which the repository is provisioned.
 - `image_tag_mutability` (String) Whether image tags can be overwritten: MUTABLE (tags may be overwritten) or IMMUTABLE (tags are write-once). Can be changed in place.
+- `kms_key_id` (String) KMS key to encrypt with, as a key id or ARN, honoured only when encryption is set to ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) — the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Immutable after creation.
 - `name` (String) DuploCloud resource name for this repository. Distinct from repository_name (the AWS ECR name); use a simple identifier here. Cannot be changed after creation.
 - `provisioner_type` (String) Provisioner type. Defaults to DirectApiCall for ECR.
 - `provisioner_version` (String) Optional provisioner version.

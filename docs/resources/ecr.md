@@ -21,6 +21,10 @@ resource "duploai_ecr" "backend" {
   environment_id    = "<environment-id>"
   resource_group_id = "<resource-group-id>"
 
+  # AwsManagedKey uses AWS's own key. Switch to ResourceGroupKmsKey and set
+  # kms_key_id to encrypt with a registered customer-managed key instead:
+  #   encryption = "ResourceGroupKmsKey"
+  #   kms_key_id = duploai_resource_group_kms_key.cmek.key_arn
   encryption           = "AwsManagedKey"
   image_tag_mutability = "IMMUTABLE"
   scan_on_push         = true
@@ -57,6 +61,7 @@ output "backend_repository_uri" {
 - `encryption` (String) Server-side encryption for the repository: NoEncryption / AwsManagedKey (AWS-managed AES256) / ResourceGroupKmsKey (the resource group's KMS key). ResourceGroupKmsKey requires the resource group to have a provisioned KMS key. Immutable after creation.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `image_tag_mutability` (String) Whether image tags can be overwritten: MUTABLE (tags may be overwritten) or IMMUTABLE (tags are write-once). Can be changed in place.
+- `kms_key_id` (String) KMS key to encrypt with, as a key id or ARN, honoured only when encryption is set to ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) — the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Immutable after creation.
 - `provisioner_type` (String) Provisioner type. Defaults to DirectApiCall for ECR.
 - `provisioner_version` (String) Optional provisioner version.
 - `scan_on_push` (Boolean) Scan images for vulnerabilities automatically when pushed. Can be changed in place.
