@@ -13,6 +13,8 @@ resource "duploai_msk_kafka" "example" {
   # Optional: pin specific private subnets (one broker per AZ). Omit for all RG private subnets.
   subnet_ids = ["subnet-0a727a1199534ecf3", "subnet-0fc56ead225db9bcc"]
 
+  # ResourceGroupKmsKey + kms_key_id encrypts data at rest with a registered
+  # customer-managed key.
   encryption            = "AwsManagedKey"
   encryption_in_transit = "TLS"
 }

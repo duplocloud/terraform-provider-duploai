@@ -47,9 +47,11 @@ resource "duploai_rds_instance" "mysql" {
   master_username      = "dbadmin"
   master_user_password = "<password>"
 
-  multi_az                = true
-  storage_encrypted       = "<encryption-mode>"
-  kms_key_id              = "<kms-key-id>"
+  multi_az          = true
+  storage_encrypted = "<encryption-mode>"
+  # With storage_encrypted = "ResourceGroupKmsKey", kms_key_id names which
+  # registered key to use; unset means the resource group's default key.
+  kms_key_id              = "<kms-key-arn>"
   backup_retention_period = 14
   deletion_protection     = true
 
@@ -99,11 +101,13 @@ resource "duploai_rds_instance" "mysql" {
 - `enable_performance_insights` (Boolean) Enable Performance Insights.
 - `engine_version` (String) Engine version. Changing this in place triggers an engine upgrade.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
-- `kms_key_id` (String) KMS key ID used for storage encryption.
+- `kms_key_id` (String) KMS key that encrypts storage, as a key id or ARN, honoured only when storage_encrypted is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) — the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Independent of performance_insights_kms_key_id: storage and Performance Insights are keyed separately. Immutable after creation.
 - `master_user_password` (String, Sensitive) Master user password.
 - `master_username` (String) Master (admin) username. Required when creating a new instance (not restoring from a snapshot).
 - `multi_az` (Boolean) Deploy the instance across multiple availability zones.
 - `parameters` (Attributes List) DB parameter group overrides. (see [below for nested schema](#nestedatt--parameters))
+- `performance_insights_encryption_mode` (String) How Performance Insights data is encrypted: AwsDefaultRdsKey (the default) uses the AWS-managed RDS key, ResourceGroupKmsKey uses a customer-managed key — either the resource group's default key or the one named by performance_insights_kms_key_id. Only meaningful when enable_performance_insights is true. Immutable after creation.
+- `performance_insights_kms_key_id` (String) KMS key that encrypts Performance Insights data, honoured only when performance_insights_encryption_mode is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key); an unregistered key is rejected. Leave it unset to use the resource group's own default key. Independent of storage_kms_key_id — these are two unrelated keys. Supply the key ARN rather than the bare key id: the platform resolves this field in place and stores the ARN, so a bare id would read back as the ARN and show as a change on the next plan. Immutable after creation.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `snapshot_identifier` (String) Identifier of a snapshot to restore the instance from.

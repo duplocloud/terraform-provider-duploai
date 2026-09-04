@@ -1,6 +1,6 @@
 {
   "name": "aws_efs",
-  "description": "Manages a DuploCloud AI Helpdesk AWS EFS file system \u2014 an elastic, managed NFS file system provisioned within an environment and resource group.",
+  "description": "Manages a DuploCloud AI Helpdesk AWS EFS file system — an elastic, managed NFS file system provisioned within an environment and resource group.",
   "idPath": "id",
   "dataSource": true,
   "endpoint": {
@@ -91,6 +91,15 @@
       ],
       "apiPath": "spec.encryption",
       "description": "Encryption at rest mode. NoEncryption disables encryption; AwsManagedKey uses the AWS-managed EFS key; ResourceGroupKmsKey uses the resource group's KMS key. Immutable after creation."
+    },
+    {
+      "name": "kms_key_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.kmsKeyId",
+      "description": "KMS key to encrypt with, as a key id or ARN, honoured only when encryption is set to ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) — the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Immutable after creation."
     },
     {
       "name": "availability_zone_name",

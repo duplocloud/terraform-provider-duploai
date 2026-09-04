@@ -51,13 +51,19 @@ resource "duploai_rds_cluster" "serverless" {
 
   manage_master_user_password = true
   storage_encrypted           = "<encryption-mode>"
-  kms_key_id                  = "<kms-key-id>"
+  # kms_key_id picks which registered key encrypts storage; unset uses the
+  # resource group's default key.
+  kms_key_id = "<kms-key-arn>"
 
   backup_retention_period      = 14
   preferred_backup_window      = "07:00-09:00"
   preferred_maintenance_window = "sun:05:00-sun:06:00"
   deletion_protection          = true
   enable_performance_insights  = true
+  # Performance Insights data is keyed separately from storage. Both keys must
+  # be registered on the resource group or one of its plans; pass the ARN.
+  performance_insights_encryption_mode = "ResourceGroupKmsKey"
+  performance_insights_kms_key_id      = duploai_resource_group_kms_key.cmek.key_arn
 
   enable_cloudwatch_logs_exports = ["postgresql"]
 
@@ -127,10 +133,12 @@ resource "duploai_rds_cluster" "serverless" {
 - `engine_mode` (String) Cluster engine mode. Accepted values are defined by the backend RdsClusterEngineMode enum (e.g. the provisioned vs. serverless mode); confirm the exact value against your tenant.
 - `engine_version` (String) Engine version. Changing this in place triggers an engine upgrade.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
-- `kms_key_id` (String) KMS key ID used for storage encryption.
+- `kms_key_id` (String) KMS key that encrypts storage, as a key id or ARN, honoured only when storage_encrypted is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) — the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Independent of performance_insights_kms_key_id: storage and Performance Insights are keyed separately. Immutable after creation.
 - `manage_master_user_password` (Boolean) Let AWS manage the master user password in Secrets Manager instead of supplying master_user_password.
 - `master_user_password` (String, Sensitive) Master user password. Omit when manage_master_user_password is true.
 - `master_username` (String) Master (admin) username. Required when creating a new cluster (not restoring from a snapshot).
+- `performance_insights_encryption_mode` (String) How Performance Insights data is encrypted: AwsDefaultRdsKey (the default) uses the AWS-managed RDS key, ResourceGroupKmsKey uses a customer-managed key — either the resource group's default key or the one named by performance_insights_kms_key_id. Only meaningful when enable_performance_insights is true. Immutable after creation.
+- `performance_insights_kms_key_id` (String) KMS key that encrypts Performance Insights data, honoured only when performance_insights_encryption_mode is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key); an unregistered key is rejected. Leave it unset to use the resource group's own default key. Independent of storage_kms_key_id — these are two unrelated keys. Supply the key ARN rather than the bare key id: the platform resolves this field in place and stores the ARN, so a bare id would read back as the ARN and show as a change on the next plan. Immutable after creation.
 - `preferred_backup_window` (String) Daily time range (UTC) for automated backups, e.g. 07:00-09:00.
 - `preferred_maintenance_window` (String) Weekly time range (UTC) for maintenance, e.g. sun:05:00-sun:06:00.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.

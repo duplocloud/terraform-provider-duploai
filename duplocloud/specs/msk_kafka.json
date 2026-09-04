@@ -103,9 +103,22 @@
       "computed": true,
       "default": "AwsManagedKey",
       "forceNew": true,
-      "oneOf": ["NoEncryption", "AwsManagedKey", "ResourceGroupKmsKey"],
+      "oneOf": [
+        "NoEncryption",
+        "AwsManagedKey",
+        "ResourceGroupKmsKey"
+      ],
       "apiPath": "spec.encryption",
       "description": "Encryption at rest. AwsManagedKey uses the AWS-managed MSK key; ResourceGroupKmsKey uses the resource group's KMS key; NoEncryption disables it. Immutable after creation."
+    },
+    {
+      "name": "kms_key_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.kmsKeyId",
+      "description": "KMS key to encrypt with, as a key id or ARN, honoured only when encryption is set to ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) — the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Immutable after creation."
     },
     {
       "name": "encryption_in_transit",
@@ -115,7 +128,11 @@
       "default": "TLS",
       "forceNew": true,
       "createOnly": true,
-      "oneOf": ["TLS", "TLS_PLAINTEXT", "PLAINTEXT"],
+      "oneOf": [
+        "TLS",
+        "TLS_PLAINTEXT",
+        "PLAINTEXT"
+      ],
       "requestPath": "spec.createRequest.provisioned.encryptionInfo.encryptionInTransit.clientBroker.value",
       "description": "How clients connect: TLS (encrypted), TLS_PLAINTEXT (both), or PLAINTEXT (unencrypted)."
     },
@@ -152,7 +169,12 @@
       "optional": true,
       "computed": true,
       "forceNew": true,
-      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
+      "oneOf": [
+        "Cli",
+        "IacNativeTf",
+        "IacDuploTf",
+        "DirectApiCall"
+      ],
       "apiPath": "spec.provisioner.type",
       "description": "Provisioner type. Defaults to DirectApiCall for MSK."
     },
