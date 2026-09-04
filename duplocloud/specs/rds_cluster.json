@@ -480,5 +480,35 @@
     "createTimeoutMinutes": 60,
     "updateTimeoutMinutes": 60,
     "deleteTimeoutMinutes": 30
-  }
+  },
+  "invalidWhen": [
+    {
+      "attribute": "performance_insights_kms_key_id",
+      "when": [
+        {
+          "attribute": "performance_insights_kms_key_id",
+          "isNotEmpty": true
+        },
+        {
+          "attribute": "enable_performance_insights",
+          "notEquals": "true"
+        }
+      ],
+      "message": "performance_insights_kms_key_id is only honoured when enable_performance_insights is true and performance_insights_encryption_mode is \"ResourceGroupKmsKey\". The platform clears the value otherwise, so it would come back empty on the next read and show as a change on every plan. Enable Performance Insights and set the mode, or remove the key."
+    },
+    {
+      "attribute": "performance_insights_kms_key_id",
+      "when": [
+        {
+          "attribute": "performance_insights_kms_key_id",
+          "isNotEmpty": true
+        },
+        {
+          "attribute": "performance_insights_encryption_mode",
+          "notEquals": "ResourceGroupKmsKey"
+        }
+      ],
+      "message": "performance_insights_kms_key_id is only honoured when enable_performance_insights is true and performance_insights_encryption_mode is \"ResourceGroupKmsKey\". The platform clears the value otherwise, so it would come back empty on the next read and show as a change on every plan. Enable Performance Insights and set the mode, or remove the key."
+    }
+  ]
 }
