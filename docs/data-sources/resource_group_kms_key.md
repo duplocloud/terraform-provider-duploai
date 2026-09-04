@@ -40,7 +40,7 @@ output "key_id" {
 
 ### Read-Only
 
-- `key_arn` (String) ARN of the existing customer-managed KMS key. Its key policy must already grant access to this resource group's account/role — registering it here does not modify the key's policy.
+- `key_arn` (String) ARN of the existing customer-managed KMS key, e.g. arn:aws:kms:us-west-2:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab. Required, and must be unique within the resource group. An alias ARN is not accepted — the registry matches on the key's own id and ARN. The key's own policy must already grant access to this resource group's account and role; registering it here does not modify that policy.
 - `key_entry_id` (String) This registration's own backend record ID (distinct from key_id, which is the AWS KMS key's ID).
-- `key_id` (String) Raw AWS KMS key ID, if it differs from what can be derived from key_arn. Some downstream resources accept either key_id or key_arn to reference this registration.
+- `key_id` (String) Raw AWS KMS key ID, e.g. 1234abcd-12ab-34cd-56ef-1234567890ab, or a multi-region key id such as mrk-1234abcd12ab34cd56ef1234567890ab. Required by the API even though it also appears inside key_arn, and must be unique within the resource group. Pass the bare id — an ARN here is rejected. Consuming resources may hand either this or key_arn to their own kms_key_id.
 - `key_name` (String) Friendly label for this key registration.
