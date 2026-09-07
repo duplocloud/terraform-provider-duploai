@@ -177,6 +177,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "createdAt",
+      "normalizeTimestamp": true,
       "description": "Timestamp when the scope was created."
     },
     {
@@ -184,6 +185,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "updatedAt",
+      "normalizeTimestamp": true,
       "description": "Timestamp when the scope was last updated."
     },
     {

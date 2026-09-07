@@ -255,6 +255,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "createdAt",
+      "normalizeTimestamp": true,
       "description": "Timestamp when the cluster was created (RFC 3339)."
     },
     {
@@ -262,6 +263,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "updatedAt",
+      "normalizeTimestamp": true,
       "description": "Timestamp when the cluster was last updated (RFC 3339)."
     },
     {
