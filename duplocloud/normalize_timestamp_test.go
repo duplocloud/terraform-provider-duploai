@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
@@ -161,5 +162,48 @@ func TestNormalizeTimestampSpecValidation(t *testing.T) {
 				t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
 			}
 		})
+	}
+}
+
+// A data source and its resource must report the same value for the same
+// object: both build state through buildStateRaw, so the flag has to take
+// effect on the data source's read path too — otherwise a config comparing
+// data.duploai_x.updated_at against duploai_x.updated_at would see two
+// different strings for one instant.
+func TestBuildStateRawNormalizesTimestampOnDataSourceRead(t *testing.T) {
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"id":         tftypes.String,
+		"name":       tftypes.String,
+		"updated_at": tftypes.String,
+	}}
+	base := tftypes.NewValue(objType, map[string]tftypes.Value{
+		"id":         tftypes.NewValue(tftypes.String, "obj-1"),
+		"name":       tftypes.NewValue(tftypes.String, nil),
+		"updated_at": tftypes.NewValue(tftypes.String, nil),
+	})
+	attrs := []AttributeSpec{
+		{Name: "name", Type: "string", Required: true, APIPath: "name"},
+		{Name: "updated_at", Type: "string", Computed: true, APIPath: "updatedAt", NormalizeTimestamp: true},
+	}
+
+	// refreshInputs=true is the data source Read path (dynamic_data_source.go).
+	var diags diag.Diagnostics
+	out := buildStateRaw(attrs, base,
+		map[string]any{"name": "thing", "updatedAt": "2026-06-30T04:37:53.1452297Z"},
+		map[string]string{}, "obj-1", true, false, &diags)
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+
+	m := map[string]tftypes.Value{}
+	if err := out.As(&m); err != nil {
+		t.Fatal(err)
+	}
+	var got string
+	if err := m["updated_at"].As(&got); err != nil {
+		t.Fatal(err)
+	}
+	if want := "2026-06-30T04:37:53Z"; got != want {
+		t.Fatalf("data source updated_at = %q, want %q", got, want)
 	}
 }

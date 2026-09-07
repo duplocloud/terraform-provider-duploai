@@ -36,13 +36,13 @@ output "limit_usd" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the quota definition was created (RFC 3339).
+- `created_at` (String) Timestamp when the quota definition was created (RFC 3339, normalized to UTC at second precision).
 - `created_by` (String) Identifier of the user who created the quota definition.
 - `description` (String) Human-readable description of the quota definition.
 - `is_active` (Boolean) Whether the quota definition is active. Defaults to active when omitted.
 - `limit_usd` (Number) Spend limit in USD for the period. Must be at least 0.01.
 - `name` (String) Name of the quota definition.
 - `type` (String) Period the quota applies over. Defaults to 'Daily'.
-- `updated_at` (String) Timestamp when the quota definition was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the quota definition was last updated (RFC 3339, normalized to UTC at second precision).
 - `updated_by` (String) Identifier of the user who last updated the quota definition.
 - `version` (Number) Version counter, incremented on each update.

@@ -40,7 +40,7 @@ output "is_active" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the agent was created (RFC 3339).
+- `created_at` (String) Timestamp when the agent was created (RFC 3339, normalized to UTC at second precision).
 - `description` (String) Human-readable description of the agent.
 - `does_support_streaming` (Boolean) Whether the agent supports streaming (Server-Sent Events) responses.
 - `endpoint` (String) Absolute URL of the HTTP(S) endpoint the help desk calls to invoke this agent. Must be a well-formed absolute URL.
@@ -48,7 +48,7 @@ output "is_active" {
 - `is_active` (Boolean) Whether the agent is active and available for use. Defaults to active when omitted.
 - `metadata` (Map of String) Free-form key/value configuration for the agent (e.g. model, maxTokens, systemPrompt).
 - `name` (String) Name of the AI agent.
-- `updated_at` (String) Timestamp when the agent was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the agent was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 <a id="nestedatt--endpoint_details"></a>

@@ -68,9 +68,9 @@ resource "duploai_admin_scope" "k8s" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the scope was created.
+- `created_at` (String) Timestamp when the scope was created (RFC 3339, normalized to UTC at second precision).
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `updated_at` (String) Timestamp when the scope was last updated.
+- `updated_at` (String) Timestamp when the scope was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Server-incremented version of the scope.
 
 <a id="nestedatt--aws_resource_search_filter"></a>

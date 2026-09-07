@@ -178,7 +178,7 @@
       "computed": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,
-      "description": "Timestamp when the scope was created."
+      "description": "Timestamp when the scope was created (RFC 3339, normalized to UTC at second precision)."
     },
     {
       "name": "updated_at",
@@ -186,7 +186,7 @@
       "computed": true,
       "apiPath": "updatedAt",
       "normalizeTimestamp": true,
-      "description": "Timestamp when the scope was last updated."
+      "description": "Timestamp when the scope was last updated (RFC 3339, normalized to UTC at second precision)."
     },
     {
       "name": "version",

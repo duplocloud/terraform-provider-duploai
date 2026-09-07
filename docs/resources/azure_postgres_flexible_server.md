@@ -136,7 +136,7 @@ resource "duploai_azure_postgres_flexible_server" "private" {
 ### Read-Only
 
 - `azure_resource_group_name` (String) Name of the Azure resource group the server lives in.
-- `created_at` (String) Timestamp when the server record was created (RFC 3339).
+- `created_at` (String) Timestamp when the server record was created (RFC 3339, normalized to UTC at second precision).
 - `effective_aad_administrators` (Attributes List) Microsoft Entra administrators Azure actually reports for the server, read back from the administrators sub-resource. Compare against aad_administrators: the platform applies them best-effort right after create and reconciles them on the next update, so the two can differ briefly. (see [below for nested schema](#nestedatt--effective_aad_administrators))
 - `effective_firewall_rules` (Attributes List) Firewall rules Azure actually reports for the server. Applied best-effort immediately after create and reconciled on the next update, so this can lag firewall_rules briefly. (see [below for nested schema](#nestedatt--effective_firewall_rules))
 - `fully_qualified_domain_name` (String) Hostname clients connect to on port 5432.
@@ -146,7 +146,7 @@ resource "duploai_azure_postgres_flexible_server" "private" {
 - `scope_ids` (List of String) Scopes the server is visible to. Inherited from the resource group.
 - `server_id` (String) Backend identifier of the server record.
 - `status` (String) Provisioning status reported by the platform.
-- `updated_at` (String) Timestamp when the server record was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the server record was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 <a id="nestedatt--aad_administrators"></a>

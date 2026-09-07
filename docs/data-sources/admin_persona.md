@@ -37,12 +37,12 @@ output "skill_ids" {
 ### Read-Only
 
 - `avatar_url` (String) URL of the persona's avatar image.
-- `created_at` (String) Timestamp when the persona was created (RFC 3339).
+- `created_at` (String) Timestamp when the persona was created (RFC 3339, normalized to UTC at second precision).
 - `description` (String) Human-readable description of the persona.
 - `is_active` (Boolean) Whether the persona is active. Defaults to active when omitted.
 - `metadata` (Map of String) Free-form key/value metadata.
 - `name` (String) Name of the persona.
 - `prompt_md` (String) System prompt for the persona, in Markdown.
 - `skill_ids` (List of String) IDs of the skills assigned to this persona. Each must reference an existing, active skill. At least one is required — a persona with no skills can do nothing.
-- `updated_at` (String) Timestamp when the persona was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the persona was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.

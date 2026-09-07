@@ -47,7 +47,7 @@ output "primary_blob_endpoint" {
 - `allow_cross_tenant_replication` (Boolean) Allow object replication across Azure AD tenants.
 - `azure_resource_group_name` (String) Azure resource group the storage account is created in. Derived from the linked resource group; not user-settable.
 - `azure_resource_id` (String) Full Azure resource ID (ARM ID) of the provisioned storage account.
-- `created_at` (String) Timestamp when the storage account was created (RFC 3339).
+- `created_at` (String) Timestamp when the storage account was created (RFC 3339, normalized to UTC at second precision).
 - `data_protection` (Attributes) Blob/container/file-share data protection settings (soft delete, versioning, point-in-time restore). Applied on update. (see [below for nested schema](#nestedatt--data_protection))
 - `enable_https_traffic_only` (Boolean) Require HTTPS for all traffic to the storage account.
 - `environment_id` (String) ID of the environment in which the storage account is provisioned.
@@ -71,7 +71,7 @@ output "primary_blob_endpoint" {
 - `status` (String) Current provisioning status of the storage account.
 - `storage_account_id` (String) ID of this storage account, for reference by dependent resources.
 - `tags` (Map of String) Tags applied to the storage account. The platform adds its own managed `duplocloud-ai-*` tags server-side; those are filtered out of state so only your tags are managed by Terraform.
-- `updated_at` (String) Timestamp when the storage account was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the storage account was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 <a id="nestedatt--data_protection"></a>

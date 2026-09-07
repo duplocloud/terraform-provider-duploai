@@ -61,7 +61,7 @@ output "provisioning_state" {
 ### Read-Only
 
 - `azure_resource_group_name` (String) Azure resource group the endpoint is created in. Defaults to the Azure resource group behind `resource_group_id`, which is almost always what you want — set it only to place the endpoint elsewhere.
-- `created_at` (String) Timestamp when the private endpoint was created (RFC 3339).
+- `created_at` (String) Timestamp when the private endpoint was created (RFC 3339, normalized to UTC at second precision).
 - `dns_zone_arm_id` (String) Full Azure resource ID (ARM ID) of the Private DNS zone created or reused for this endpoint. The zone lives in a platform-shared resource group per subscription (`duplo-shared-rg-<subscription-id>`), not in this endpoint's own resource group, and it is reused — every endpoint for the same sub-resource type across the subscription reports the same value, so deleting one endpoint does not remove the zone.
 - `dns_zone_group_provisioned` (Boolean) Whether the Private DNS zone group is attached. The endpoint only reaches Complete once this is true, so a Complete endpoint always resolves privately; while it is false the endpoint exists but the target's hostname still resolves publicly.
 - `dns_zone_name` (String) Private DNS zone attached to the endpoint, derived from `sub_resource_name` — e.g. `privatelink.blob.core.windows.net`.

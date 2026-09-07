@@ -44,7 +44,7 @@ output "version" {
 
 - `allowed_workspace_ids` (List of String) Workspace IDs allowed to access this environment in addition to the owner.
 - `blocked_reason` (String) Reason the environment is blocked, when applicable.
-- `created_at` (String) Creation timestamp.
+- `created_at` (String) Creation timestamp (RFC 3339, normalized to UTC at second precision).
 - `description` (String) Optional description of the environment.
 - `environment_id` (String) ID of this environment, for reference by dependent resources.
 - `ever_completed` (Boolean) Whether the environment has ever reached the Complete state.
@@ -63,6 +63,6 @@ output "version" {
 - `spec_version` (String) Spec version identifier (UUID).
 - `status` (String) Current provisioning status.
 - `sub_status` (String) Additional status detail.
-- `updated_at` (String) Last update timestamp.
+- `updated_at` (String) Last update timestamp (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Server-assigned version of the environment record.
 - `warnings` (List of String) Provisioning warnings.

@@ -205,7 +205,7 @@
       "computed": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,
-      "description": "Timestamp when the provider was created (RFC 3339)."
+      "description": "Timestamp when the provider was created (RFC 3339, normalized to UTC at second precision)."
     },
     {
       "name": "updated_at",
@@ -213,7 +213,7 @@
       "computed": true,
       "apiPath": "updatedAt",
       "normalizeTimestamp": true,
-      "description": "Timestamp when the provider was last updated (RFC 3339)."
+      "description": "Timestamp when the provider was last updated (RFC 3339, normalized to UTC at second precision)."
     },
     {
       "name": "version",

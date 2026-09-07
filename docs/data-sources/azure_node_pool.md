@@ -64,7 +64,7 @@ output "cluster" {
 - `azure_cluster_name` (String) Name of the AKS managed cluster in Azure that hosts this pool.
 - `azure_cluster_resource_group_name` (String) Azure resource group that owns the AKS managed cluster. Note this is the cluster's resource group, which is not necessarily the one named by `resource_group_id`.
 - `cluster_id` (String) ID of the cluster this pool belongs to, taken from the resource group's linked cluster when the pool is created.
-- `created_at` (String) Timestamp when the node pool was created (RFC 3339).
+- `created_at` (String) Timestamp when the node pool was created (RFC 3339, normalized to UTC at second precision).
 - `enable_auto_scaling` (Boolean) Let the AKS cluster autoscaler size the pool between `min_count` and `max_count`. While enabled, `node_count` has no effect.
 - `environment_id` (String) ID of the environment in which the node pool is provisioned.
 - `max_count` (Number) Upper bound for the autoscaler. Only meaningful when `enable_auto_scaling` is true, and must then be greater than or equal to `min_count`.
