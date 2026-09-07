@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
@@ -622,6 +623,38 @@ func normalizeVersionMinor(s string) string {
 	return strings.Join(parts[:2], ".")
 }
 
+// canonicalTimestampLayout is the single spelling normalizeTimestampPrecision
+// reduces every RFC 3339 value to: UTC, a "Z" offset, whole seconds. Dropping
+// the fractional part rather than keeping it at some fixed width is what makes
+// this robust — the write and read responses disagree on precision, so any
+// surviving digit is a digit the two sides could disagree about (whether the
+// platform truncates or rounds when it persists a higher-precision value is its
+// business, not ours). Second resolution is all these fields are read at.
+const canonicalTimestampLayout = "2006-01-02T15:04:05Z"
+
+// normalizeTimestampPrecision rewrites an RFC 3339 timestamp to
+// canonicalTimestampLayout. Applied to both the write and the read response (it
+// is idempotent), it collapses every spelling the platform uses for one instant
+// — differing fractional precision, "Z" versus "+00:00", a trimmed trailing
+// zero — into a value that compares equal across refreshes.
+//
+// Anything that is not a parseable RFC 3339 timestamp is returned unchanged,
+// including the empty string: better to store what the API said than to blank a
+// field over an unrecognized format.
+func normalizeTimestampPrecision(s string) string {
+	if s == "" {
+		return s
+	}
+	// time.Parse accepts a fractional second after the layout's seconds field
+	// even though RFC3339 does not spell one out, so this handles every digit
+	// count the platform emits.
+	ts, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return s
+	}
+	return ts.UTC().Format(canonicalTimestampLayout)
+}
+
 func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 	if data == nil {
 		return tftypes.NewValue(t, nil)
@@ -647,6 +680,11 @@ func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 		if a.NormalizeVersion {
 			if s, ok := data.(string); ok {
 				data = normalizeVersionMinor(s)
+			}
+		}
+		if a.NormalizeTimestamp {
+			if s, ok := data.(string); ok {
+				data = normalizeTimestampPrecision(s)
 			}
 		}
 		// mapValuePath and filterResponseKeys compose in either order — one

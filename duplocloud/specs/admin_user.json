@@ -75,6 +75,7 @@
       "computed": true,
       "noSend": true,
       "apiPath": "lastLoginAtUtc",
+      "normalizeTimestamp": true,
       "description": "Timestamp of the user's last login (RFC 3339, UTC)."
     },
     {
@@ -83,6 +84,7 @@
       "computed": true,
       "noSend": true,
       "apiPath": "createdAt",
+      "normalizeTimestamp": true,
       "description": "Timestamp when the user was created (RFC 3339)."
     },
     {
@@ -91,6 +93,7 @@
       "computed": true,
       "noSend": true,
       "apiPath": "updatedAt",
+      "normalizeTimestamp": true,
       "description": "Timestamp when the user was last updated (RFC 3339)."
     },
     {

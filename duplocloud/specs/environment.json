@@ -181,6 +181,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "createdAt",
+      "normalizeTimestamp": true,
       "description": "Creation timestamp."
     },
     {
@@ -188,6 +189,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "updatedAt",
+      "normalizeTimestamp": true,
       "description": "Last update timestamp."
     },
     {

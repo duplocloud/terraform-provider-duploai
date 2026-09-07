@@ -422,6 +422,7 @@
       "computed": true,
       "stable": true,
       "apiPath": "createdAt",
+      "normalizeTimestamp": true,
       "description": "Timestamp when the node pool was created (RFC 3339)."
     }
   ]

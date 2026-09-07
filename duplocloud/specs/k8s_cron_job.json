@@ -3645,6 +3645,7 @@
       "computed": true,
       "noSend": true,
       "apiPath": "result.k8sResource.status.lastScheduleTime",
+      "normalizeTimestamp": true,
       "description": "Time the cron job last scheduled a run."
     },
     {
@@ -3653,6 +3654,7 @@
       "computed": true,
       "noSend": true,
       "apiPath": "result.k8sResource.status.lastSuccessfulTime",
+      "normalizeTimestamp": true,
       "description": "Time a run of the cron job last completed successfully."
     }
   ],

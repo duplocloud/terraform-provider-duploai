@@ -547,6 +547,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "createdAt",
+      "normalizeTimestamp": true,
       "description": "Timestamp when the server record was created (RFC 3339)."
     },
     {
@@ -554,6 +555,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "updatedAt",
+      "normalizeTimestamp": true,
       "description": "Timestamp when the server record was last updated (RFC 3339)."
     },
     {
