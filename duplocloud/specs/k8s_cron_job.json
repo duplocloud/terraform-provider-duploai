@@ -3645,7 +3645,8 @@
       "computed": true,
       "noSend": true,
       "apiPath": "result.k8sResource.status.lastScheduleTime",
-      "description": "Time the cron job last scheduled a run."
+      "normalizeTimestamp": true,
+      "description": "Time the cron job last scheduled a run (RFC 3339, normalized to UTC at second precision)."
     },
     {
       "name": "last_successful_time",
@@ -3653,7 +3654,8 @@
       "computed": true,
       "noSend": true,
       "apiPath": "result.k8sResource.status.lastSuccessfulTime",
-      "description": "Time a run of the cron job last completed successfully."
+      "normalizeTimestamp": true,
+      "description": "Time a run of the cron job last completed successfully (RFC 3339, normalized to UTC at second precision)."
     }
   ],
   "requestConstants": [

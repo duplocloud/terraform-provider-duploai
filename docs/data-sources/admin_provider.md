@@ -42,7 +42,7 @@ output "category" {
 
 - `account_id` (String) Account identifier for the provider (e.g. an AWS account id or cluster endpoint).
 - `category` (String) Provider category. Defaults to 'cloud'.
-- `created_at` (String) Timestamp when the provider was created (RFC 3339).
+- `created_at` (String) Timestamp when the provider was created (RFC 3339, normalized to UTC at second precision).
 - `credentials` (Attributes List) Authentication credentials for the provider. Sensitive field values are write-only: the API redacts them on read, so Terraform keeps the configured value in state and cannot detect an out-of-band change to a secret. (see [below for nested schema](#nestedatt--credentials))
 - `description` (String) Human-readable description of the provider.
 - `is_active` (Boolean) Whether the provider is active. Defaults to active when omitted.
@@ -50,7 +50,7 @@ output "category" {
 - `name` (String) Name of the provider.
 - `system_credential` (Attributes) System credential for the provider. Sensitive field values are write-only: the API redacts them on read, so Terraform keeps the configured value in state. (see [below for nested schema](#nestedatt--system_credential))
 - `type` (String) Provider type (case-insensitive). One of: eks, aks, gke, rhos, otel, aws, azure, gcp, datadog, newrelic, sentry, grafanaalertmanager, pagerduty, incident.io, github, gitlab, bitbucket, apollo, outreach, zoom, attention, gong, hubspot, salesforce, marketo, mailchimp, vanta, drata, other.
-- `updated_at` (String) Timestamp when the provider was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the provider was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 <a id="nestedatt--credentials"></a>

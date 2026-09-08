@@ -37,12 +37,12 @@ output "allowed_workspaces" {
 ### Read-Only
 
 - `allowed_workspaces` (Attributes List) Workspaces this permission set grants access to. Must contain at least one entry. (see [below for nested schema](#nestedatt--allowed_workspaces))
-- `created_at` (String) Timestamp when the permission set was created (RFC 3339).
+- `created_at` (String) Timestamp when the permission set was created (RFC 3339, normalized to UTC at second precision).
 - `description` (String) Human-readable description of the permission set.
 - `is_active` (Boolean) Whether the permission set is active. Defaults to active when omitted.
 - `metadata` (Map of String) Free-form key/value metadata.
 - `name` (String) Name of the permission set.
-- `updated_at` (String) Timestamp when the permission set was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the permission set was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 <a id="nestedatt--allowed_workspaces"></a>

@@ -114,14 +114,14 @@ resource "duploai_admin_workspace" "with_prompts" {
 ### Read-Only
 
 - `agent_ids` (List of String) IDs of the agents assigned to this workspace.
-- `created_at` (String) Timestamp when the workspace was created (RFC 3339).
+- `created_at` (String) Timestamp when the workspace was created (RFC 3339, normalized to UTC at second precision).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `incident_ids` (List of String) IDs of the incidents assigned to this workspace.
 - `is_active` (Boolean) Whether the workspace is active.
 - `project_ids` (List of String) IDs of the projects assigned to this workspace.
 - `system_scope_ids` (Set of String) IDs of scopes attached to this workspace by the backend (not managed in Terraform configuration), e.g. a Kubernetes scope created when a cluster is provisioned.
 - `ticket_ids` (List of String) IDs of the tickets assigned to this workspace.
-- `updated_at` (String) Timestamp when the workspace was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the workspace was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 ## Import

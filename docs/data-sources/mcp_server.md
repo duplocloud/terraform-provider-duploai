@@ -42,12 +42,12 @@ output "api_endpoint" {
 
 - `api_endpoint` (String) Absolute URL of the MCP server. Required when config_type is 'Http' or 'Sse'; must be a well-formed absolute URL.
 - `config_type` (String) Configuration type. 'Http' and 'Sse' connect to a remote server at api_endpoint; 'Raw' uses raw_config. Defaults to 'Http'.
-- `created_at` (String) Timestamp when the server was created (RFC 3339).
+- `created_at` (String) Timestamp when the server was created (RFC 3339, normalized to UTC at second precision).
 - `is_active` (Boolean) Whether the MCP server is active and available for use. Defaults to active when omitted.
 - `metadata` (Map of String) Free-form key/value metadata.
 - `name` (String) Name of the MCP server.
 - `provider_type` (String) Provider/category of the MCP server.
 - `raw_config` (Map of String) Raw key/value configuration. Required when config_type is 'Raw', and must be omitted for 'Http'/'Sse'. Holds flat string values only — nested structures are not supported via this attribute.
 - `transport` (String) Transport used to reach the server (e.g. 'http', 'sse'). Required when config_type is 'Http' or 'Sse'.
-- `updated_at` (String) Timestamp when the server was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the server was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.

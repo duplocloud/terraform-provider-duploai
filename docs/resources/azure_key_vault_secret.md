@@ -75,10 +75,10 @@ variable "next_api_key" {
 
 ### Read-Only
 
-- `created_on` (String) When this version was created (RFC 3339).
+- `created_on` (String) When this version was created (RFC 3339, normalized to UTC at second precision).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `secret_id` (String) Full Azure identifier of this secret version, e.g. https://my-vault.vault.azure.net/secrets/db-password/<version>.
-- `updated_on` (String) When this version was last updated (RFC 3339).
+- `updated_on` (String) When this version was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (String) Identifier of the current version. Changes every time a value is written, including when the value is unchanged.
 
 ## Import

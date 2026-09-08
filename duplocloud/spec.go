@@ -542,6 +542,33 @@ type AttributeSpec struct {
 	// components (e.g. EKS "1.34") are returned unchanged.
 	NormalizeVersion bool `json:"normalizeVersion,omitempty"`
 
+	// NormalizeTimestamp, for a computed-only string attribute, rewrites an
+	// RFC 3339 response value to a single canonical spelling before storing it in
+	// state: UTC, a "Z" offset, whole seconds. Use for a server-assigned
+	// timestamp, because the write and read responses do not agree on how they
+	// render one and the difference reads as drift on every plan:
+	//
+	//   POST/PUT response  2026-06-30T04:37:53.1452297Z  (.NET ticks, from memory)
+	//   GET response       2026-06-30T04:37:53.145Z      (milliseconds, from storage)
+	//
+	// Same instant, different string, so refresh reports "Objects have changed
+	// outside of Terraform" after every apply. The fraction is dropped rather
+	// than kept at a fixed width because any digit that survives is a digit the
+	// two sides could still disagree about; these fields are only ever read at
+	// second resolution. Canonicalizing both sides also absorbs the platform's
+	// two offset spellings (a .NET DateTimeOffset with a zero offset serializes
+	// as "+00:00", a UTC DateTime as "Z"), which drifts the same way.
+	//
+	// Values that do not parse as RFC 3339, and the empty string, pass through
+	// untouched.
+	//
+	// Rejected at spec load on a non-string type, or on an attribute the user can
+	// set (required, or optional): rewriting a configured value makes the stored
+	// value disagree with the plan, which Terraform rejects as an inconsistent
+	// result after apply. A user-settable timestamp needs preserve-the-prior-value
+	// semantics instead, which this flag deliberately does not provide.
+	NormalizeTimestamp bool `json:"normalizeTimestamp,omitempty"`
+
 	// StringBool, for a bool attribute, carries the value over the wire as the
 	// STRING "true"/"false" instead of a JSON boolean, and parses the string back
 	// to a bool on read. Use when the field lives in a string-valued container the
@@ -1295,6 +1322,15 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			if a.UpdateBoolTrueValue != "" {
 				return nil, fmt.Errorf("attribute %q: stringBool and updateBoolTrueValue are mutually exclusive — "+
 					"both rewrite the wire representation of the same value", a.Name)
+			}
+		}
+		if a.NormalizeTimestamp {
+			if a.Type != "string" {
+				return nil, fmt.Errorf("attribute %q: normalizeTimestamp requires a string type, got %q", a.Name, a.Type)
+			}
+			if a.Required || a.Optional {
+				return nil, fmt.Errorf("attribute %q: normalizeTimestamp is only valid on a computed-only attribute — "+
+					"rewriting a user-set value would make state disagree with the plan", a.Name)
 			}
 		}
 		if a.MapValuePath != "" && a.Type != "map(string)" {

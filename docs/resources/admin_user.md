@@ -39,10 +39,10 @@ resource "duploai_admin_user" "example" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the user was created (RFC 3339).
+- `created_at` (String) Timestamp when the user was created (RFC 3339, normalized to UTC at second precision).
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `last_login_at_utc` (String) Timestamp of the user's last login (RFC 3339, UTC).
-- `updated_at` (String) Timestamp when the user was last updated (RFC 3339).
+- `last_login_at_utc` (String) Timestamp of the user's last login (RFC 3339, normalized to UTC at second precision).
+- `updated_at` (String) Timestamp when the user was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 ## Import

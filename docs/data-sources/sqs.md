@@ -39,7 +39,7 @@ output "queue_arn" {
 ### Read-Only
 
 - `content_based_deduplication` (Boolean) Enable content-based deduplication (FIFO queues only; ignored for Standard). Can be changed in place.
-- `created_at` (String) Timestamp when the queue was created (RFC 3339).
+- `created_at` (String) Timestamp when the queue was created (RFC 3339, normalized to UTC at second precision).
 - `delay_seconds` (Number) Delivery delay for new messages (seconds, 0-900). Defaults to 0 when unset. Can be changed in place.
 - `encryption_mode` (String) Server-side encryption mode: None (unencrypted), SseS3 (SQS-managed keys), or SseKms (AWS KMS). Can be changed in place.
 - `environment_id` (String) ID of the environment in which the queue is provisioned.
@@ -58,6 +58,6 @@ output "queue_arn" {
 - `scope_ids` (List of String) Scope IDs that link this queue to a cloud provider account.
 - `sqs_id` (String) ID of this SQS queue, for reference by dependent resources.
 - `status` (String) Current provisioning status of the queue.
-- `updated_at` (String) Timestamp when the queue was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the queue was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 - `visibility_timeout_seconds` (Number) Time (seconds, 0-43200) a message is hidden after a consumer receives it. Defaults to 30 when unset. Can be changed in place.

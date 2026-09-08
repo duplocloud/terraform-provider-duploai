@@ -61,9 +61,9 @@ resource "duploai_admin_permission_set" "full" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the permission set was created (RFC 3339).
+- `created_at` (String) Timestamp when the permission set was created (RFC 3339, normalized to UTC at second precision).
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `updated_at` (String) Timestamp when the permission set was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the permission set was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 <a id="nestedatt--allowed_workspaces"></a>

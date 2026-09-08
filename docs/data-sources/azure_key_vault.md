@@ -48,7 +48,7 @@ output "provisioning_state" {
 ### Read-Only
 
 - `azure_resource_group_name` (String) Name of the Azure resource group the vault lives in.
-- `created_at` (String) Timestamp when the vault record was created (RFC 3339).
+- `created_at` (String) Timestamp when the vault record was created (RFC 3339, normalized to UTC at second precision).
 - `enable_purge_protection` (Boolean) Prevent permanent deletion during the retention period. One-way in Azure: it can be turned on, but turning it off is rejected — the vault has to be recreated. Setting it back to false is refused at plan time rather than failing mid-apply; use `lifecycle { ignore_changes = [enable_purge_protection] }` if you want Terraform to leave an already-protected vault alone. Note it also blocks purge_on_deprovision, so the name stays reserved for the full retention period after a destroy.
 - `enable_rbac_authorization` (Boolean) Whether the vault's data plane uses Azure RBAC. Always true for platform-provisioned vaults, and immutable — flipping it would silently change who can read every secret, so the platform requires a recreate instead.
 - `enabled_for_deployment` (Boolean) Allow Azure Virtual Machines to retrieve certificates stored as secrets. Kubernetes workloads do not need this — they use the Secrets Store CSI driver with workload identity.
@@ -69,7 +69,7 @@ output "provisioning_state" {
 - `status` (String) Provisioning status reported by the platform.
 - `tags` (Map of String) Azure resource tags. Platform-managed duplocloud-ai-* tags are added automatically and are not tracked here.
 - `tenant_id` (String) Microsoft Entra tenant that backs the vault's authentication.
-- `updated_at` (String) Timestamp when the vault record was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the vault record was last updated (RFC 3339, normalized to UTC at second precision).
 - `vault_record_id` (String) Backend identifier of the vault record.
 - `vault_uri` (String) Data-plane URI clients use to read secrets, e.g. https://my-app-vault.vault.azure.net/.
 - `version` (Number) Version counter, incremented on each update.

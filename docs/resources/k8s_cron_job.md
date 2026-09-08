@@ -280,8 +280,8 @@ resource "duploai_k8s_cron_job" "any_host" {
 - `active_job_names` (List of String) Names of job runs currently active for this cron job.
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `k8s_cron_job_id` (String) ID of this cron job, for reference by dependent resources.
-- `last_schedule_time` (String) Time the cron job last scheduled a run.
-- `last_successful_time` (String) Time a run of the cron job last completed successfully.
+- `last_schedule_time` (String) Time the cron job last scheduled a run (RFC 3339, normalized to UTC at second precision).
+- `last_successful_time` (String) Time a run of the cron job last completed successfully (RFC 3339, normalized to UTC at second precision).
 - `status` (String) Current provisioning status of the cron job resource.
 
 <a id="nestedatt--affinity"></a>

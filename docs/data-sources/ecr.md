@@ -38,7 +38,7 @@ output "repository_arn" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the repository was created (RFC 3339).
+- `created_at` (String) Timestamp when the repository was created (RFC 3339, normalized to UTC at second precision).
 - `ecr_id` (String) ID of this ECR repository resource, for reference by dependent resources.
 - `encryption` (String) Server-side encryption for the repository: NoEncryption / AwsManagedKey (AWS-managed AES256) / ResourceGroupKmsKey (the resource group's KMS key). ResourceGroupKmsKey requires the resource group to have a provisioned KMS key. Immutable after creation.
 - `environment_id` (String) ID of the environment in which the repository is provisioned.
@@ -55,5 +55,5 @@ output "repository_arn" {
 - `scan_on_push` (Boolean) Scan images for vulnerabilities automatically when pushed. Can be changed in place.
 - `scope_ids` (List of String) Scope IDs linking this repository to a cloud provider account. Derived from the resource group; not user-settable.
 - `status` (String) Current provisioning status of the repository.
-- `updated_at` (String) Timestamp when the repository was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the repository was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.

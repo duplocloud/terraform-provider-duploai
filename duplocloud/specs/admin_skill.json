@@ -156,14 +156,16 @@
       "type": "string",
       "computed": true,
       "apiPath": "createdAt",
-      "description": "Timestamp when the skill was created (RFC 3339)."
+      "normalizeTimestamp": true,
+      "description": "Timestamp when the skill was created (RFC 3339, normalized to UTC at second precision)."
     },
     {
       "name": "updated_at",
       "type": "string",
       "computed": true,
       "apiPath": "updatedAt",
-      "description": "Timestamp when the skill was last updated (RFC 3339)."
+      "normalizeTimestamp": true,
+      "description": "Timestamp when the skill was last updated (RFC 3339, normalized to UTC at second precision)."
     },
     {
       "name": "version",

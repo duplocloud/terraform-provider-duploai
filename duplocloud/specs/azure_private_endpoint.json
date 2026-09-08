@@ -199,7 +199,8 @@
       "computed": true,
       "stable": true,
       "apiPath": "createdAt",
-      "description": "Timestamp when the private endpoint was created (RFC 3339)."
+      "normalizeTimestamp": true,
+      "description": "Timestamp when the private endpoint was created (RFC 3339, normalized to UTC at second precision)."
     }
   ]
 }

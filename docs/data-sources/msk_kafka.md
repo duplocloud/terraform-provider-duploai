@@ -44,7 +44,7 @@ output "status" {
 - `bootstrap_brokers_tls` (String) TLS bootstrap broker connection string.
 - `broker_volume_size_gb` (Number) EBS storage per broker, in GiB. Can be increased in place.
 - `cluster_arn` (String) ARN of the provisioned MSK cluster.
-- `created_at` (String) Timestamp when the cluster was created (RFC 3339).
+- `created_at` (String) Timestamp when the cluster was created (RFC 3339, normalized to UTC at second precision).
 - `encryption` (String) Encryption at rest. AwsManagedKey uses the AWS-managed MSK key; ResourceGroupKmsKey uses the resource group's KMS key; NoEncryption disables it. Immutable after creation.
 - `environment_id` (String) ID of the environment in which the cluster is provisioned.
 - `instance_type` (String) Broker instance type (e.g. kafka.m5.large). Can be changed in place.
@@ -59,5 +59,5 @@ output "status" {
 - `scope_ids` (Set of String) IDs of the scopes attached to this cluster.
 - `security_group_ids` (List of String) Security groups attached to the cluster (assigned by the platform).
 - `status` (String) Current provisioning status of the cluster.
-- `updated_at` (String) Timestamp when the cluster was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the cluster was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.

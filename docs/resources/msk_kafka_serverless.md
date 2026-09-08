@@ -51,12 +51,12 @@ output "kafka_bootstrap_brokers_sasl_iam" {
 - `bootstrap_brokers_sasl_iam` (String) SASL/IAM bootstrap broker connection string.
 - `bootstrap_brokers_tls` (String) TLS bootstrap broker connection string.
 - `cluster_arn` (String) ARN of the provisioned MSK cluster.
-- `created_at` (String) Timestamp when the cluster was created (RFC 3339).
+- `created_at` (String) Timestamp when the cluster was created (RFC 3339, normalized to UTC at second precision).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `msk_kafka_serverless_id` (String) ID of this MSK Kafka Serverless cluster, for reference by dependent resources.
 - `security_group_ids` (List of String) Security groups attached to the cluster (assigned by the platform).
 - `status` (String) Current provisioning status of the cluster.
-- `updated_at` (String) Timestamp when the cluster was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the cluster was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 <a id="nestedblock--timeouts"></a>
