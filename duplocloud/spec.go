@@ -287,6 +287,18 @@ type EndpointSpec struct {
 	// to produce exactly one element — one source per resource, enforced with
 	// conflictsWith — because state can track only one id. An empty response is
 	// an error; extra elements are ignored with a warning.
+	//
+	// Unlike the read side, this has no envelope counterpart: the create response
+	// must be a bare array, because there is no createListPath to unwrap one. The
+	// two halves of a route can therefore differ in what they tolerate, and today
+	// they do — the security-group ingress routes answer their POST with a bare
+	// array while their GET wraps the elements under "rules", which is why
+	// creating rules always worked while reading them failed until the read side
+	// learned ReadListPath. If a future route wraps its create response, expect
+	// the same "cannot unmarshal object into Go struct field
+	// apiResponse[[]map[string]interface {}].data" on create, and add the
+	// unwrapping to createFromList rather than re-diagnosing it: the knob is
+	// deliberately absent while nothing needs it.
 	CreateReturnsList bool `json:"createReturnsList,omitempty"`
 }
 

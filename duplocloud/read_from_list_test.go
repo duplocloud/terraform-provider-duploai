@@ -228,11 +228,35 @@ func TestSpecCollectionElement_HonorsSpecReadListPath(t *testing.T) {
 	}
 }
 
-// Every shipped spec that reads from a collection must name a listPath when its
-// API wraps the elements. This walks the real specs so a new one cannot repeat
-// the mistake unnoticed: readFromList with dataSource and no listPath is only
-// correct for a bare-array route.
-func TestShippedReadFromListSpecsDeclareListPath(t *testing.T) {
+// knownCollectionShapes records, per collection route, whether the API wraps its
+// elements in an object ({"ownSecurityGroupId":…,"rules":[…]}) or answers with a
+// bare array. Nothing in a spec file can express this — only the live API knows —
+// so the shapes are recorded here from observed responses, and the test below
+// fails on any readFromList route missing from the table.
+//
+// Adding a readFromList spec therefore forces a deliberate answer to "what shape
+// does this route return?", which is the question that was got wrong for the
+// security-group-rule data sources.
+var knownCollectionShapes = map[string]struct {
+	wrapped bool
+	note    string
+}{
+	"awsSecurityGroupIngresses": {true, `{"ownSecurityGroupId":…,"rules":[…]} — elements under "rules"`},
+	"kms-keys":                  {false, "a bare array of key registrations"},
+}
+
+// routeCollection is the last path segment of a uriBase — the collection name the
+// shapes above are keyed by.
+func routeCollection(uriBase string) string {
+	segs := strings.Split(strings.TrimSuffix(uriBase, "/"), "/")
+	return segs[len(segs)-1]
+}
+
+// Each shipped readFromList spec must declare readListPath exactly when its route
+// wraps its elements: set on a wrapped route (or the response cannot be decoded at
+// all, which is the reported bug), absent on a bare array (or the decode looks for
+// a key that is not there).
+func TestShippedReadFromListSpecsMatchKnownRouteShape(t *testing.T) {
 	specs, err := loadResourceSpecs()
 	if err != nil {
 		t.Fatalf("loadResourceSpecs: %v", err)
@@ -243,17 +267,44 @@ func TestShippedReadFromListSpecsDeclareListPath(t *testing.T) {
 			continue
 		}
 		seen++
-		// Both routes that wrap their elements are the security-group ingress
-		// ones; the kms-key routes answer with a bare array.
-		wrapped := strings.HasSuffix(spec.Endpoint.UriBase, "awsSecurityGroupIngresses")
-		if wrapped && spec.Endpoint.ReadListPath == "" {
-			t.Errorf("%s: readFromList on a wrapped collection needs readListPath", spec.Name)
+		coll := routeCollection(spec.Endpoint.UriBase)
+		shape, known := knownCollectionShapes[coll]
+		if !known {
+			t.Errorf("%s: readFromList on route %q, whose response shape is not recorded — "+
+				"observe the collection response and add %q to knownCollectionShapes",
+				spec.Name, coll, coll)
+			continue
 		}
-		if !wrapped && spec.Endpoint.ReadListPath != "" {
-			t.Errorf("%s: readListPath set on a bare-array collection", spec.Name)
+		switch {
+		case shape.wrapped && spec.Endpoint.ReadListPath == "":
+			t.Errorf("%s: route %q returns %s, so readListPath is required",
+				spec.Name, coll, shape.note)
+		case !shape.wrapped && spec.Endpoint.ReadListPath != "":
+			t.Errorf("%s: route %q returns %s, so readListPath must not be set (got %q)",
+				spec.Name, coll, shape.note, spec.Endpoint.ReadListPath)
 		}
 	}
 	if seen == 0 {
 		t.Fatal("no readFromList specs found — the walk is not covering anything")
+	}
+}
+
+// The table itself must stay honest: a shape recorded for a route no spec uses is
+// dead weight that outlives the route it described.
+func TestKnownCollectionShapesHasNoUnusedEntries(t *testing.T) {
+	specs, err := loadResourceSpecs()
+	if err != nil {
+		t.Fatalf("loadResourceSpecs: %v", err)
+	}
+	used := map[string]bool{}
+	for _, spec := range specs {
+		if spec.Endpoint.ReadFromList {
+			used[routeCollection(spec.Endpoint.UriBase)] = true
+		}
+	}
+	for coll := range knownCollectionShapes {
+		if !used[coll] {
+			t.Errorf("knownCollectionShapes records %q, which no readFromList spec uses any more", coll)
+		}
 	}
 }
