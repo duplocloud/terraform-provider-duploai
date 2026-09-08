@@ -130,7 +130,7 @@ func (d *dynamicDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		// EndpointSpec.ReadFromList); select from the collection instead. No
 		// GetWithRetry equivalent: a missing element is reported as not found
 		// rather than waited for, since the collection read itself succeeded.
-		obj, clientErr = readCollectionElement(api, d.spec.IDPath, apiID)
+		obj, clientErr = specCollectionElement(&d.spec, api, apiID)
 		if clientErr == nil && obj == nil {
 			resp.Diagnostics.AddError("Object not found",
 				d.spec.Name+" with id "+objID+" does not exist.")

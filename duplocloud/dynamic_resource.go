@@ -596,21 +596,24 @@ func (r *dynamicResource) createFromList(api *duplosdk.RESTResource[map[string]a
 // parameters on these routes are ignored), so the match is made here; the list
 // carries each element in full, so nothing further is fetched.
 func (r *dynamicResource) readFromCollection(scope map[string]string, objID string) (*map[string]any, duplosdk.ClientError) {
-	return readCollectionElementAt(r.api(scope, r.specFailureRetries()),
-		r.spec.Endpoint.ReadListPath, r.spec.IDPath, objID)
+	return specCollectionElement(&r.spec, r.api(scope, r.specFailureRetries()), objID)
 }
 
-// readCollectionElement GETs the collection and returns the element whose
-// idPath value equals objID, or nil when the collection does not hold it.
-// Shared by the resource and data source read paths.
-func readCollectionElement(api *duplosdk.RESTResource[map[string]any], idPath, objID string) (*map[string]any, duplosdk.ClientError) {
-	return readCollectionElementAt(api, "", idPath, objID)
+// specCollectionElement is the one place a spec's collection-read settings are
+// turned into a read. Both the resource and the data source go through it, so
+// neither can honor ReadListPath while the other quietly ignores it — which is
+// exactly what happened to the security-group-rule data sources, whose response
+// wraps its elements ({"ownSecurityGroupId":…,"rules":[…]}) and so failed to
+// decode as a bare array on every plan.
+func specCollectionElement(spec *ResourceSpec, api *duplosdk.RESTResource[map[string]any], objID string) (*map[string]any, duplosdk.ClientError) {
+	return readCollectionElementAt(api, spec.Endpoint.ReadListPath, spec.IDPath, objID)
 }
 
-// readCollectionElementAt is readCollectionElement for a collection whose
-// elements are nested under listPath inside the response rather than being the
-// response itself (see EndpointSpec.ReadListPath). An empty listPath reads a
-// bare array.
+// readCollectionElementAt GETs a collection and returns the element whose
+// idPath value equals objID, or nil when the collection does not hold it. A
+// non-empty listPath means the elements are nested under that path inside an
+// enveloping object rather than being the response itself (see
+// EndpointSpec.ReadListPath); an empty listPath reads a bare array.
 func readCollectionElementAt(api *duplosdk.RESTResource[map[string]any], listPath, idPath, objID string) (*map[string]any, duplosdk.ClientError) {
 	var items []map[string]any
 	var clientErr duplosdk.ClientError
