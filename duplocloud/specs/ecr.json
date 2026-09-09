@@ -33,6 +33,7 @@
       "apiPath": "spec.repositoryName",
       "pattern": "^(?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*$",
       "patternDescription": "must be a valid AWS ECR repository name: lowercase letters, digits, and the separators . _ - between them, with / for a namespace path (2-256 characters), e.g. \"cbi/tf-igrc\" or \"team/backend\". Uppercase letters, leading or trailing separators, and consecutive slashes are rejected",
+      "minLength": 2,
       "maxLength": 256,
       "description": "Name of the AWS ECR repository (may contain path separators, e.g. \"team/backend\"). Immutable — AWS has no rename API."
     },

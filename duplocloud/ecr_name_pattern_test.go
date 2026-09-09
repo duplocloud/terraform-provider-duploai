@@ -1,7 +1,9 @@
 package duplocloud
 
 import (
+	"encoding/json"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -124,5 +126,127 @@ func TestEcrNamePatternsDisagreeOnSlash(t *testing.T) {
 	}
 	if !ecrAttrPattern(t, "repository_name").MatchString(reported) {
 		t.Errorf("repository_name rejects %q, but that is the field it belongs in", reported)
+	}
+}
+
+// AWS requires at least 2 characters in a repository name, which the pattern
+// cannot express: RE2 has no lookahead, so "2 or more overall" across
+// optionally-repeating path segments would mean duplicating every alternative.
+// minLength carries it instead, so a one-character name fails at plan rather
+// than at AWS.
+func TestEcrRepositoryNameLengthBounds(t *testing.T) {
+	specs, err := loadResourceSpecs()
+	if err != nil {
+		t.Fatalf("loadResourceSpecs: %v", err)
+	}
+	for _, spec := range specs {
+		if spec.Name != "ecr" {
+			continue
+		}
+		for _, a := range spec.Attributes {
+			if a.Name != "repository_name" {
+				continue
+			}
+			if a.MinLength != 2 {
+				t.Errorf("repository_name minLength = %d, want 2 (AWS's floor)", a.MinLength)
+			}
+			if a.MaxLength != 256 {
+				t.Errorf("repository_name maxLength = %d, want 256 (AWS's ceiling)", a.MaxLength)
+			}
+			// The pattern alone would let a single character through — that is
+			// exactly why the bound is declared separately.
+			if !regexp.MustCompile(a.Pattern).MatchString("a") {
+				t.Error("pattern unexpectedly rejects a 1-character name; minLength is then redundant")
+			}
+			return
+		}
+		t.Fatal("ecr spec has no repository_name attribute")
+	}
+	t.Fatal("ecr spec not found")
+}
+
+// minLength is a string-only constraint, must be positive, and cannot exceed
+// maxLength — a spec asking for both would accept nothing.
+func TestMinLengthSpecValidation(t *testing.T) {
+	cases := []struct {
+		name    string
+		attr    string
+		wantErr string
+	}{
+		{
+			name:    "string with a sane bound is accepted",
+			attr:    `{"name":"repo","type":"string","required":true,"apiPath":"repo","minLength":2,"maxLength":256}`,
+			wantErr: "",
+		},
+		{
+			name:    "non-string is rejected",
+			attr:    `{"name":"count","type":"int","required":true,"apiPath":"count","minLength":2}`,
+			wantErr: "only valid on a string",
+		},
+		{
+			name:    "negative is rejected",
+			attr:    `{"name":"repo","type":"string","required":true,"apiPath":"repo","minLength":-1}`,
+			wantErr: "minLength must be positive",
+		},
+		{
+			name:    "min above max is rejected",
+			attr:    `{"name":"repo","type":"string","required":true,"apiPath":"repo","minLength":10,"maxLength":4}`,
+			wantErr: "exceeds maxLength",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := []byte(`{
+			  "name": "min_len_probe",
+			  "description": "probe",
+			  "idPath": "id",
+			  "endpoint": {"uriBase": "/v3/admin/things"},
+			  "attributes": [` + tc.attr + `]
+			}`)
+			var spec ResourceSpec
+			if err := json.Unmarshal(raw, &spec); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			err := spec.validate()
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatalf("expected the spec to load, got %v", err)
+			case tc.wantErr != "" && err == nil:
+				t.Fatalf("expected error containing %q, got none", tc.wantErr)
+			case tc.wantErr != "" && !strings.Contains(err.Error(), tc.wantErr):
+				t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
+// A negative maxLength on its own used to slip through: the gate guarding the
+// "must be positive" check required a positive value, so the check could only
+// fire when some other constraint happened to be set. Pins both bounds.
+func TestNegativeLengthBoundsAreRejectedAlone(t *testing.T) {
+	for _, attr := range []struct{ name, json, want string }{
+		{"maxLength", `{"name":"repo","type":"string","required":true,"apiPath":"repo","maxLength":-5}`, "maxLength must be positive"},
+		{"minLength", `{"name":"repo","type":"string","required":true,"apiPath":"repo","minLength":-5}`, "minLength must be positive"},
+	} {
+		t.Run(attr.name, func(t *testing.T) {
+			raw := []byte(`{
+			  "name": "neg_bound_probe",
+			  "description": "probe",
+			  "idPath": "id",
+			  "endpoint": {"uriBase": "/v3/admin/things"},
+			  "attributes": [` + attr.json + `]
+			}`)
+			var spec ResourceSpec
+			if err := json.Unmarshal(raw, &spec); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			err := spec.validate()
+			if err == nil {
+				t.Fatalf("a negative %s alone must be rejected at spec load", attr.name)
+			}
+			if !strings.Contains(err.Error(), attr.want) {
+				t.Fatalf("expected error containing %q, got %v", attr.want, err)
+			}
+		})
 	}
 }

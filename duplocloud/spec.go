@@ -417,9 +417,14 @@ type AttributeSpec struct {
 	// silently-ignored constraint reads as validation that is not happening.
 	// PatternDescription, when set, replaces the raw regex in the error message —
 	// prefer it, as a regex is rarely actionable to the reader.
+	// MinLength floors the length, for an API whose minimum a pattern cannot
+	// express: Go's RE2 has no lookahead, so "at least 2 characters overall"
+	// across optionally-repeating path segments — an AWS ECR repository name —
+	// cannot be written as one regex without duplicating every alternative.
 	Pattern            string `json:"pattern,omitempty"`
 	PatternDescription string `json:"patternDescription,omitempty"`
 	MaxLength          int    `json:"maxLength,omitempty"`
+	MinLength          int    `json:"minLength,omitempty"`
 
 	// MinItems, when > 0, requires a list/set attribute to have at least this
 	// many elements (validated at plan time). Use for collections the API
@@ -1275,9 +1280,12 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 		// Pattern/maxLength are wired only for strings, so on any other type they
 		// would be accepted and silently ignored — validation the spec claims but
 		// does not perform. Reject at load instead.
-		if a.Pattern != "" || a.MaxLength > 0 || a.PatternDescription != "" {
+		// Note the != 0 rather than > 0: a NEGATIVE bound must reach the checks
+		// below, not skip them. Gating on > 0 made the "must be positive" error
+		// unreachable unless some other constraint happened to be set too.
+		if a.Pattern != "" || a.MaxLength != 0 || a.MinLength != 0 || a.PatternDescription != "" {
 			if a.Type != "string" {
-				return nil, fmt.Errorf("attribute %q: pattern/maxLength are only valid on a string, got %q", a.Name, a.Type)
+				return nil, fmt.Errorf("attribute %q: pattern/minLength/maxLength are only valid on a string, got %q", a.Name, a.Type)
 			}
 			if a.PatternDescription != "" && a.Pattern == "" {
 				return nil, fmt.Errorf("attribute %q: patternDescription without pattern has nothing to describe", a.Name)
@@ -1289,6 +1297,13 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			}
 			if a.MaxLength < 0 {
 				return nil, fmt.Errorf("attribute %q: maxLength must be positive, got %d", a.Name, a.MaxLength)
+			}
+			if a.MinLength < 0 {
+				return nil, fmt.Errorf("attribute %q: minLength must be positive, got %d", a.Name, a.MinLength)
+			}
+			if a.MaxLength > 0 && a.MinLength > a.MaxLength {
+				return nil, fmt.Errorf("attribute %q: minLength %d exceeds maxLength %d, so no value can satisfy both",
+					a.Name, a.MinLength, a.MaxLength)
 			}
 		}
 		if a.ImmutableOnceTrue {
