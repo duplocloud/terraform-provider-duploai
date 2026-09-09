@@ -21,7 +21,9 @@
       "required": true,
       "forceNew": true,
       "apiPath": "name",
-      "description": "DuploCloud resource name for this repository. Distinct from repository_name (the AWS ECR name); use a simple identifier here. Cannot be changed after creation."
+      "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$",
+      "patternDescription": "must be a DNS-style label: letters, digits and hyphens only, starting and ending with a letter or digit. Slashes, dots and underscores are rejected — this is the DuploCloud record name, not the AWS repository name. A namespaced path such as \"cbi/tf-igrc\" belongs in repository_name; pair it with a plain name like \"cbi-tf-igrc\"",
+      "description": "DuploCloud record name for this repository — a DNS-style label used to identify the resource on the platform, and unique within the workspace. This is NOT the AWS repository name: put the ECR name, including any namespace path, in repository_name. Cannot be changed after creation."
     },
     {
       "name": "repository_name",
@@ -29,6 +31,9 @@
       "required": true,
       "forceNew": true,
       "apiPath": "spec.repositoryName",
+      "pattern": "^(?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "patternDescription": "must be a valid AWS ECR repository name: lowercase letters, digits, and the separators . _ - between them, with / for a namespace path (2-256 characters), e.g. \"cbi/tf-igrc\" or \"team/backend\". Uppercase letters, leading or trailing separators, and consecutive slashes are rejected",
+      "maxLength": 256,
       "description": "Name of the AWS ECR repository (may contain path separators, e.g. \"team/backend\"). Immutable — AWS has no rename API."
     },
     {

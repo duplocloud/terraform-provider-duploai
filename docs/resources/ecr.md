@@ -51,7 +51,7 @@ output "backend_repository_uri" {
 ### Required
 
 - `environment_id` (String) ID of the environment in which the repository is provisioned.
-- `name` (String) DuploCloud resource name for this repository. Distinct from repository_name (the AWS ECR name); use a simple identifier here. Cannot be changed after creation.
+- `name` (String) DuploCloud record name for this repository — a DNS-style label used to identify the resource on the platform, and unique within the workspace. This is NOT the AWS repository name: put the ECR name, including any namespace path, in repository_name. Cannot be changed after creation.
 - `repository_name` (String) Name of the AWS ECR repository (may contain path separators, e.g. "team/backend"). Immutable — AWS has no rename API.
 - `resource_group_id` (String) ID of the resource group in which the repository is provisioned.
 - `workspace_id` (String) ID of the workspace that owns this ECR repository.
