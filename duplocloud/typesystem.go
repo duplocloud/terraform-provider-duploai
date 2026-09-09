@@ -120,6 +120,9 @@ func stringValidators(a AttributeSpec) []validator.String {
 	if a.MaxLength > 0 {
 		out = append(out, stringvalidator.LengthAtMost(a.MaxLength))
 	}
+	if a.MinLength > 0 {
+		out = append(out, stringvalidator.LengthAtLeast(a.MinLength))
+	}
 	if a.Pattern != "" {
 		// validate() compiles this at spec load, so a spec carrying a bad pattern
 		// never reaches here; MustCompile cannot fire on a loaded spec.
