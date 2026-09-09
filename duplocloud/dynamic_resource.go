@@ -596,47 +596,7 @@ func (r *dynamicResource) createFromList(api *duplosdk.RESTResource[map[string]a
 // parameters on these routes are ignored), so the match is made here; the list
 // carries each element in full, so nothing further is fetched.
 func (r *dynamicResource) readFromCollection(scope map[string]string, objID string) (*map[string]any, duplosdk.ClientError) {
-	return readCollectionElementAt(r.api(scope, r.specFailureRetries()),
-		r.spec.Endpoint.ReadListPath, r.spec.IDPath, objID)
-}
-
-// readCollectionElement GETs the collection and returns the element whose
-// idPath value equals objID, or nil when the collection does not hold it.
-// Shared by the resource and data source read paths.
-func readCollectionElement(api *duplosdk.RESTResource[map[string]any], idPath, objID string) (*map[string]any, duplosdk.ClientError) {
-	return readCollectionElementAt(api, "", idPath, objID)
-}
-
-// readCollectionElementAt is readCollectionElement for a collection whose
-// elements are nested under listPath inside the response rather than being the
-// response itself (see EndpointSpec.ReadListPath). An empty listPath reads a
-// bare array.
-func readCollectionElementAt(api *duplosdk.RESTResource[map[string]any], listPath, idPath, objID string) (*map[string]any, duplosdk.ClientError) {
-	var items []map[string]any
-	var clientErr duplosdk.ClientError
-	if listPath == "" {
-		items, clientErr = api.GetCollection()
-	} else {
-		var envelope map[string]any
-		envelope, clientErr = api.GetCollectionEnvelope()
-		if clientErr == nil {
-			for _, e := range toAnySlice(extractPath(envelope, strings.Split(listPath, "."))) {
-				if m, ok := e.(map[string]any); ok {
-					items = append(items, m)
-				}
-			}
-		}
-	}
-	if clientErr != nil {
-		return nil, clientErr
-	}
-	idSegs := strings.Split(idPath, ".")
-	for i := range items {
-		if fmt.Sprint(extractPath(items[i], idSegs)) == objID {
-			return &items[i], nil
-		}
-	}
-	return nil, nil
+	return specCollectionElement(&r.spec, r.api(scope, r.specFailureRetries()), objID)
 }
 
 // readAssociation refreshes a link-only resource. The API offers no GET for the
