@@ -124,7 +124,7 @@
           "type": "string",
           "required": true,
           "apiPath": "DeviceName",
-          "description": "Device name as it appears on the instance (e.g. /dev/xvdb)."
+          "description": "Device name for the additional volume, as it appears on the instance (e.g. /dev/xvdb). Must not be a root device name: the API rejects /dev/xvda and /dev/sda1, which the AMI already uses for the root volume — both are listed because Amazon Linux and Ubuntu name it differently."
         },
         {
           "name": "volume_size_gb",
@@ -204,7 +204,28 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.imageId",
-      "description": "AMI ID for the nodes, e.g. ami-0c02fb55956c7d316. Required when ami_type is CUSTOM and rejected for every other ami_type. The AMI must derive from an EKS-optimised AL2023 image so nodeadm is present: the launch template pins the image and injects nodeadm bootstrap user data, because EKS stops supplying bootstrap config for custom AMIs — an AMI without it provisions successfully and then never joins the cluster. The platform preflights the id's existence and architecture in-region, so a wrong-architecture or cross-region id fails early. Immutable after creation."
+      "description": "AMI ID for the nodes, e.g. ami-0c02fb55956c7d316. Required when ami_type is CUSTOM and rejected for every other ami_type. EKS supplies no bootstrap configuration for a custom AMI, so the platform generates it: it detects whether the image expects nodeadm or the classic /etc/eks/bootstrap.sh from the AMI name and the cluster's Kubernetes version, and the launch template carries the result — so an AL2023 image is no longer required. Set user_data to replace or extend that generated payload. The platform preflights the id's existence and architecture in-region, so a wrong-architecture or cross-region id fails early. Immutable after creation."
+    },
+    {
+      "name": "user_data",
+      "type": "string",
+      "optional": true,
+      "sensitive": true,
+      "maxLength": 1024,
+      "apiPath": "spec.userData",
+      "description": "Raw EC2 user data for the launch template, as PLAIN TEXT — the platform base64-encodes it, so an already-encoded value is rejected (the opposite of duploai_native_host.base64_user_data). Capped at 1024 bytes. Valid for every ami_type, but used differently: with ami_type CUSTOM it combines with the bootstrap payload the platform generates, per user_data_mode — read that attribute before setting this one, because its default replaces the bootstrap rather than adding to it; with any managed ami_type EKS always merges it alongside its own bootstrap and user_data_mode is ignored, so per AWS guidance the script must not start or reconfigure kubelet. Marked sensitive because bootstrap scripts routinely carry registry credentials, join tokens or licence keys — note the API still returns the value verbatim to any caller allowed to read the node group, and Terraform stores it unencrypted in state."
+    },
+    {
+      "name": "user_data_mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "oneOf": [
+        "Override",
+        "Append"
+      ],
+      "apiPath": "spec.userDataMode",
+      "description": "How user_data combines with the bootstrap payload the platform generates for a CUSTOM AMI. Choose Append to ADD setup steps while the platform still bootstraps the node — the generated payload runs and user_data is added to it (a second MIME part for nodeadm, trailing shell lines for bootstrap.sh). Choose Override to REPLACE the bootstrap: the platform then detects nothing and generates nothing, so user_data alone is responsible for joining the node to the cluster. Note the default is Override, so a script that only installs an agent and leaves this unset will leave the node provisioned but never joined — set Append for that case. Has no effect unless user_data is set, and none for any ami_type other than CUSTOM, where EKS merges user_data itself; the API ignores rather than rejects it there."
     },
     {
       "name": "additional_labels",
