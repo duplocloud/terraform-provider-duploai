@@ -109,6 +109,7 @@
       "type": "string",
       "computed": true,
       "apiPath": "status",
+      "sendFromState": true,
       "description": "Current provisioning status."
     },
     {
@@ -138,6 +139,7 @@
       "type": "bool",
       "computed": true,
       "apiPath": "everCompleted",
+      "sendFromState": true,
       "description": "Whether the environment has ever reached the Complete state."
     },
     {
