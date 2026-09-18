@@ -81,8 +81,8 @@
     {
       "name": "vpc_id",
       "type": "string",
+      "computed": true,
       "sendFromState": true,
-          "computed": true,
       "forceNew": true,
       "apiPath": "spec.vpcId",
       "description": "VPC ID for the cluster (AWS only). Inherited from the linked network (network_id); computed, not user-settable. For Azure see azure.vnet_id."
@@ -90,8 +90,8 @@
     {
       "name": "subnet_ids",
       "type": "list(string)",
+      "computed": true,
       "sendFromState": true,
-          "computed": true,
       "forceNew": true,
       "apiPath": "spec.subnetIds",
       "description": "Subnet IDs for the cluster (AWS only). Inherited from the linked network (network_id); computed, not user-settable. For Azure see azure.node_subnet_id / azure.pod_subnet_id."
