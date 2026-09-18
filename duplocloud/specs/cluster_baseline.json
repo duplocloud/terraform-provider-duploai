@@ -260,6 +260,7 @@
           "name": "node_subnet_ids",
           "type": "list(string)",
           "computed": true,
+          "stable": true,
           "noSend": true,
           "apiPath": "nodeSubnetIds",
           "description": "Private subnet IDs the system node group is placed in. Populated server-side from the linked network's private subnets."
