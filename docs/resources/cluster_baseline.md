@@ -76,6 +76,9 @@ resource "duploai_cluster_baseline" "full" {
 #   - azure.network_mode = "AzureCniPodSubnet"    → network must have an AksPods subnet
 #   - azure.enable_agic = true                    → network must have an ApplicationGateway subnet
 #   - azure.enable_workload_identity = true       → enables the AKS OIDC issuer; see azure_oidc_issuer_url
+#   - azure.addon_profiles                        → any other AKS add-on (keyvault-secrets,
+#                                                   monitoring, azure-policy); an ingressApplicationGateway
+#                                                   entry needs azure.enable_agic = false
 #   - domain_name_filter                          → the Azure public DNS zone(s) must already exist
 #   - api_server_visibility = "Private"           → private API endpoint only
 #   - cluster_ip_cidr                             → optional K8s service CIDR (AKS default when unset)
@@ -114,6 +117,21 @@ resource "duploai_cluster_baseline" "azure_full" {
       enable_auto_scaling = true
       min_count           = 3
       max_count           = 10
+    }
+
+    # Any other AKS add-on, keyed by its ARM add-on name. Merged as-is into the
+    # managed cluster. For AGIC, enable_agic above is the simple path; see the
+    # advanced/brownfield examples at the end of this file for the alternative.
+    addon_profiles = {
+      azureKeyvaultSecretsProvider = {
+        enabled = true
+        config = {
+          enableSecretRotation = "true"
+        }
+      }
+      azurepolicy = {
+        enabled = true
+      }
     }
 
     tags = {
@@ -226,6 +244,139 @@ output "cluster_helpdesk_peering_enabled" {
 output "cluster_helpdesk_allowed_cidrs" {
   value = duploai_cluster_baseline.basic.helpdesk_vpc_peering.helpdesk_vpc_cidr_blocks
 }
+
+# ─── Advanced AGIC: you own the add-on entry ────────────────────────────────────
+# enable_agic = false is REQUIRED — it defaults to true, and the API rejects the
+# bool and an ingressApplicationGateway entry being set together.
+
+# (a) Greenfield with custom settings — AKS still creates the gateway, but you
+#     choose its name, the subnet, and which namespaces AGIC watches.
+resource "duploai_cluster_baseline" "azure_agic_custom" {
+  workspace_id = "<workspace-id>"
+  name         = "aks-agic-custom"
+  cloud        = "Azure"
+  network_id   = "<azure-network-baseline-id>"
+  version      = "1.35"
+
+  azure = {
+    enable_agic = false
+
+    addon_profiles = {
+      ingressApplicationGateway = {
+        enabled = true
+        config = {
+          subnetId               = "<ApplicationGateway subnet id of the linked network>"
+          applicationGatewayName = "appgw-custom"
+          watchNamespace         = "default,apps"
+        }
+      }
+    }
+  }
+}
+
+# (b) Brownfield — attach AGIC to an Application Gateway that already exists.
+#     No subnet is resolved, so the gateway may live in any resource group or
+#     VNet. Use this when the gateway needs settings AKS will not create for you
+#     (for example properties.globalConfiguration).
+resource "duploai_cluster_baseline" "azure_agic_brownfield" {
+  workspace_id = "<workspace-id>"
+  name         = "aks-agic-byo"
+  cloud        = "Azure"
+  network_id   = "<azure-network-baseline-id>"
+  version      = "1.35"
+
+  azure = {
+    enable_agic = false
+
+    addon_profiles = {
+      ingressApplicationGateway = {
+        enabled = true
+        config = {
+          # Mutually exclusive with subnetId.
+          applicationGatewayId = "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Network/applicationGateways/<name>"
+        }
+      }
+    }
+  }
+}
+
+# ─── Application Gateway settings the cluster body cannot reach ────────────────
+# Properties of the gateway itself — globalConfiguration (request/response
+# buffering), WAF settings, autoscale — live on the
+# Microsoft.Network/applicationGateways resource, NOT on the cluster. No key in
+# addon_profiles reaches them: an add-on profile's config is a flat
+# map[string]string on the AKS resource, and the gateway is a different resource.
+#
+# On the greenfield paths AKS creates the gateway, so there is nothing to
+# configure at cluster-create time. Patch it afterwards with azapi_update_resource,
+# which changes only the properties named in `body` and leaves AGIC's listeners,
+# rules and backend pools alone.
+
+resource "duploai_cluster_baseline" "azure_agic_buffers" {
+  workspace_id = "<workspace-id>"
+  name         = "aks-agic-buffers"
+  cloud        = "Azure"
+  network_id   = "<azure-network-baseline-id>"
+  version      = "1.35"
+
+  azure = {
+    # Advanced AGIC path: you own the add-on entry, so enable_agic must be false
+    # (it defaults to true, and the API rejects both being set together).
+    enable_agic = false
+
+    addon_profiles = {
+      ingressApplicationGateway = {
+        enabled = true
+
+        # config is omitted on purpose. The platform stamps config.subnetId from
+        # the linked network's ApplicationGateway subnet at create, and AKS then
+        # creates a Standard_v2 gateway in it. Because config is computed,
+        # omitting it keeps whatever the server set. Writing `config = {}`
+        # instead sends an explicit empty map and clears those values.
+      }
+    }
+  }
+}
+
+# azapi is a separate provider; declare it alongside duploai:
+#
+#   terraform {
+#     required_providers {
+#       azapi = {
+#         source  = "Azure/azapi"
+#         version = "~> 2.0"
+#       }
+#     }
+#   }
+#
+# AKS publishes the gateway it created here, a few minutes after the cluster is
+# Ready. Because the id is unknown until then, gate the patch on a static
+# variable and apply a second time rather than deriving count from this value.
+data "azapi_resource" "agic_cluster" {
+  type        = "Microsoft.ContainerService/managedClusters@2024-09-01"
+  resource_id = duploai_cluster_baseline.azure_agic_buffers.cluster_id
+
+  response_export_values = [
+    "properties.addonProfiles.ingressApplicationGateway.config.effectiveApplicationGatewayId",
+  ]
+}
+
+resource "azapi_update_resource" "agic_appgw_buffers" {
+  # api-version must be 2020-01-01 or later; globalConfiguration does not exist
+  # in earlier versions (which is also why the Azure portal's JSON view can show
+  # the property as absent while it is in fact set).
+  type        = "Microsoft.Network/applicationGateways@2024-05-01"
+  resource_id = data.azapi_resource.agic_cluster.output.properties.addonProfiles.ingressApplicationGateway.config.effectiveApplicationGatewayId
+
+  body = {
+    properties = {
+      globalConfiguration = {
+        enableRequestBuffering  = true
+        enableResponseBuffering = false
+      }
+    }
+  }
+}
 ```
 
 <!-- schema generated by tfplugindocs -->
@@ -263,7 +414,7 @@ These are cloud-category scopes, not Kubernetes ones: passing one to `duploai_k8
 - `skip_attribute_auto_creation` (Boolean) Skip automatic creation of cluster attributes (add-ons/managed components) during provisioning. When unset, follows the server default; set true to fully self-manage cluster attributes.
 - `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. AWS (EKS) only — for Azure (AKS) use azure.system_node_pool instead. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `version` (String) Kubernetes major.minor version for the cluster (e.g. "1.34"). Required when mode is Create; auto-discovered when mode is Import. The live cluster's version is read back at major.minor precision (e.g. AKS's resolved "1.35.6" is stored as "1.35"). Immutable after creation.
+- `version` (String) Kubernetes major.minor version for the cluster (e.g. "1.34"). Required when mode is Create; auto-discovered when mode is Import. Read back from the live cluster at major.minor precision where the platform reports it (e.g. EKS's resolved "1.35.6" is stored as "1.35"); on Azure, which does not report a live version, the configured value is retained, so a cluster upgraded outside Terraform will not show as drift. Immutable after creation.
 
 ### Read-Only
 
@@ -292,11 +443,21 @@ These are cloud-category scopes, not Kubernetes ones: passing one to `duploai_k8
 
 Optional:
 
-- `enable_agic` (Boolean) Enable the Application Gateway Ingress Controller (AGIC) add-on. Requires the linked network to have an Application Gateway subnet.
+- `addon_profiles` (Attributes Map) AKS add-on profiles, keyed by the ARM add-on name (e.g. azureKeyvaultSecretsProvider, omsagent, azurepolicy). Each entry is merged as-is into the managed cluster's addonProfiles. An ingressApplicationGateway entry is allowed only when enable_agic is false (the advanced AGIC path, where you own the whole entry); its config takes either subnetId (create a gateway in that subnet of the linked network) or applicationGatewayId (attach to an existing gateway), never both, plus optional applicationGatewayName, subnetCIDR and watchNamespace. Omit this attribute to keep the add-ons the platform reports (it composes the ingressApplicationGateway entry itself when enable_agic is true); set an explicit empty map to remove them. (see [below for nested schema](#nestedatt--azure--addon_profiles))
+- `enable_agic` (Boolean) Enable the Application Gateway Ingress Controller (AGIC) add-on the simple way: the add-on creates a Standard_v2 Application Gateway in the linked network's Application Gateway subnet. Defaults to true, so the advanced path (an ingressApplicationGateway entry in addon_profiles) requires setting this to false explicitly - the API rejects both together.
 - `enable_workload_identity` (Boolean) Enable Azure AD Workload Identity (and the AKS OIDC issuer) for the cluster, allowing pods to authenticate to Azure AD via federated credentials instead of static secrets. See azure_oidc_issuer_url for the resulting issuer URL.
 - `network_mode` (String) AKS networking mode. AzureCniPodSubnet requires an AksPods subnet on the linked network.
 - `system_node_pool` (Attributes) The AKS system node pool. (see [below for nested schema](#nestedatt--azure--system_node_pool))
 - `tags` (Map of String) Tags applied to the AKS cluster. The platform adds its own managed `duplocloud-ai-*` tags server-side; those are filtered out of state so only your tags are managed by Terraform.
+
+<a id="nestedatt--azure--addon_profiles"></a>
+### Nested Schema for `azure.addon_profiles`
+
+Optional:
+
+- `config` (Map of String) Add-on specific settings, passed straight through to the ARM add-on profile's config map (e.g. logAnalyticsWorkspaceResourceID for omsagent). Computed because the platform writes into it - for ingressApplicationGateway it stamps subnetId from the linked network at create. Omit this attribute to keep whatever the server set; an explicit empty map is sent as empty and clears those values.
+- `enabled` (Boolean) Whether the add-on is enabled. When unset, the value the platform returns is used.
+
 
 <a id="nestedatt--azure--system_node_pool"></a>
 ### Nested Schema for `azure.system_node_pool`

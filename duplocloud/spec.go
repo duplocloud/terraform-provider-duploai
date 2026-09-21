@@ -470,14 +470,19 @@ type AttributeSpec struct {
 	RequestPath  string `json:"requestPath,omitempty"`
 	ResponsePath string `json:"responsePath,omitempty"`
 
-	// ResponsePaths is an ordered list of response dot-paths for a read-only
-	// (computed) attribute; on read the engine stores the value at the FIRST path
-	// that yields a non-null, non-empty result. Use for a cloud-agnostic output
-	// whose value lives at different paths per cloud (e.g. an EKS cluster id at
-	// result.clusterArn but an AKS cluster id at result.azure.clusterId) so a
-	// single attribute is populated regardless of cloud. Takes precedence over
-	// apiPath/responsePath for the read direction; intended for computed-only
-	// attributes (it is not sent in any request).
+	// ResponsePaths is an ordered list of response dot-paths; on read the engine
+	// stores the value at the FIRST path that yields a non-null, non-empty
+	// result. Use for a cloud-agnostic value that lives at different paths per
+	// cloud (e.g. an EKS cluster id at result.clusterArn but an AKS cluster id at
+	// result.azure.clusterId) so a single attribute is populated regardless of
+	// cloud, or to fall back to the requested value when a cloud does not report
+	// the live one (cluster_baseline's version: result.version on EKS, spec.version
+	// on AKS).
+	//
+	// It governs the READ direction only and takes precedence there over
+	// apiPath/responsePath. It is never itself sent in a request, so a
+	// computed-only attribute needs nothing else; an optional+computed attribute
+	// that must also be SENT pairs it with an explicit RequestPath (or APIPath).
 	ResponsePaths []string `json:"responsePaths,omitempty"`
 
 	// CreatePath / UpdatePath override RequestPath (and APIPath) for the POST
