@@ -83,7 +83,7 @@ output "azure_fqdn" {
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) Subnet IDs for the cluster (AWS only). Inherited from the linked network (network_id); computed, not user-settable. For Azure see azure.node_subnet_id / azure.pod_subnet_id.
 - `system_node_group` (Attributes) Optional default system managed node group provisioned alongside the cluster. AWS (EKS) only — for Azure (AKS) use azure.system_node_pool instead. Leave unset to provision a bare cluster with no node groups. (see [below for nested schema](#nestedatt--system_node_group))
-- `version` (String) Kubernetes major.minor version for the cluster (e.g. "1.34"). Required when mode is Create; auto-discovered when mode is Import. The live cluster's version is read back at major.minor precision (e.g. AKS's resolved "1.35.6" is stored as "1.35"). Immutable after creation.
+- `version` (String) Kubernetes major.minor version for the cluster (e.g. "1.34"). Required when mode is Create; auto-discovered when mode is Import. Read back from the live cluster at major.minor precision where the platform reports it (e.g. EKS's resolved "1.35.6" is stored as "1.35"); on Azure, which does not report a live version, the configured value is retained, so a cluster upgraded outside Terraform will not show as drift. Immutable after creation.
 - `vpc_id` (String) VPC ID for the cluster (AWS only). Inherited from the linked network (network_id); computed, not user-settable. For Azure see azure.vnet_id.
 
 <a id="nestedatt--azure"></a>
@@ -91,11 +91,21 @@ output "azure_fqdn" {
 
 Read-Only:
 
-- `enable_agic` (Boolean) Enable the Application Gateway Ingress Controller (AGIC) add-on. Requires the linked network to have an Application Gateway subnet.
+- `addon_profiles` (Attributes Map) AKS add-on profiles, keyed by the ARM add-on name (e.g. azureKeyvaultSecretsProvider, omsagent, azurepolicy). Each entry is merged as-is into the managed cluster's addonProfiles. An ingressApplicationGateway entry is allowed only when enable_agic is false (the advanced AGIC path, where you own the whole entry); its config takes either subnetId (create a gateway in that subnet of the linked network) or applicationGatewayId (attach to an existing gateway), never both, plus optional applicationGatewayName, subnetCIDR and watchNamespace. Omit this attribute to keep the add-ons the platform reports (it composes the ingressApplicationGateway entry itself when enable_agic is true); set an explicit empty map to remove them. (see [below for nested schema](#nestedatt--azure--addon_profiles))
+- `enable_agic` (Boolean) Enable the Application Gateway Ingress Controller (AGIC) add-on the simple way: the add-on creates a Standard_v2 Application Gateway in the linked network's Application Gateway subnet. Defaults to true, so the advanced path (an ingressApplicationGateway entry in addon_profiles) requires setting this to false explicitly - the API rejects both together.
 - `enable_workload_identity` (Boolean) Enable Azure AD Workload Identity (and the AKS OIDC issuer) for the cluster, allowing pods to authenticate to Azure AD via federated credentials instead of static secrets. See azure_oidc_issuer_url for the resulting issuer URL.
 - `network_mode` (String) AKS networking mode. AzureCniPodSubnet requires an AksPods subnet on the linked network.
 - `system_node_pool` (Attributes) The AKS system node pool. (see [below for nested schema](#nestedatt--azure--system_node_pool))
 - `tags` (Map of String) Tags applied to the AKS cluster. The platform adds its own managed `duplocloud-ai-*` tags server-side; those are filtered out of state so only your tags are managed by Terraform.
+
+<a id="nestedatt--azure--addon_profiles"></a>
+### Nested Schema for `azure.addon_profiles`
+
+Read-Only:
+
+- `config` (Map of String) Add-on specific settings, passed straight through to the ARM add-on profile's config map (e.g. logAnalyticsWorkspaceResourceID for omsagent). Computed because the platform writes into it - for ingressApplicationGateway it stamps subnetId from the linked network at create. Omit this attribute to keep whatever the server set; an explicit empty map is sent as empty and clears those values.
+- `enabled` (Boolean) Whether the add-on is enabled. When unset, the value the platform returns is used.
+
 
 <a id="nestedatt--azure--system_node_pool"></a>
 ### Nested Schema for `azure.system_node_pool`
