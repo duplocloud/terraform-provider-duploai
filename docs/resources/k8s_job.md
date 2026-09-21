@@ -236,7 +236,7 @@ resource "duploai_k8s_job" "full" {
 - `manual_selector` (Boolean) Allow a manually-specified pod selector (advanced).
 - `max_failed_indexes` (Number) Max number of failed indexes before the job is failed (Indexed jobs only).
 - `namespace_name` (String) Kubernetes namespace to run the job in.
-- `node_selector` (Map of String) Node label selector constraints for pod scheduling.
+- `node_selector` (Map of String) Node label selector constraints for pod scheduling. The platform stamps two selectors of its own: `resourcegroup` (the resource group's name, so the pods land on its nodes — opt out with `is_any_host_allowed` rather than by setting the key here, which the backend overwrites) and `allocationtags` (mirrors `allocation_tags` when it is set). Both are hidden from state unless you list them here, so you can add your own selectors without fighting a perpetual diff.
 - `parallelism` (Number) Maximum number of pods running in parallel at any time.
 - `pod_failure_policy` (Attributes) Rules that determine how pod failures are handled. (see [below for nested schema](#nestedatt--pod_failure_policy))
 - `pod_replacement_policy` (String) When to create replacement pods: TerminatingOrFailed or Failed.
