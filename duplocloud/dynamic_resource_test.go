@@ -253,6 +253,22 @@ func TestRequestResponsePaths(t *testing.T) {
 	if b.requestPath() != "name" || b.responsePath() != "name" {
 		t.Errorf("fallback failed: req=%q resp=%q", b.requestPath(), b.responsePath())
 	}
+
+	// An optional+computed attribute may pair RequestPath with ResponsePaths:
+	// the write goes to the single request path, while the read walks the
+	// ordered fallback list. cluster_baseline's version relies on this — EKS
+	// reports result.version, AKS reports none, so it falls back to spec.version.
+	c := AttributeSpec{
+		Name: "version", Type: "string", Optional: true, Computed: true,
+		RequestPath:   "spec.version",
+		ResponsePaths: []string{"result.version", "spec.version"},
+	}
+	if c.requestPath() != "spec.version" {
+		t.Errorf("requestPath with ResponsePaths set = %q, want spec.version", c.requestPath())
+	}
+	if got := c.responsePathList(); len(got) != 2 || got[0] != "result.version" || got[1] != "spec.version" {
+		t.Errorf("responsePathList = %#v, want [result.version spec.version]", got)
+	}
 }
 
 func TestRequiredIf_CompoundAndHelpers(t *testing.T) {
