@@ -65,6 +65,8 @@ Saving this file, running `go generate ./...` (to regenerate docs), and running
 | `resendCreatePathsOnUpdate` | bool | no | Also write each attribute's **create** path in the PUT body, with the same value. For a backend whose update body is a delta envelope over a record it rebuilds from that body. See [Delta envelopes over a rebuilt record](#delta-envelopes-over-a-rebuilt-record). |
 | `dataSource` | bool | no | When `true`, also registers a read-only `data.duploai_<name>` data source derived automatically from this spec. See [Auto-generated data source](#auto-generated-data-source). |
 | `dataSourceOnly` | bool | no | When `true`, registers **only** a read-only `data.duploai_<name>` data source — no managed resource is registered. Use this for purely read-only APIs (e.g. look-up endpoints with no create/update/delete). Implies data source semantics; `dataSource` need not also be set. |
+| `lookupAttribute` | string | no | Renames the data source's engine-injected lookup key from the default `id`. Use when the value the API looks the object up by is not the object's own id, so that `id` would mislead. Requires `dataSource`/`dataSourceOnly`, and must not collide with a declared attribute. See [Renaming the lookup key](#renaming-the-lookup-key). |
+| `lookupDescription` | string | no | Overrides the lookup attribute's description (default: *"ID of the object to look up."*). Requires `lookupAttribute`. |
 | `waiter` | object | no | Async polling config. Required for resources that provision asynchronously. See [Waiter](#waiter). |
 | `association` | object | no | Makes this a link between two existing objects rather than an object of its own. See [Association resources](#association-resources). |
 
@@ -333,6 +335,7 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `noSend` | bool | Read from the response but never sent in requests. Use for computed-only output fields. |
 | `sendFromState` | bool | The inverse of `noSend`: send a **computed-only** attribute in request bodies, carrying the value Terraform already holds in state. See [Server-assigned fields the API wants back](#server-assigned-fields-the-api-wants-back). |
 | `normalizeCsvOrder` | bool | For a `string` field, sort its comma-separated tokens into a canonical (lexical) order before storing in state. Use for order-insensitive values the backend returns non-deterministically (e.g. AWS MSK bootstrap broker strings) to prevent perpetual refresh drift. |
+| `filterResponseKeys` | array | For a `map(string)` field, drop matching keys from the response before it reaches state, so keys the backend injects into a map the user only partially manages do not show perpetual drift. See [Server-managed map keys](#server-managed-map-keys). |
 | `normalizeTimestamp` | bool | For a **computed-only** `string` field, rewrite an RFC 3339 response value to one canonical spelling — UTC, a `Z` offset, whole seconds — before storing it in state. Use for every server-assigned timestamp: the write response renders one from memory at .NET tick precision (`…53.1452297Z`) while the read response renders what storage kept (`…53.145Z`), so refresh reports "Objects have changed outside of Terraform" after every apply even though nothing moved. The fraction is dropped rather than kept at a fixed width because any digit that survives is a digit the two responses could still disagree about; these fields are only read at second resolution. Normalizing both sides also absorbs the two offset spellings the platform emits (a `DateTimeOffset` with a zero offset serializes as `+00:00`, a UTC `DateTime` as `Z`). Idempotent; unparseable values and the empty string pass through untouched. One consequence to be aware of: two updates inside the same second leave the value unchanged, so `updated_at` cannot be used to distinguish them. Rejected at spec load on a non-`string` type, or on a `required`/`optional` attribute — rewriting a value the user set makes state disagree with the plan, which Terraform fails as an inconsistent result after apply. |
 | `stringBool` | bool | For a **`bool`** attribute, carry the value over the wire as the string `"true"`/`"false"` instead of a JSON boolean, and parse it back on read. Use when the field lives in a string-valued container the API cannot hold a real boolean in — chiefly a `Dictionary<string,string>` metadata map, where a JSON bool fails to deserialize (e.g. `delete_protection` at `metaData.delete_protection` on `resource_group`/`k8s_namespace`). Keeps HCL idiomatic (`delete_protection = false`) rather than forcing a quoted boolean. On read only an explicit `"true"` (case-insensitive) is true; any other non-null value is false, and an absent key stays null so a value the server dropped still surfaces as drift. Rejected at spec load on a non-`bool` type, or combined with `updateBoolTrueValue` (both rewrite the same value's wire form). |
 | `preserveOnEmptyResponse` | bool | Keep the value already held for this attribute — the configured plan value on create/update, the prior state value on refresh — whenever the API returns null or empty for it. See [Write-only fields](#write-only-fields). |
@@ -470,6 +473,52 @@ Scope and limits:
   Say so in the attribute's `description`.
 - On **import** there is no prior value, so the field lands empty — expected,
   since the secret is unrecoverable from the API.
+
+### Server-managed map keys
+
+Some backends inject their own entries into a map the user only partially
+manages — the AI Helpdesk stamps `nodeSelector.resourcegroup` on every job pod,
+the ALB controller adds `alb.ingress.kubernetes.io/*` annotations, the platform
+stamps `duplocloud-ai-*` tags. Terraform then plans to remove every key it does
+not see in config, which on a `forceNew` attribute means a **replacement on
+every apply**.
+
+List the backend's keys in `filterResponseKeys` and they are dropped from the
+response before it reaches state:
+
+```json
+{
+  "name": "node_selector",
+  "type": "map(string)",
+  "optional": true,
+  "computed": true,
+  "requestPath": "spec.k8sResource.spec.template.spec.nodeSelector",
+  "responsePath": "result.k8sResource.spec.template.spec.nodeSelector",
+  "filterResponseKeys": ["resourcegroup", "allocationtags"]
+}
+```
+
+A pattern is an exact key, or a prefix when it ends in `*` (`duplocloud-ai-*`).
+
+Semantics:
+
+- **A key the user declares is never dropped.** The keep set is the plan value on
+  create/update and the prior state value on refresh, so declaring a stamped key
+  makes it user-managed: it round-trips into state, and real drift on it is still
+  reported. Without this, a config that named a filtered key could never converge
+  — state would permanently lack a key config permanently had.
+- A lone `"*"` therefore means "state holds only the keys I declare".
+- Only the keys the user does **not** declare stay hidden, so partial management
+  works from both directions.
+- **Not applied on the data source path** — a data source has no config to drift
+  against, so it reports the response verbatim, stamped keys included.
+- **Not a substitute for aligning with the backend.** Match the list to what the
+  API actually stamps: filtering a key the backend never sets blocks an imported
+  resource from converging (the read strips a key the config declares), and
+  omitting one it does set leaves the drift in place.
+
+Rejected at spec load on anything but a `map(string)`, on an attribute that
+carries nested `attributes`, and on an empty pattern.
 
 ### InvalidWhen rules
 
@@ -1008,6 +1057,43 @@ The data source example file must be placed at
 `examples/data-sources/duploai_<name>/data-source.tf`.
 
 ---
+
+### Renaming the lookup key
+
+A data source's lookup key is injected by the engine as a Required `id`, described
+generically as *"ID of the object to look up."* That is fine when the value really
+is the object's own id — but some endpoints look an object up by something else,
+and then `id` actively misleads.
+
+`duploai_k8s_credentials` is the case this exists for: credentials are minted per
+**Kubernetes scope**, so the value is `duploai_cluster_baseline.<name>.scope_id`.
+A user reading "id" reaches for the cluster id and gets a 400, and the neighbouring
+`scope_ids` (the *cloud* scopes) fails the same way.
+
+```json
+{
+  "name": "k8s_credentials",
+  "dataSourceOnly": true,
+  "lookupAttribute": "scope_id",
+  "lookupDescription": "ID of the cluster's Kubernetes scope — ..."
+}
+```
+
+The renamed attribute **replaces** `id` rather than joining it: the schema carries
+`scope_id` and no `id`, so there is one obvious way to address the object. State is
+built without an `id` key too — `buildStateRaw` only writes one when the schema
+declares it.
+
+Scope and limits:
+
+- Data sources only. A managed resource's composite `id` (`workspace_id/id`) is
+  untouched, and `lookupAttribute` on a spec with neither data source flag is a
+  startup error rather than a silent no-op.
+- The name must not collide with a declared attribute — the engine injects the
+  lookup key, so a same-named spec attribute would be overwritten unnoticed.
+- `lookupDescription` without `lookupAttribute` is an error: the default text is
+  only wrong when the key is not really an id.
+
 
 ## Waiter
 

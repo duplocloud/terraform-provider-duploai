@@ -144,7 +144,7 @@ resource "duploai_app_service" "nginx" {
 - `init_containers` (Attributes List) Init containers that run to completion, in order, before the main containers start. (see [below for nested schema](#nestedatt--init_containers))
 - `labels` (Map of String) Kubernetes labels applied to the Deployment object.
 - `match_labels` (Map of String) Deployment selector matchLabels. Must match pod_labels.
-- `node_selector` (Map of String) Node labels a node must have for the pod to be scheduled onto it.
+- `node_selector` (Map of String) Node labels a node must have for the pod to be scheduled onto it. The platform stamps `resourcegroup` and `environment` so the pods land on nodes belonging to this resource group (skipped on a Kubernetes-only cluster, whose nodes carry no such labels); both are hidden from state unless you list them here, so you can add your own selectors without fighting a perpetual diff.
 - `pod_labels` (Map of String) Labels applied to the pod template (must satisfy match_labels).
 - `pod_security_context` (Attributes) Pod-level security settings applied to all containers. (see [below for nested schema](#nestedatt--pod_security_context))
 - `priority_class_name` (String) PriorityClass name used to set the pod's scheduling priority.
