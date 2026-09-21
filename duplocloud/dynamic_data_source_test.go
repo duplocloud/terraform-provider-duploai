@@ -335,8 +335,16 @@ func TestEmbeddedDataSourceSpecsRegister(t *testing.T) {
 			if resp.Diagnostics.HasError() {
 				t.Fatalf("schema diags: %v", resp.Diagnostics)
 			}
-			if _, ok := resp.Schema.Attributes["id"]; !ok {
-				t.Error("derived schema is missing the engine id attribute")
+			// Every data source exposes exactly one Required lookup key: "id" by
+			// default, or spec.lookupAttribute when the spec renames it.
+			lookup := spec.lookupName()
+			if _, ok := resp.Schema.Attributes[lookup]; !ok {
+				t.Errorf("derived schema is missing the engine lookup attribute %q", lookup)
+			}
+			if lookup != "id" {
+				if _, ok := resp.Schema.Attributes["id"]; ok {
+					t.Error("a renamed lookup attribute must replace \"id\", not coexist with it")
+				}
 			}
 		})
 	}
@@ -441,10 +449,102 @@ func TestK8sCredentialsReadsJitAccessPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("BuildEndpoint: %v", err)
 		}
-		if got := endpoint.Read.Path; got != "/{id}/jitAccess" {
-			t.Errorf("read path = %q, want %q", got, "/{id}/jitAccess")
+		// Credentials are minted per scope, not per cluster: the scope decides
+		// which API server is reachable, which token is issued, and which
+		// namespaces it may touch. The cluster route hardcodes the namespace to
+		// "default", so it cannot express that.
+		if got := endpoint.Read.Path; got != "/{id}/k8s/jitAccess" {
+			t.Errorf("read path = %q, want %q", got, "/{id}/k8s/jitAccess")
+		}
+		if got := endpoint.UriBase; got != "/v1/aiservicedesk/admin/data/Scopes" {
+			t.Errorf("uriBase = %q, want the Scopes collection", got)
+		}
+		// The scope id is the only lookup key — no workspace path parameter.
+		for _, a := range spec.Attributes {
+			if a.Name == "workspace_id" {
+				t.Error("k8s_credentials is looked up by scope id alone; workspace_id must not be an input")
+			}
+		}
+		// The lookup key is surfaced as "scope_id", not the generic "id": the value
+		// is the cluster's Kubernetes scope, and passing the cluster id (the obvious
+		// reading of "id") is a 400.
+		if got := spec.lookupName(); got != "scope_id" {
+			t.Errorf("lookup attribute = %q, want scope_id", got)
+		}
+		d := &dynamicDataSource{spec: spec, endpoint: endpoint}
+		var schemaResp datasource.SchemaResponse
+		d.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+		if schemaResp.Diagnostics.HasError() {
+			t.Fatalf("schema diags: %v", schemaResp.Diagnostics)
+		}
+		sc, ok := schemaResp.Schema.Attributes["scope_id"].(dsschema.StringAttribute)
+		if !ok || !sc.Required {
+			t.Error("scope_id must be a Required string attribute")
+		}
+		if _, present := schemaResp.Schema.Attributes["id"]; present {
+			t.Error("id must not remain once the lookup key is renamed to scope_id")
 		}
 		return
 	}
 	t.Fatal("k8s_credentials spec not found")
+}
+
+// lookupAttribute only affects the generated data source, and the engine injects
+// it — so a spec that declares neither data source flag, or that also declares an
+// attribute of the same name, is a spec bug rather than a silent no-op.
+func TestLookupAttribute_Validation(t *testing.T) {
+	base := func() ResourceSpec {
+		return ResourceSpec{
+			Name: "x", IDPath: "id",
+			Endpoint:   EndpointSpec{UriBase: "/v1/test"},
+			Attributes: []AttributeSpec{{Name: "name", Type: "string", Computed: true, APIPath: "name"}},
+		}
+	}
+	t.Run("requires a data source flag", func(t *testing.T) {
+		s := base()
+		s.LookupAttribute = "scope_id"
+		if err := s.validate(); err == nil {
+			t.Error("want error when lookupAttribute is set without dataSource/dataSourceOnly")
+		}
+	})
+	t.Run("rejects collision with a declared attribute", func(t *testing.T) {
+		s := base()
+		s.DataSourceOnly = true
+		s.LookupAttribute = "name"
+		if err := s.validate(); err == nil {
+			t.Error("want error when lookupAttribute collides with a declared attribute")
+		}
+	})
+	t.Run("description requires the rename", func(t *testing.T) {
+		s := base()
+		s.DataSourceOnly = true
+		s.LookupDescription = "orphaned"
+		if err := s.validate(); err == nil {
+			t.Error("want error when lookupDescription is set without lookupAttribute")
+		}
+	})
+	t.Run("accepts a valid rename", func(t *testing.T) {
+		s := base()
+		s.DataSourceOnly = true
+		s.LookupAttribute = "scope_id"
+		s.LookupDescription = "The scope id."
+		if err := s.validate(); err != nil {
+			t.Errorf("valid rename rejected: %v", err)
+		}
+		if got := s.lookupName(); got != "scope_id" {
+			t.Errorf("lookupName = %q", got)
+		}
+		if got := s.lookupDescription(); got != "The scope id." {
+			t.Errorf("lookupDescription = %q", got)
+		}
+	})
+	t.Run("defaults when unset", func(t *testing.T) {
+		s := base()
+		if got := s.lookupName(); got != "id" {
+			t.Errorf("lookupName default = %q, want id", got)
+		}
+		if got := s.lookupDescription(); got != "ID of the object to look up." {
+			t.Errorf("lookupDescription default = %q", got)
+		}
+	})
 }
