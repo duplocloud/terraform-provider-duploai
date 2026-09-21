@@ -96,7 +96,7 @@ resource "duploai_azure_key_vault" "private" {
 ### Read-Only
 
 - `azure_resource_group_name` (String) Name of the Azure resource group the vault lives in.
-- `created_at` (String) Timestamp when the vault record was created (RFC 3339).
+- `created_at` (String) Timestamp when the vault record was created (RFC 3339, normalized to UTC at second precision).
 - `enable_rbac_authorization` (Boolean) Whether the vault's data plane uses Azure RBAC. Always true for platform-provisioned vaults, and immutable — flipping it would silently change who can read every secret, so the platform requires a recreate instead.
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `key_vault_id` (String) ARM resource id of the Key Vault in Azure.
@@ -104,7 +104,7 @@ resource "duploai_azure_key_vault" "private" {
 - `scope_ids` (List of String) Scopes the vault is visible to. Inherited from the resource group.
 - `status` (String) Provisioning status reported by the platform.
 - `tenant_id` (String) Microsoft Entra tenant that backs the vault's authentication.
-- `updated_at` (String) Timestamp when the vault record was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the vault record was last updated (RFC 3339, normalized to UTC at second precision).
 - `vault_record_id` (String) Backend identifier of the vault record.
 - `vault_uri` (String) Data-plane URI clients use to read secrets, e.g. https://my-app-vault.vault.azure.net/.
 - `version` (Number) Version counter, incremented on each update.

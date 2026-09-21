@@ -66,8 +66,8 @@ output "last_successful_time" {
 - `is_any_host_allowed` (Boolean) When true, the cron job pods may be scheduled on any available host.
 - `k8s_cron_job_id` (String) ID of this cron job, for reference by dependent resources.
 - `labels` (Map of String) Labels to apply to the Kubernetes CronJob object.
-- `last_schedule_time` (String) Time the cron job last scheduled a run.
-- `last_successful_time` (String) Time a run of the cron job last completed successfully.
+- `last_schedule_time` (String) Time the cron job last scheduled a run (RFC 3339, normalized to UTC at second precision).
+- `last_successful_time` (String) Time a run of the cron job last completed successfully (RFC 3339, normalized to UTC at second precision).
 - `manual_selector` (Boolean) Allow a manually-specified pod selector (advanced).
 - `max_failed_indexes` (Number) Max number of failed indexes before the job is failed (Indexed jobs only).
 - `name` (String) Name of the Kubernetes cron job resource.

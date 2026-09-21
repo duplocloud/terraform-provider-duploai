@@ -63,12 +63,14 @@ output "port" {
 - `engine_mode` (String) Cluster engine mode. Accepted values are defined by the backend RdsClusterEngineMode enum (e.g. the provisioned vs. serverless mode); confirm the exact value against your tenant.
 - `engine_version` (String) Engine version. Changing this in place triggers an engine upgrade.
 - `environment_id` (String) ID of the environment that owns the resource group.
-- `kms_key_id` (String) KMS key ID used for storage encryption.
+- `kms_key_id` (String) KMS key that encrypts storage, as a key id or ARN, honoured only when storage_encrypted is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key); an unregistered key is rejected. Leave it unset to use the resource group's own default key. Independent of performance_insights_kms_key_id: storage and Performance Insights are keyed separately. Immutable after creation.
 - `manage_master_user_password` (Boolean) Let AWS manage the master user password in Secrets Manager instead of supplying master_user_password.
 - `master_user_password` (String, Sensitive) Master user password. Omit when manage_master_user_password is true.
 - `master_user_secret_arn` (String) Secrets Manager ARN holding the master credentials (when manage_master_user_password is enabled).
 - `master_username` (String) Master (admin) username. Required when creating a new cluster (not restoring from a snapshot).
 - `name` (String) Name of the RDS cluster.
+- `performance_insights_encryption_mode` (String) How Performance Insights data is encrypted: AwsDefaultRdsKey (the default) uses the AWS-managed RDS key, ResourceGroupKmsKey uses a customer-managed key — either the resource group's default key or the one named by performance_insights_kms_key_id. Only meaningful when enable_performance_insights is true. Immutable after creation.
+- `performance_insights_kms_key_id` (String) KMS key that encrypts Performance Insights data, honoured only when performance_insights_encryption_mode is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key); an unregistered key is rejected. Leave it unset to use the resource group's own default key. Independent of kms_key_id. Supply the key ARN rather than the bare key id: the platform resolves this field in place and stores the ARN, so a bare id would read back as the ARN and show as a change on the next plan. Immutable after creation.
 - `port` (Number) Port the cluster listens on.
 - `preferred_backup_window` (String) Daily time range (UTC) for automated backups, e.g. 07:00-09:00.
 - `preferred_maintenance_window` (String) Weekly time range (UTC) for maintenance, e.g. sun:05:00-sun:06:00.

@@ -44,12 +44,13 @@ output "version" {
 
 - `allowed_workspace_ids` (List of String) Workspace IDs allowed to access this environment in addition to the owner.
 - `blocked_reason` (String) Reason the environment is blocked, when applicable.
-- `created_at` (String) Creation timestamp.
+- `created_at` (String) Creation timestamp (RFC 3339, normalized to UTC at second precision).
 - `description` (String) Optional description of the environment.
 - `environment_id` (String) ID of this environment, for reference by dependent resources.
 - `ever_completed` (Boolean) Whether the environment has ever reached the Complete state.
 - `faults` (List of String) Provisioning faults.
 - `is_active` (Boolean) Whether the environment is active.
+- `metadata` (Map of String) Free-form key/value metadata associated with the environment. Provide the complete map; on update the full map replaces the previous one.
 - `mode` (String) Resource mode: Create provisions new infrastructure, Import adopts existing infrastructure.
 - `name` (String) Name of the environment.
 - `owner_workspace_id` (String) Workspace that owns the environment.
@@ -62,6 +63,6 @@ output "version" {
 - `spec_version` (String) Spec version identifier (UUID).
 - `status` (String) Current provisioning status.
 - `sub_status` (String) Additional status detail.
-- `updated_at` (String) Last update timestamp.
+- `updated_at` (String) Last update timestamp (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Server-assigned version of the environment record.
 - `warnings` (List of String) Provisioning warnings.

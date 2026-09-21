@@ -95,7 +95,10 @@ resource "duploai_elasticache" "redis_secure" {
   cluster_mode       = "Disabled"
   num_cache_clusters = 2
 
-  encryption_mode            = "ResourceGroupKmsKey" # at-rest via the RG's KMS key
+  encryption_mode = "ResourceGroupKmsKey" # at-rest via a customer-managed key
+  # kms_key_id names which registered key to use; unset means the resource
+  # group's own default key.
+  # kms_key_id               = duploai_resource_group_kms_key.cmek.key_arn
   transit_encryption_enabled = true
   auth_token                 = "<redis-auth-token>" # sensitive
 

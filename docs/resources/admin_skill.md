@@ -68,10 +68,10 @@ resource "duploai_admin_skill" "external" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the skill was created (RFC 3339).
+- `created_at` (String) Timestamp when the skill was created (RFC 3339, normalized to UTC at second precision).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `is_built_in` (Boolean) Whether this is a built-in skill. Built-in skills are system-provided and cannot be edited or deleted.
-- `updated_at` (String) Timestamp when the skill was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the skill was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 <a id="nestedatt--git_repo"></a>

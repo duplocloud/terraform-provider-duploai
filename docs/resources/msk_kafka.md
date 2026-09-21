@@ -28,6 +28,8 @@ resource "duploai_msk_kafka" "example" {
   # Optional: pin specific private subnets (one broker per AZ). Omit for all RG private subnets.
   subnet_ids = ["subnet-0a727a1199534ecf3", "subnet-0fc56ead225db9bcc"]
 
+  # ResourceGroupKmsKey + kms_key_id encrypts data at rest with a registered
+  # customer-managed key.
   encryption            = "AwsManagedKey"
   encryption_in_transit = "TLS"
 }
@@ -61,6 +63,7 @@ output "kafka_cluster_arn" {
 - `encryption` (String) Encryption at rest. AwsManagedKey uses the AWS-managed MSK key; ResourceGroupKmsKey uses the resource group's KMS key; NoEncryption disables it. Immutable after creation.
 - `encryption_in_transit` (String) How clients connect: TLS (encrypted), TLS_PLAINTEXT (both), or PLAINTEXT (unencrypted).
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `kms_key_id` (String) KMS key to encrypt with, as a key id or ARN, honoured only when encryption is set to ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) — the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Immutable after creation.
 - `number_of_broker_nodes` (Number) Number of broker nodes. Must be a multiple of the number of broker subnets (Availability Zones); rounded up server-side. Can be increased in place.
 - `provisioner_type` (String) Provisioner type. Defaults to DirectApiCall for MSK.
 - `provisioner_version` (String) Optional provisioner version.
@@ -76,12 +79,12 @@ output "kafka_cluster_arn" {
 - `bootstrap_brokers_sasl_scram` (String) SASL/SCRAM bootstrap broker connection string.
 - `bootstrap_brokers_tls` (String) TLS bootstrap broker connection string.
 - `cluster_arn` (String) ARN of the provisioned MSK cluster.
-- `created_at` (String) Timestamp when the cluster was created (RFC 3339).
+- `created_at` (String) Timestamp when the cluster was created (RFC 3339, normalized to UTC at second precision).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `msk_kafka_id` (String) ID of this MSK Kafka cluster, for reference by dependent resources.
 - `security_group_ids` (List of String) Security groups attached to the cluster (assigned by the platform).
 - `status` (String) Current provisioning status of the cluster.
-- `updated_at` (String) Timestamp when the cluster was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the cluster was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 <a id="nestedblock--timeouts"></a>

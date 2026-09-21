@@ -39,7 +39,7 @@ output "status" {
 ### Read-Only
 
 - `content_based_deduplication` (Boolean) Enable content-based deduplication (FIFO topics only; ignored for Standard). Can be changed in place.
-- `created_at` (String) Timestamp when the topic was created (RFC 3339).
+- `created_at` (String) Timestamp when the topic was created (RFC 3339, normalized to UTC at second precision).
 - `delivery_policy` (String) SNS delivery policy document (JSON) controlling retry behavior for HTTP/S subscriptions. Can be changed in place.
 - `display_name` (String) Human-readable name shown as the sender for SMS/email subscriptions. Can be changed in place.
 - `encryption_mode` (String) Server-side encryption mode: None (unencrypted) or SseKms (AWS KMS). Can be changed in place.
@@ -52,5 +52,5 @@ output "status" {
 - `status` (String) Current provisioning status of the topic.
 - `topic_arn` (String) ARN of the provisioned SNS topic.
 - `topic_type` (String) Topic type: Standard (best-effort ordering, at-least-once delivery) or Fifo (strict ordering, exactly-once). Immutable after creation.
-- `updated_at` (String) Timestamp when the topic was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the topic was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.

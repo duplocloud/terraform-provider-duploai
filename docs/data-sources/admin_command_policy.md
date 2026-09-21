@@ -42,12 +42,12 @@ output "block_list" {
 
 - `allow_list` (List of String) Regular-expression patterns for commands that are auto-approved. A command matching any pattern here (and not matching the block list) is approved without human intervention. Each entry must be a valid regular expression; invalid patterns are rejected by the server.
 - `block_list` (List of String) Regular-expression patterns for commands that are always denied. Block takes precedence over allow (deny-wins). Each entry must be a valid regular expression; invalid patterns are rejected by the server.
-- `created_at` (String) Timestamp when the policy was created (RFC 3339).
+- `created_at` (String) Timestamp when the policy was created (RFC 3339, normalized to UTC at second precision).
 - `created_by` (String) Identifier of the user who created the policy.
 - `description` (String) Human-readable description of the policy.
 - `is_active` (Boolean) Whether the policy is active. Defaults to true.
 - `metadata` (Map of String) Arbitrary key/value metadata attached to the policy.
 - `name` (String) Name of the command policy.
-- `updated_at` (String) Timestamp when the policy was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the policy was last updated (RFC 3339, normalized to UTC at second precision).
 - `updated_by` (String) Identifier of the user who last updated the policy.
 - `version` (Number) Server-incremented version of the policy.

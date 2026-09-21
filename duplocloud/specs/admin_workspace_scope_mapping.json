@@ -22,6 +22,7 @@
       "type": "string",
       "required": true,
       "forceNew": true,
+      "minItems": 1,
       "description": "Scope to attach."
     }
   ]

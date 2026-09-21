@@ -36,16 +36,20 @@ output "status" {
 
 - `additional_labels` (Map of String) Kubernetes labels applied to the nodes.
 - `allocation_tag` (String) Allocation tag used to target workloads to this node group.
-- `ami_type` (String) AMI type for the nodes. Accepted values are defined by the backend EksNodeGroupAmiType enum; confirm the exact value against your tenant.
+- `ami_type` (String) EKS-optimised AMI the nodes boot from. Leave it unset in most cases: the platform then resolves a type that suits both the cluster's Kubernetes version and the instance types' architecture, and records the value it chose. Setting it explicitly overrides that resolution, and the API validates the value against the types it currently supports — so a value this description does not list may still be accepted, and an unsupported one is rejected by the API rather than by AWS minutes into the CloudFormation stack. At the time of writing: the AL2_* types (AL2_x86_64, AL2_x86_64_GPU, AL2_ARM_64) are Amazon Linux 2 and are accepted only through Kubernetes 1.32, while the AL2023_* types (AL2023_x86_64_STANDARD, AL2023_x86_64_NVIDIA, AL2023_ARM_64_STANDARD) are Amazon Linux 2023 and are required from 1.33 onward. Match the variant to the instance types — ARM_64 for Graviton families (those ending in g, such as m7g), the GPU/NVIDIA variants for GPU workloads — since no single AMI boots both architectures. To boot your own image instead, set ami_type = "CUSTOM" and image_id to the AMI's id: CUSTOM is the only value that accepts image_id, and it requires it, while every other value rejects it. A custom AMI must derive from an EKS-optimised AL2023 image so that nodeadm is present, because the launch template pins your image and injects nodeadm bootstrap user data — EKS does not supply bootstrap config for custom AMIs, and an image without nodeadm provisions successfully and then never joins the cluster. The platform preflights the id's existence and architecture in the cluster's region, so a wrong-architecture or cross-region id fails early rather than as a late stack rollback. Immutable after creation.
 - `asg_name` (String) Name of the backing Auto Scaling group.
-- `capacity_type` (String) Capacity type (e.g. on-demand vs. spot). Accepted values are defined by the backend EksNodeGroupCapacityType enum; confirm the exact value against your tenant.
+- `capacity_type` (String) EC2 purchasing model for the nodes: ON_DEMAND (the server default) for standard pricing, or SPOT for cheaper capacity that AWS can reclaim at any time. Immutable after creation.
 - `description` (String) Optional description.
 - `desired_size` (Number) Desired number of nodes (between min_size and max_size).
 - `disk_size_gb` (Number) Root EBS volume size in GiB for each node.
+- `enable_cluster_autoscaler` (Boolean) Tag this node group's Auto Scaling group for discovery by the Kubernetes Cluster Autoscaler. The cluster_autoscaler component must also be enabled on the cluster via duploai_cluster_attributes for autoscaling to take effect.
 - `environment_id` (String) ID of the environment that owns the resource group.
+- `image_id` (String) AMI ID for the nodes, e.g. ami-0c02fb55956c7d316. Required when ami_type is CUSTOM and rejected for every other ami_type. EKS supplies no bootstrap configuration for a custom AMI, so the platform generates it: it detects whether the image expects nodeadm or the classic /etc/eks/bootstrap.sh from the AMI name and the cluster's Kubernetes version, and the launch template carries the result — so an AL2023 image is no longer required. Set user_data to replace or extend that generated payload. The platform preflights the id's existence and architecture in-region, so a wrong-architecture or cross-region id fails early. Immutable after creation.
 - `instance_types` (List of String) EC2 instance types for the node group (e.g. t3.medium).
-- `instance_visibility` (String) Node placement visibility (public vs. private subnets). Accepted values are defined by the backend InstanceVisibilityType enum; confirm the exact value against your tenant.
+- `instance_visibility` (String) Node placement visibility: Internal places nodes in private subnets only (the default, and the platform's own default), Public places them in public subnets only. Immutable after creation.
+- `kms_key_id` (String) KMS key ARN or ID used to encrypt the node group's EBS volumes. Leave unset to use the AWS-managed default key. Immutable after creation.
 - `kubernetes_version` (String) Kubernetes version of the node group.
+- `live_cluster_autoscaler_enabled` (Boolean) Whether the cluster autoscaler currently recognizes and manages this node group's Auto Scaling group, as observed live from AWS.
 - `max_size` (Number) Maximum number of nodes.
 - `min_size` (Number) Minimum number of nodes.
 - `name` (String) Name of the node group.
@@ -60,7 +64,11 @@ output "status" {
 - `stack_id` (String) ID of the underlying provisioning stack.
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) Subnets the node group is deployed into.
+- `tags` (Map of String) AWS tags applied to the node group, its Auto Scaling Group, and its EC2 instances/EBS volumes. Keys cannot use the reserved prefixes duplocloud.ai/ or k8s.io/cluster-autoscaler/, or the reserved names resourcegroup, environment, allocationtags, or duplo-resource-id (use enable_cluster_autoscaler instead of setting a cluster-autoscaler tag directly). Subject to AWS limits: max 50 tags, keys up to 128 characters, values up to 256 characters.
 - `taints` (Attributes List) Kubernetes taints applied to the nodes. (see [below for nested schema](#nestedatt--taints))
+- `user_data` (String, Sensitive) Raw EC2 user data for the launch template, as PLAIN TEXT — the platform base64-encodes it, so an already-encoded value is rejected (the opposite of duploai_native_host.base64_user_data). Capped at 1024 bytes. Valid for every ami_type, but used differently: with ami_type CUSTOM it combines with the bootstrap payload the platform generates, per user_data_mode — read that attribute before setting this one, because its default replaces the bootstrap rather than adding to it; with any managed ami_type EKS always merges it alongside its own bootstrap and user_data_mode is ignored, so per AWS guidance the script must not start or reconfigure kubelet. Marked sensitive because bootstrap scripts routinely carry registry credentials, join tokens or licence keys — note the API still returns the value verbatim to any caller allowed to read the node group, and Terraform stores it unencrypted in state.
+- `user_data_mode` (String) How user_data combines with the bootstrap payload the platform generates for a CUSTOM AMI. Choose Append to ADD setup steps while the platform still bootstraps the node — the generated payload runs and user_data is added to it (a second MIME part for nodeadm, trailing shell lines for bootstrap.sh). Choose Override to REPLACE the bootstrap: the platform then detects nothing and generates nothing, so user_data alone is responsible for joining the node to the cluster. Note the default is Override, so a script that only installs an agent and leaves this unset will leave the node provisioned but never joined — set Append for that case. Has no effect unless user_data is set, and none for any ami_type other than CUSTOM, where EKS merges user_data itself; the API ignores rather than rejects it there.
+- `volumes` (Attributes List) Additional EBS volumes attached to every node, beyond the root volume sized by disk_size_gb. Maximum 4 entries; device_name must be unique per entry and cannot be /dev/xvda (the root device). Per-volume KMS encryption is not supported here — disk encryption is controlled by the node group's own kms_key_id/encryption settings. (see [below for nested schema](#nestedatt--volumes))
 
 <a id="nestedatt--taints"></a>
 ### Nested Schema for `taints`
@@ -70,3 +78,18 @@ Read-Only:
 - `effect` (String) Taint effect. Accepted values are defined by the backend EksNodeGroupTaintEffect enum (e.g. NoSchedule/PreferNoSchedule/NoExecute); confirm the exact value against your tenant.
 - `key` (String) Taint key.
 - `value` (String) Taint value.
+
+
+<a id="nestedatt--volumes"></a>
+### Nested Schema for `volumes`
+
+Read-Only:
+
+- `delete_on_termination` (Boolean) Whether the volume is deleted when the node is terminated.
+- `device_name` (String) Device name for the additional volume, as it appears on the instance (e.g. /dev/xvdb). Must not be a root device name: the API rejects /dev/xvda and /dev/sda1, which the AMI already uses for the root volume — both are listed because Amazon Linux and Ubuntu name it differently.
+- `encrypted` (Boolean) Whether the volume is encrypted at rest.
+- `iops` (Number) Provisioned IOPS. Only valid for gp3, io1, and io2 volume types.
+- `snapshot_id` (String) Snapshot ID to restore the volume from.
+- `throughput` (Number) Provisioned throughput in MiB/s. Only valid for gp3 volumes.
+- `volume_size_gb` (Number) Volume size in GiB.
+- `volume_type` (String) EBS volume type: gp2, gp3, io1, io2, st1, or sc1. Defaults to gp3.

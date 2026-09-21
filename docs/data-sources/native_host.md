@@ -42,7 +42,7 @@ output "status" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the host was created (RFC 3339).
+- `created_at` (String) Timestamp when the host was created (RFC 3339, normalized to UTC at second precision).
 - `disk_size_gb` (Number) Root EBS volume size in GiB (20-16384, gp3).
 - `enable_os_disk_encryption` (Boolean) Whether the root EBS volume is encrypted at rest.
 - `environment_id` (String) ID of the environment this host is provisioned in.
@@ -63,5 +63,5 @@ output "status" {
 - `subnet_id` (String) ID of the subnet to launch the host in. Leave unset to auto-select the first subnet of the chosen subnet_type. Cannot be changed after creation.
 - `subnet_type` (String) Subnet tier used when subnet_id is auto-selected. Cannot be changed after creation.
 - `tags` (Map of String) Key/value tags applied to the host. Platform ownership tags are added automatically.
-- `updated_at` (String) Timestamp when the host was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the host was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.

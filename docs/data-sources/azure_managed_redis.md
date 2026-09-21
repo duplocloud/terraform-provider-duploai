@@ -55,7 +55,7 @@ output "database_id" {
 - `azure_resource_group_name` (String) Azure resource group the cluster is created in, derived from the linked resource group.
 - `cluster_id` (String) Full Azure resource ID (ARM ID) of the Redis Enterprise cluster.
 - `clustering_policy` (String) Redis clustering policy. Treated as immutable here: Azure only allows it to change while the current value is `NoCluster`, so a change forces replacement rather than risking an update the API rejects. `EnterpriseCluster` is required by the RediSearch module. `NoCluster` additionally only applies to SKUs of 25 GB or less and is not supported at all by the `FlashOptimized_*` family; the API rejects both cases.
-- `created_at` (String) Timestamp when the Redis instance was created (RFC 3339).
+- `created_at` (String) Timestamp when the Redis instance was created (RFC 3339, normalized to UTC at second precision).
 - `database_id` (String) Full Azure resource ID (ARM ID) of the `default` database. Empty until the database child finishes provisioning, which happens after the cluster — set `wait_for_database` to block until it is populated.
 - `environment_id` (String) ID of the environment in which the Redis instance is provisioned.
 - `eviction_policy` (String) Key eviction policy applied when the cache is full.
@@ -90,7 +90,7 @@ The legacy `Enterprise_*` and `EnterpriseFlash_*` families are deliberately not 
 - `status` (String) Current provisioning status of the Redis instance.
 - `tags` (Map of String) Tags applied to the Redis instance. The platform adds its own managed `duplocloud-ai-*` tags server-side; those are filtered out of state so only your tags are managed by Terraform.
 - `unique_cloud_resource_id` (String) Full Azure resource ID (ARM ID) of the cluster, as the platform records it on the resource itself. `cluster_id` exposes the same ARM ID read from the live Azure result.
-- `updated_at` (String) Timestamp when the Redis instance was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the Redis instance was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 <a id="nestedatt--geo_replication"></a>

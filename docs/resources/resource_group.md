@@ -44,11 +44,52 @@ resource "duploai_resource_group" "custom" {
   provisioner_type  = "IacNativeTf"
   aws_resource_name = "prod-rg"
 
+  # User-defined tags, inherited by every resource provisioned under this group:
+  # stamped on AWS resources as tags and on Kubernetes objects as labels. Each
+  # entry must be legal in both systems, so the Kubernetes label grammar governs
+  # the character set. The duplocloud.ai/ and aws: prefixes are reserved.
+  #
+  # Removing a key here removes the tag from every resource in the group, but
+  # propagation is asynchronous — a removed tag can linger briefly after apply.
+  # Omit the argument to leave stored tags untouched; set {} to remove them all.
+  tags = {
+    owner       = "platform-team"
+    cost-center = "fin-1024"
+  }
+
+  # Free-form key/value metadata stored on the resource group record. Provide the
+  # complete map — on update it replaces the previous one. Do not put
+  # delete_protection here; that key belongs to the delete_protection attribute
+  # and is filtered out of this map.
+  metadata = {
+    owner       = "platform-team"
+    cost-center = "cc-4417"
+  }
+
   timeouts {
     create = "45m"
     update = "30m"
     delete = "20m"
   }
+}
+
+# Disposable resource group — delete protection turned off up front so
+# `terraform destroy` works without a second apply.
+#
+# The platform enables delete protection on every new resource group unless the
+# create request says otherwise, and while it is on the API refuses both
+# deprovision and delete. Leaving delete_protection unset therefore inherits the
+# platform default (on), and tearing the group down then takes two steps: set it
+# to false, apply, and only then destroy. Setting it here at create time skips
+# that dance — appropriate for ephemeral/CI environments, not for production.
+resource "duploai_resource_group" "disposable" {
+  workspace_id   = "<workspace-id>"
+  name           = "ci-ephemeral-rg"
+  environment_id = "<environment-id>"
+  region         = ""
+  network_id     = "<network-id>"
+
+  delete_protection = false
 }
 ```
 
@@ -66,12 +107,15 @@ resource "duploai_resource_group" "custom" {
 - `aws_resource_name` (String) AWS resource name prefix for provisioned resources.
 - `cloud` (String) Cloud provider the resource group targets. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
 - `cluster_id` (String) Cluster ID to associate with this resource group.
+- `delete_protection` (Boolean) Guards the resource group against teardown. The platform enables this on every new resource group unless the request says otherwise, and while it is enabled the API refuses both deprovision and delete — so `terraform destroy` fails by design. To tear the group down, set this to false and `terraform apply` first, then destroy. Leave it unset to inherit the platform default (enabled). Stored as the `delete_protection` metadata key.
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `metadata` (Map of String) Free-form key/value metadata associated with the resource group. Provide the complete map; on update the full map replaces the previous one. The `delete_protection` key is excluded — it is managed by the delete_protection attribute, and setting it here has no effect.
 - `network_id` (String) ID of the network baseline this resource group is linked to. At least one of network_id or vpc_id is required.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `region` (String) Cloud region (e.g. us-east-1).
+- `tags` (Map of String) User-defined tags inherited by every resource provisioned under this resource group — applied to AWS resources as tags and to Kubernetes objects as labels. Because one map feeds both projections, each entry must be legal as an AWS tag and as a Kubernetes label: keys may carry an optional `prefix/` (a lowercase DNS-1123 subdomain up to 253 characters) followed by a name segment of up to 63 characters, values follow the Kubernetes label grammar, and AWS limits still apply (key up to 128 characters, value up to 256). The reserved `duplocloud.ai/` prefix and the `aws:` prefix are rejected. Removing a key from this map removes the tag from every resource in the group; propagation is asynchronous, so a removed tag can linger on cloud resources briefly after apply. Omit the argument entirely to leave the stored tags untouched; set it to an empty map to remove them all.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `vpc_id` (String) VPC ID to associate with this resource group. At least one of vpc_id or network_id is required. The API derives this automatically when network_id is set.
 

@@ -272,6 +272,48 @@ type EndpointSpec struct {
 	// Deprovision, when non-nil, adds a pre-delete teardown step.
 	// Defaults to POST /{id}/deprovision; set verb/path only to override.
 	Deprovision *OperationSpec `json:"deprovision,omitempty"`
+
+	// ReadFromList makes the read leg GET the COLLECTION at UriBase and select the
+	// element whose IDPath value equals the object id, instead of GETting
+	// UriBase/{id}. Use for a sub-collection the API only exposes as a whole:
+	// .../kms-keys serves GET (list) and POST, while .../kms-keys/{id} serves only
+	// DELETE, so the conventional read gets 405 Method Not Allowed and every plan
+	// after the first fails. The list already carries each element in full, so no
+	// extra call and no server-side filtering are needed.
+	//
+	// An element that is no longer in the list is treated as gone: the resource
+	// leaves state and the next plan recreates it, matching what a 404 on a
+	// conventional read would do.
+	ReadFromList bool `json:"readFromList,omitempty"`
+
+	// ReadListPath names the dot-path, inside the collection response, of the
+	// array ReadFromList selects from. Leave empty when the response body IS the
+	// array (the KMS registries). Set it for a wrapped collection —
+	// security-group ingress answers {"ownSecurityGroupId":…,"rules":[…]}, so the
+	// elements are at "rules". Requires ReadFromList.
+	ReadListPath string `json:"readListPath,omitempty"`
+
+	// CreateReturnsList marks an endpoint whose create response is a JSON array
+	// rather than the created object, so the engine takes the sole element as the
+	// created object. One security-group ingress request carrying several CIDRs
+	// becomes several AWS rules, each with its own id, so the API answers with a
+	// list even for a single source. A spec using this must constrain its request
+	// to produce exactly one element — one source per resource, enforced with
+	// conflictsWith — because state can track only one id. An empty response is
+	// an error; extra elements are ignored with a warning.
+	//
+	// Unlike the read side, this has no envelope counterpart: the create response
+	// must be a bare array, because there is no createListPath to unwrap one. The
+	// two halves of a route can therefore differ in what they tolerate, and today
+	// they do — the security-group ingress routes answer their POST with a bare
+	// array while their GET wraps the elements under "rules", which is why
+	// creating rules always worked while reading them failed until the read side
+	// learned ReadListPath. If a future route wraps its create response, expect
+	// the same "cannot unmarshal object into Go struct field
+	// apiResponse[[]map[string]interface {}].data" on create, and add the
+	// unwrapping to createFromList rather than re-diagnosing it: the knob is
+	// deliberately absent while nothing needs it.
+	CreateReturnsList bool `json:"createReturnsList,omitempty"`
 }
 
 // BuildEndpoint converts this spec's EndpointSpec into a duplosdk.Endpoint
@@ -389,9 +431,14 @@ type AttributeSpec struct {
 	// silently-ignored constraint reads as validation that is not happening.
 	// PatternDescription, when set, replaces the raw regex in the error message —
 	// prefer it, as a regex is rarely actionable to the reader.
+	// MinLength floors the length, for an API whose minimum a pattern cannot
+	// express: Go's RE2 has no lookahead, so "at least 2 characters overall"
+	// across optionally-repeating path segments — an AWS ECR repository name —
+	// cannot be written as one regex without duplicating every alternative.
 	Pattern            string `json:"pattern,omitempty"`
 	PatternDescription string `json:"patternDescription,omitempty"`
 	MaxLength          int    `json:"maxLength,omitempty"`
+	MinLength          int    `json:"minLength,omitempty"`
 
 	// MinItems, when > 0, requires a list/set attribute to have at least this
 	// many elements (validated at plan time). Use for collections the API
@@ -499,6 +546,25 @@ type AttributeSpec struct {
 	// applied on the data source path, which reports the API response verbatim.
 	FilterResponseKeys []string `json:"filterResponseKeys,omitempty"`
 
+	// MapValuePath, for a map(string) attribute, unwraps a response whose entries
+	// are objects rather than plain strings: each value is replaced by the named
+	// field. Use when the backend stores per-entry bookkeeping alongside the value
+	// but accepts the flat {"key":"value"} shape on write, so Terraform can expose
+	// an ordinary map(string) in both directions — resource_group.tags is the case
+	// this exists for, where the API returns {"cost-center":{"value":"fin-1024",
+	// "remove":false}}. Entries whose named field is missing or not a string are
+	// dropped. Read-side only: requests still send the flat map.
+	MapValuePath string `json:"mapValuePath,omitempty"`
+
+	// MapDropWhenTrue names a sibling boolean field, inside the same wrapped entry
+	// MapValuePath unwraps, that marks an entry as not-really-there. Entries whose
+	// flag is true are dropped from state entirely. Use for a backend that soft-
+	// deletes map entries — resource_group.tags keeps a removed tag in the map with
+	// "remove":true until a reconciler has taken it off every resource, and without
+	// this the key would reappear in state on the next read and diff forever
+	// against a config that no longer lists it. Requires MapValuePath.
+	MapDropWhenTrue string `json:"mapDropWhenTrue,omitempty"`
+
 	// NormalizeCsvOrder, for a string attribute, sorts the comma-separated tokens
 	// of the response value into a canonical (lexical) order before storing it in
 	// state. Use for backend fields whose elements are order-insensitive but
@@ -514,6 +580,46 @@ type AttributeSpec struct {
 	// and on a forceNew field, forced replacement. Values with two or fewer
 	// components (e.g. EKS "1.34") are returned unchanged.
 	NormalizeVersion bool `json:"normalizeVersion,omitempty"`
+
+	// NormalizeTimestamp, for a computed-only string attribute, rewrites an
+	// RFC 3339 response value to a single canonical spelling before storing it in
+	// state: UTC, a "Z" offset, whole seconds. Use for a server-assigned
+	// timestamp, because the write and read responses do not agree on how they
+	// render one and the difference reads as drift on every plan:
+	//
+	//   POST/PUT response  2026-06-30T04:37:53.1452297Z  (.NET ticks, from memory)
+	//   GET response       2026-06-30T04:37:53.145Z      (milliseconds, from storage)
+	//
+	// Same instant, different string, so refresh reports "Objects have changed
+	// outside of Terraform" after every apply. The fraction is dropped rather
+	// than kept at a fixed width because any digit that survives is a digit the
+	// two sides could still disagree about; these fields are only ever read at
+	// second resolution. Canonicalizing both sides also absorbs the platform's
+	// two offset spellings (a .NET DateTimeOffset with a zero offset serializes
+	// as "+00:00", a UTC DateTime as "Z"), which drifts the same way.
+	//
+	// Values that do not parse as RFC 3339, and the empty string, pass through
+	// untouched.
+	//
+	// Rejected at spec load on a non-string type, or on an attribute the user can
+	// set (required, or optional): rewriting a configured value makes the stored
+	// value disagree with the plan, which Terraform rejects as an inconsistent
+	// result after apply. A user-settable timestamp needs preserve-the-prior-value
+	// semantics instead, which this flag deliberately does not provide.
+	NormalizeTimestamp bool `json:"normalizeTimestamp,omitempty"`
+
+	// StringBool, for a bool attribute, carries the value over the wire as the
+	// STRING "true"/"false" instead of a JSON boolean, and parses the string back
+	// to a bool on read. Use when the field lives in a string-valued container the
+	// API cannot hold a real boolean in — chiefly a Dictionary<string,string>
+	// metadata map, where a JSON bool fails to deserialize.
+	//
+	// On read, "true" matches case-insensitively; every other non-null value is
+	// false. That mirrors the platform's own convention for these keys, where only
+	// an explicit "true" enables the behaviour (see delete_protection). A key that
+	// is absent from the response stays null rather than becoming false, so a value
+	// the user set but the server dropped still surfaces as drift.
+	StringBool bool `json:"stringBool,omitempty"`
 
 	// PreserveOnEmptyResponse keeps the value already held for this attribute —
 	// the configured plan value on create/update, the prior state value on
@@ -660,6 +766,16 @@ type RequiredIfCondition struct {
 	Equals    string `json:"equals,omitempty"`
 	NotEquals string `json:"notEquals,omitempty"`
 	IsEmpty   bool   `json:"isEmpty,omitempty"`
+
+	// IsNotEmpty is the inverse of IsEmpty: the condition holds when the attribute
+	// IS set. Note that isEmpty:false does NOT mean this — an unset bool reads as
+	// "no operator", so the presence test needs its own key. Use it to express
+	// all-or-nothing pairs, which are otherwise inexpressible: two requiredIf rules
+	// pointing at each other make either field mandatory once the other is set.
+	//
+	// For a collection the answer is by element count, so an explicit empty list
+	// counts as not set — matching an API that tests the list's length.
+	IsNotEmpty bool `json:"isNotEmpty,omitempty"`
 
 	// Numeric comparisons, for int and number attributes. A null config value
 	// falls back to the attribute's default, so a rule still catches a bad
@@ -931,8 +1047,11 @@ func (s *ResourceSpec) validate() error {
 			if c.IsEmpty {
 				ops++
 			}
+			if c.IsNotEmpty {
+				ops++
+			}
 			if ops != 1 {
-				return fmt.Errorf("requiredIf condition on %q must set exactly one of equals/notEquals/isEmpty", c.Attribute)
+				return fmt.Errorf("requiredIf condition on %q must set exactly one of equals/notEquals/isEmpty/isNotEmpty", c.Attribute)
 			}
 		}
 	}
@@ -1113,7 +1232,7 @@ func (s *ResourceSpec) validateInvalidWhen() error {
 			}
 			ops := 0
 			for _, set := range []bool{
-				c.Equals != "", c.NotEquals != "", c.IsEmpty,
+				c.Equals != "", c.NotEquals != "", c.IsEmpty, c.IsNotEmpty,
 				c.GreaterThan != nil, c.LessThan != nil, c.LessThanAttribute != "",
 			} {
 				if set {
@@ -1216,9 +1335,12 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 		// Pattern/maxLength are wired only for strings, so on any other type they
 		// would be accepted and silently ignored — validation the spec claims but
 		// does not perform. Reject at load instead.
-		if a.Pattern != "" || a.MaxLength > 0 || a.PatternDescription != "" {
+		// Note the != 0 rather than > 0: a NEGATIVE bound must reach the checks
+		// below, not skip them. Gating on > 0 made the "must be positive" error
+		// unreachable unless some other constraint happened to be set too.
+		if a.Pattern != "" || a.MaxLength != 0 || a.MinLength != 0 || a.PatternDescription != "" {
 			if a.Type != "string" {
-				return nil, fmt.Errorf("attribute %q: pattern/maxLength are only valid on a string, got %q", a.Name, a.Type)
+				return nil, fmt.Errorf("attribute %q: pattern/minLength/maxLength are only valid on a string, got %q", a.Name, a.Type)
 			}
 			if a.PatternDescription != "" && a.Pattern == "" {
 				return nil, fmt.Errorf("attribute %q: patternDescription without pattern has nothing to describe", a.Name)
@@ -1230,6 +1352,13 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			}
 			if a.MaxLength < 0 {
 				return nil, fmt.Errorf("attribute %q: maxLength must be positive, got %d", a.Name, a.MaxLength)
+			}
+			if a.MinLength < 0 {
+				return nil, fmt.Errorf("attribute %q: minLength must be positive, got %d", a.Name, a.MinLength)
+			}
+			if a.MaxLength > 0 && a.MinLength > a.MaxLength {
+				return nil, fmt.Errorf("attribute %q: minLength %d exceeds maxLength %d, so no value can satisfy both",
+					a.Name, a.MinLength, a.MaxLength)
 			}
 		}
 		if a.ImmutableOnceTrue {
@@ -1286,6 +1415,31 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			if a.UpdatePath == "" {
 				return nil, fmt.Errorf("attribute %q: updateBoolTrueValue requires updatePath", a.Name)
 			}
+		}
+		if a.StringBool {
+			if a.Type != "bool" {
+				return nil, fmt.Errorf("attribute %q: stringBool requires a bool type, got %q", a.Name, a.Type)
+			}
+			if a.UpdateBoolTrueValue != "" {
+				return nil, fmt.Errorf("attribute %q: stringBool and updateBoolTrueValue are mutually exclusive — "+
+					"both rewrite the wire representation of the same value", a.Name)
+			}
+		}
+		if a.NormalizeTimestamp {
+			if a.Type != "string" {
+				return nil, fmt.Errorf("attribute %q: normalizeTimestamp requires a string type, got %q", a.Name, a.Type)
+			}
+			if a.Required || a.Optional {
+				return nil, fmt.Errorf("attribute %q: normalizeTimestamp is only valid on a computed-only attribute — "+
+					"rewriting a user-set value would make state disagree with the plan", a.Name)
+			}
+		}
+		if a.MapValuePath != "" && a.Type != "map(string)" {
+			return nil, fmt.Errorf("attribute %q: mapValuePath is only valid on map(string), got %q", a.Name, a.Type)
+		}
+		if a.MapDropWhenTrue != "" && a.MapValuePath == "" {
+			return nil, fmt.Errorf("attribute %q: mapDropWhenTrue requires mapValuePath — "+
+				"the flag lives inside the wrapped entry that mapValuePath unwraps", a.Name)
 		}
 		if a.OrderByKey != "" {
 			if a.Type != "list(object)" {

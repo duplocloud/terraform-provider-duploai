@@ -171,7 +171,7 @@ Named `node_count` rather than `count` because `count` is a reserved Terraform m
 - `azure_cluster_name` (String) Name of the AKS managed cluster in Azure that hosts this pool.
 - `azure_cluster_resource_group_name` (String) Azure resource group that owns the AKS managed cluster. Note this is the cluster's resource group, which is not necessarily the one named by `resource_group_id`.
 - `cluster_id` (String) ID of the cluster this pool belongs to, taken from the resource group's linked cluster when the pool is created.
-- `created_at` (String) Timestamp when the node pool was created (RFC 3339).
+- `created_at` (String) Timestamp when the node pool was created (RFC 3339, normalized to UTC at second precision).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `node_pool_id` (String) ID of this node pool, for reference by dependent resources.
 - `scope_ids` (List of String) Scope IDs linking this node pool to a cloud provider account, inherited from the resource group.

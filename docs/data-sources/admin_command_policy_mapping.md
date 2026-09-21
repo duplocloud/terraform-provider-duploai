@@ -40,7 +40,7 @@ output "target_ids" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the mapping was created (RFC 3339).
+- `created_at` (String) Timestamp when the mapping was created (RFC 3339, normalized to UTC at second precision).
 - `created_by` (String) Identifier of the user who created the mapping.
 - `description` (String) Human-readable description of the mapping.
 - `is_active` (Boolean) Whether the mapping is active. Defaults to true. Only active mappings take effect and are checked for scope conflicts.
@@ -49,6 +49,6 @@ output "target_ids" {
 - `name` (String) Name of the command policy mapping.
 - `policy_id` (String) ID of the command policy this mapping applies. Must reference an existing, active command policy.
 - `target_ids` (Set of String) IDs of the targets this mapping applies to: workspace IDs when level is Workspace, project IDs when level is Project. Required for Workspace and Project levels; must be omitted for System level.
-- `updated_at` (String) Timestamp when the mapping was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the mapping was last updated (RFC 3339, normalized to UTC at second precision).
 - `updated_by` (String) Identifier of the user who last updated the mapping.
 - `version` (Number) Server-incremented version of the mapping.

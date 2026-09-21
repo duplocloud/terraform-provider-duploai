@@ -41,7 +41,7 @@ output "status" {
 - `bootstrap_brokers_sasl_iam` (String) SASL/IAM bootstrap broker connection string.
 - `bootstrap_brokers_tls` (String) TLS bootstrap broker connection string.
 - `cluster_arn` (String) ARN of the provisioned MSK cluster.
-- `created_at` (String) Timestamp when the cluster was created (RFC 3339).
+- `created_at` (String) Timestamp when the cluster was created (RFC 3339, normalized to UTC at second precision).
 - `environment_id` (String) ID of the environment in which the cluster is provisioned.
 - `msk_kafka_serverless_id` (String) ID of this MSK Kafka Serverless cluster, for reference by dependent resources.
 - `name` (String) Cluster name. Letters, numbers, and hyphens. Cannot be changed after creation.
@@ -51,5 +51,5 @@ output "status" {
 - `scope_ids` (Set of String) IDs of the scopes attached to this cluster.
 - `security_group_ids` (List of String) Security groups attached to the cluster (assigned by the platform).
 - `status` (String) Current provisioning status of the cluster.
-- `updated_at` (String) Timestamp when the cluster was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the cluster was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.

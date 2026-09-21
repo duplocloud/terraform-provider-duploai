@@ -82,6 +82,7 @@
       "name": "vpc_id",
       "type": "string",
       "computed": true,
+      "sendFromState": true,
       "forceNew": true,
       "apiPath": "spec.vpcId",
       "description": "VPC ID for the cluster (AWS only). Inherited from the linked network (network_id); computed, not user-settable. For Azure see azure.vnet_id."
@@ -90,6 +91,7 @@
       "name": "subnet_ids",
       "type": "list(string)",
       "computed": true,
+      "sendFromState": true,
       "forceNew": true,
       "apiPath": "spec.subnetIds",
       "description": "Subnet IDs for the cluster (AWS only). Inherited from the linked network (network_id); computed, not user-settable. For Azure see azure.node_subnet_id / azure.pod_subnet_id."
@@ -258,6 +260,7 @@
           "name": "node_subnet_ids",
           "type": "list(string)",
           "computed": true,
+          "stable": true,
           "noSend": true,
           "apiPath": "nodeSubnetIds",
           "description": "Private subnet IDs the system node group is placed in. Populated server-side from the linked network's private subnets."
@@ -404,6 +407,50 @@
       "computed": true,
       "apiPath": "result.clusterArn",
       "description": "ARN of the provisioned cluster (AWS only)."
+    },
+    {
+      "name": "helpdesk_vpc_peering",
+      "type": "object",
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig",
+      "description": "AWS only. Read-only copy of the linked network's helpdesk VPC peering settings. The platform copies this across from `network_id`'s network on every write \u2014 it is never accepted from the client \u2014 and uses it to open inbound 443 for the helpdesk CIDR on the EKS control-plane security group, which is created per-cluster and is separate from the network's own security group. Null when the linked network has no peering configured, or when the cluster was given a VPC directly instead of a network. Change the setting on the network baseline, not here.",
+      "attributes": [
+        {
+          "name": "enabled",
+          "type": "bool",
+          "computed": true,
+          "apiPath": "enabled",
+          "description": "Whether helpdesk VPC peering is active for the linked network."
+        },
+        {
+          "name": "helpdesk_vpc_id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "helpdeskVpcId",
+          "description": "ID of the helpdesk VPC the linked network peers with."
+        },
+        {
+          "name": "helpdesk_account_id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "helpdeskAccountId",
+          "description": "AWS account that owns the helpdesk VPC."
+        },
+        {
+          "name": "helpdesk_region",
+          "type": "string",
+          "computed": true,
+          "apiPath": "helpdeskRegion",
+          "description": "Region of the helpdesk VPC; only meaningful when the peering crosses regions."
+        },
+        {
+          "name": "helpdesk_vpc_cidr_blocks",
+          "type": "list(string)",
+          "computed": true,
+          "apiPath": "helpdeskVpcCidrBlocks",
+          "description": "Helpdesk VPC CIDR blocks allowed inbound on 443 on the EKS control-plane security group."
+        }
+      ]
     },
     {
       "name": "cluster_endpoint",

@@ -107,21 +107,21 @@ resource "duploai_admin_workspace" "with_prompts" {
 - `prompt_md` (String) Markdown system prompt applied to interactions within this workspace.
 - `quota_id` (String) ID of the quota definition that limits this workspace's usage.
 - `role` (String) Role label associated with the workspace.
-- `scope_ids` (Set of String) IDs of the scopes you manage on this workspace. Scopes the backend attaches automatically (for example a Kubernetes scope created with a cluster) are not included here — they appear in system_scope_ids and are preserved across updates.
+- `scope_ids` (Set of String) IDs of the scopes you manage on this workspace. Omit the argument to manage the links elsewhere (for example with duploai_admin_workspace_scope_mapping); an empty list is rejected, since a workspace with no scope has nothing to act on. Scopes the backend attaches automatically (for example a Kubernetes scope created with a cluster) are not included here — they appear in system_scope_ids and are preserved across updates.
 - `short_name` (String) Short identifier used as a prefix for tickets. Up to 10 characters, must start with a letter and contain only letters, digits, hyphens, or underscores. Must be unique across workspaces; when omitted, one is derived from the name.
 - `team` (String) Team label associated with the workspace.
 
 ### Read-Only
 
 - `agent_ids` (List of String) IDs of the agents assigned to this workspace.
-- `created_at` (String) Timestamp when the workspace was created (RFC 3339).
+- `created_at` (String) Timestamp when the workspace was created (RFC 3339, normalized to UTC at second precision).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `incident_ids` (List of String) IDs of the incidents assigned to this workspace.
 - `is_active` (Boolean) Whether the workspace is active.
 - `project_ids` (List of String) IDs of the projects assigned to this workspace.
 - `system_scope_ids` (Set of String) IDs of scopes attached to this workspace by the backend (not managed in Terraform configuration), e.g. a Kubernetes scope created when a cluster is provisioned.
 - `ticket_ids` (List of String) IDs of the tickets assigned to this workspace.
-- `updated_at` (String) Timestamp when the workspace was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the workspace was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 ## Import

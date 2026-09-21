@@ -50,13 +50,13 @@ output "secret_id" {
 ### Read-Only
 
 - `content_type` (String) Free-form hint describing what the value holds, e.g. "text/plain" or "application/json". Azure does not interpret it.
-- `created_on` (String) When this version was created (RFC 3339).
+- `created_on` (String) When this version was created (RFC 3339, normalized to UTC at second precision).
 - `enabled` (Boolean) Whether the secret can be read. Disabling keeps the secret and its versions but makes reads fail. Defaults to enabled.
 - `expires_on` (String) When the secret stops being valid, as an RFC 3339 timestamp. Azure does not delete an expired secret — reads simply fail. Leave unset for no expiry.
 - `name` (String) Secret name, unique within the vault. Letters, numbers and hyphens only. Changing it creates a different secret, so the old one is destroyed — and Azure keeps a deleted name reserved in a recoverable state until it is purged or recovered.
 - `not_before` (String) When the secret becomes valid, as an RFC 3339 timestamp. Reads before this time fail. Leave unset to make it valid immediately.
 - `secret_id` (String) Full Azure identifier of this secret version, e.g. https://my-vault.vault.azure.net/secrets/db-password/<version>.
 - `tags` (Map of String) Free-form key/value tags on the secret.
-- `updated_on` (String) When this version was last updated (RFC 3339).
+- `updated_on` (String) When this version was last updated (RFC 3339, normalized to UTC at second precision).
 - `value` (String, Sensitive) Secret value. Required — the API rejects a create or a new version without one. Write-only: reads return metadata only, so the configured value is kept in Terraform state and a change made outside Terraform cannot be detected. Because Key Vault is append-only, sending a value creates a new version even when it is unchanged.
 - `version` (String) Identifier of the current version. Changes every time a value is written, including when the value is unchanged.

@@ -56,10 +56,10 @@ resource "duploai_admin_command_policy" "empty" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the policy was created (RFC 3339).
+- `created_at` (String) Timestamp when the policy was created (RFC 3339, normalized to UTC at second precision).
 - `created_by` (String) Identifier of the user who created the policy.
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `updated_at` (String) Timestamp when the policy was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the policy was last updated (RFC 3339, normalized to UTC at second precision).
 - `updated_by` (String) Identifier of the user who last updated the policy.
 - `version` (Number) Server-incremented version of the policy.
 

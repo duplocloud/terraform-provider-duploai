@@ -61,9 +61,9 @@ resource "duploai_mcp_server" "raw" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the server was created (RFC 3339).
+- `created_at` (String) Timestamp when the server was created (RFC 3339, normalized to UTC at second precision).
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `updated_at` (String) Timestamp when the server was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the server was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 ## Import

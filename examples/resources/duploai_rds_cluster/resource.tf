@@ -36,13 +36,19 @@ resource "duploai_rds_cluster" "serverless" {
 
   manage_master_user_password = true
   storage_encrypted           = "<encryption-mode>"
-  kms_key_id                  = "<kms-key-id>"
+  # kms_key_id picks which registered key encrypts storage; unset uses the
+  # resource group's default key.
+  kms_key_id = "<kms-key-arn>"
 
   backup_retention_period      = 14
   preferred_backup_window      = "07:00-09:00"
   preferred_maintenance_window = "sun:05:00-sun:06:00"
   deletion_protection          = true
   enable_performance_insights  = true
+  # Performance Insights data is keyed separately from storage. Both keys must
+  # be registered on the resource group or one of its plans; pass the ARN.
+  performance_insights_encryption_mode = "ResourceGroupKmsKey"
+  performance_insights_kms_key_id      = duploai_resource_group_kms_key.cmek.key_arn
 
   enable_cloudwatch_logs_exports = ["postgresql"]
 

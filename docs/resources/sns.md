@@ -68,12 +68,12 @@ resource "duploai_sns" "fifo" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the topic was created (RFC 3339).
+- `created_at` (String) Timestamp when the topic was created (RFC 3339, normalized to UTC at second precision).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `sns_id` (String) ID of this SNS topic, for reference by dependent resources.
 - `status` (String) Current provisioning status of the topic.
 - `topic_arn` (String) ARN of the provisioned SNS topic.
-- `updated_at` (String) Timestamp when the topic was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the topic was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 <a id="nestedatt--tags"></a>

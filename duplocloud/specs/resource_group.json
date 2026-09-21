@@ -37,7 +37,8 @@
       "type": "list(string)",
       "computed": true,
       "apiPath": "spec.scopeIds",
-      "description": "Scope IDs linking this resource group to a cloud provider account. Inherited from the linked network; computed, not user-settable."
+      "description": "Scope IDs linking this resource group to a cloud provider account. Inherited from the linked network; computed, not user-settable.",
+      "sendFromState": true
     },
     {
       "name": "region",
@@ -130,10 +131,41 @@
       "description": "Optional provisioner version."
     },
     {
+      "name": "tags",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "tags",
+      "mapValuePath": "value",
+      "mapDropWhenTrue": "remove",
+      "description": "User-defined tags inherited by every resource provisioned under this resource group — applied to AWS resources as tags and to Kubernetes objects as labels. Because one map feeds both projections, each entry must be legal as an AWS tag and as a Kubernetes label: keys may carry an optional `prefix/` (a lowercase DNS-1123 subdomain up to 253 characters) followed by a name segment of up to 63 characters, values follow the Kubernetes label grammar, and AWS limits still apply (key up to 128 characters, value up to 256). The reserved `duplocloud.ai/` prefix and the `aws:` prefix are rejected. Removing a key from this map removes the tag from every resource in the group; propagation is asynchronous, so a removed tag can linger on cloud resources briefly after apply. Omit the argument entirely to leave the stored tags untouched; set it to an empty map to remove them all."
+    },
+    {
+      "name": "metadata",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "filterResponseKeys": [
+        "delete_protection"
+      ],
+      "description": "Free-form key/value metadata associated with the resource group. Provide the complete map; on update the full map replaces the previous one. The `delete_protection` key is excluded — it is managed by the delete_protection attribute, and setting it here has no effect."
+    },
+    {
+      "name": "delete_protection",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "stringBool": true,
+      "apiPath": "metaData.delete_protection",
+      "description": "Guards the resource group against teardown. The platform enables this on every new resource group unless the request says otherwise, and while it is enabled the API refuses both deprovision and delete \u2014 so `terraform destroy` fails by design. To tear the group down, set this to false and `terraform apply` first, then destroy. Leave it unset to inherit the platform default (enabled). Stored as the `delete_protection` metadata key."
+    },
+    {
       "name": "status",
       "type": "string",
       "computed": true,
       "apiPath": "status",
+      "sendFromState": true,
       "description": "Current provisioning status."
     },
     {

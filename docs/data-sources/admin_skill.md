@@ -36,7 +36,7 @@ output "format" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the skill was created (RFC 3339).
+- `created_at` (String) Timestamp when the skill was created (RFC 3339, normalized to UTC at second precision).
 - `description` (String) Human-readable description of the skill.
 - `format` (String) How the skill is delivered: 'SkillMd' (Markdown), 'Package' (packaged artifact), or 'PrivateGitRepo' (private Git repository). Defaults to 'SkillMd'.
 - `git_repo` (Attributes) Private Git repository the skill is loaded from. Required for Custom skills with 'PrivateGitRepo' format. (see [below for nested schema](#nestedatt--git_repo))
@@ -48,7 +48,7 @@ output "format" {
 - `skill_md` (String) Skill documentation in Markdown. Required for Custom skills with 'SkillMd' format; must be omitted for 'Package' and External skills.
 - `skill_version` (String) Version of the skill.
 - `type` (String) Skill type: 'Custom' (developed in-house) or 'External' (from a vendor). Defaults to 'Custom'.
-- `updated_at` (String) Timestamp when the skill was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the skill was last updated (RFC 3339, normalized to UTC at second precision).
 - `vendor` (String) Vendor that provides the skill (for External skills).
 - `version` (Number) Version counter, incremented on each update.
 

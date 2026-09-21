@@ -32,6 +32,13 @@ resource "duploai_environment" "full" {
   provisioner_version = "1.0.0"
   plan_ids            = ["<plan-id>"]
 
+  # Free-form key/value metadata stored on the environment record. Provide the
+  # complete map — on update it replaces the previous one.
+  metadata = {
+    owner       = "platform-team"
+    cost-center = "cc-4417"
+  }
+
   timeouts {
     create = "45m"
     update = "30m"
@@ -54,6 +61,7 @@ resource "duploai_environment" "full" {
 - `allowed_workspace_ids` (List of String) Workspace IDs allowed to access this environment in addition to the owner.
 - `description` (String) Optional description of the environment.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `metadata` (Map of String) Free-form key/value metadata associated with the environment. Provide the complete map; on update the full map replaces the previous one.
 - `mode` (String) Resource mode: Create provisions new infrastructure, Import adopts existing infrastructure.
 - `plan_ids` (List of String) Plan IDs applied to this environment.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
@@ -63,7 +71,7 @@ resource "duploai_environment" "full" {
 ### Read-Only
 
 - `blocked_reason` (String) Reason the environment is blocked, when applicable.
-- `created_at` (String) Creation timestamp.
+- `created_at` (String) Creation timestamp (RFC 3339, normalized to UTC at second precision).
 - `environment_id` (String) ID of this environment, for reference by dependent resources.
 - `ever_completed` (Boolean) Whether the environment has ever reached the Complete state.
 - `faults` (List of String) Provisioning faults.
@@ -75,7 +83,7 @@ resource "duploai_environment" "full" {
 - `spec_version` (String) Spec version identifier (UUID).
 - `status` (String) Current provisioning status.
 - `sub_status` (String) Additional status detail.
-- `updated_at` (String) Last update timestamp.
+- `updated_at` (String) Last update timestamp (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Server-assigned version of the environment record.
 - `warnings` (List of String) Provisioning warnings.
 

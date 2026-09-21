@@ -363,11 +363,11 @@
     {
       "name": "kms_key_id",
       "type": "string",
+      "optional": true,
       "computed": true,
       "forceNew": true,
-      "sensitive": true,
-      "apiPath": "spec.kmsKeyId",
-      "description": "KMS key ARN for at-rest encryption. Derived from the resource group when encryption_mode = ResourceGroupKmsKey."
+      "apiPath": "spec.requestedKmsKeyId",
+      "description": "KMS key to encrypt data at rest with, as a key id or ARN, honoured only when encryption_mode is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key); an unregistered key is rejected. Leave it unset to use the resource group's own default key. Immutable after creation."
     },
     {
       "name": "multi_az_enabled",

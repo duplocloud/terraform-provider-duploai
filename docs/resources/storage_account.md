@@ -95,7 +95,7 @@ resource "duploai_storage_account" "full" {
 
 - `azure_resource_group_name` (String) Azure resource group the storage account is created in. Derived from the linked resource group; not user-settable.
 - `azure_resource_id` (String) Full Azure resource ID (ARM ID) of the provisioned storage account.
-- `created_at` (String) Timestamp when the storage account was created (RFC 3339).
+- `created_at` (String) Timestamp when the storage account was created (RFC 3339, normalized to UTC at second precision).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `primary_blob_endpoint` (String) Primary Blob service endpoint URL.
 - `primary_file_endpoint` (String) Primary File service endpoint URL.
@@ -106,7 +106,7 @@ resource "duploai_storage_account" "full" {
 - `scope_ids` (List of String) Scope IDs linking this storage account to a cloud provider account. Inherited from the resource group; not user-settable.
 - `status` (String) Current provisioning status of the storage account.
 - `storage_account_id` (String) ID of this storage account, for reference by dependent resources.
-- `updated_at` (String) Timestamp when the storage account was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the storage account was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 <a id="nestedatt--data_protection"></a>

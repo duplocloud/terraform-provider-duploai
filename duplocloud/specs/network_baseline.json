@@ -102,7 +102,25 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.subnetPrefix",
-      "description": "Subnet prefix length (e.g. 24). Required on AWS; ignored on Azure, which sets per-subnet address prefixes via the `azure` block."
+      "description": "Subnet prefix length (e.g. 24). Required on AWS; ignored on Azure, which sets per-subnet address prefixes via the `azure` block. Also ignored when `custom_public_subnet_cidrs`/`custom_private_subnet_cidrs` are set — those replace the automatic carve-up — but still required, since the platform derives its subnet host-bits parameter from it either way."
+    },
+    {
+      "name": "custom_public_subnet_cidrs",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.customPublicSubnetCidrs",
+      "description": "AWS only, mode Create only. Public subnet CIDRs chosen explicitly instead of letting the platform carve the VPC automatically — one entry per availability zone, in AZ order, so entry `i` becomes the public subnet in AZ `i`. Must be set together with `custom_private_subnet_cidrs`; when both are set they override the `subnet_prefix` carve-up entirely. Each list must contain exactly `az_count` entries. Every CIDR must be a canonical network address with a prefix of /28 or shorter (e.g. 10.0.0.0/24, not 10.0.0.5/24), fall inside `cidr`, and not overlap any other entry in either list. Immutable after creation."
+    },
+    {
+      "name": "custom_private_subnet_cidrs",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.customPrivateSubnetCidrs",
+      "description": "AWS only, mode Create only. Private subnet CIDRs chosen explicitly, one per availability zone in AZ order. Must be set together with `custom_public_subnet_cidrs`; see that attribute for the full rules. Immutable after creation."
     },
     {
       "name": "nat_mode",
@@ -486,6 +504,114 @@
       ]
     },
     {
+      "name": "helpdesk_vpc_peering_enabled",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.enabled",
+      "description": "AWS only. Whether to peer this network's VPC with the helpdesk platform's own VPC, so the platform can reach an EKS cluster that has a private API server endpoint. When on, provisioning creates the peering connection, routes the helpdesk CIDR back through it, and opens inbound 443 from the helpdesk security group. Prefer leaving this unset: the platform default is on, and the value it settles on is then read back as computed state. Setting it to true explicitly risks a diff that never settles \u2014 on an install where the helpdesk VPC was only auto-detected from the machine hosting the backend, rather than configured via the vpc-peering-config setting, the platform downgrades the setting to false, so a config of true differs from the stored value on every plan and re-applying does not converge. Set it explicitly only to turn peering off (false), which the platform always honours."
+    },
+    {
+      "name": "helpdesk_vpc_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskVpcId",
+      "description": "AWS only. ID of the helpdesk VPC this network peers with. Resolved and stamped by the platform; never accepted from the client."
+    },
+    {
+      "name": "helpdesk_account_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskAccountId",
+      "description": "AWS only. AWS account that owns the helpdesk VPC. Stamped by the platform."
+    },
+    {
+      "name": "helpdesk_region",
+      "type": "string",
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskRegion",
+      "description": "AWS only. Region of the helpdesk VPC. Stamped by the platform; only meaningful when the peering crosses regions."
+    },
+    {
+      "name": "helpdesk_vpc_cidr_blocks",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskVpcCidrBlocks",
+      "description": "AWS only. CIDR blocks of the helpdesk VPC \u2014 the ranges routed back through the peering connection and allowed inbound on 443. Stamped by the platform."
+    },
+    {
+      "name": "helpdesk_vpc_peering",
+      "type": "object",
+      "computed": true,
+      "responsePath": "result.helpdeskVpcPeering",
+      "description": "AWS only. Live state of the peering connection with the helpdesk VPC. Populated once provisioning creates the connection and the platform's peering worker accepts it; null when peering is off, unresolved, or the network is not on AWS. Written by two independent processes \u2014 provisioning owns the requester side, the worker owns acceptance and the helpdesk side \u2014 so fields appear at different times.",
+      "attributes": [
+        {
+          "name": "peering_connection_id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "peeringConnectionId",
+          "description": "The pcx-* VPC peering connection ID."
+        },
+        {
+          "name": "state",
+          "type": "string",
+          "computed": true,
+          "apiPath": "state",
+          "description": "AWS peering connection state, verbatim (e.g. pending-acceptance, active, rejected, failed). Reaches active once the platform's worker has accepted the request."
+        },
+        {
+          "name": "state_message",
+          "type": "string",
+          "computed": true,
+          "apiPath": "stateMessage",
+          "description": "AWS's explanation for the current state. Worth reading when state is not active."
+        },
+        {
+          "name": "requester_vpc_id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "requesterVpcId",
+          "description": "This network's own VPC \u2014 the requester side of the connection."
+        },
+        {
+          "name": "requester_cidr_blocks",
+          "type": "list(string)",
+          "computed": true,
+          "apiPath": "requesterCidrBlocks",
+          "description": "This network's CIDR blocks, which the platform allows on the helpdesk side."
+        },
+        {
+          "name": "accepter_vpc_id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "accepterVpcId",
+          "description": "The helpdesk VPC \u2014 the accepter side of the connection."
+        },
+        {
+          "name": "accepter_cidr_blocks",
+          "type": "list(string)",
+          "computed": true,
+          "apiPath": "accepterCidrBlocks",
+          "description": "CIDR blocks of the helpdesk VPC, as resolved when the connection was created."
+        },
+        {
+          "name": "helpdesk_route_stack_status",
+          "type": "string",
+          "computed": true,
+          "apiPath": "helpdeskRouteStackStatus",
+          "description": "How far the platform got adding return routes on its own side: ACTIVE (all present), PARTIAL (at least one route collided with an unrelated existing route and was left alone), or SKIPPED (nothing resolved yet). PARTIAL is the one to investigate \u2014 traffic may work in only one direction."
+        },
+        {
+          "name": "last_error",
+          "type": "string",
+          "computed": true,
+          "apiPath": "lastError",
+          "description": "Most recent error from the platform's peering worker, if it is stuck. Empty when healthy."
+        }
+      ]
+    },
+    {
       "name": "status",
       "type": "string",
       "computed": true,
@@ -579,6 +705,82 @@
       "attribute": "cidr",
       "whenAttribute": "mode",
       "whenEquals": "Create"
+    },
+    {
+      "attribute": "custom_private_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "custom_public_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ]
+    },
+    {
+      "attribute": "custom_public_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "custom_private_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ]
+    }
+  ],
+  "invalidWhen": [
+    {
+      "attribute": "custom_public_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "custom_public_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "custom_public_subnet_cidrs is AWS only. On Azure declare each subnet's range with azure.subnets[].address_prefix instead; set cloud = \"Aws\" to use custom subnet CIDRs."
+    },
+    {
+      "attribute": "custom_private_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "custom_private_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "custom_private_subnet_cidrs is AWS only. On Azure declare each subnet's range with azure.subnets[].address_prefix instead; set cloud = \"Aws\" to use custom subnet CIDRs."
+    },
+    {
+      "attribute": "custom_public_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        },
+        {
+          "attribute": "custom_public_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "custom_public_subnet_cidrs cannot be combined with mode = \"Import\": custom subnet CIDRs only apply when the platform provisions a new VPC. An imported VPC keeps the subnets it already has."
+    },
+    {
+      "attribute": "custom_private_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        },
+        {
+          "attribute": "custom_private_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "custom_private_subnet_cidrs cannot be combined with mode = \"Import\": custom subnet CIDRs only apply when the platform provisions a new VPC. An imported VPC keeps the subnets it already has."
     }
   ],
   "conflictsWith": [
@@ -613,6 +815,14 @@
     [
       "azure",
       "subnet_prefix"
+    ],
+    [
+      "azure",
+      "custom_public_subnet_cidrs"
+    ],
+    [
+      "azure",
+      "custom_private_subnet_cidrs"
     ]
   ],
   "waiter": {

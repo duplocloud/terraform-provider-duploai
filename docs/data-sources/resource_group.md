@@ -46,12 +46,14 @@ output "iam_role_arn" {
 - `aws_resource_name` (String) AWS resource name prefix for provisioned resources.
 - `cloud` (String) Cloud provider the resource group targets. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws.
 - `cluster_id` (String) Cluster ID to associate with this resource group.
+- `delete_protection` (Boolean) Guards the resource group against teardown. The platform enables this on every new resource group unless the request says otherwise, and while it is enabled the API refuses both deprovision and delete — so `terraform destroy` fails by design. To tear the group down, set this to false and `terraform apply` first, then destroy. Leave it unset to inherit the platform default (enabled). Stored as the `delete_protection` metadata key.
 - `description` (String) Optional description.
 - `environment_id` (String) Environment ID to associate with this resource group.
 - `iam_role_arn` (String) Provisioned IAM role ARN.
 - `iam_role_name` (String) Provisioned IAM role name.
 - `kms_key_alias` (String) Provisioned KMS key alias.
 - `kms_key_arn` (String) Provisioned KMS key ARN.
+- `metadata` (Map of String) Free-form key/value metadata associated with the resource group. Provide the complete map; on update the full map replaces the previous one. The `delete_protection` key is excluded — it is managed by the delete_protection attribute, and setting it here has no effect.
 - `name` (String) Name of the resource group.
 - `network_id` (String) ID of the network baseline this resource group is linked to. At least one of network_id or vpc_id is required.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
@@ -62,4 +64,5 @@ output "iam_role_arn" {
 - `security_group_id` (String) Provisioned main security group ID.
 - `security_group_name` (String) Provisioned main security group name.
 - `status` (String) Current provisioning status.
+- `tags` (Map of String) User-defined tags inherited by every resource provisioned under this resource group — applied to AWS resources as tags and to Kubernetes objects as labels. Because one map feeds both projections, each entry must be legal as an AWS tag and as a Kubernetes label: keys may carry an optional `prefix/` (a lowercase DNS-1123 subdomain up to 253 characters) followed by a name segment of up to 63 characters, values follow the Kubernetes label grammar, and AWS limits still apply (key up to 128 characters, value up to 256). The reserved `duplocloud.ai/` prefix and the `aws:` prefix are rejected. Removing a key from this map removes the tag from every resource in the group; propagation is asynchronous, so a removed tag can linger on cloud resources briefly after apply. Omit the argument entirely to leave the stored tags untouched; set it to an empty map to remove them all.
 - `vpc_id` (String) VPC ID to associate with this resource group. At least one of vpc_id or network_id is required. The API derives this automatically when network_id is set.

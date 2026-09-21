@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -423,7 +424,16 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	created, err := api.Create(&body)
+	var created *map[string]any
+	var err duplosdk.ClientError
+	if r.spec.Endpoint.CreateReturnsList {
+		created, err = r.createFromList(api, &body, &resp.Diagnostics)
+		if err == nil && resp.Diagnostics.HasError() {
+			return
+		}
+	} else {
+		created, err = api.Create(&body)
+	}
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating "+r.spec.Name, err.Error())
 		return
@@ -523,7 +533,20 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	obj, clientErr := r.api(scope, r.specFailureRetries()).Get(objID)
+	var obj *map[string]any
+	var clientErr duplosdk.ClientError
+	if r.spec.Endpoint.ReadFromList {
+		obj, clientErr = r.readFromCollection(scope, objID)
+		if clientErr == nil && obj == nil {
+			// No longer in the collection — same meaning as a 404 on a
+			// conventional read: gone, so let the next plan recreate it.
+			log.Printf("[TRACE] dynamic %s Read(%s): not in collection, dropping from state", r.spec.Name, id)
+			resp.State.RemoveResource(ctx)
+			return
+		}
+	} else {
+		obj, clientErr = r.api(scope, r.specFailureRetries()).Get(objID)
+	}
 	if clientErr != nil {
 		if clientErr.IsNotFound() {
 			resp.State.RemoveResource(ctx)
@@ -539,6 +562,41 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 	resp.State.Raw = state
 	log.Printf("[TRACE] dynamic %s Read(%s): end", r.spec.Name, id)
+}
+
+// createFromList issues a create whose response is a JSON array and returns the
+// single element it should have produced (see EndpointSpec.CreateReturnsList).
+// An empty array is an error: the object may or may not exist in the backend, and
+// state cannot record an id it never received. More than one element means the
+// spec let a request expand into several backend objects — Terraform can track
+// only the first, so the rest would be orphaned; that is a spec bug, reported as
+// a warning here rather than silently dropped.
+func (r *dynamicResource) createFromList(api *duplosdk.RESTResource[map[string]any], body *map[string]any, diags *diag.Diagnostics) (*map[string]any, duplosdk.ClientError) {
+	items, clientErr := api.CreateList(body)
+	if clientErr != nil {
+		return nil, clientErr
+	}
+	if len(items) == 0 {
+		diags.AddError("Error creating "+r.spec.Name,
+			"the create call succeeded but returned no objects, so there is no id to record in state")
+		return nil, nil
+	}
+	if len(items) > 1 {
+		diags.AddWarning("Multiple objects created",
+			fmt.Sprintf("the create call produced %d objects but Terraform can track only one — "+
+				"the extras are not managed and must be removed out of band", len(items)))
+	}
+	return &items[0], nil
+}
+
+// readFromCollection fetches the collection at uriBase and returns the element
+// whose IDPath value equals objID, or nil when the collection no longer holds
+// it. Use for a sub-collection the API exposes only as a whole — see
+// EndpointSpec.ReadFromList. The API does no server-side filtering (query
+// parameters on these routes are ignored), so the match is made here; the list
+// carries each element in full, so nothing further is fetched.
+func (r *dynamicResource) readFromCollection(scope map[string]string, objID string) (*map[string]any, duplosdk.ClientError) {
+	return specCollectionElement(&r.spec, r.api(scope, r.specFailureRetries()), objID)
 }
 
 // readAssociation refreshes a link-only resource. The API offers no GET for the
@@ -855,15 +913,18 @@ func (r *dynamicResource) deprovisionSkipped(ctx context.Context, state attrRead
 		if a == nil {
 			return false
 		}
+		if c.IsEmpty || c.IsNotEmpty {
+			// Collection-aware presence test — an empty list is "not set".
+			if attrEmptyAtPath(ctx, state, *a, path.Root(a.Name)) != c.IsEmpty {
+				return false
+			}
+			continue
+		}
 		val := readConfigString(ctx, state, *a)
 		if val == "" {
 			val = defaultString(*a) // attribute omitted — fall back to its spec default
 		}
 		switch {
-		case c.IsEmpty:
-			if val != "" {
-				return false
-			}
 		case c.NotEquals != "":
 			if val == c.NotEquals {
 				return false
@@ -964,16 +1025,17 @@ func (v invalidWhenValidator) holds(ctx context.Context, cfg attrReader, conds [
 					return false
 				}
 			}
+		case c.IsEmpty, c.IsNotEmpty:
+			// Collection-aware presence test — an empty list is "not set".
+			if attrEmptyAtPath(ctx, cfg, *target, p) != c.IsEmpty {
+				return false
+			}
 		default:
 			val := readPathString(ctx, cfg, *target, p)
 			if val == "" {
 				val = defaultString(*target)
 			}
 			switch {
-			case c.IsEmpty:
-				if val != "" {
-					return false
-				}
 			case c.NotEquals != "":
 				if val == c.NotEquals {
 					return false
@@ -1074,15 +1136,18 @@ func (v requiredIfValidator) conditionsHold(ctx context.Context, cfg attrReader,
 			// collapses unknown to "" the same as null) and fire a false requiredIf error.
 			return false
 		}
+		if c.IsEmpty || c.IsNotEmpty {
+			// Collection-aware presence test — an empty list is "not set".
+			if attrEmptyAtPath(ctx, cfg, *when, path.Root(when.Name)) != c.IsEmpty {
+				return false
+			}
+			continue
+		}
 		val := readConfigString(ctx, cfg, *when)
 		if val == "" {
 			val = defaultString(*when) // user omitted it — use the spec default
 		}
 		switch {
-		case c.IsEmpty:
-			if val != "" {
-				return false
-			}
 		case c.NotEquals != "":
 			if val == c.NotEquals {
 				return false
@@ -1115,6 +1180,8 @@ func requiredIfMessage(rule RequiredIfRule) string {
 		switch {
 		case c.IsEmpty:
 			parts = append(parts, fmt.Sprintf("%s is not set", c.Attribute))
+		case c.IsNotEmpty:
+			parts = append(parts, fmt.Sprintf("%s is set", c.Attribute))
 		case c.NotEquals != "":
 			parts = append(parts, fmt.Sprintf("%s is not %q", c.Attribute, c.NotEquals))
 		default:
@@ -1481,6 +1548,42 @@ func readConfigString(ctx context.Context, cfg attrReader, a AttributeSpec) stri
 		return ""
 	}
 	return toStringValue(v)
+}
+
+// attrEmptyAtPath reports whether the value at p is empty, for isEmpty /
+// isNotEmpty conditions. Collections are answered by element count rather than by
+// their string rendering: readPathString renders every non-scalar as "" and
+// readConfigString renders an empty list as "[]", so neither form tells an empty
+// collection apart from an unset one. Scalars fall back to the string render with
+// the attribute's static default applied, so a condition on a defaulted field
+// still evaluates. An unknown value reads as empty here, which is only safe
+// because the config-time callers bail out on unknown first (readConfigUnknown /
+// readPathUnknown) and the deprovision caller reads prior state, where nothing is
+// unknown.
+func attrEmptyAtPath(ctx context.Context, cfg attrReader, a AttributeSpec, p path.Path) bool {
+	switch {
+	case strings.HasPrefix(a.Type, "list("):
+		var v types.List
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsNull() || v.IsUnknown() || len(v.Elements()) == 0
+	case strings.HasPrefix(a.Type, "set("):
+		var v types.Set
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsNull() || v.IsUnknown() || len(v.Elements()) == 0
+	case strings.HasPrefix(a.Type, "map("):
+		var v types.Map
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsNull() || v.IsUnknown() || len(v.Elements()) == 0
+	case a.Type == "object":
+		var v types.Object
+		cfg.GetAttribute(ctx, p, &v)
+		return v.IsNull() || v.IsUnknown()
+	}
+	val := readPathString(ctx, cfg, a, p)
+	if val == "" {
+		val = defaultString(a)
+	}
+	return val == ""
 }
 
 // readPathUnknown reports whether the value at p is unknown. Same distinction as
@@ -1879,6 +1982,43 @@ func filterMapKeys(cur any, keys []string, keep map[string]bool) any {
 	return out
 }
 
+// flattenMapValues unwraps a response map whose entries are objects into a plain
+// key → string map, taking each value from the valuePath field. When dropFlag is
+// set, an entry whose named boolean is true is omitted entirely — a soft-deleted
+// entry the backend still stores but that must not reach state (see
+// AttributeSpec.MapDropWhenTrue). Entries already carrying a plain string pass
+// through unchanged, so a backend that serves both the wrapped and the flat shape
+// is handled; anything else is dropped rather than surfaced as a broken value —
+// and logged, since a tag quietly disappearing is otherwise hard to trace back to
+// a change in the entry shape.
+func flattenMapValues(cur any, valuePath, dropFlag string) any {
+	m, ok := cur.(map[string]any)
+	if !ok {
+		return cur
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		switch entry := v.(type) {
+		case string:
+			out[k] = entry
+		case map[string]any:
+			if dropFlag != "" {
+				if flag, ok := entry[dropFlag].(bool); ok && flag {
+					continue // soft-deleted: expected, and deliberately not logged
+				}
+			}
+			if s, ok := entry[valuePath].(string); ok {
+				out[k] = s
+				continue
+			}
+			log.Printf("[WARN] flattenMapValues: entry %q has no string %q field; dropping it", k, valuePath)
+		default:
+			log.Printf("[WARN] flattenMapValues: entry %q is %T, expected a string or an object; dropping it", k, v)
+		}
+	}
+	return out
+}
+
 // rawMapKeys returns the key set of a map(string) tftypes value, or nil when it
 // is null/unknown (nothing declared yet).
 func rawMapKeys(v tftypes.Value) map[string]bool {
@@ -1941,6 +2081,10 @@ func mapIndex(cur any, key string) any {
 func setPath(root map[string]any, segs []string, val any) {
 	m := root
 	for _, s := range segs[:len(segs)-1] {
+		if name, idx, ok := parseIndexedSegment(s); ok {
+			m = descendIntoArray(m, name, idx)
+			continue
+		}
 		next, ok := m[s].(map[string]any)
 		if !ok {
 			next = map[string]any{}
@@ -1948,7 +2092,57 @@ func setPath(root map[string]any, segs []string, val any) {
 		}
 		m = next
 	}
-	m[segs[len(segs)-1]] = val
+	last := segs[len(segs)-1]
+	if name, idx, ok := parseIndexedSegment(last); ok {
+		// Terminal index, e.g. "values[0]" — write the value into the slot itself.
+		arr := growArray(m, name, idx)
+		arr[idx] = val
+		m[name] = arr
+		return
+	}
+	m[last] = val
+}
+
+// indexedSegment matches a path segment addressing one element of an array, e.g.
+// "ipv4Ranges[0]".
+var indexedSegment = regexp.MustCompile(`^([^\[\]]+)\[(\d+)\]$`)
+
+// parseIndexedSegment splits "name[3]" into ("name", 3, true). Anything else
+// reports false and is treated as a plain object key.
+func parseIndexedSegment(seg string) (string, int, bool) {
+	m := indexedSegment.FindStringSubmatch(seg)
+	if m == nil {
+		return seg, 0, false
+	}
+	idx, err := strconv.Atoi(m[2])
+	if err != nil {
+		return seg, 0, false
+	}
+	return m[1], idx, true
+}
+
+// growArray returns the array at key, extended with nils so index idx exists.
+func growArray(m map[string]any, key string, idx int) []any {
+	arr, _ := m[key].([]any)
+	for len(arr) <= idx {
+		arr = append(arr, nil)
+	}
+	return arr
+}
+
+// descendIntoArray returns the object at m[key][idx], creating the array and the
+// element as needed. Used for a request path that addresses a field inside an
+// array element — the AWS-shaped bodies do this, e.g. a single CIDR that must be
+// sent as ipv4Ranges[0].cidrIp.
+func descendIntoArray(m map[string]any, key string, idx int) map[string]any {
+	arr := growArray(m, key, idx)
+	elem, ok := arr[idx].(map[string]any)
+	if !ok {
+		elem = map[string]any{}
+		arr[idx] = elem
+	}
+	m[key] = arr
+	return elem
 }
 
 func minutesOr(min int, fallback time.Duration) time.Duration {

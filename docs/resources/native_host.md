@@ -86,7 +86,7 @@ output "host_private_ip" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the host was created (RFC 3339).
+- `created_at` (String) Timestamp when the host was created (RFC 3339, normalized to UTC at second precision).
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `instance_id` (String) AWS EC2 instance ID of the provisioned host.
 - `live_state` (String) Current live state of the EC2 instance (e.g. running, stopped).
@@ -95,7 +95,7 @@ output "host_private_ip" {
 - `public_ip_address` (String) Public IP address of the host, if any.
 - `status` (String) Provisioning status of the host.
 - `sub_status` (String) Additional provisioning status detail.
-- `updated_at` (String) Timestamp when the host was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the host was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
 <a id="nestedatt--block_device_mappings"></a>

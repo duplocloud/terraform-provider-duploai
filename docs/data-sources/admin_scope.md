@@ -41,7 +41,7 @@ output "is_active" {
 ### Read-Only
 
 - `aws_resource_search_filter` (Attributes) Optional filter restricting which AWS resources this scope can see. (see [below for nested schema](#nestedatt--aws_resource_search_filter))
-- `created_at` (String) Timestamp when the scope was created.
+- `created_at` (String) Timestamp when the scope was created (RFC 3339, normalized to UTC at second precision).
 - `credential_name` (String) Name of the credential (on the referenced provider) this scope uses. Either credential_name or mcp_server_id must be set.
 - `description` (String) Optional description of the scope.
 - `git_resource_filter` (Attributes) Optional filter restricting which Git resources this scope can see. (see [below for nested schema](#nestedatt--git_resource_filter))
@@ -51,7 +51,7 @@ output "is_active" {
 - `metadata` (Map of String) Arbitrary key/value metadata attached to the scope.
 - `name` (String) Name of the scope. Immutable once created.
 - `provider_id` (String) ID of the provider this scope is bound to. The provider resolves the credential and is required for the scope to access any resources (and, when mcp_server_id is set, its type must match the MCP server).
-- `updated_at` (String) Timestamp when the scope was last updated.
+- `updated_at` (String) Timestamp when the scope was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Server-incremented version of the scope.
 
 <a id="nestedatt--aws_resource_search_filter"></a>

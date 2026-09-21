@@ -21,7 +21,9 @@
       "required": true,
       "forceNew": true,
       "apiPath": "name",
-      "description": "DuploCloud resource name for this repository. Distinct from repository_name (the AWS ECR name); use a simple identifier here. Cannot be changed after creation."
+      "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$",
+      "patternDescription": "must be a DNS-style label: letters, digits and hyphens only, starting and ending with a letter or digit. Slashes, dots and underscores are rejected — this is the DuploCloud record name, not the AWS repository name. A namespaced path such as \"cbi/tf-igrc\" belongs in repository_name; pair it with a plain name like \"cbi-tf-igrc\"",
+      "description": "DuploCloud record name for this repository — a DNS-style label used to identify the resource on the platform, and unique within the workspace. This is NOT the AWS repository name: put the ECR name, including any namespace path, in repository_name. Cannot be changed after creation."
     },
     {
       "name": "repository_name",
@@ -29,6 +31,10 @@
       "required": true,
       "forceNew": true,
       "apiPath": "spec.repositoryName",
+      "pattern": "^(?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "patternDescription": "must be a valid AWS ECR repository name: lowercase letters, digits, and the separators . _ - between them, with / for a namespace path (2-256 characters), e.g. \"cbi/tf-igrc\" or \"team/backend\". Uppercase letters, leading or trailing separators, and consecutive slashes are rejected",
+      "minLength": 2,
+      "maxLength": 256,
       "description": "Name of the AWS ECR repository (may contain path separators, e.g. \"team/backend\"). Immutable — AWS has no rename API."
     },
     {
@@ -69,6 +75,15 @@
       ],
       "apiPath": "spec.encryption",
       "description": "Server-side encryption for the repository: NoEncryption / AwsManagedKey (AWS-managed AES256) / ResourceGroupKmsKey (the resource group's KMS key). ResourceGroupKmsKey requires the resource group to have a provisioned KMS key. Immutable after creation."
+    },
+    {
+      "name": "kms_key_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.kmsKeyId",
+      "description": "KMS key to encrypt with, as a key id or ARN, honoured only when encryption is set to ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) \u2014 the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Immutable after creation."
     },
     {
       "name": "scan_on_push",
@@ -191,14 +206,16 @@
       "type": "string",
       "computed": true,
       "apiPath": "createdAt",
-      "description": "Timestamp when the repository was created (RFC 3339)."
+      "normalizeTimestamp": true,
+      "description": "Timestamp when the repository was created (RFC 3339, normalized to UTC at second precision)."
     },
     {
       "name": "updated_at",
       "type": "string",
       "computed": true,
       "apiPath": "updatedAt",
-      "description": "Timestamp when the repository was last updated (RFC 3339)."
+      "normalizeTimestamp": true,
+      "description": "Timestamp when the repository was last updated (RFC 3339, normalized to UTC at second precision)."
     },
     {
       "name": "version",

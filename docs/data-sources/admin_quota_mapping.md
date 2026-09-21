@@ -36,7 +36,7 @@ output "quota_reference_id" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the quota mapping was created (RFC 3339).
+- `created_at` (String) Timestamp when the quota mapping was created (RFC 3339, normalized to UTC at second precision).
 - `created_by` (String) Identifier of the user who created the quota mapping.
 - `description` (String) Human-readable description of the quota mapping.
 - `is_active` (Boolean) Whether the quota mapping is active. Defaults to active when omitted.
@@ -46,6 +46,6 @@ output "quota_reference_id" {
 - `scope` (String) Scope the quota applies at: 'Platform' (organisation-wide) or 'Workspace' (specific workspaces). Defaults to 'Platform'.
 - `target_ids` (List of String) Workspace IDs this mapping applies to. Required (non-empty) for 'Workspace' scope; must be omitted for 'Platform' scope.
 - `type` (String) Dimension the quota targets. Valid scope/type combinations: Workspace scope with Workspace/User/Ticket; Platform scope with All/Workspace/User. Defaults to 'Workspace'.
-- `updated_at` (String) Timestamp when the quota mapping was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the quota mapping was last updated (RFC 3339, normalized to UTC at second precision).
 - `updated_by` (String) Identifier of the user who last updated the quota mapping.
 - `version` (Number) Version counter, incremented on each update.

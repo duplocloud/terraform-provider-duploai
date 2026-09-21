@@ -46,6 +46,7 @@ output "status" {
 - `environment_id` (String) ID of the environment in which the file system is provisioned.
 - `file_system_arn` (String) ARN of the provisioned file system.
 - `file_system_id` (String) AWS ID of the provisioned file system (e.g. fs-0123456789abcdef0).
+- `kms_key_id` (String) KMS key to encrypt with, as a key id or ARN, honoured only when encryption is set to ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) — the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Immutable after creation.
 - `life_cycle_state` (String) AWS lifecycle state of the file system (e.g. available, creating, deleting).
 - `name` (String) Name of the EFS file system.
 - `performance_mode` (String) Performance mode: generalPurpose (default) or maxIO. Immutable after creation. When importing a maxIO file system, set this to maxIO in the configuration — otherwise the generalPurpose default plans a replacement.

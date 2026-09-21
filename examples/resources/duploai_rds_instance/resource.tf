@@ -32,9 +32,11 @@ resource "duploai_rds_instance" "mysql" {
   master_username      = "dbadmin"
   master_user_password = "<password>"
 
-  multi_az                = true
-  storage_encrypted       = "<encryption-mode>"
-  kms_key_id              = "<kms-key-id>"
+  multi_az          = true
+  storage_encrypted = "<encryption-mode>"
+  # With storage_encrypted = "ResourceGroupKmsKey", kms_key_id names which
+  # registered key to use; unset means the resource group's default key.
+  kms_key_id              = "<kms-key-arn>"
   backup_retention_period = 14
   deletion_protection     = true
 

@@ -8,7 +8,9 @@ import (
 	"math/big"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
@@ -117,6 +119,9 @@ func stringValidators(a AttributeSpec) []validator.String {
 	}
 	if a.MaxLength > 0 {
 		out = append(out, stringvalidator.LengthAtMost(a.MaxLength))
+	}
+	if a.MinLength > 0 {
+		out = append(out, stringvalidator.LengthAtLeast(a.MinLength))
 	}
 	if a.Pattern != "" {
 		// validate() compiles this at spec load, so a spec carrying a bad pattern
@@ -533,7 +538,16 @@ func attrToRequest(a AttributeSpec, v tftypes.Value) (any, bool) {
 	}
 	info, _ := parseType(a.Type)
 	if info.elem != "object" {
-		return tftypesToGo(v), true
+		g := tftypesToGo(v)
+		if a.StringBool {
+			// The API holds this field in a string-valued container (e.g. a
+			// Dictionary<string,string> metadata map), so send "true"/"false"
+			// rather than a JSON boolean it cannot deserialize.
+			if b, ok := g.(bool); ok {
+				return strconv.FormatBool(b), true
+			}
+		}
+		return g, true
 	}
 	switch info.coll {
 	case "":
@@ -612,12 +626,55 @@ func normalizeVersionMinor(s string) string {
 	return strings.Join(parts[:2], ".")
 }
 
+// canonicalTimestampLayout is the single spelling normalizeTimestampPrecision
+// reduces every RFC 3339 value to: UTC, a "Z" offset, whole seconds. Dropping
+// the fractional part rather than keeping it at some fixed width is what makes
+// this robust — the write and read responses disagree on precision, so any
+// surviving digit is a digit the two sides could disagree about (whether the
+// platform truncates or rounds when it persists a higher-precision value is its
+// business, not ours). Second resolution is all these fields are read at.
+const canonicalTimestampLayout = "2006-01-02T15:04:05Z"
+
+// normalizeTimestampPrecision rewrites an RFC 3339 timestamp to
+// canonicalTimestampLayout. Applied to both the write and the read response (it
+// is idempotent), it collapses every spelling the platform uses for one instant
+// — differing fractional precision, "Z" versus "+00:00", a trimmed trailing
+// zero — into a value that compares equal across refreshes.
+//
+// Anything that is not a parseable RFC 3339 timestamp is returned unchanged,
+// including the empty string: better to store what the API said than to blank a
+// field over an unrecognized format.
+func normalizeTimestampPrecision(s string) string {
+	if s == "" {
+		return s
+	}
+	// time.Parse accepts a fractional second after the layout's seconds field
+	// even though RFC3339 does not spell one out, so this handles every digit
+	// count the platform emits.
+	ts, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return s
+	}
+	return ts.UTC().Format(canonicalTimestampLayout)
+}
+
 func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 	if data == nil {
 		return tftypes.NewValue(t, nil)
 	}
 	info, _ := parseType(a.Type)
 	if info.elem != "object" {
+		if a.StringBool {
+			// Wire form is the string "true"/"false" (see AttributeSpec.StringBool).
+			// Only an explicit "true" is true, matching the platform's own reading of
+			// these keys; a real bool is tolerated in case the API ever sends one.
+			switch s := data.(type) {
+			case string:
+				data = strings.EqualFold(s, "true")
+			case bool:
+				data = s
+			}
+		}
 		if a.NormalizeCsvOrder {
 			if s, ok := data.(string); ok {
 				data = normalizeCsvOrder(s)
@@ -627,6 +684,17 @@ func attrFromResponse(a AttributeSpec, t tftypes.Type, data any) tftypes.Value {
 			if s, ok := data.(string); ok {
 				data = normalizeVersionMinor(s)
 			}
+		}
+		if a.NormalizeTimestamp {
+			if s, ok := data.(string); ok {
+				data = normalizeTimestampPrecision(s)
+			}
+		}
+		// mapValuePath and filterResponseKeys compose in either order — one
+		// rewrites values, the other selects keys — so it does not matter that
+		// the top-level read loop filters before calling in here.
+		if a.MapValuePath != "" {
+			data = flattenMapValues(data, a.MapValuePath, a.MapDropWhenTrue)
 		}
 		// Honor filterResponseKeys here too (not only in the top-level loop) so a
 		// map(string) attribute nested inside an object (e.g. azure.tags) still

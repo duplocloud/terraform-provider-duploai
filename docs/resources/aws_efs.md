@@ -20,6 +20,9 @@ resource "duploai_aws_efs" "shared" {
   environment_id    = "<environment-id>"
   resource_group_id = "<eks-resource-group-id>"
 
+  # Switch to ResourceGroupKmsKey and set kms_key_id to use a registered
+  # customer-managed key; leaving kms_key_id unset uses the resource group's
+  # own default key.
   encryption       = "AwsManagedKey"
   performance_mode = "generalPurpose"
   throughput_mode  = "elastic"
@@ -59,6 +62,7 @@ resource "duploai_aws_efs" "db_backups" {
 - `description` (String) Optional description of the EFS file system.
 - `encryption` (String) Encryption at rest mode. NoEncryption disables encryption; AwsManagedKey uses the AWS-managed EFS key; ResourceGroupKmsKey uses the resource group's KMS key. Immutable after creation.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
+- `kms_key_id` (String) KMS key to encrypt with, as a key id or ARN, honoured only when encryption is set to ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) — the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Immutable after creation.
 - `performance_mode` (String) Performance mode: generalPurpose (default) or maxIO. Immutable after creation. When importing a maxIO file system, set this to maxIO in the configuration — otherwise the generalPurpose default plans a replacement.
 - `provisioned_throughput_in_mibps` (Number) Provisioned throughput in MiB/s. Required when throughput_mode is provisioned; ignored otherwise.
 - `provisioner_version` (String) Optional provisioner version.

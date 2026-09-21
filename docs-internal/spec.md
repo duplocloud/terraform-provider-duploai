@@ -205,6 +205,9 @@ have been replaced by this block.
 | `update` | OperationSpec | see below | Override for Update. Ignored when `immutable` is true. |
 | `delete` | OperationSpec | see below | Override for Delete. |
 | `deprovision` | OperationSpec | absent | When present, adds a pre-delete teardown step **before** the Delete call. `{}` uses defaults. |
+| `readFromList` | bool | `false` | Read the **collection** at `uriBase` and select the element whose `idPath` value matches, instead of `GET uriBase/{id}`. Use for a sub-collection the API serves only as a whole: `.../kms-keys` answers `GET` (list) and `POST`, while `.../kms-keys/{id}` answers only `DELETE`, so the conventional read returns **405 Method Not Allowed** and every plan after the first fails. These routes ignore query parameters, so the match is made client-side; the list already carries each element in full, so no extra call is needed. An element missing from the list is treated as gone — the resource leaves state and the next plan recreates it, exactly as a 404 would. Applies to the generated data source too. Used by `plan_kms_key` and `resource_group_kms_key`. |
+| `readListPath` | string | — | Dotted path to the element array inside a collection response, for a route that **wraps** its elements instead of answering with a bare array — the security-group ingress routes return `{"ownSecurityGroupId":…,"rules":[…]}`, so they set `"rules"`. Required whenever the route wraps: without it the response is decoded as a bare array and every read fails with `cannot unmarshal object into Go struct field apiResponse[[]map[string]interface {}].data`. Must be left unset for a bare-array route (e.g. `.../kms-keys`), or the unwrapping looks for a key that is not there. Applies to the resource and the generated data source alike — both read through `specCollectionElement`, which derives this from the spec, so neither can honor it while the other ignores it. Only the live API reveals which shape a route uses, so `read_from_list_test.go` keeps a table of the observed shapes and fails on a `readFromList` route that is not in it. |
+| `createReturnsList` | bool | `false` | The create response is a JSON **array**; take its sole element. One ingress request carrying several CIDRs becomes several rules, each with its own id, so the API answers with a list even for a single source. A spec using this must constrain its request to exactly one element (one source per resource, enforced with `conflictsWith`), because state can track only one id; an empty response is an error and extra elements are ignored with a warning. The array must be **bare** — there is no `createListPath`, so unlike `readListPath` on the read side an enveloped create response cannot be unwrapped. Correct for every current route: the ingress routes answer their POST with a bare array while their GET wraps the elements, which is why creating rules always worked while reading them failed. |
 
 **OperationSpec fields:**
 
@@ -212,7 +215,7 @@ have been replaced by this block.
 |-------|---------|-------------|
 | `verb` | see table below | HTTP method (e.g. `"POST"`, `"PUT"`, `"DELETE"`). |
 | `path` | see table below | Path suffix appended to `uriBase`. May contain `{id}`. |
-| `skipWhen` | absent | **Deprovision only.** Array of conditions (`attribute` + one of `equals`/`notEquals`/`isEmpty`) evaluated against prior state at delete time. When **all** hold (logical AND), the engine skips the pre-delete deprovision step and deletes directly. Use for modes with no cloud infrastructure to tear down, e.g. `"skipWhen": [{"attribute": "cloud", "equals": "K8S_ONLY"}]`. Ignored on create/read/update/delete. |
+| `skipWhen` | absent | **Deprovision only.** Array of conditions (`attribute` + one of `equals`/`notEquals`/`isEmpty`/`isNotEmpty`) evaluated against prior state at delete time. When **all** hold (logical AND), the engine skips the pre-delete deprovision step and deletes directly. Use for modes with no cloud infrastructure to tear down, e.g. `"skipWhen": [{"attribute": "cloud", "equals": "K8S_ONLY"}]`. Ignored on create/read/update/delete. |
 
 ### Default REST conventions
 
@@ -319,6 +322,10 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `immutableOnceTrue` | bool | For a `bool`: reject a `true` → `false` change at plan time. See [One-way switches](#one-way-switches). |
 | `default` | any | Static default value (JSON literal). Requires `computed: true` — the framework errors if `computed` is false and a default is set. |
 | `oneOf` | array of strings | Enum constraint on a `string` attribute. Bad values fail at plan time. Only wired for `string` — on any other type it is silently ignored. |
+| `pattern` | string | Constrains a **`string`** attribute to a Go (RE2) regular expression, checked at plan time so a value the API would reject fails before any call is made. Used by `ecr.name` (the platform record name, a DNS-style label — mirrors the backend's own regex, so a namespaced value like `cbi/tf-igrc` is caught here instead of coming back as a 400) and `ecr.repository_name` (AWS's ECR name rule, which *does* allow `/`). Rejected at spec load on a non-string type, or when the regex does not compile. |
+| `patternDescription` | string | Replaces the raw regex in the plan error. Always prefer it — a regex is rarely actionable, and the message is the only place to say what the reader should do instead (`ecr.name` uses it to name `repository_name` as the field a slashed value belongs in). Rejected at spec load without a `pattern`. |
+| `maxLength` | int | Caps a **`string`** attribute's length at plan time (e.g. `ecr.repository_name` at AWS's 256). |
+| `minLength` | int | Floors a **`string`** attribute's length at plan time. Use for an API minimum a regex cannot express: RE2 has no lookahead, so "at least N characters overall" across optionally-repeating segments — an AWS ECR repository name, minimum 2 — cannot be written as one pattern without duplicating every alternative. Rejected at spec load on a non-string, when negative, or when it exceeds `maxLength`, since no value could satisfy both. |
 | `apiPath` | string | Dot-path in the API body this attribute reads/writes (e.g. `"spec.region"`). See [Path mapping](#path-mapping). |
 | `requestPath` | string | Override `apiPath` for write direction only. |
 | `responsePath` | string | Override `apiPath` for read direction only. |
@@ -329,7 +336,11 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `sendFromState` | bool | The inverse of `noSend`: send a **computed-only** attribute in request bodies, carrying the value Terraform already holds in state. See [Server-assigned fields the API wants back](#server-assigned-fields-the-api-wants-back). |
 | `normalizeCsvOrder` | bool | For a `string` field, sort its comma-separated tokens into a canonical (lexical) order before storing in state. Use for order-insensitive values the backend returns non-deterministically (e.g. AWS MSK bootstrap broker strings) to prevent perpetual refresh drift. |
 | `filterResponseKeys` | array | For a `map(string)` field, drop matching keys from the response before it reaches state, so keys the backend injects into a map the user only partially manages do not show perpetual drift. See [Server-managed map keys](#server-managed-map-keys). |
+| `normalizeTimestamp` | bool | For a **computed-only** `string` field, rewrite an RFC 3339 response value to one canonical spelling — UTC, a `Z` offset, whole seconds — before storing it in state. Use for every server-assigned timestamp: the write response renders one from memory at .NET tick precision (`…53.1452297Z`) while the read response renders what storage kept (`…53.145Z`), so refresh reports "Objects have changed outside of Terraform" after every apply even though nothing moved. The fraction is dropped rather than kept at a fixed width because any digit that survives is a digit the two responses could still disagree about; these fields are only read at second resolution. Normalizing both sides also absorbs the two offset spellings the platform emits (a `DateTimeOffset` with a zero offset serializes as `+00:00`, a UTC `DateTime` as `Z`). Idempotent; unparseable values and the empty string pass through untouched. One consequence to be aware of: two updates inside the same second leave the value unchanged, so `updated_at` cannot be used to distinguish them. Rejected at spec load on a non-`string` type, or on a `required`/`optional` attribute — rewriting a value the user set makes state disagree with the plan, which Terraform fails as an inconsistent result after apply. |
+| `stringBool` | bool | For a **`bool`** attribute, carry the value over the wire as the string `"true"`/`"false"` instead of a JSON boolean, and parse it back on read. Use when the field lives in a string-valued container the API cannot hold a real boolean in — chiefly a `Dictionary<string,string>` metadata map, where a JSON bool fails to deserialize (e.g. `delete_protection` at `metaData.delete_protection` on `resource_group`/`k8s_namespace`). Keeps HCL idiomatic (`delete_protection = false`) rather than forcing a quoted boolean. On read only an explicit `"true"` (case-insensitive) is true; any other non-null value is false, and an absent key stays null so a value the server dropped still surfaces as drift. Rejected at spec load on a non-`bool` type, or combined with `updateBoolTrueValue` (both rewrite the same value's wire form). |
 | `preserveOnEmptyResponse` | bool | Keep the value already held for this attribute — the configured plan value on create/update, the prior state value on refresh — whenever the API returns null or empty for it. See [Write-only fields](#write-only-fields). |
+| `mapValuePath` | string | For a **`map(string)`** attribute whose response entries are objects rather than plain strings, take each value from the named field. Use when the backend keeps per-entry bookkeeping alongside the value but accepts the flat `{"key":"value"}` shape on write, so Terraform can expose an ordinary `map(string)` in both directions — e.g. `resource_group.tags`, returned as `{"cost-center":{"value":"fin-1024","remove":false}}`. Entries already carrying a plain string pass through, so a mixed payload is handled; an entry whose named field is missing or non-string is dropped. Read-side only. Rejected at spec load on any type other than `map(string)`. |
+| `mapDropWhenTrue` | string | Names a sibling **boolean** inside the wrapped entry `mapValuePath` unwraps; an entry whose flag is true is omitted from state entirely. Use for a backend that soft-deletes map entries — `resource_group.tags` keeps a removed tag with `"remove":true` until a reconciler has taken it off every resource, and without this the key reappears in state on the next read and diffs forever against a config that no longer lists it. Requires `mapValuePath`. |
 | `deprecated` | string | Marks the attribute deprecated: the message is wired to the framework's `DeprecationMessage` and shown as a warning whenever the attribute is set in config. Use when renaming an attribute — keep the old one with a deprecation message pointing at the replacement (pair with `conflictsWith` + `requiredIf`/`isEmpty` for a backwards-compatible rename). |
 | `attributes` | array | Nested `AttributeSpec` entries. Required when `type` is an object form. Recurses to any depth. |
 
@@ -550,7 +561,7 @@ usually the case most worth catching.
 ]
 ```
 
-Conditions reuse the `requiredIf` operators — `equals`, `notEquals`, `isEmpty` — plus:
+Conditions reuse the `requiredIf` operators — `equals`, `notEquals`, `isEmpty`, `isNotEmpty` — plus:
 
 | Operator | Meaning |
 |---|---|
@@ -916,7 +927,7 @@ Two forms are supported:
 
 Use the `when` array when the requirement depends on more than one condition.
 All conditions must hold (logical AND). Each condition targets one attribute and
-uses exactly one of `equals`, `notEquals`, or `isEmpty`.
+uses exactly one of `equals`, `notEquals`, `isEmpty`, or `isNotEmpty`.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -931,8 +942,14 @@ Each condition object:
 | `equals` | string | Condition holds when the attribute equals this value. |
 | `notEquals` | string | Condition holds when the attribute does **not** equal this value. |
 | `isEmpty` | bool | Condition holds when the attribute is unset or empty. |
+| `isNotEmpty` | bool | Condition holds when the attribute **is** set. Note that `"isEmpty": false` does *not* mean this — an unset bool reads as "no operator at all", so the presence test needs its own key. |
 
-Exactly one of `equals`, `notEquals`, or `isEmpty` must be set per condition.
+Exactly one of `equals`, `notEquals`, `isEmpty`, or `isNotEmpty` must be set per condition.
+
+`isEmpty` / `isNotEmpty` answer a **collection** by element count, so an explicitly
+empty `list`/`set`/`map` counts as *not set* — matching an API that tests the list's
+length. Scalars compare on their string value, with the attribute's `default` applied
+first. An `object` attribute counts as set when the block is present at all.
 
 When evaluating, if the user omitted an attribute that has a `default`, the
 default value is used — so conditions on defaulted fields work correctly
@@ -958,6 +975,26 @@ without the user explicitly setting them.
     "attribute": "engine_version",
     "when": [
       { "attribute": "snapshot_name", "isEmpty": true }
+    ]
+  }
+]
+```
+
+**Example** — an **all-or-nothing pair**: two rules pointing at each other make either
+list mandatory once the other is set, so the API never sees one without the other
+(`network_baseline`'s custom subnet CIDRs). Setting neither stays valid:
+```json
+"requiredIf": [
+  {
+    "attribute": "custom_private_subnet_cidrs",
+    "when": [
+      { "attribute": "custom_public_subnet_cidrs", "isNotEmpty": true }
+    ]
+  },
+  {
+    "attribute": "custom_public_subnet_cidrs",
+    "when": [
+      { "attribute": "custom_private_subnet_cidrs", "isNotEmpty": true }
     ]
   }
 ]

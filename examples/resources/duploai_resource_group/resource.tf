@@ -29,9 +29,50 @@ resource "duploai_resource_group" "custom" {
   provisioner_type  = "IacNativeTf"
   aws_resource_name = "prod-rg"
 
+  # User-defined tags, inherited by every resource provisioned under this group:
+  # stamped on AWS resources as tags and on Kubernetes objects as labels. Each
+  # entry must be legal in both systems, so the Kubernetes label grammar governs
+  # the character set. The duplocloud.ai/ and aws: prefixes are reserved.
+  #
+  # Removing a key here removes the tag from every resource in the group, but
+  # propagation is asynchronous — a removed tag can linger briefly after apply.
+  # Omit the argument to leave stored tags untouched; set {} to remove them all.
+  tags = {
+    owner       = "platform-team"
+    cost-center = "fin-1024"
+  }
+
+  # Free-form key/value metadata stored on the resource group record. Provide the
+  # complete map — on update it replaces the previous one. Do not put
+  # delete_protection here; that key belongs to the delete_protection attribute
+  # and is filtered out of this map.
+  metadata = {
+    owner       = "platform-team"
+    cost-center = "cc-4417"
+  }
+
   timeouts {
     create = "45m"
     update = "30m"
     delete = "20m"
   }
+}
+
+# Disposable resource group — delete protection turned off up front so
+# `terraform destroy` works without a second apply.
+#
+# The platform enables delete protection on every new resource group unless the
+# create request says otherwise, and while it is on the API refuses both
+# deprovision and delete. Leaving delete_protection unset therefore inherits the
+# platform default (on), and tearing the group down then takes two steps: set it
+# to false, apply, and only then destroy. Setting it here at create time skips
+# that dance — appropriate for ephemeral/CI environments, not for production.
+resource "duploai_resource_group" "disposable" {
+  workspace_id   = "<workspace-id>"
+  name           = "ci-ephemeral-rg"
+  environment_id = "<environment-id>"
+  region         = ""
+  network_id     = "<network-id>"
+
+  delete_protection = false
 }

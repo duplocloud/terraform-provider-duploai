@@ -57,10 +57,10 @@ resource "duploai_admin_command_policy_mapping" "project" {
 
 ### Read-Only
 
-- `created_at` (String) Timestamp when the mapping was created (RFC 3339).
+- `created_at` (String) Timestamp when the mapping was created (RFC 3339, normalized to UTC at second precision).
 - `created_by` (String) Identifier of the user who created the mapping.
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `updated_at` (String) Timestamp when the mapping was last updated (RFC 3339).
+- `updated_at` (String) Timestamp when the mapping was last updated (RFC 3339, normalized to UTC at second precision).
 - `updated_by` (String) Identifier of the user who last updated the mapping.
 - `version` (Number) Server-incremented version of the mapping.
 
