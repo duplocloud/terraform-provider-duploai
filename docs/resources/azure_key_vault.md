@@ -40,9 +40,10 @@ resource "duploai_azure_key_vault" "restricted" {
   soft_delete_retention_days = 90
   enable_purge_protection    = true
 
-  # Purge protection blocks purging, so a destroyed vault keeps its name
-  # reserved for the full retention period.
-  purge_on_deprovision = false
+  # Note: a destroyed vault stays soft-deleted for the retention period above,
+  # and its globally-unique name stays reserved for that whole time. Reusing the
+  # name means purging the soft-deleted vault in Azure first — which purge
+  # protection forbids, so a protected vault's name is unavailable for 90 days.
 
   network_acls = {
     public_network_access = "Enabled"
@@ -79,7 +80,7 @@ resource "duploai_azure_key_vault" "private" {
 
 ### Optional
 
-- `enable_purge_protection` (Boolean) Prevent permanent deletion during the retention period. One-way in Azure: it can be turned on, but turning it off is rejected — the vault has to be recreated. Setting it back to false is refused at plan time rather than failing mid-apply; use `lifecycle { ignore_changes = [enable_purge_protection] }` if you want Terraform to leave an already-protected vault alone. Note it also blocks purge_on_deprovision, so the name stays reserved for the full retention period after a destroy.
+- `enable_purge_protection` (Boolean) Prevent permanent deletion during the retention period. One-way in Azure: it can be turned on, but turning it off is rejected - the vault has to be recreated. Setting it back to false is refused at plan time rather than failing mid-apply; use lifecycle { ignore_changes = [enable_purge_protection] } if you want Terraform to leave an already-protected vault alone. It also blocks purging a soft-deleted vault, so after a destroy the name stays reserved for the full soft_delete_retention_days and cannot be reused before then.
 - `enabled_for_deployment` (Boolean) Allow Azure Virtual Machines to retrieve certificates stored as secrets. Kubernetes workloads do not need this — they use the Secrets Store CSI driver with workload identity.
 - `enabled_for_disk_encryption` (Boolean) Allow Azure Disk Encryption to retrieve secrets and unwrap keys.
 - `enabled_for_template_deployment` (Boolean) Allow ARM template deployments to retrieve secrets during deployment.
@@ -87,7 +88,7 @@ resource "duploai_azure_key_vault" "private" {
 - `network_acls` (Attributes) Network rules controlling who can reach the vault's data plane. (see [below for nested schema](#nestedatt--network_acls))
 - `provisioner_type` (String) How the platform provisions the vault. Defaults to the environment's provisioner.
 - `provisioner_version` (String) Provisioner version. Defaults to the environment's version.
-- `purge_on_deprovision` (Boolean) Purge the vault after deleting it so its name is immediately reusable. A platform behaviour, not an Azure setting. Leave off to keep deprovisioned vaults recoverable — but vault names are globally unique, so an unpurged vault blocks reuse of its name for the whole retention period.
+- `purge_on_deprovision` (Boolean, Deprecated) Deprecated and ignored. Azure keeps a deleted vault soft-deleted for soft_delete_retention_days, and its globally-unique name stays reserved for that period. To create a new vault with the same name, purge the soft-deleted one in Azure first (az keyvault purge --name <name>) - which is only possible when enable_purge_protection is false.
 - `sku_name` (String) Pricing tier. Standard is sufficient for secrets and certificates; Premium adds HSM-backed keys.
 - `soft_delete_retention_days` (Number) How long a deleted vault or secret stays recoverable before Azure permanently removes it. Soft delete itself cannot be disabled.
 - `tags` (Map of String) Azure resource tags. Platform-managed duplocloud-ai-* tags are added automatically and are not tracked here.
