@@ -80,6 +80,7 @@
       "forceNew": true,
       "oneOf": ["11", "12", "13", "14", "15", "16", "17", "18"],
       "apiPath": "spec.version",
+      "responsePaths": ["result.cloudDetails.version", "spec.version"],
       "description": "PostgreSQL major version. Immutable — Azure does not support in-place major version upgrades."
     },
     {
@@ -91,7 +92,7 @@
       "oneOf": ["Burstable", "GeneralPurpose", "MemoryOptimized"],
       "createPath": "spec.sku.tier",
       "updatePath": "spec.updateRequest.sku.tier",
-      "responsePath": "spec.sku.tier",
+      "responsePaths": ["result.cloudDetails.sku.tier", "spec.sku.tier"],
       "description": "Compute tier. Burstable is cost-effective for low or variable workloads; GeneralPurpose balances compute and memory; MemoryOptimized suits demanding workloads."
     },
     {
@@ -102,7 +103,7 @@
       "default": "Standard_B1ms",
       "createPath": "spec.sku.name",
       "updatePath": "spec.updateRequest.sku.name",
-      "responsePath": "spec.sku.name",
+      "responsePaths": ["result.cloudDetails.sku.name", "spec.sku.name"],
       "description": "Compute size, e.g. Standard_B1ms (1 vCore, 2 GiB) or Standard_B2s (2 vCore, 4 GiB) for Burstable. Must be a size Azure offers for the chosen sku_tier."
     },
 
@@ -114,7 +115,7 @@
       "default": 32,
       "createPath": "spec.storage.storageSizeGB",
       "updatePath": "spec.updateRequest.storage.storageSizeGB",
-      "responsePath": "spec.storage.storageSizeGB",
+      "responsePaths": ["result.cloudDetails.storage.storageSizeInGB", "spec.storage.storageSizeGB"],
       "description": "Storage size in GiB. Azure allows growing storage but never shrinking it."
     },
     {
@@ -126,7 +127,7 @@
       "oneOf": ["Enabled", "Disabled"],
       "createPath": "spec.storage.autoGrow",
       "updatePath": "spec.updateRequest.storage.autoGrow",
-      "responsePath": "spec.storage.autoGrow",
+      "responsePaths": ["result.cloudDetails.storage.autoGrow", "spec.storage.autoGrow"],
       "description": "Whether Azure grows storage automatically as it fills."
     },
     {
@@ -137,7 +138,7 @@
       "oneOf": ["P1", "P2", "P3", "P4", "P6", "P10", "P15", "P20", "P30", "P40", "P50", "P60", "P70", "P80"],
       "createPath": "spec.storage.storageTier",
       "updatePath": "spec.updateRequest.storage.storageTier",
-      "responsePath": "spec.storage.storageTier",
+      "responsePaths": ["result.cloudDetails.storage.tier", "spec.storage.storageTier"],
       "description": "Managed-disk performance tier. Leave unset to let Azure pick the default for the chosen storage size."
     },
     {
@@ -147,6 +148,7 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.availabilityZone",
+      "responsePaths": ["result.cloudDetails.availabilityZone", "spec.availabilityZone"],
       "description": "Availability zone to place the server in (\"1\", \"2\" or \"3\"). Leave unset for no preference. Immutable after creation."
     },
 
@@ -160,7 +162,7 @@
       "max": 35,
       "createPath": "spec.backup.backupRetentionDays",
       "updatePath": "spec.updateRequest.backupRetentionDays",
-      "responsePath": "spec.backup.backupRetentionDays",
+      "responsePaths": ["result.cloudDetails.backup.backupRetentionDays", "spec.backup.backupRetentionDays"],
       "description": "Number of days to retain automated backups."
     },
     {
@@ -172,6 +174,7 @@
       "forceNew": true,
       "oneOf": ["Enabled", "Disabled"],
       "apiPath": "spec.backup.geoRedundantBackup",
+      "responsePaths": ["result.cloudDetails.backup.geoRedundantBackup", "spec.backup.geoRedundantBackup"],
       "description": "Whether backups are replicated to the paired region. Immutable after creation."
     },
     {
@@ -183,7 +186,7 @@
       "oneOf": ["Disabled", "SameZone", "ZoneRedundant"],
       "createPath": "spec.highAvailability.mode",
       "updatePath": "spec.updateRequest.highAvailability.mode",
-      "responsePath": "spec.highAvailability.mode",
+      "responsePaths": ["result.cloudDetails.highAvailability.mode", "spec.highAvailability.mode"],
       "description": "Standby replica placement. SameZone keeps the standby in the same availability zone; ZoneRedundant places it in a different one. Not available on the Burstable tier."
     },
     {
@@ -193,7 +196,7 @@
       "computed": true,
       "createPath": "spec.highAvailability.standbyAvailabilityZone",
       "updatePath": "spec.updateRequest.highAvailability.standbyAvailabilityZone",
-      "responsePath": "spec.highAvailability.standbyAvailabilityZone",
+      "responsePaths": ["result.cloudDetails.highAvailability.standbyAvailabilityZone", "spec.highAvailability.standbyAvailabilityZone"],
       "description": "Availability zone for the standby replica when high_availability_mode is ZoneRedundant. Leave unset to let Azure choose."
     },
     {
@@ -203,7 +206,7 @@
       "computed": true,
       "createPath": "spec.maintenanceWindow",
       "updatePath": "spec.updateRequest.maintenanceWindow",
-      "responsePath": "spec.maintenanceWindow",
+      "responsePaths": ["result.cloudDetails.maintenanceWindow", "spec.maintenanceWindow"],
       "description": "When Azure may apply planned maintenance. Leave unset to let Azure pick the window.",
       "attributes": [
         {
@@ -255,7 +258,7 @@
       "filterResponseKeys": ["duplocloud-ai-*"],
       "createPath": "spec.tags",
       "updatePath": "spec.updateRequest.tags",
-      "responsePath": "spec.tags",
+      "responsePaths": ["result.cloudDetails.tags", "spec.tags"],
       "description": "Azure resource tags. Platform-managed duplocloud-ai-* tags are added automatically and are not tracked here."
     },
 
@@ -266,6 +269,7 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.administratorLogin",
+      "responsePaths": ["result.cloudDetails.administratorLogin", "spec.administratorLogin"],
       "description": "Administrator login name. Required when password_auth is Enabled; leave unset in Microsoft Entra-only mode. Letters, numbers and underscores only, cannot start with 'pg_', and Azure reserves several names. Immutable after creation."
     },
     {
@@ -288,7 +292,7 @@
       "oneOf": ["Enabled", "Disabled"],
       "createPath": "spec.authConfig.passwordAuth",
       "updatePath": "spec.updateRequest.authConfig.passwordAuth",
-      "responsePath": "spec.authConfig.passwordAuth",
+      "responsePaths": ["result.cloudDetails.authConfig.passwordAuth", "spec.authConfig.passwordAuth"],
       "description": "Whether PostgreSQL password authentication is accepted. At least one of password_auth and active_directory_auth must be Enabled."
     },
     {
@@ -300,7 +304,7 @@
       "oneOf": ["Enabled", "Disabled"],
       "createPath": "spec.authConfig.activeDirectoryAuth",
       "updatePath": "spec.updateRequest.authConfig.activeDirectoryAuth",
-      "responsePath": "spec.authConfig.activeDirectoryAuth",
+      "responsePaths": ["result.cloudDetails.authConfig.activeDirectoryAuth", "spec.authConfig.activeDirectoryAuth"],
       "description": "Whether Microsoft Entra authentication is accepted. At least one of password_auth and active_directory_auth must be Enabled."
     },
     {
@@ -310,7 +314,7 @@
       "computed": true,
       "createPath": "spec.authConfig.tenantId",
       "updatePath": "spec.updateRequest.authConfig.tenantId",
-      "responsePath": "spec.authConfig.tenantId",
+      "responsePaths": ["result.cloudDetails.authConfig.tenantId", "spec.authConfig.tenantId"],
       "description": "Microsoft Entra tenant (a GUID) that backs Entra authentication. Defaults to the subscription's tenant."
     },
     {
@@ -359,6 +363,7 @@
       "forceNew": true,
       "oneOf": ["Enabled", "Disabled"],
       "apiPath": "spec.network.publicNetworkAccess",
+      "responsePaths": ["result.cloudDetails.network.publicNetworkAccess", "spec.network.publicNetworkAccess"],
       "description": "Enabled exposes the server publicly, gated by firewall_rules. Disabled selects private access (VNet integration) and requires delegated_subnet_resource_id. Immutable after creation — Azure does not allow changing the connectivity method, VNet, or private DNS zone afterwards."
     },
     {
@@ -368,6 +373,7 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.network.delegatedSubnetResourceId",
+      "responsePaths": ["result.cloudDetails.network.delegatedSubnetResourceId", "spec.network.delegatedSubnetResourceId"],
       "description": "ARM resource id of the delegated subnet for private access. Required when public_network_access is Disabled, and rejected alongside firewall_rules."
     },
     {
@@ -377,6 +383,7 @@
       "computed": true,
       "forceNew": true,
       "apiPath": "spec.network.privateDnsZoneArmResourceId",
+      "responsePaths": ["result.cloudDetails.network.privateDnsZoneArmResourceId", "spec.network.privateDnsZoneArmResourceId"],
       "description": "ARM resource id of the private DNS zone for private access. Leave unset to let the platform create or reuse the well-known zone."
     },
     {
