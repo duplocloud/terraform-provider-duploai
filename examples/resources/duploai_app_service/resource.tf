@@ -51,6 +51,14 @@ resource "duploai_app_service" "nginx" {
   ingress = {
     name               = "nginx"
     ingress_class_name = "nginx"
+
+    # Labels on the Ingress object. The platform adds its own duplocloud.ai/*
+    # labels alongside these; keys under duplocloud.ai/ are reserved.
+    labels = {
+      app  = "nginx"
+      team = "web"
+    }
+
     rules = [
       {
         host = "nginx.example.com"
