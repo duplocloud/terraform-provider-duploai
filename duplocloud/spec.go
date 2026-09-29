@@ -864,6 +864,12 @@ type WaiterSpec struct {
 	// report a transient failure mid-provisioning (a first attempt fails, the
 	// worker retries) and then recover. Defaults to 0 (abort on first failure).
 	FailureRetries int `json:"failureRetries,omitempty"`
+
+	// FetchRetries is how many consecutive failed polls to tolerate before
+	// giving up. A read that never lands says nothing about the resource, so
+	// aborting on the first one fails creates that are actually succeeding.
+	// Defaults to defaultFetchRetries when unset.
+	FetchRetries int `json:"fetchRetries,omitempty"`
 	// DeprovisionedState is the terminal status reached after a deprovision step
 	// completes (e.g. "DeProvisioned"). Required only for resources whose
 	// endpoint declares a Deprovision operation; the delete flow waits for this
@@ -899,6 +905,7 @@ func defaultWaiterSpec() WaiterSpec {
 		},
 		FailureDetailPath:    "blockedReason",
 		PollIntervalSeconds:  10,
+		FetchRetries:         5,
 		CreateTimeoutMinutes: 30,
 		UpdateTimeoutMinutes: 30,
 		DeleteTimeoutMinutes: 15,

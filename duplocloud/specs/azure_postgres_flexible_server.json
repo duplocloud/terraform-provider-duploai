@@ -468,7 +468,7 @@
       "type": "string",
       "computed": true,
       "noSend": true,
-      "responsePaths": ["result.cloudDetails.id", "spec.uniqueCloudResourceId"],
+      "responsePaths": ["spec.uniqueCloudResourceId", "result.cloudDetails.id"],
       "description": "ARM resource id of the PostgreSQL Flexible Server in Azure."
     },
     {
@@ -574,8 +574,9 @@
     }
   ],
   "waiter": {
-    "readyPath": "result.provisioningState",
-    "readyState": "Ready",
-    "deprovisionedState": "DeProvisioned"
+    "deprovisionedState": "DeProvisioned",
+    "createTimeoutMinutes": 60,
+    "updateTimeoutMinutes": 60,
+    "deleteTimeoutMinutes": 60
   }
 }

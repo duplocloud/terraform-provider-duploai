@@ -30,8 +30,18 @@ type Waiter[T any] struct {
 	// failure — a longer wait avoids hammering the API during retry. Falls back
 	// to PollInterval when zero.
 	FailurePollInterval time.Duration
-	StatusFn            func(*T) string
-	FailureDetailFn     func(*T) string // optional: extra context appended to the error message
+	// FetchRetries is how many consecutive fetch errors to tolerate before
+	// giving up. A poll that fails to reach the API says nothing about the
+	// resource: the read may have timed out while the backend was busy
+	// enriching its response (Azure Postgres blocks GET while it applies
+	// firewall rules), or hit a restart or a blip. Aborting on the first such
+	// error fails a create that is in fact succeeding, and leaves Terraform
+	// with no state for a resource that now exists. With FetchRetries=N the
+	// waiter retries N times before surfacing the error, and the counter resets
+	// on any successful fetch. The overall timeout still bounds the wait.
+	FetchRetries    int
+	StatusFn        func(*T) string
+	FailureDetailFn func(*T) string // optional: extra context appended to the error message
 	// ReadyFn / ReadyState add an optional secondary success gate: when ReadyFn
 	// is set, the resource is only considered done once StatusFn == SuccessState
 	// AND ReadyFn == ReadyState. Use it when the provisioning status reports
@@ -76,11 +86,25 @@ func (w *Waiter[T]) Wait(ctx context.Context, name string, timeout time.Duration
 	log.Printf("[TRACE] waiter(%s): start (timeout=%s)", name, timeout)
 	deadline := time.Now().Add(timeout)
 	failCount := 0
+	fetchFailCount := 0
 	for {
 		obj, err := fetchFn()
 		if err != nil {
-			return nil, err
+			// A failed read tells us nothing about the resource; retry rather
+			// than abandon a create that may well be succeeding.
+			fetchFailCount++
+			if fetchFailCount > w.FetchRetries || time.Now().After(deadline) {
+				return nil, err
+			}
+			log.Printf("[TRACE] waiter(%s): fetch failed (%s), retry %d/%d", name, err, fetchFailCount, w.FetchRetries)
+			select {
+			case <-ctx.Done():
+				return nil, newClientError(0, fmt.Errorf("waiting for %s cancelled: %w", name, ctx.Err()))
+			case <-time.After(w.PollInterval):
+			}
+			continue
 		}
+		fetchFailCount = 0
 		status := w.StatusFn(obj)
 		log.Printf("[TRACE] waiter(%s): status=%s", name, status)
 
