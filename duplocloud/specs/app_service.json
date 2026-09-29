@@ -1459,6 +1459,14 @@
           "description": "Name of the Ingress object."
         },
         {
+          "name": "labels",
+          "type": "map(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "metadata.labels",
+          "description": "Labels applied to the Ingress object. The platform also stamps its own `duplocloud.ai/*` labels and the resource group's tags onto the object in the cluster; keys under `duplocloud.ai/` are reserved and dropped if set here."
+        },
+        {
           "name": "annotations",
           "type": "map(string)",
           "optional": true,

@@ -964,6 +964,7 @@ Read-Only:
 - `api_version` (String) Ingress apiVersion.
 - `ingress_class_name` (String) IngressClass name (e.g. nginx, alb).
 - `kind` (String) Ingress kind.
+- `labels` (Map of String) Labels applied to the Ingress object. The platform also stamps its own `duplocloud.ai/*` labels and the resource group's tags onto the object in the cluster; keys under `duplocloud.ai/` are reserved and dropped if set here.
 - `name` (String) Name of the Ingress object.
 - `rules` (Attributes List) Host/path routing rules. (see [below for nested schema](#nestedatt--ingress--rules))
 
