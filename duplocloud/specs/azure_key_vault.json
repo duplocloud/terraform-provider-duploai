@@ -1,6 +1,6 @@
 {
   "name": "azure_key_vault",
-  "description": "Manages an Azure Key Vault — a managed store for secrets, keys and certificates, provisioned within an environment and resource group. Platform-provisioned vaults always use Azure RBAC: the resource group's managed identity is granted Key Vault Administrator at resource-group scope, so workloads bound to that group can read secrets with no per-vault permission setup.",
+  "description": "Manages an Azure Key Vault \u2014 a managed store for secrets, keys and certificates, provisioned within an environment and resource group. Platform-provisioned vaults always use Azure RBAC: the resource group's managed identity is granted Key Vault Administrator at resource-group scope, so workloads bound to that group can read secrets with no per-vault permission setup.",
   "idPath": "id",
   "dataSource": true,
   "endpoint": {
@@ -8,7 +8,10 @@
     "deprovision": {}
   },
   "createConstants": [
-    { "path": "spec.mode", "value": "Create" }
+    {
+      "path": "spec.mode",
+      "value": "Create"
+    }
   ],
   "attributes": [
     {
@@ -24,7 +27,7 @@
       "required": true,
       "forceNew": true,
       "apiPath": "name",
-      "description": "Vault name. 3–24 characters, letters, numbers and hyphens only; must start with a letter, end with a letter or number, and contain no consecutive hyphens. Must be globally unique within Azure — note that a soft-deleted vault keeps its name reserved until it is purged."
+      "description": "Vault name. 3\u201324 characters, letters, numbers and hyphens only; must start with a letter, end with a letter or number, and contain no consecutive hyphens. Must be globally unique within Azure \u2014 note that a soft-deleted vault keeps its name reserved until it is purged."
     },
     {
       "name": "environment_id",
@@ -50,20 +53,21 @@
       "apiPath": "spec.scopeIds",
       "description": "Scopes the vault is visible to. Inherited from the resource group."
     },
-
     {
       "name": "sku_name",
       "type": "string",
       "optional": true,
       "computed": true,
       "default": "Standard",
-      "oneOf": ["Standard", "Premium"],
+      "oneOf": [
+        "Standard",
+        "Premium"
+      ],
       "createPath": "spec.skuName",
       "updatePath": "spec.updateRequest.skuName",
       "responsePath": "spec.skuName",
       "description": "Pricing tier. Standard is sufficient for secrets and certificates; Premium adds HSM-backed keys."
     },
-
     {
       "name": "soft_delete_retention_days",
       "type": "int",
@@ -74,8 +78,11 @@
       "max": 90,
       "createPath": "spec.softDeleteRetentionInDays",
       "updatePath": "spec.updateRequest.softDeleteRetentionInDays",
-      "responsePath": "spec.softDeleteRetentionInDays",
-      "description": "How long a deleted vault or secret stays recoverable before Azure permanently removes it. Soft delete itself cannot be disabled."
+      "description": "How long a deleted vault or secret stays recoverable before Azure permanently removes it. Soft delete itself cannot be disabled.",
+      "responsePaths": [
+        "result.cloudDetails.properties.softDeleteRetentionInDays",
+        "spec.softDeleteRetentionInDays"
+      ]
     },
     {
       "name": "enable_purge_protection",
@@ -86,21 +93,26 @@
       "immutableOnceTrue": true,
       "createPath": "spec.enablePurgeProtection",
       "updatePath": "spec.updateRequest.enablePurgeProtection",
-      "responsePath": "spec.enablePurgeProtection",
-      "description": "Prevent permanent deletion during the retention period. One-way in Azure: it can be turned on, but turning it off is rejected — the vault has to be recreated. Setting it back to false is refused at plan time rather than failing mid-apply; use `lifecycle { ignore_changes = [enable_purge_protection] }` if you want Terraform to leave an already-protected vault alone. Note it also blocks purge_on_deprovision, so the name stays reserved for the full retention period after a destroy."
+      "description": "Prevent permanent deletion during the retention period. One-way in Azure: it can be turned on, but turning it off is rejected - the vault has to be recreated. Setting it back to false is refused at plan time rather than failing mid-apply; use lifecycle { ignore_changes = [enable_purge_protection] } if you want Terraform to leave an already-protected vault alone. It also blocks purging a soft-deleted vault, so after a destroy the name stays reserved for the full soft_delete_retention_days and cannot be reused before then.",
+      "responsePaths": [
+        "result.cloudDetails.properties.enablePurgeProtection",
+        "spec.enablePurgeProtection"
+      ]
     },
     {
       "name": "purge_on_deprovision",
       "type": "bool",
       "optional": true,
       "computed": true,
-      "default": true,
       "createPath": "spec.purgeOnDeprovision",
       "updatePath": "spec.updateRequest.purgeOnDeprovision",
-      "responsePath": "spec.purgeOnDeprovision",
-      "description": "Purge the vault after deleting it so its name is immediately reusable. A platform behaviour, not an Azure setting. Leave off to keep deprovisioned vaults recoverable — but vault names are globally unique, so an unpurged vault blocks reuse of its name for the whole retention period."
+      "description": "Deprecated and ignored. Azure keeps a deleted vault soft-deleted for soft_delete_retention_days, and its globally-unique name stays reserved for that period. To create a new vault with the same name, purge the soft-deleted one in Azure first (az keyvault purge --name <name>) - which is only possible when enable_purge_protection is false.",
+      "responsePaths": [
+        "spec.purgeOnDeprovision"
+      ],
+      "deprecated": "No longer used. The platform does not purge the vault on deprovision; to reuse a vault's name, purge the soft-deleted vault in Azure first.",
+      "preserveOnEmptyResponse": true
     },
-
     {
       "name": "enabled_for_deployment",
       "type": "bool",
@@ -109,8 +121,11 @@
       "default": false,
       "createPath": "spec.enabledForDeployment",
       "updatePath": "spec.updateRequest.enabledForDeployment",
-      "responsePath": "spec.enabledForDeployment",
-      "description": "Allow Azure Virtual Machines to retrieve certificates stored as secrets. Kubernetes workloads do not need this — they use the Secrets Store CSI driver with workload identity."
+      "description": "Allow Azure Virtual Machines to retrieve certificates stored as secrets. Kubernetes workloads do not need this \u2014 they use the Secrets Store CSI driver with workload identity.",
+      "responsePaths": [
+        "result.cloudDetails.properties.enabledForDeployment",
+        "spec.enabledForDeployment"
+      ]
     },
     {
       "name": "enabled_for_disk_encryption",
@@ -120,8 +135,11 @@
       "default": false,
       "createPath": "spec.enabledForDiskEncryption",
       "updatePath": "spec.updateRequest.enabledForDiskEncryption",
-      "responsePath": "spec.enabledForDiskEncryption",
-      "description": "Allow Azure Disk Encryption to retrieve secrets and unwrap keys."
+      "description": "Allow Azure Disk Encryption to retrieve secrets and unwrap keys.",
+      "responsePaths": [
+        "result.cloudDetails.properties.enabledForDiskEncryption",
+        "spec.enabledForDiskEncryption"
+      ]
     },
     {
       "name": "enabled_for_template_deployment",
@@ -131,10 +149,12 @@
       "default": false,
       "createPath": "spec.enabledForTemplateDeployment",
       "updatePath": "spec.updateRequest.enabledForTemplateDeployment",
-      "responsePath": "spec.enabledForTemplateDeployment",
-      "description": "Allow ARM template deployments to retrieve secrets during deployment."
+      "description": "Allow ARM template deployments to retrieve secrets during deployment.",
+      "responsePaths": [
+        "result.cloudDetails.properties.enabledForTemplateDeployment",
+        "spec.enabledForTemplateDeployment"
+      ]
     },
-
     {
       "name": "network_acls",
       "type": "object",
@@ -142,7 +162,6 @@
       "computed": true,
       "createPath": "spec.networkAcls",
       "updatePath": "spec.updateRequest.networkAcls",
-      "responsePath": "spec.networkAcls",
       "description": "Network rules controlling who can reach the vault's data plane.",
       "attributes": [
         {
@@ -151,7 +170,10 @@
           "optional": true,
           "computed": true,
           "default": "Enabled",
-          "oneOf": ["Enabled", "Disabled"],
+          "oneOf": [
+            "Enabled",
+            "Disabled"
+          ],
           "apiPath": "publicNetworkAccess",
           "description": "Enabled makes the vault reachable over its public endpoint, subject to default_action. Disabled allows private endpoints only."
         },
@@ -161,7 +183,10 @@
           "optional": true,
           "computed": true,
           "default": "Allow",
-          "oneOf": ["Allow", "Deny"],
+          "oneOf": [
+            "Allow",
+            "Deny"
+          ],
           "apiPath": "defaultAction",
           "description": "What to do with traffic that matches no rule. Allow accepts any network; Deny accepts only the addresses in ip_rules and the subnets in vnet_rules."
         },
@@ -190,6 +215,10 @@
           "apiPath": "bypassAzureServices",
           "description": "Let trusted Microsoft services bypass the firewall."
         }
+      ],
+      "responsePaths": [
+        "result.networkAcls",
+        "spec.networkAcls"
       ]
     },
     {
@@ -197,20 +226,29 @@
       "type": "map(string)",
       "optional": true,
       "computed": true,
-      "filterResponseKeys": ["duplocloud-ai-*"],
+      "filterResponseKeys": [
+        "duplocloud-ai-*"
+      ],
       "createPath": "spec.tags",
       "updatePath": "spec.updateRequest.tags",
-      "responsePath": "spec.tags",
-      "description": "Azure resource tags. Platform-managed duplocloud-ai-* tags are added automatically and are not tracked here."
+      "description": "Azure resource tags. Platform-managed duplocloud-ai-* tags are added automatically and are not tracked here.",
+      "responsePaths": [
+        "result.cloudDetails.tags",
+        "spec.tags"
+      ]
     },
-
     {
       "name": "provisioner_type",
       "type": "string",
       "optional": true,
       "computed": true,
       "forceNew": true,
-      "oneOf": ["Cli", "IacNativeTf", "IacDuploTf", "DirectApiCall"],
+      "oneOf": [
+        "Cli",
+        "IacNativeTf",
+        "IacDuploTf",
+        "DirectApiCall"
+      ],
       "apiPath": "spec.provisioner.type",
       "description": "How the platform provisions the vault. Defaults to the environment's provisioner."
     },
@@ -223,13 +261,16 @@
       "apiPath": "spec.provisioner.version",
       "description": "Provisioner version. Defaults to the environment's version."
     },
-
     {
       "name": "enable_rbac_authorization",
       "type": "bool",
       "computed": true,
       "apiPath": "spec.enableRbacAuthorization",
-      "description": "Whether the vault's data plane uses Azure RBAC. Always true for platform-provisioned vaults, and immutable — flipping it would silently change who can read every secret, so the platform requires a recreate instead."
+      "description": "Whether the vault's data plane uses Azure RBAC. Always true for platform-provisioned vaults, and immutable \u2014 flipping it would silently change who can read every secret, so the platform requires a recreate instead.",
+      "responsePaths": [
+        "result.cloudDetails.properties.enableRbacAuthorization",
+        "spec.enableRbacAuthorization"
+      ]
     },
     {
       "name": "azure_resource_group_name",
@@ -258,8 +299,8 @@
       "type": "string",
       "computed": true,
       "noSend": true,
-      "apiPath": "result.keyVaultId",
-      "description": "ARM resource id of the Key Vault in Azure."
+      "description": "ARM resource id of the Key Vault in Azure.",
+      "responsePath": "result.cloudDetails.id"
     },
     {
       "name": "vault_uri",
