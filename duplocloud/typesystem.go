@@ -890,7 +890,7 @@ func restorePreservedValues(a AttributeSpec, prior, next tftypes.Value) tftypes.
 		return next
 	}
 	if a.PreserveOnEmptyResponse {
-		if isEmptyStateValue(next) && prior.IsKnown() && !prior.IsNull() && prior.Type().Is(next.Type()) {
+		if isRedactedStateValue(next) && prior.IsKnown() && !prior.IsNull() && prior.Type().Is(next.Type()) {
 			return prior
 		}
 		return next
@@ -989,6 +989,29 @@ func isEmptyStateValue(v tftypes.Value) bool {
 		var s string
 		if err := v.As(&s); err == nil {
 			return s == ""
+		}
+	}
+	return false
+}
+
+// redactedPrefix is how the backend masks a secret it will not return
+// (SecretHelper.MaskValue): eight asterisks, followed by the last few characters
+// of longer values. The backend itself reads a value with this prefix on update
+// as "unchanged".
+const redactedPrefix = "********"
+
+// isRedactedStateValue reports whether a response value stands in for a secret
+// the API withholds: null or empty (isEmptyStateValue), or masked with
+// redactedPrefix. Either way it says nothing about the real value, so a
+// PreserveOnEmptyResponse attribute keeps what it already holds.
+func isRedactedStateValue(v tftypes.Value) bool {
+	if isEmptyStateValue(v) {
+		return true
+	}
+	if v.Type().Is(tftypes.String) {
+		var s string
+		if err := v.As(&s); err == nil {
+			return strings.HasPrefix(s, redactedPrefix)
 		}
 	}
 	return false

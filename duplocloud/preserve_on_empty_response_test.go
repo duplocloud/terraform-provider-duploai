@@ -277,3 +277,90 @@ func TestMergeUnknown_ListObjectKeepsConfiguredLeaves(t *testing.T) {
 		t.Errorf("metadata[rotated] = %q, want the response value", rotated)
 	}
 }
+
+// A top-level write-only password, the azure_postgres_flexible_server shape:
+// the API returns it masked ("********" plus the last few characters) rather
+// than empty.
+func pgPasswordAttrs() []AttributeSpec {
+	return []AttributeSpec{
+		{Name: "name", Type: "string", Required: true, APIPath: "name"},
+		{Name: "administrator_password", Type: "string", Optional: true, Sensitive: true, APIPath: "spec.administratorLoginPassword", PreserveOnEmptyResponse: true},
+	}
+}
+
+var pgTopType = tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+	"id":                     tftypes.String,
+	"name":                   tftypes.String,
+	"administrator_password": tftypes.String,
+}}
+
+func pgBase(password any) tftypes.Value {
+	return tftypes.NewValue(pgTopType, map[string]tftypes.Value{
+		"id":                     tftypes.NewValue(tftypes.String, "pg1"),
+		"name":                   tftypes.NewValue(tftypes.String, "tf-test-pg"),
+		"administrator_password": tftypes.NewValue(tftypes.String, password),
+	})
+}
+
+func pgPasswordInState(t *testing.T, v tftypes.Value) string {
+	t.Helper()
+	var obj map[string]tftypes.Value
+	if err := v.As(&obj); err != nil {
+		t.Fatalf("state is not an object: %v", err)
+	}
+	var s string
+	if err := obj["administrator_password"].As(&s); err != nil {
+		t.Fatalf("administrator_password: %v", err)
+	}
+	return s
+}
+
+func pgResponse(password string) map[string]any {
+	return map[string]any{"id": "pg1", "name": "tf-test-pg", "spec": map[string]any{"administratorLoginPassword": password}}
+}
+
+// Refresh: a masked read must not replace the password in state. Before this,
+// every plan showed administrator_password changing and re-sent it on apply.
+func TestPreserveOnEmpty_RefreshKeepsSecretOverMaskedResponse(t *testing.T) {
+	for _, masked := range []string{"********", "********t!pg"} {
+		var diags diag.Diagnostics
+		state := buildStateRaw(pgPasswordAttrs(), pgBase("Sup3rSecret!pg"), pgResponse(masked),
+			map[string]string{}, "pg1", true, true, &diags)
+		if diags.HasError() {
+			t.Fatalf("diags: %v", diags)
+		}
+		if got := pgPasswordInState(t, state); got != "Sup3rSecret!pg" {
+			t.Errorf("response %q: password = %q, want the prior state secret to be kept", masked, got)
+		}
+	}
+}
+
+// Create: the create response is masked too; the configured password must
+// survive into state or the apply fails with an inconsistent result.
+func TestPreserveOnEmpty_CreateKeepsSecretOverMaskedResponse(t *testing.T) {
+	var diags diag.Diagnostics
+	state := buildStateRaw(pgPasswordAttrs(), pgBase("Sup3rSecret!pg"), pgResponse("********t!pg"),
+		map[string]string{}, "pg1", false, true, &diags)
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+	if got := pgPasswordInState(t, state); got != "Sup3rSecret!pg" {
+		t.Errorf("password = %q, want the configured secret to be kept", got)
+	}
+}
+
+// Only the mask prefix counts as redaction: an unmasked value the API returns
+// still wins, and a value merely containing asterisks is not mistaken for one.
+func TestPreserveOnEmpty_UnmaskedResponseStillWins(t *testing.T) {
+	for _, returned := range []string{"Rotated-Pass1", "abc*****"} {
+		var diags diag.Diagnostics
+		state := buildStateRaw(pgPasswordAttrs(), pgBase("Sup3rSecret!pg"), pgResponse(returned),
+			map[string]string{}, "pg1", true, true, &diags)
+		if diags.HasError() {
+			t.Fatalf("diags: %v", diags)
+		}
+		if got := pgPasswordInState(t, state); got != returned {
+			t.Errorf("password = %q, want the value the API returned (%q)", got, returned)
+		}
+	}
+}

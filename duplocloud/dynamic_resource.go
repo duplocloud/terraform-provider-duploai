@@ -271,6 +271,7 @@ func (r *dynamicResource) waiter(failureRetries int) *duplosdk.Waiter[map[string
 		SuccessState:        w.SuccessState,
 		FailureStates:       w.FailureStates,
 		FailureRetries:      failureRetries,
+		FetchRetries:        w.FetchRetries,
 		StatusFn: func(m *map[string]any) string {
 			return toStringValue(extractPath(*m, statusSegs))
 		},

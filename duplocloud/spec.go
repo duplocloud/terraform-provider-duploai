@@ -628,14 +628,15 @@ type AttributeSpec struct {
 
 	// PreserveOnEmptyResponse keeps the value already held for this attribute —
 	// the configured plan value on create/update, the prior state value on
-	// refresh — whenever the API response comes back null or empty for it. Use
-	// for write-only fields the backend accepts but never echoes: e.g. an
+	// refresh — whenever the API response comes back null, empty, or masked
+	// ("********…", the backend's SecretHelper.MaskValue form) for it. Use for
+	// write-only fields the backend accepts but never echoes: e.g. an
 	// admin_provider credential secret, which the API redacts to "" on every
-	// read (including the create/update response). Without it the redacted empty
-	// value lands in state, which fails the apply with "provider produced
-	// inconsistent result after apply" and shows perpetual drift afterwards. A
-	// non-empty response value always wins, so an out-of-band rotation the API
-	// does surface is still picked up.
+	// read, or a Postgres administrator password, which it returns masked.
+	// Without it the redacted value lands in state, which fails the apply with
+	// "provider produced inconsistent result after apply" and shows perpetual
+	// drift afterwards. Any other response value always wins, so an out-of-band
+	// rotation the API does surface is still picked up.
 	//
 	// Valid on a leaf (string/bool/number) attribute at the top level or nested
 	// inside an object, list(object) or map(object): inside a collection the
@@ -864,6 +865,12 @@ type WaiterSpec struct {
 	// report a transient failure mid-provisioning (a first attempt fails, the
 	// worker retries) and then recover. Defaults to 0 (abort on first failure).
 	FailureRetries int `json:"failureRetries,omitempty"`
+
+	// FetchRetries is how many consecutive failed polls to tolerate before
+	// giving up. A read that never lands says nothing about the resource, so
+	// aborting on the first one fails creates that are actually succeeding.
+	// Defaults to defaultFetchRetries when unset.
+	FetchRetries int `json:"fetchRetries,omitempty"`
 	// DeprovisionedState is the terminal status reached after a deprovision step
 	// completes (e.g. "DeProvisioned"). Required only for resources whose
 	// endpoint declares a Deprovision operation; the delete flow waits for this
@@ -899,6 +906,7 @@ func defaultWaiterSpec() WaiterSpec {
 		},
 		FailureDetailPath:    "blockedReason",
 		PollIntervalSeconds:  10,
+		FetchRetries:         5,
 		CreateTimeoutMinutes: 30,
 		UpdateTimeoutMinutes: 30,
 		DeleteTimeoutMinutes: 15,
