@@ -139,6 +139,22 @@
       "forceNew": true
     },
     {
+      "name": "pod_labels",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.template.metadata.labels",
+      "responsePath": "result.k8sResource.spec.template.metadata.labels",
+      "description": "Labels to apply to the pods the Job creates. Kubernetes adds its own `job-name`, `controller-uid` and `batch.kubernetes.io/*` labels to the pod template; those are not tracked here.",
+      "forceNew": true,
+      "filterResponseKeys": [
+        "controller-uid",
+        "job-name",
+        "batch.kubernetes.io/*",
+        "duplocloud.ai/*"
+      ]
+    },
+    {
       "name": "backoff_limit",
       "type": "int",
       "optional": true,

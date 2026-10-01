@@ -91,7 +91,8 @@ resource "duploai_k8s_cron_job" "full" {
   restart_policy       = "Never" # required when pod_failure_policy is set
   service_account_name = "report-runner"
   node_selector        = { "node-role" = "batch" }
-  labels               = { app = "weekly-report", team = "data-platform" }
+  labels               = { app = "weekly-report", team = "data-platform" } # on the CronJob object
+  pod_labels           = { app = "weekly-report", team = "data-platform" } # on the pods of every run
 
   image_pull_secrets = [{ name = "regcred" }]
 

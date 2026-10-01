@@ -49,7 +49,7 @@ output "provisioning_state" {
 
 - `azure_resource_group_name` (String) Name of the Azure resource group the vault lives in.
 - `created_at` (String) Timestamp when the vault record was created (RFC 3339, normalized to UTC at second precision).
-- `enable_purge_protection` (Boolean) Prevent permanent deletion during the retention period. One-way in Azure: it can be turned on, but turning it off is rejected — the vault has to be recreated. Setting it back to false is refused at plan time rather than failing mid-apply; use `lifecycle { ignore_changes = [enable_purge_protection] }` if you want Terraform to leave an already-protected vault alone. Note it also blocks purge_on_deprovision, so the name stays reserved for the full retention period after a destroy.
+- `enable_purge_protection` (Boolean) Prevent permanent deletion during the retention period. One-way in Azure: it can be turned on, but turning it off is rejected - the vault has to be recreated. Setting it back to false is refused at plan time rather than failing mid-apply; use lifecycle { ignore_changes = [enable_purge_protection] } if you want Terraform to leave an already-protected vault alone. It also blocks purging a soft-deleted vault, so after a destroy the name stays reserved for the full soft_delete_retention_days and cannot be reused before then.
 - `enable_rbac_authorization` (Boolean) Whether the vault's data plane uses Azure RBAC. Always true for platform-provisioned vaults, and immutable — flipping it would silently change who can read every secret, so the platform requires a recreate instead.
 - `enabled_for_deployment` (Boolean) Allow Azure Virtual Machines to retrieve certificates stored as secrets. Kubernetes workloads do not need this — they use the Secrets Store CSI driver with workload identity.
 - `enabled_for_disk_encryption` (Boolean) Allow Azure Disk Encryption to retrieve secrets and unwrap keys.
@@ -61,7 +61,7 @@ output "provisioning_state" {
 - `provisioner_type` (String) How the platform provisions the vault. Defaults to the environment's provisioner.
 - `provisioner_version` (String) Provisioner version. Defaults to the environment's version.
 - `provisioning_state` (String) Azure-reported provisioning state of the vault.
-- `purge_on_deprovision` (Boolean) Purge the vault after deleting it so its name is immediately reusable. A platform behaviour, not an Azure setting. Leave off to keep deprovisioned vaults recoverable — but vault names are globally unique, so an unpurged vault blocks reuse of its name for the whole retention period.
+- `purge_on_deprovision` (Boolean, Deprecated) Deprecated and ignored. Azure keeps a deleted vault soft-deleted for soft_delete_retention_days, and its globally-unique name stays reserved for that period. To create a new vault with the same name, purge the soft-deleted one in Azure first (az keyvault purge --name <name>) - which is only possible when enable_purge_protection is false.
 - `resource_group_id` (String) Resource group the vault is provisioned into. Its managed identity is what gets Key Vault Administrator on the vault.
 - `scope_ids` (List of String) Scopes the vault is visible to. Inherited from the resource group.
 - `sku_name` (String) Pricing tier. Standard is sufficient for secrets and certificates; Premium adds HSM-backed keys.

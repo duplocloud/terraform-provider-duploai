@@ -194,7 +194,7 @@ The legacy `Enterprise_*` and `EnterpriseFlash_*` families are deliberately not 
 ### Read-Only
 
 - `azure_resource_group_name` (String) Azure resource group the cluster is created in, derived from the linked resource group.
-- `cluster_id` (String) Full Azure resource ID (ARM ID) of the Redis Enterprise cluster.
+- `cluster_id` (String) Full Azure resource ID (ARM ID) of the Redis Enterprise cluster. The same value as `unique_cloud_resource_id`.
 - `created_at` (String) Timestamp when the Redis instance was created (RFC 3339, normalized to UTC at second precision).
 - `database_id` (String) Full Azure resource ID (ARM ID) of the `default` database. Empty until the database child finishes provisioning, which happens after the cluster — set `wait_for_database` to block until it is populated.
 - `geo_replication_group_nickname` (String) Geo-replication group nickname reported by Azure, if the database belongs to a group.
@@ -207,7 +207,7 @@ The legacy `Enterprise_*` and `EnterpriseFlash_*` families are deliberately not 
 - `reported_modules` (Attributes List) Modules as Azure reports them, mirroring `modules`. (see [below for nested schema](#nestedatt--reported_modules))
 - `scope_ids` (List of String) Scope IDs linking this Redis instance to a cloud provider account, inherited from the resource group.
 - `status` (String) Current provisioning status of the Redis instance.
-- `unique_cloud_resource_id` (String) Full Azure resource ID (ARM ID) of the cluster, as the platform records it on the resource itself. `cluster_id` exposes the same ARM ID read from the live Azure result.
+- `unique_cloud_resource_id` (String) Full Azure resource ID (ARM ID) of the cluster, as the platform records it on the resource itself. `cluster_id` holds the same value.
 - `updated_at` (String) Timestamp when the Redis instance was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 
