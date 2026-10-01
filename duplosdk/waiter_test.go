@@ -269,3 +269,55 @@ func TestWaiter_ContextCancel(t *testing.T) {
 		t.Fatal("Wait did not return after context cancellation")
 	}
 }
+
+// A read that fails says nothing about the resource, so the waiter must retry
+// rather than abandon a create that is succeeding — the Azure Postgres case,
+// where GET blocks past the HTTP deadline while the backend applies firewall
+// rules, and the server goes Ready moments later.
+func TestWaiter_RetriesTransientFetchErrors(t *testing.T) {
+	calls := 0
+	w := &Waiter[map[string]any]{
+		PollInterval: time.Millisecond,
+		SuccessState: "Complete",
+		FetchRetries: 3,
+		StatusFn:     func(m *map[string]any) string { return (*m)["status"].(string) },
+	}
+	obj, err := w.Wait(context.Background(), "pg", time.Minute, func() (*map[string]any, ClientError) {
+		calls++
+		if calls <= 2 { // two deadline-exceeded polls, then the real answer
+			return nil, newClientError(0, fmt.Errorf("context deadline exceeded"))
+		}
+		return &map[string]any{"status": "Complete"}, nil
+	})
+	if err != nil {
+		t.Fatalf("wait failed despite retries available: %v", err)
+	}
+	if (*obj)["status"] != "Complete" {
+		t.Errorf("status = %v, want Complete", (*obj)["status"])
+	}
+	if calls != 3 {
+		t.Errorf("fetch calls = %d, want 3", calls)
+	}
+}
+
+// Past the retry budget the error still surfaces — retries must not mask a
+// backend that is genuinely unreachable.
+func TestWaiter_GivesUpAfterFetchRetries(t *testing.T) {
+	calls := 0
+	w := &Waiter[map[string]any]{
+		PollInterval: time.Millisecond,
+		SuccessState: "Complete",
+		FetchRetries: 2,
+		StatusFn:     func(m *map[string]any) string { return (*m)["status"].(string) },
+	}
+	_, err := w.Wait(context.Background(), "pg", time.Minute, func() (*map[string]any, ClientError) {
+		calls++
+		return nil, newClientError(0, fmt.Errorf("context deadline exceeded"))
+	})
+	if err == nil {
+		t.Fatal("expected the error to surface once retries are exhausted")
+	}
+	if calls != 3 { // initial attempt + 2 retries
+		t.Errorf("fetch calls = %d, want 3", calls)
+	}
+}

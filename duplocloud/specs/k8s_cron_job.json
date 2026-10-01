@@ -99,6 +99,16 @@
       "description": "Annotations to apply to the Kubernetes CronJob object."
     },
     {
+      "name": "pod_labels",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.k8sResource.spec.jobTemplate.spec.template.metadata.labels",
+      "responsePath": "result.k8sResource.spec.jobTemplate.spec.template.metadata.labels",
+      "filterResponseKeys": ["duplocloud.ai/*"],
+      "description": "Labels to apply to the pods of every Job the CronJob creates. Kubernetes adds its own `job-name` and `controller-uid` labels to those pods at run time; they are not part of this map."
+    },
+    {
       "name": "schedule",
       "type": "string",
       "required": true,

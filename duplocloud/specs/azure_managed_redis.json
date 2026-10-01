@@ -366,7 +366,7 @@
       "computed": true,
       "sendFromState": true,
       "apiPath": "spec.uniqueCloudResourceId",
-      "description": "Full Azure resource ID (ARM ID) of the cluster, as the platform records it on the resource itself. `cluster_id` exposes the same ARM ID read from the live Azure result."
+      "description": "Full Azure resource ID (ARM ID) of the cluster, as the platform records it on the resource itself. `cluster_id` holds the same value."
     },
     {
       "name": "provisioner_type",
@@ -413,8 +413,8 @@
       "computed": true,
       "stable": true,
       "noSend": true,
-      "apiPath": "result.clusterId",
-      "description": "Full Azure resource ID (ARM ID) of the Redis Enterprise cluster."
+      "responsePaths": ["spec.uniqueCloudResourceId", "result.clusterId"],
+      "description": "Full Azure resource ID (ARM ID) of the Redis Enterprise cluster. The same value as `unique_cloud_resource_id`."
     },
     {
       "name": "database_id",
