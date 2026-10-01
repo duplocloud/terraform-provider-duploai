@@ -468,7 +468,7 @@
       "type": "string",
       "computed": true,
       "noSend": true,
-      "responsePaths": ["spec.uniqueCloudResourceId", "result.cloudDetails.id"],
+      "responsePaths": ["spec.uniqueCloudResourceId", "result.cloudDetails.id", "result.postgresServerId"],
       "description": "ARM resource id of the PostgreSQL Flexible Server in Azure."
     },
     {
