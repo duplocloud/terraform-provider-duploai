@@ -300,7 +300,7 @@
       "computed": true,
       "noSend": true,
       "description": "ARM resource id of the Key Vault in Azure.",
-      "responsePath": "result.cloudDetails.id"
+      "responsePaths": ["spec.uniqueCloudResourceId", "result.cloudDetails.id", "result.keyVaultId"]
     },
     {
       "name": "vault_uri",
