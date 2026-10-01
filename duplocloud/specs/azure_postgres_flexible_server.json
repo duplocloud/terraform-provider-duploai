@@ -575,6 +575,8 @@
   ],
   "waiter": {
     "deprovisionedState": "DeProvisioned",
+    "failureRetries": 3,
+    "failurePollIntervalSeconds": 100,
     "createTimeoutMinutes": 60,
     "updateTimeoutMinutes": 60,
     "deleteTimeoutMinutes": 60
