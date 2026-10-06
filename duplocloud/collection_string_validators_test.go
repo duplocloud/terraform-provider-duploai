@@ -20,7 +20,7 @@ import (
 
 var roleAttr = AttributeSpec{
 	Name: "roles", Type: "list(string)", Optional: true, Computed: true,
-	APIPath: "roles", OneOf: []string{"Administrator", "User"},
+	APIPath: "roles", OneOf: []string{"Administrator", "User"}, MaxItems: 1,
 }
 
 func stringValues(vs ...string) []attr.Value {
@@ -43,7 +43,7 @@ func TestCollectionOneOf_ListChecksEveryElement(t *testing.T) {
 	}{
 		{"Administrator", []string{"Administrator"}, false},
 		{"User", []string{"User"}, false},
-		{"both", []string{"Administrator", "User"}, false},
+		{"both is rejected (one role per user, as in the console)", []string{"Administrator", "User"}, true},
 		{"empty list", []string{}, false},
 		{"lowercase is rejected (backend compares case-sensitively)", []string{"user"}, true},
 		{"unknown role", []string{"SuperUser"}, true},
@@ -118,6 +118,10 @@ func TestCollectionOneOf_SpecValidation(t *testing.T) {
 		{"oneOf on int is rejected", `{"name":"count","type":"int","optional":true,"apiPath":"count","oneOf":["1","2"]}`, "oneOf is only valid on a string"},
 		{"oneOf on list(int) is rejected", `{"name":"ports","type":"list(int)","optional":true,"apiPath":"ports","oneOf":["80"]}`, "oneOf is only valid on a string"},
 		{"pattern on list(int) is rejected", `{"name":"ports","type":"list(int)","optional":true,"apiPath":"ports","pattern":"^8"}`, "only valid on a string"},
+		{"maxItems on list loads", `{"name":"roles","type":"list(string)","optional":true,"apiPath":"roles","maxItems":1}`, ""},
+		{"maxItems on string is rejected", `{"name":"role","type":"string","optional":true,"apiPath":"role","maxItems":1}`, "maxItems is only valid on a list or set"},
+		{"negative maxItems is rejected", `{"name":"roles","type":"list(string)","optional":true,"apiPath":"roles","maxItems":-1}`, "maxItems must be positive"},
+		{"minItems above maxItems is rejected", `{"name":"roles","type":"list(string)","optional":true,"apiPath":"roles","minItems":2,"maxItems":1}`, "exceeds maxItems"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -140,7 +144,7 @@ func TestCollectionOneOf_SpecValidation(t *testing.T) {
 	}
 }
 
-// The shipped admin_user spec restricts roles to the backend's two role names.
+// The shipped admin_user spec restricts roles to one of the backend's two role names.
 func TestAdminUserRolesOneOf(t *testing.T) {
 	specs, err := loadResourceSpecs()
 	if err != nil {
@@ -157,6 +161,9 @@ func TestAdminUserRolesOneOf(t *testing.T) {
 			want := []string{"Administrator", "User"}
 			if strings.Join(a.OneOf, ",") != strings.Join(want, ",") {
 				t.Errorf("admin_user.roles oneOf = %v, want %v (backend UserRoles constants)", a.OneOf, want)
+			}
+			if a.MaxItems != 1 {
+				t.Errorf("admin_user.roles maxItems = %d, want 1 (a user has one role; the console's role picker is single-select)", a.MaxItems)
 			}
 			return
 		}

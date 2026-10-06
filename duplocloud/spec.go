@@ -447,6 +447,12 @@ type AttributeSpec struct {
 	// rejects when empty, e.g. a permission set's allowed_workspaces.
 	MinItems int `json:"minItems,omitempty"`
 
+	// MaxItems, when > 0, caps a list/set attribute at this many elements
+	// (validated at plan time), e.g. admin_user.roles, which holds exactly one
+	// role. Rejected at spec load on any other type, when negative, or when
+	// below MinItems.
+	MaxItems int `json:"maxItems,omitempty"`
+
 	// Min / Max bound a numeric attribute (int or number) inclusively, validated
 	// at plan time. Use for ranges the API enforces, e.g. limit_usd >= 0.01.
 	Min *float64 `json:"min,omitempty"`
@@ -1351,6 +1357,17 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 		// collection of strings (applied per element), so on any other type they
 		// would be accepted and silently ignored — validation the spec claims but
 		// does not perform. Reject at load instead.
+		if a.MaxItems != 0 {
+			if !strings.HasPrefix(a.Type, "list(") && !strings.HasPrefix(a.Type, "set(") {
+				return nil, fmt.Errorf("attribute %q: maxItems is only valid on a list or set, got %q", a.Name, a.Type)
+			}
+			if a.MaxItems < 0 {
+				return nil, fmt.Errorf("attribute %q: maxItems must be positive, got %d", a.Name, a.MaxItems)
+			}
+			if a.MinItems > a.MaxItems {
+				return nil, fmt.Errorf("attribute %q: minItems %d exceeds maxItems %d", a.Name, a.MinItems, a.MaxItems)
+			}
+		}
 		if len(a.OneOf) > 0 && !isStringOrStringCollection(a.Type) {
 			return nil, fmt.Errorf("attribute %q: oneOf is only valid on a string or a list/set/map of strings, got %q", a.Name, a.Type)
 		}

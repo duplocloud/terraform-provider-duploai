@@ -284,6 +284,9 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 		if a.MinItems > 0 {
 			o.Validators = append(o.Validators, setvalidator.SizeAtLeast(a.MinItems))
 		}
+		if a.MaxItems > 0 {
+			o.Validators = append(o.Validators, setvalidator.SizeAtMost(a.MaxItems))
+		}
 		if len(elemValidators) > 0 {
 			o.Validators = append(o.Validators, setvalidator.ValueStringsAre(elemValidators...))
 		}
@@ -321,6 +324,9 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 		if a.MinItems > 0 {
 			o.Validators = append(o.Validators, listvalidator.SizeAtLeast(a.MinItems))
 		}
+		if a.MaxItems > 0 {
+			o.Validators = append(o.Validators, listvalidator.SizeAtMost(a.MaxItems))
+		}
 		if len(elemValidators) > 0 {
 			o.Validators = append(o.Validators, listvalidator.ValueStringsAre(elemValidators...))
 		}
@@ -355,6 +361,9 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		if a.MinItems > 0 {
 			o.Validators = append(o.Validators, listvalidator.SizeAtLeast(a.MinItems))
 		}
+		if a.MaxItems > 0 {
+			o.Validators = append(o.Validators, listvalidator.SizeAtMost(a.MaxItems))
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
 		}
@@ -376,6 +385,9 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		}
 		if a.MinItems > 0 {
 			o.Validators = append(o.Validators, setvalidator.SizeAtLeast(a.MinItems))
+		}
+		if a.MaxItems > 0 {
+			o.Validators = append(o.Validators, setvalidator.SizeAtMost(a.MaxItems))
 		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())
