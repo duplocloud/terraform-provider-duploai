@@ -16,7 +16,9 @@ Manages a DuploCloud AI user account, including identity, roles, and metadata.
 resource "duploai_admin_user" "example" {
   name  = "Alice Example"
   email = "alice@example.com"
-  roles = ["user"]
+
+  # "Administrator" or "User" (case-sensitive). "User" is the default when unset.
+  roles = ["User"]
 }
 ```
 
@@ -35,7 +37,7 @@ resource "duploai_admin_user" "example" {
 - `external_subject` (String) Subject identifier from the external OAuth/SSO provider.
 - `is_active` (Boolean) Whether the user account is active. Defaults to true when omitted.
 - `metadata` (Map of String) Free-form key/value metadata.
-- `roles` (List of String) List of roles assigned to the user.
+- `roles` (List of String) Roles assigned to the user. Each entry must be `Administrator` (full platform access, bypassing permission sets) or `User` (access governed by permission sets). Values are case-sensitive. When unset, the platform assigns `User`.
 
 ### Read-Only
 

@@ -40,6 +40,6 @@ output "user_email" {
 - `last_login_at_utc` (String) Timestamp of the user's last login (RFC 3339, normalized to UTC at second precision).
 - `metadata` (Map of String) Free-form key/value metadata.
 - `name` (String) Name of the user, as shown in the console.
-- `roles` (List of String) List of roles assigned to the user.
+- `roles` (List of String) Roles assigned to the user. Each entry must be `Administrator` (full platform access, bypassing permission sets) or `User` (access governed by permission sets). Values are case-sensitive. When unset, the platform assigns `User`.
 - `updated_at` (String) Timestamp when the user was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.

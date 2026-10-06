@@ -418,7 +418,9 @@ type AttributeSpec struct {
 	// Interpreted according to Type.
 	Default *json.RawMessage `json:"default,omitempty"`
 
-	// OneOf constrains a string attribute to an enumerated set.
+	// OneOf constrains a string attribute to an enumerated set. On a
+	// list(string), set(string) or map(string) it constrains every element (map:
+	// every value) instead — as do Pattern, MinLength and MaxLength.
 	OneOf []string `json:"oneOf,omitempty"`
 
 	// Pattern constrains a string attribute to a Go regular expression, and
@@ -1345,15 +1347,19 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 		if !a.Required && !a.Optional && !a.Computed {
 			return nil, fmt.Errorf("attribute %q must be one of required/optional/computed", a.Name)
 		}
-		// Pattern/maxLength are wired only for strings, so on any other type they
+		// oneOf/pattern/minLength/maxLength are wired only for a string or a
+		// collection of strings (applied per element), so on any other type they
 		// would be accepted and silently ignored — validation the spec claims but
 		// does not perform. Reject at load instead.
+		if len(a.OneOf) > 0 && !isStringOrStringCollection(a.Type) {
+			return nil, fmt.Errorf("attribute %q: oneOf is only valid on a string or a list/set/map of strings, got %q", a.Name, a.Type)
+		}
 		// Note the != 0 rather than > 0: a NEGATIVE bound must reach the checks
 		// below, not skip them. Gating on > 0 made the "must be positive" error
 		// unreachable unless some other constraint happened to be set too.
 		if a.Pattern != "" || a.MaxLength != 0 || a.MinLength != 0 || a.PatternDescription != "" {
-			if a.Type != "string" {
-				return nil, fmt.Errorf("attribute %q: pattern/minLength/maxLength are only valid on a string, got %q", a.Name, a.Type)
+			if !isStringOrStringCollection(a.Type) {
+				return nil, fmt.Errorf("attribute %q: pattern/minLength/maxLength are only valid on a string or a list/set/map of strings, got %q", a.Name, a.Type)
 			}
 			if a.PatternDescription != "" && a.Pattern == "" {
 				return nil, fmt.Errorf("attribute %q: patternDescription without pattern has nothing to describe", a.Name)
@@ -1500,4 +1506,15 @@ func (s *ResourceSpec) checkPathParams(params []string) error {
 		}
 	}
 	return nil
+}
+
+// isStringOrStringCollection reports whether a spec type can carry string
+// constraints: a string, or a list/set/map whose elements are strings (where
+// the constraints apply per element, see primitiveCollectionSchema).
+func isStringOrStringCollection(t string) bool {
+	switch t {
+	case "string", "list(string)", "set(string)", "map(string)":
+		return true
+	}
+	return false
 }
