@@ -90,7 +90,7 @@ output "orders_queue_url" {
 - `encryption_mode` (String) Server-side encryption mode: None (unencrypted), SseSqs (SQS-managed keys, SSE-SQS), SseKms (an AWS KMS key you choose with kms_master_key_id), or SseKmsRg (the resource group's or plan's KMS key). Can be changed in place.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `kms_data_key_reuse_seconds` (Number) How long (seconds, 60-86400) SQS reuses a KMS data key before calling KMS again (SseKms and SseKmsRg only). Can be changed in place.
-- `kms_master_key_id` (String) KMS key used when encryption_mode is SseKms or SseKmsRg. With SseKms: a key ID, ARN, or alias, defaulting to alias/aws/sqs when unset. With SseKmsRg: optional, selects one of the resource group's or plan's KMS keys, and reads back as that key's ARN. Ignored otherwise. Can be changed in place.
+- `kms_master_key_id` (String) KMS key used when encryption_mode is SseKms or SseKmsRg. With SseKms: a key ID, ARN, or alias, defaulting to alias/aws/sqs when unset. With SseKmsRg: leave unset to use the resource group's default KMS key, or set the full ARN of one of the resource group's or plan's keys (not a key ID or alias). Ignored otherwise. Can be changed in place.
 - `maximum_message_size_bytes` (Number) Maximum message size in bytes (1024-262144). Defaults to 262144 (256 KiB) when unset. Can be changed in place.
 - `message_retention_seconds` (Number) How long (seconds, 60-1209600) messages are retained. Defaults to 345600 (4 days) when unset. Can be changed in place.
 - `provisioner_type` (String) Provisioner type. Defaults to DirectApiCall for SQS.
