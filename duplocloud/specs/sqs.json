@@ -115,11 +115,12 @@
       "computed": true,
       "oneOf": [
         "None",
-        "SseS3",
-        "SseKms"
+        "SseSqs",
+        "SseKms",
+        "SseKmsRg"
       ],
       "apiPath": "spec.encryption.mode",
-      "description": "Server-side encryption mode: None (unencrypted), SseS3 (SQS-managed keys), or SseKms (AWS KMS). Can be changed in place."
+      "description": "Server-side encryption mode: None (unencrypted), SseSqs (SQS-managed keys, SSE-SQS), SseKms (an AWS KMS key you choose with kms_master_key_id), or SseKmsRg (the resource group's or plan's KMS key). Can be changed in place."
     },
     {
       "name": "kms_master_key_id",
@@ -127,7 +128,7 @@
       "optional": true,
       "computed": true,
       "apiPath": "spec.encryption.kmsMasterKeyId",
-      "description": "KMS key ID, ARN, or alias used when encryption_mode is SseKms. Defaults to alias/aws/sqs when SseKms and unset. Can be changed in place."
+      "description": "KMS key used when encryption_mode is SseKms or SseKmsRg. With SseKms: a key ID, ARN, or alias, defaulting to alias/aws/sqs when unset. With SseKmsRg: optional, selects one of the resource group's or plan's KMS keys, and reads back as that key's ARN. Ignored otherwise. Can be changed in place."
     },
     {
       "name": "kms_data_key_reuse_seconds",
@@ -135,7 +136,7 @@
       "optional": true,
       "computed": true,
       "apiPath": "spec.encryption.kmsDataKeyReusePeriodSeconds",
-      "description": "How long (seconds, 60-86400) SQS reuses a KMS data key before calling KMS again (SseKms only). Can be changed in place."
+      "description": "How long (seconds, 60-86400) SQS reuses a KMS data key before calling KMS again (SseKms and SseKmsRg only). Can be changed in place."
     },
     {
       "name": "tags",
