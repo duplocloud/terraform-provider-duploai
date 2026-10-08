@@ -51,7 +51,9 @@
       "optional": true,
       "computed": true,
       "apiPath": "roles",
-      "description": "List of roles assigned to the user."
+      "oneOf": ["Administrator", "User"],
+      "maxItems": 1,
+      "description": "The user's role: a single entry, either `Administrator` (full platform access, bypassing permission sets) or `User` (access governed by permission sets). Values are case-sensitive. When unset, the platform assigns `User`."
     },
     {
       "name": "is_active",

@@ -78,15 +78,16 @@ func TestStringPatternUsesDescriptionInMessage(t *testing.T) {
 	}
 }
 
-// Pattern/maxLength are wired for strings only, so declaring them elsewhere
-// would be validation the spec claims but never performs.
+// Pattern/maxLength are wired for strings and string collections only (per
+// element), so declaring them elsewhere would be validation the spec claims but
+// never performs.
 func TestPatternRejectedOnNonStringTypes(t *testing.T) {
 	cases := []struct {
 		name string
 		attr AttributeSpec
 	}{
 		{"pattern on int", AttributeSpec{Name: "n", Type: "int", Optional: true, Pattern: "^a$"}},
-		{"maxLength on list", AttributeSpec{Name: "l", Type: "list(string)", Optional: true, MaxLength: 5}},
+		{"maxLength on list(int)", AttributeSpec{Name: "l", Type: "list(int)", Optional: true, MaxLength: 5}},
 		{"description without pattern", AttributeSpec{Name: "s", Type: "string", Optional: true, PatternDescription: "orphan"}},
 		{"uncompilable pattern", AttributeSpec{Name: "s", Type: "string", Optional: true, Pattern: "([unclosed"}},
 	}

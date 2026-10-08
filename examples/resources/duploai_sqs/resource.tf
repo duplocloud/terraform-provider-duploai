@@ -40,6 +40,18 @@ resource "duploai_sqs" "events" {
   }
 }
 
+# A queue encrypted with SQS-managed keys (SSE-SQS), the AWS default. No KMS key
+# to manage, and an SNS topic can deliver into it without extra key policy.
+resource "duploai_sqs" "notifications" {
+  workspace_id      = "<workspace-id>"
+  name              = "notifications"
+  queue_type        = "Standard"
+  environment_id    = "<environment-id>"
+  resource_group_id = "<resource-group-id>"
+
+  encryption_mode = "SseSqs"
+}
+
 output "orders_queue_url" {
   value = duploai_sqs.orders.queue_url
 }
