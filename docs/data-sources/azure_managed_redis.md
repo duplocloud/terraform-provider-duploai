@@ -53,7 +53,7 @@ output "database_id" {
 
 - `access_keys_authentication_enabled` (Boolean) Allow classic access-key authentication. Defaults to disabled, matching Azure's guidance to use Microsoft Entra ID for new caches. While disabled, the platform's access-key read and regenerate operations return an error, because Azure rejects ListKeys outright. Can be changed in place — verified live 2026-08-04. The platform's own console cannot change it: its save payload resends the current value rather than the newly selected one, so the toggle appears to revert.
 - `azure_resource_group_name` (String) Azure resource group the cluster is created in, derived from the linked resource group.
-- `cluster_id` (String) Full Azure resource ID (ARM ID) of the Redis Enterprise cluster.
+- `cluster_id` (String) Full Azure resource ID (ARM ID) of the Redis Enterprise cluster. The same value as `unique_cloud_resource_id`.
 - `clustering_policy` (String) Redis clustering policy. Treated as immutable here: Azure only allows it to change while the current value is `NoCluster`, so a change forces replacement rather than risking an update the API rejects. `EnterpriseCluster` is required by the RediSearch module. `NoCluster` additionally only applies to SKUs of 25 GB or less and is not supported at all by the `FlashOptimized_*` family; the API rejects both cases.
 - `created_at` (String) Timestamp when the Redis instance was created (RFC 3339, normalized to UTC at second precision).
 - `database_id` (String) Full Azure resource ID (ARM ID) of the `default` database. Empty until the database child finishes provisioning, which happens after the cluster — set `wait_for_database` to block until it is populated.
@@ -89,7 +89,7 @@ WARNING: while geo-replication is enabled the instance cannot be UPDATED AT ALL 
 The legacy `Enterprise_*` and `EnterpriseFlash_*` families are deliberately not offered: those are Azure Cache for Redis Enterprise SKUs, which Azure has retired — a create returns "Creation of new Azure Cache for Redis Enterprise resources is no longer supported". They are therefore unusable here, including for adopting an existing legacy instance.
 - `status` (String) Current provisioning status of the Redis instance.
 - `tags` (Map of String) Tags applied to the Redis instance. The platform adds its own managed `duplocloud-ai-*` tags server-side; those are filtered out of state so only your tags are managed by Terraform.
-- `unique_cloud_resource_id` (String) Full Azure resource ID (ARM ID) of the cluster, as the platform records it on the resource itself. `cluster_id` exposes the same ARM ID read from the live Azure result.
+- `unique_cloud_resource_id` (String) Full Azure resource ID (ARM ID) of the cluster, as the platform records it on the resource itself. `cluster_id` holds the same value.
 - `updated_at` (String) Timestamp when the Redis instance was last updated (RFC 3339, normalized to UTC at second precision).
 - `version` (Number) Version counter, incremented on each update.
 

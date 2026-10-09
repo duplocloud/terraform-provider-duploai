@@ -25,9 +25,10 @@ resource "duploai_azure_key_vault" "restricted" {
   soft_delete_retention_days = 90
   enable_purge_protection    = true
 
-  # Purge protection blocks purging, so a destroyed vault keeps its name
-  # reserved for the full retention period.
-  purge_on_deprovision = false
+  # Note: a destroyed vault stays soft-deleted for the retention period above,
+  # and its globally-unique name stays reserved for that whole time. Reusing the
+  # name means purging the soft-deleted vault in Azure first — which purge
+  # protection forbids, so a protected vault's name is unavailable for 90 days.
 
   network_acls = {
     public_network_access = "Enabled"

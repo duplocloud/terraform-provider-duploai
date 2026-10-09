@@ -66,6 +66,14 @@ resource "duploai_app_service" "nginx" {
   ingress = {
     name               = "nginx"
     ingress_class_name = "nginx"
+
+    # Labels on the Ingress object. The platform adds its own duplocloud.ai/*
+    # labels alongside these; keys under duplocloud.ai/ are reserved.
+    labels = {
+      app  = "nginx"
+      team = "web"
+    }
+
     rules = [
       {
         host = "nginx.example.com"
@@ -1180,6 +1188,7 @@ Optional:
 - `api_version` (String) Ingress apiVersion.
 - `ingress_class_name` (String) IngressClass name (e.g. nginx, alb).
 - `kind` (String) Ingress kind.
+- `labels` (Map of String) Labels applied to the Ingress object. The platform also stamps its own `duplocloud.ai/*` labels and the resource group's tags onto the object in the cluster; keys under `duplocloud.ai/` are reserved: they are not applied to the cluster object.
 - `rules` (Attributes List) Host/path routing rules. (see [below for nested schema](#nestedatt--ingress--rules))
 
 <a id="nestedatt--ingress--rules"></a>

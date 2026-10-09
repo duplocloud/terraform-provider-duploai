@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -265,6 +266,13 @@ func staticDefaultValue(ctx context.Context, at attr.Type, raw *json.RawMessage)
 
 func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 	et := primitiveAttrType(info.elem)
+	// A string collection applies the string constraints (oneOf, pattern,
+	// minLength, maxLength) to every element, so e.g. a list of role names is
+	// checked value by value at plan time. Map entries are checked by value.
+	var elemValidators []validator.String
+	if info.elem == "string" {
+		elemValidators = stringValidators(a)
+	}
 	switch info.coll {
 	case "set":
 		o := schema.SetAttribute{ElementType: et, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
@@ -275,6 +283,12 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 		}
 		if a.MinItems > 0 {
 			o.Validators = append(o.Validators, setvalidator.SizeAtLeast(a.MinItems))
+		}
+		if a.MaxItems > 0 {
+			o.Validators = append(o.Validators, setvalidator.SizeAtMost(a.MaxItems))
+		}
+		if len(elemValidators) > 0 {
+			o.Validators = append(o.Validators, setvalidator.ValueStringsAre(elemValidators...))
 		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())
@@ -289,6 +303,9 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 			if v, ok := staticDefaultValue(context.Background(), o.GetType(), a.Default); ok {
 				o.Default = mapdefault.StaticValue(v.(types.Map))
 			}
+		}
+		if len(elemValidators) > 0 {
+			o.Validators = append(o.Validators, mapvalidator.ValueStringsAre(elemValidators...))
 		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.UseStateForUnknown())
@@ -306,6 +323,12 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 		}
 		if a.MinItems > 0 {
 			o.Validators = append(o.Validators, listvalidator.SizeAtLeast(a.MinItems))
+		}
+		if a.MaxItems > 0 {
+			o.Validators = append(o.Validators, listvalidator.SizeAtMost(a.MaxItems))
+		}
+		if len(elemValidators) > 0 {
+			o.Validators = append(o.Validators, listvalidator.ValueStringsAre(elemValidators...))
 		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
@@ -338,6 +361,9 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		if a.MinItems > 0 {
 			o.Validators = append(o.Validators, listvalidator.SizeAtLeast(a.MinItems))
 		}
+		if a.MaxItems > 0 {
+			o.Validators = append(o.Validators, listvalidator.SizeAtMost(a.MaxItems))
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
 		}
@@ -359,6 +385,9 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		}
 		if a.MinItems > 0 {
 			o.Validators = append(o.Validators, setvalidator.SizeAtLeast(a.MinItems))
+		}
+		if a.MaxItems > 0 {
+			o.Validators = append(o.Validators, setvalidator.SizeAtMost(a.MaxItems))
 		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())
@@ -890,7 +919,7 @@ func restorePreservedValues(a AttributeSpec, prior, next tftypes.Value) tftypes.
 		return next
 	}
 	if a.PreserveOnEmptyResponse {
-		if isEmptyStateValue(next) && prior.IsKnown() && !prior.IsNull() && prior.Type().Is(next.Type()) {
+		if isRedactedStateValue(next) && prior.IsKnown() && !prior.IsNull() && prior.Type().Is(next.Type()) {
 			return prior
 		}
 		return next
@@ -994,6 +1023,29 @@ func isEmptyStateValue(v tftypes.Value) bool {
 	return false
 }
 
+// redactedPrefix is how the backend masks a secret it will not return
+// (SecretHelper.MaskValue): eight asterisks, followed by the last few characters
+// of longer values. The backend itself reads a value with this prefix on update
+// as "unchanged".
+const redactedPrefix = "********"
+
+// isRedactedStateValue reports whether a response value stands in for a secret
+// the API withholds: null or empty (isEmptyStateValue), or masked with
+// redactedPrefix. Either way it says nothing about the real value, so a
+// PreserveOnEmptyResponse attribute keeps what it already holds.
+func isRedactedStateValue(v tftypes.Value) bool {
+	if isEmptyStateValue(v) {
+		return true
+	}
+	if v.Type().Is(tftypes.String) {
+		var s string
+		if err := v.As(&s); err == nil {
+			return strings.HasPrefix(s, redactedPrefix)
+		}
+	}
+	return false
+}
+
 func toAnySlice(g any) []any        { s, _ := g.([]any); return s }
 func toAnyMap(g any) map[string]any { m, _ := g.(map[string]any); return m }
 
@@ -1053,22 +1105,41 @@ func dsPrimitiveSchema(a AttributeSpec, elem string) dsschema.Attribute {
 
 func dsPrimitiveCollectionSchema(a AttributeSpec, info typeInfo) dsschema.Attribute {
 	et := primitiveAttrType(info.elem)
+	// Same per-element string constraints as the resource schema
+	// (primitiveCollectionSchema): one enforcing them and the other not would be
+	// a trap.
+	var elemValidators []validator.String
+	if info.elem == "string" {
+		elemValidators = stringValidators(a)
+	}
 	switch info.coll {
 	case "set":
-		return dsschema.SetAttribute{
+		o := dsschema.SetAttribute{
 			ElementType: et, Required: a.Required, Optional: a.Optional,
 			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
+		if len(elemValidators) > 0 {
+			o.Validators = append(o.Validators, setvalidator.ValueStringsAre(elemValidators...))
+		}
+		return o
 	case "map":
-		return dsschema.MapAttribute{
+		o := dsschema.MapAttribute{
 			ElementType: et, Required: a.Required, Optional: a.Optional,
 			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
+		if len(elemValidators) > 0 {
+			o.Validators = append(o.Validators, mapvalidator.ValueStringsAre(elemValidators...))
+		}
+		return o
 	default: // list
-		return dsschema.ListAttribute{
+		o := dsschema.ListAttribute{
 			ElementType: et, Required: a.Required, Optional: a.Optional,
 			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
+		if len(elemValidators) > 0 {
+			o.Validators = append(o.Validators, listvalidator.ValueStringsAre(elemValidators...))
+		}
+		return o
 	}
 }
 

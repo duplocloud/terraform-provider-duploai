@@ -418,7 +418,9 @@ type AttributeSpec struct {
 	// Interpreted according to Type.
 	Default *json.RawMessage `json:"default,omitempty"`
 
-	// OneOf constrains a string attribute to an enumerated set.
+	// OneOf constrains a string attribute to an enumerated set. On a
+	// list(string), set(string) or map(string) it constrains every element (map:
+	// every value) instead — as do Pattern, MinLength and MaxLength.
 	OneOf []string `json:"oneOf,omitempty"`
 
 	// Pattern constrains a string attribute to a Go regular expression, and
@@ -444,6 +446,12 @@ type AttributeSpec struct {
 	// many elements (validated at plan time). Use for collections the API
 	// rejects when empty, e.g. a permission set's allowed_workspaces.
 	MinItems int `json:"minItems,omitempty"`
+
+	// MaxItems, when > 0, caps a list/set attribute at this many elements
+	// (validated at plan time), e.g. admin_user.roles, which holds exactly one
+	// role. Rejected at spec load on any other type, when negative, or when
+	// below MinItems.
+	MaxItems int `json:"maxItems,omitempty"`
 
 	// Min / Max bound a numeric attribute (int or number) inclusively, validated
 	// at plan time. Use for ranges the API enforces, e.g. limit_usd >= 0.01.
@@ -628,14 +636,15 @@ type AttributeSpec struct {
 
 	// PreserveOnEmptyResponse keeps the value already held for this attribute —
 	// the configured plan value on create/update, the prior state value on
-	// refresh — whenever the API response comes back null or empty for it. Use
-	// for write-only fields the backend accepts but never echoes: e.g. an
+	// refresh — whenever the API response comes back null, empty, or masked
+	// ("********…", the backend's SecretHelper.MaskValue form) for it. Use for
+	// write-only fields the backend accepts but never echoes: e.g. an
 	// admin_provider credential secret, which the API redacts to "" on every
-	// read (including the create/update response). Without it the redacted empty
-	// value lands in state, which fails the apply with "provider produced
-	// inconsistent result after apply" and shows perpetual drift afterwards. A
-	// non-empty response value always wins, so an out-of-band rotation the API
-	// does surface is still picked up.
+	// read, or a Postgres administrator password, which it returns masked.
+	// Without it the redacted value lands in state, which fails the apply with
+	// "provider produced inconsistent result after apply" and shows perpetual
+	// drift afterwards. Any other response value always wins, so an out-of-band
+	// rotation the API does surface is still picked up.
 	//
 	// Valid on a leaf (string/bool/number) attribute at the top level or nested
 	// inside an object, list(object) or map(object): inside a collection the
@@ -864,6 +873,12 @@ type WaiterSpec struct {
 	// report a transient failure mid-provisioning (a first attempt fails, the
 	// worker retries) and then recover. Defaults to 0 (abort on first failure).
 	FailureRetries int `json:"failureRetries,omitempty"`
+
+	// FetchRetries is how many consecutive failed polls to tolerate before
+	// giving up. A read that never lands says nothing about the resource, so
+	// aborting on the first one fails creates that are actually succeeding.
+	// Defaults to defaultFetchRetries when unset.
+	FetchRetries int `json:"fetchRetries,omitempty"`
 	// DeprovisionedState is the terminal status reached after a deprovision step
 	// completes (e.g. "DeProvisioned"). Required only for resources whose
 	// endpoint declares a Deprovision operation; the delete flow waits for this
@@ -899,6 +914,7 @@ func defaultWaiterSpec() WaiterSpec {
 		},
 		FailureDetailPath:    "blockedReason",
 		PollIntervalSeconds:  10,
+		FetchRetries:         5,
 		CreateTimeoutMinutes: 30,
 		UpdateTimeoutMinutes: 30,
 		DeleteTimeoutMinutes: 15,
@@ -1337,15 +1353,30 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 		if !a.Required && !a.Optional && !a.Computed {
 			return nil, fmt.Errorf("attribute %q must be one of required/optional/computed", a.Name)
 		}
-		// Pattern/maxLength are wired only for strings, so on any other type they
+		// oneOf/pattern/minLength/maxLength are wired only for a string or a
+		// collection of strings (applied per element), so on any other type they
 		// would be accepted and silently ignored — validation the spec claims but
 		// does not perform. Reject at load instead.
+		if a.MaxItems != 0 {
+			if !strings.HasPrefix(a.Type, "list(") && !strings.HasPrefix(a.Type, "set(") {
+				return nil, fmt.Errorf("attribute %q: maxItems is only valid on a list or set, got %q", a.Name, a.Type)
+			}
+			if a.MaxItems < 0 {
+				return nil, fmt.Errorf("attribute %q: maxItems must be positive, got %d", a.Name, a.MaxItems)
+			}
+			if a.MinItems > a.MaxItems {
+				return nil, fmt.Errorf("attribute %q: minItems %d exceeds maxItems %d", a.Name, a.MinItems, a.MaxItems)
+			}
+		}
+		if len(a.OneOf) > 0 && !isStringOrStringCollection(a.Type) {
+			return nil, fmt.Errorf("attribute %q: oneOf is only valid on a string or a list/set/map of strings, got %q", a.Name, a.Type)
+		}
 		// Note the != 0 rather than > 0: a NEGATIVE bound must reach the checks
 		// below, not skip them. Gating on > 0 made the "must be positive" error
 		// unreachable unless some other constraint happened to be set too.
 		if a.Pattern != "" || a.MaxLength != 0 || a.MinLength != 0 || a.PatternDescription != "" {
-			if a.Type != "string" {
-				return nil, fmt.Errorf("attribute %q: pattern/minLength/maxLength are only valid on a string, got %q", a.Name, a.Type)
+			if !isStringOrStringCollection(a.Type) {
+				return nil, fmt.Errorf("attribute %q: pattern/minLength/maxLength are only valid on a string or a list/set/map of strings, got %q", a.Name, a.Type)
 			}
 			if a.PatternDescription != "" && a.Pattern == "" {
 				return nil, fmt.Errorf("attribute %q: patternDescription without pattern has nothing to describe", a.Name)
@@ -1492,4 +1523,15 @@ func (s *ResourceSpec) checkPathParams(params []string) error {
 		}
 	}
 	return nil
+}
+
+// isStringOrStringCollection reports whether a spec type can carry string
+// constraints: a string, or a list/set/map whose elements are strings (where
+// the constraints apply per element, see primitiveCollectionSchema).
+func isStringOrStringCollection(t string) bool {
+	switch t {
+	case "string", "list(string)", "set(string)", "map(string)":
+		return true
+	}
+	return false
 }
