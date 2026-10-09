@@ -470,7 +470,7 @@
       "noSend": true,
       "responsePaths": ["spec.uniqueCloudResourceId", "result.cloudDetails.id", "result.postgresServerId"],
       "preserveOnEmptyResponse": true,
-      "description": "ARM resource id of the PostgreSQL Flexible Server in Azure. Confirmed live (centxforge/staging, 2026-10-08): a refresh can come back with none of the three responsePaths populated even though the server is Ready and otherwise unchanged, which without this flag null's out the value and forces a destroy/recreate of every azurerm_postgresql_flexible_server_configuration that keys off it (server_id is ForceNew there). preserveOnEmptyResponse keeps the last known-good id across that kind of transient gap, same as administrator_password above."
+      "description": "ARM resource id of the PostgreSQL Flexible Server in Azure. Read-only; the backend can occasionally omit it from an otherwise-normal read, so the last known value is kept rather than cleared. Feeds server_id on dependent azurerm_postgresql_flexible_server_configuration resources, where it is ForceNew."
     },
     {
       "name": "provisioning_state",
