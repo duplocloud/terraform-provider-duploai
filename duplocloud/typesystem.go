@@ -251,7 +251,7 @@ func useStateForUnknown(a AttributeSpec) bool {
 // optional values may legitimately be unset, and a forceNew value turning
 // unknown would force replacement.
 func preserveNonNullOnly(a AttributeSpec) bool {
-	return a.Stable && !(a.Optional || a.ForceNew || a.preserveTarget || a.SendFromState)
+	return a.Stable && !a.Optional && !a.ForceNew && !a.preserveTarget && !a.SendFromState
 }
 
 // preserveModifier picks the type's UseNonNullStateForUnknown (nonNull) for a
