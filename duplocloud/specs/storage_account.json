@@ -338,8 +338,9 @@
       "name": "azure_resource_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
-      "apiPath": "result.storageAccountId",
+      "responsePaths": ["spec.uniqueCloudResourceId", "result.storageAccountId"],
       "description": "Full Azure resource ID (ARM ID) of the provisioned storage account."
     },
     {
@@ -354,6 +355,7 @@
       "name": "primary_blob_endpoint",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.primaryBlobEndpoint",
       "description": "Primary Blob service endpoint URL."
@@ -362,6 +364,7 @@
       "name": "primary_file_endpoint",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.primaryFileEndpoint",
       "description": "Primary File service endpoint URL."
@@ -370,6 +373,7 @@
       "name": "primary_queue_endpoint",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.primaryQueueEndpoint",
       "description": "Primary Queue service endpoint URL."
@@ -378,6 +382,7 @@
       "name": "primary_table_endpoint",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.primaryTableEndpoint",
       "description": "Primary Table service endpoint URL."
