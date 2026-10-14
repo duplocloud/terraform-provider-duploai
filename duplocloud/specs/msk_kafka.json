@@ -90,11 +90,13 @@
     },
     {
       "name": "subnet_ids",
-      "type": "list(string)",
+      "type": "set(string)",
       "optional": true,
+      "computed": true,
       "forceNew": true,
       "createPath": "spec.subnetIds",
-      "description": "Private subnets (2-4, each in a distinct Availability Zone) to place brokers in. Leave unset to use all of the resource group's private subnets. Write-only at creation."
+      "responsePaths": ["result.cloudDetails.provisioned.brokerNodeGroupInfo.clientSubnets", "spec.subnetIds"],
+      "description": "Private subnets (2-4, each in a distinct Availability Zone) to place brokers in. Leave unset to use all of the resource group's private subnets; the subnets actually used are read back either way. Changing it replaces the cluster."
     },
     {
       "name": "encryption",
@@ -126,7 +128,8 @@
       "createOnly": true,
       "oneOf": ["TLS", "TLS_PLAINTEXT", "PLAINTEXT"],
       "requestPath": "spec.createRequest.provisioned.encryptionInfo.encryptionInTransit.clientBroker.value",
-      "description": "How clients connect: TLS (encrypted), TLS_PLAINTEXT (both), or PLAINTEXT (unencrypted)."
+      "responsePath": "result.cloudDetails.provisioned.encryptionInfo.encryptionInTransit.clientBroker",
+      "description": "How clients connect: TLS (encrypted), TLS_PLAINTEXT (both), or PLAINTEXT (unencrypted). Read back from the cluster. Changing it replaces the cluster."
     },
     {
       "name": "configuration_arn",
@@ -135,7 +138,8 @@
       "forceNew": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.provisioned.configurationInfo.arn",
-      "description": "ARN of a saved MSK (Kafka broker) configuration to apply. Leave unset for the AWS default."
+      "responsePath": "result.cloudDetails.provisioned.currentBrokerSoftwareInfo.configurationArn",
+      "description": "ARN of a saved MSK (Kafka broker) configuration to apply. Leave unset for the AWS default. Read back from the cluster. Changing it replaces the cluster."
     },
     {
       "name": "configuration_revision",
@@ -144,7 +148,8 @@
       "forceNew": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.provisioned.configurationInfo.revision",
-      "description": "Revision of the MSK configuration referenced by configuration_arn."
+      "responsePath": "result.cloudDetails.provisioned.currentBrokerSoftwareInfo.configurationRevision",
+      "description": "Revision of the MSK configuration referenced by configuration_arn. Read back from the cluster. Changing it replaces the cluster."
     },
     {
       "name": "scope_ids",
@@ -181,7 +186,7 @@
       "optional": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.tags",
-      "description": "Tags applied to the cluster at creation. Platform ownership tags are added automatically."
+      "description": "Tags applied to the cluster at creation. Platform ownership tags are added automatically. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing cluster."
     },
     {
       "name": "status",
@@ -210,6 +215,7 @@
       "name": "cluster_arn",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.cloudDetails.clusterArn",
       "description": "ARN of the provisioned MSK cluster."
@@ -254,6 +260,7 @@
       "name": "created_at",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,
       "description": "Timestamp when the cluster was created (RFC 3339, normalized to UTC at second precision)."

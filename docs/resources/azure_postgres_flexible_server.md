@@ -143,7 +143,7 @@ resource "duploai_azure_postgres_flexible_server" "private" {
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `postgres_server_id` (String) ARM resource id of the PostgreSQL Flexible Server in Azure. Read-only; the backend can occasionally omit it from an otherwise-normal read, so the last known value is kept rather than cleared. Feeds server_id on dependent azurerm_postgresql_flexible_server_configuration resources, where it is ForceNew.
 - `provisioning_state` (String) Azure-reported provisioning state of the server.
-- `scope_ids` (List of String) Scopes the server is visible to. Inherited from the resource group.
+- `scope_ids` (List of String) Scopes the server is visible to. Inherited from the resource group. Sent back unchanged on update: the platform rebuilds the server record from the update request and would otherwise drop them.
 - `server_id` (String) Backend identifier of the server record.
 - `status` (String) Provisioning status reported by the platform.
 - `updated_at` (String) Timestamp when the server record was last updated (RFC 3339, normalized to UTC at second precision).

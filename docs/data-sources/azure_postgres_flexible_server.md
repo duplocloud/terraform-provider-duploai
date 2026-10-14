@@ -73,7 +73,7 @@ output "postgres_server_id" {
 - `provisioning_state` (String) Azure-reported provisioning state of the server.
 - `public_network_access` (String) Enabled exposes the server publicly, gated by firewall_rules. Disabled selects private access (VNet integration) and requires delegated_subnet_resource_id. Immutable after creation — Azure does not allow changing the connectivity method, VNet, or private DNS zone afterwards.
 - `resource_group_id` (String) Resource group the server is provisioned into.
-- `scope_ids` (List of String) Scopes the server is visible to. Inherited from the resource group.
+- `scope_ids` (List of String) Scopes the server is visible to. Inherited from the resource group. Sent back unchanged on update: the platform rebuilds the server record from the update request and would otherwise drop them.
 - `server_id` (String) Backend identifier of the server record.
 - `sku_name` (String) Compute size, e.g. Standard_B1ms (1 vCore, 2 GiB) or Standard_B2s (2 vCore, 4 GiB) for Burstable. Must be a size Azure offers for the chosen sku_tier.
 - `sku_tier` (String) Compute tier. Burstable is cost-effective for low or variable workloads; GeneralPurpose balances compute and memory; MemoryOptimized suits demanding workloads.

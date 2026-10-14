@@ -66,23 +66,23 @@ output "host_private_ip" {
 
 ### Optional
 
-- `block_device_mappings` (Attributes List) Block device mappings (root and additional volumes). (see [below for nested schema](#nestedatt--block_device_mappings))
+- `block_device_mappings` (Attributes List) Block device mappings (root and additional volumes). Not returned by the API in full (sizes and types are missing), so after `terraform import` the configured value is recorded without replacing the host; changing it later replaces the host. (see [below for nested schema](#nestedatt--block_device_mappings))
 - `disk_size_gb` (Number) Root EBS volume size in GiB (20-16384, gp3).
-- `ebs_optimized` (Boolean) Whether the instance is EBS-optimized (higher IOPS/throughput on supported instance types).
+- `ebs_optimized` (Boolean) Whether the instance is EBS-optimized (higher IOPS/throughput on supported instance types). Read back from the instance.
 - `enable_os_disk_encryption` (Boolean) Whether the root EBS volume is encrypted at rest.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
-- `image_id` (String) AMI ID to launch (ami-...). Leave unset to use the default AMI for the selected OS platform.
-- `instance_type` (String) EC2 instance type (e.g. t3a.small). Cannot be changed after creation.
-- `metadata_hop_limit` (Number) Maximum number of network hops for instance metadata service requests.
-- `metadata_service_option` (String) Instance metadata service mode. V2Only requires IMDSv2 and disables IMDSv1 (recommended).
+- `image_id` (String) AMI ID to launch (ami-...). Leave unset to use the default AMI for the selected OS platform; the AMI actually used is read back from the instance.
+- `instance_type` (String) EC2 instance type (e.g. t3a.small). Read back from the instance. Cannot be changed after creation.
+- `metadata_hop_limit` (Number) Maximum number of network hops for instance metadata service requests. Changing it replaces the host: the platform has no in-place update for it.
+- `metadata_service_option` (String) Instance metadata service mode. V2Only requires IMDSv2 and disables IMDSv1 (recommended). Can be changed in place.
 - `os_disk_encryption_key` (String) KMS key ARN used to encrypt the root volume. Leave unset to use the resource group's default key.
 - `os_platform` (Number) OS platform: 0 = Linux, 1 = Windows. Cannot be changed after creation.
 - `scope_ids` (Set of String) IDs of the scopes attached to this host.
 - `subnet_id` (String) ID of the subnet to launch the host in. Leave unset to auto-select the first subnet of the chosen subnet_type. Cannot be changed after creation.
 - `subnet_type` (String) Subnet tier used when subnet_id is auto-selected. Cannot be changed after creation.
-- `tags` (Map of String) Key/value tags applied to the host. Platform ownership tags are added automatically.
+- `tags` (Map of String) Key/value tags applied to the host. Platform ownership tags are added automatically. Can be changed in place.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `user_data` (String) Base64-encoded user data script run on first boot.
+- `user_data` (String) Base64-encoded user data script run on first boot. Not returned by the API, so after `terraform import` the configured value is recorded without replacing the host; changing it later replaces the host.
 
 ### Read-Only
 

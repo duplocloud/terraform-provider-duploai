@@ -327,6 +327,7 @@
       "name": "node_group_name",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.nodeGroupName",
       "description": "Provisioned EKS node group name."
     },
@@ -334,6 +335,7 @@
       "name": "node_group_arn",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.nodeGroupArn",
       "description": "ARN of the provisioned node group."
     },
@@ -363,6 +365,7 @@
       "name": "asg_name",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.asgName",
       "description": "Name of the backing Auto Scaling group."
     },

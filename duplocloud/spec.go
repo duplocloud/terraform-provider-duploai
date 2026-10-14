@@ -416,6 +416,41 @@ type AttributeSpec struct {
 	// read missed the value, and the next apply should fill it in.
 	Stable bool `json:"stable,omitempty"`
 
+	// ImportAdoptsConfig, on a forceNew attribute the API never returns (so no
+	// read path can fill it), replaces the resource only when the prior value is
+	// set. After `terraform import` such a value is null; with this flag the
+	// first plan adopts the configured value as an in-place, state-only change
+	// instead of replacing the resource just imported. A change from a known
+	// value still replaces it. Only valid on forceNew string or list attributes.
+	ImportAdoptsConfig bool `json:"importAdoptsConfig,omitempty"`
+
+	// UpdateOnlyIfChanged leaves the attribute out of the update (PUT) body
+	// unless its value changed, and drops any parent object that leaves empty.
+	// For backends that act on every field present in an update delta — AWS EFS
+	// calls UpdateFileSystem whenever spec.updateRequest is present, and AWS
+	// rejects an unchanged throughput, so an unrelated (description/backup)
+	// update failed. Matches the AWS provider, which only calls UpdateFileSystem
+	// when the throughput settings changed.
+	UpdateOnlyIfChanged bool `json:"updateOnlyIfChanged,omitempty"`
+
+	// AppliesWhen, on a computed-only attribute, lists conditions (logical AND,
+	// same shape as requiredIf) under which the attribute is meaningful — e.g.
+	// [{"attribute": "cloud", "equals": "Azure"}] for an AKS-only output. When
+	// they don't hold, the attribute is planned and stored as null instead of
+	// "(known after apply)" on every update, so an AWS cluster's plan no longer
+	// lists its Azure-only outputs (and vice versa). A condition whose attribute
+	// is unknown counts as holding, so a value is never nulled on a guess.
+	AppliesWhen []RequiredIfCondition `json:"appliesWhen,omitempty"`
+
+	// CaseInsensitive marks a string whose value compares case-insensitively —
+	// an Azure ARM id, where "resourceGroups" and "resourcegroups" name the same
+	// resource and the API is free to return either. A case-only difference
+	// then never replaces the resource (a forceNew attribute plans an in-place,
+	// state-only change), a read that returns other casing keeps the stored
+	// value, and an update request carries the stored casing so a backend's
+	// case-sensitive immutability check isn't tripped. Only valid on strings.
+	CaseInsensitive bool `json:"caseInsensitive,omitempty"`
+
 	// Default supplies a static default for Optional+Computed attributes.
 	// Interpreted according to Type.
 	Default *json.RawMessage `json:"default,omitempty"`
@@ -693,6 +728,10 @@ type AttributeSpec struct {
 	// adopt UseStateForUnknown so its prior-state value is known at plan time —
 	// required for the union-on-write to keep server-managed entries.
 	preserveTarget bool
+
+	// nested is set internally (not from JSON) on an attribute declared inside
+	// an object-typed attribute. See preserveNonNullOnly.
+	nested bool
 }
 
 // requestPath / responsePath resolve the effective per-direction path.
@@ -1048,6 +1087,15 @@ func (s *ResourceSpec) validate() error {
 	if s.LookupDescription != "" && s.LookupAttribute == "" {
 		return fmt.Errorf("lookupDescription requires lookupAttribute")
 	}
+	// rawConditionsHold skips a condition whose attribute isn't in the plan, so a
+	// misspelled name would silently disable the rule rather than fail.
+	for _, a := range s.Attributes {
+		for _, c := range a.AppliesWhen {
+			if !seen[c.Attribute] {
+				return fmt.Errorf("attribute %q: appliesWhen references unknown attribute %q", a.Name, c.Attribute)
+			}
+		}
+	}
 	for _, r := range s.RequiredIf {
 		if !seen[r.Attribute] {
 			return fmt.Errorf("requiredIf references unknown attribute %q", r.Attribute)
@@ -1397,6 +1445,20 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			if a.MaxLength > 0 && a.MinLength > a.MaxLength {
 				return nil, fmt.Errorf("attribute %q: minLength %d exceeds maxLength %d, so no value can satisfy both",
 					a.Name, a.MinLength, a.MaxLength)
+			}
+		}
+		if a.CaseInsensitive && a.Type != "string" {
+			return nil, fmt.Errorf("attribute %q: caseInsensitive is only valid on a string", a.Name)
+		}
+		if len(a.AppliesWhen) > 0 && (a.Optional || a.Required || !a.Computed) {
+			return nil, fmt.Errorf("attribute %q: appliesWhen is only valid on a computed-only attribute", a.Name)
+		}
+		if a.ImportAdoptsConfig {
+			if !a.ForceNew {
+				return nil, fmt.Errorf("attribute %q: importAdoptsConfig only changes how a forceNew attribute replaces; add forceNew or drop it", a.Name)
+			}
+			if a.Type != "string" && !strings.HasPrefix(a.Type, "list(") {
+				return nil, fmt.Errorf("attribute %q: importAdoptsConfig is only supported on string and list attributes", a.Name)
 			}
 		}
 		if a.ImmutableOnceTrue {

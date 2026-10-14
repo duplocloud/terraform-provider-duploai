@@ -59,11 +59,12 @@
     {
       "name": "labels",
       "type": "map(string)",
+      "filterResponseKeys": ["*"],
       "optional": true,
       "computed": true,
       "requestPath": "spec.k8sResource.metadata.labels",
       "responsePath": "result.k8sResource.metadata.labels",
-      "description": "Kubernetes labels applied to the Ingress."
+      "description": "Kubernetes labels applied to the Ingress. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored."
     },
     {
       "name": "annotations",
@@ -174,15 +175,14 @@
                 {
                   "name": "path_type",
                   "type": "string",
-                  "optional": true,
-                  "computed": true,
+                  "required": true,
                   "apiPath": "pathType",
                   "oneOf": [
                     "Exact",
                     "Prefix",
                     "ImplementationSpecific"
                   ],
-                  "description": "Path matching semantics: Exact, Prefix, or ImplementationSpecific."
+                  "description": "Path matching semantics: Exact, Prefix, or ImplementationSpecific. Required: Kubernetes rejects an Ingress path without a pathType (it has no default)."
                 },
                 {
                   "name": "backend",

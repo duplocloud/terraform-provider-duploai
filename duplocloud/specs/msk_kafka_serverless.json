@@ -74,7 +74,7 @@
       "optional": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.tags",
-      "description": "Tags applied to the cluster at creation. Platform ownership tags are added automatically."
+      "description": "Tags applied to the cluster at creation. Platform ownership tags are added automatically. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing cluster."
     },
     {
       "name": "status",
@@ -103,6 +103,7 @@
       "name": "cluster_arn",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.cloudDetails.clusterArn",
       "description": "ARN of the provisioned MSK cluster."
@@ -129,6 +130,7 @@
       "name": "created_at",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,
       "description": "Timestamp when the cluster was created (RFC 3339, normalized to UTC at second precision)."

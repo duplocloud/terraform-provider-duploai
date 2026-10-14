@@ -513,6 +513,7 @@
     },
     {
       "name": "helpdesk_vpc_id",
+      "appliesWhen": [{"attribute": "cloud", "equals": "Aws"}],
       "type": "string",
       "computed": true,
       "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskVpcId",
@@ -520,6 +521,7 @@
     },
     {
       "name": "helpdesk_account_id",
+      "appliesWhen": [{"attribute": "cloud", "equals": "Aws"}],
       "type": "string",
       "computed": true,
       "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskAccountId",
@@ -527,6 +529,7 @@
     },
     {
       "name": "helpdesk_region",
+      "appliesWhen": [{"attribute": "cloud", "equals": "Aws"}],
       "type": "string",
       "computed": true,
       "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskRegion",
@@ -534,6 +537,7 @@
     },
     {
       "name": "helpdesk_vpc_cidr_blocks",
+      "appliesWhen": [{"attribute": "cloud", "equals": "Aws"}],
       "type": "list(string)",
       "computed": true,
       "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskVpcCidrBlocks",
@@ -541,6 +545,7 @@
     },
     {
       "name": "helpdesk_vpc_peering",
+      "appliesWhen": [{"attribute": "cloud", "equals": "Aws"}],
       "type": "object",
       "computed": true,
       "responsePath": "result.helpdeskVpcPeering",
@@ -637,6 +642,7 @@
     },
     {
       "name": "subnet_ids",
+      "appliesWhen": [{"attribute": "cloud", "equals": "Aws"}],
       "type": "list(string)",
       "computed": true,
       "apiPath": "result.subnets[].subnetId",
@@ -644,6 +650,7 @@
     },
     {
       "name": "nat_gateway_ids",
+      "appliesWhen": [{"attribute": "cloud", "equals": "Aws"}],
       "type": "list(string)",
       "computed": true,
       "apiPath": "result.natGateways[].natGatewayId",
@@ -651,6 +658,7 @@
     },
     {
       "name": "azure_vnet_id",
+      "appliesWhen": [{"attribute": "cloud", "equals": "Azure"}],
       "type": "string",
       "computed": true,
       "apiPath": "result.azure.vnet.vnetId",
@@ -658,20 +666,25 @@
     },
     {
       "name": "azure_resource_group",
+      "appliesWhen": [{"attribute": "cloud", "equals": "Azure"}],
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.azure.resourceGroup",
       "description": "Azure only. Resource group the virtual network was provisioned into."
     },
     {
       "name": "azure_subscription_id",
+      "appliesWhen": [{"attribute": "cloud", "equals": "Azure"}],
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.azure.subscriptionId",
       "description": "Azure only. Subscription the virtual network was provisioned into."
     },
     {
       "name": "azure_subnet_ids",
+      "appliesWhen": [{"attribute": "cloud", "equals": "Azure"}],
       "type": "list(string)",
       "computed": true,
       "apiPath": "result.azure.subnets[].subnetId",
@@ -679,6 +692,7 @@
     },
     {
       "name": "azure_nat_gateway_ids",
+      "appliesWhen": [{"attribute": "cloud", "equals": "Azure"}],
       "type": "list(string)",
       "computed": true,
       "apiPath": "result.azure.natGateways[].natGatewayId",

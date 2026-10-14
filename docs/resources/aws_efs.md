@@ -57,7 +57,7 @@ resource "duploai_aws_efs" "db_backups" {
 ### Optional
 
 - `availability_zone_name` (String) AWS Availability Zone to create a One Zone file system in (e.g. us-east-1a). Omit for a Regional (multi-AZ) file system. Immutable after creation.
-- `backup` (Boolean) Whether to enable automatic backups (AWS Backup) at creation. Immutable after creation.
+- `backup` (Boolean) Whether automatic backups (AWS Backup) are enabled. Defaults to `true` on create. Can be changed in place: the platform applies it to the file system's backup policy. In regions without AWS Backup, a file system created with the default reads back as `false`; explicitly setting `true` there fails.
 - `creation_token` (String) Idempotency token used at creation. Defaults to the file system name if omitted. Immutable after creation.
 - `description` (String) Optional description of the EFS file system.
 - `encryption` (String) Encryption at rest mode. NoEncryption disables encryption; AwsManagedKey uses the AWS-managed EFS key; ResourceGroupKmsKey uses the resource group's KMS key. Immutable after creation.
@@ -66,7 +66,7 @@ resource "duploai_aws_efs" "db_backups" {
 - `performance_mode` (String) Performance mode: generalPurpose (default) or maxIO. Immutable after creation. When importing a maxIO file system, set this to maxIO in the configuration — otherwise the generalPurpose default plans a replacement.
 - `provisioned_throughput_in_mibps` (Number) Provisioned throughput in MiB/s. Required when throughput_mode is provisioned; ignored otherwise.
 - `provisioner_version` (String) Optional provisioner version.
-- `tags` (Attributes List) Tags applied to the file system at creation. (see [below for nested schema](#nestedatt--tags))
+- `tags` (Attributes List) Tags applied to the file system at creation. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing file system. (see [below for nested schema](#nestedatt--tags))
 - `throughput_mode` (String) Throughput mode: bursting (default), provisioned, or elastic. Mutable.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 

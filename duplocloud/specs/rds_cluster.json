@@ -456,6 +456,7 @@
       "name": "cluster_endpoint",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.clusterEndpoint",
       "description": "Writer (primary) endpoint of the provisioned cluster."
     },
@@ -463,6 +464,7 @@
       "name": "reader_endpoint",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.readerEndpoint",
       "description": "Reader endpoint of the provisioned cluster."
     },
@@ -470,6 +472,7 @@
       "name": "port",
       "type": "int",
       "computed": true,
+      "stable": true,
       "apiPath": "result.port",
       "description": "Port the cluster listens on."
     },

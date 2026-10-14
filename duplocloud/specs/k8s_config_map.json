@@ -84,15 +84,18 @@
     {
       "name": "labels",
       "type": "map(string)",
+      "filterResponseKeys": ["*"],
       "optional": true,
-      "apiPath": "spec.k8sResource.metadata.labels",
-      "description": "Kubernetes labels applied to the config map."
+      "requestPath": "spec.k8sResource.metadata.labels",
+      "responsePath": "result.k8sResource.metadata.labels",
+      "description": "Kubernetes labels applied to the config map. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored."
     },
     {
       "name": "annotations",
       "type": "map(string)",
       "optional": true,
-      "apiPath": "spec.k8sResource.metadata.annotations",
+      "requestPath": "spec.k8sResource.metadata.annotations",
+      "responsePath": "result.k8sResource.metadata.annotations",
       "description": "Kubernetes annotations applied to the config map."
     },
     {

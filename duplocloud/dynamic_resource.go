@@ -334,6 +334,15 @@ func jsonEqual(a, b any) bool {
 // the apply is a true no-op (see Update). This is generic — it applies to every
 // resource the engine serves, current and future.
 func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Outputs that don't apply (appliesWhen) are planned null, on create and
+	// update alike — run last, after anything below adjusts the plan.
+	if !req.Plan.Raw.IsNull() {
+		defer func() {
+			if !resp.Diagnostics.HasError() {
+				resp.Plan.Raw = nullInapplicable(r.spec.Attributes, resp.Plan.Raw)
+			}
+		}()
+	}
 	// Only relevant on update: create has no prior state, destroy has no plan.
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
 		return
@@ -702,6 +711,15 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
+	r.dropUnchangedUpdateFields(ctx, req, body, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.sendStoredCasing(ctx, req, body, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	retries := r.failureRetries(ctx, req.Plan, &resp.Diagnostics)
 	waitPopulated := r.waitForPopulated(ctx, req.Plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
@@ -740,6 +758,82 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 	resp.State.Raw = state
 	log.Printf("[TRACE] dynamic %s Update(%s): end", r.spec.Name, id)
+}
+
+// dropUnchangedUpdateFields removes each UpdateOnlyIfChanged attribute whose
+// value did not change from the update body, pruning parent objects it leaves
+// empty — so a backend that acts on any field present (EFS UpdateFileSystem)
+// is not asked to "change" a value to what it already is.
+func (r *dynamicResource) dropUnchangedUpdateFields(ctx context.Context, req resource.UpdateRequest, body map[string]any, diags *diag.Diagnostics) {
+	for i := range r.spec.Attributes {
+		a := r.spec.Attributes[i]
+		if !a.UpdateOnlyIfChanged {
+			continue
+		}
+		path := a.effectiveUpdatePath()
+		if path == "" {
+			continue
+		}
+		planVal, _ := readPlanGoValue(ctx, req.Plan, a, diags)
+		stateVal, _ := readPlanGoValue(ctx, req.State, a, diags)
+		if diags.HasError() {
+			return
+		}
+		if jsonEqual(planVal, stateVal) {
+			deletePathPruning(body, strings.Split(path, "."))
+		}
+	}
+}
+
+// sendStoredCasing writes the prior state's value into the update body for a
+// CaseInsensitive attribute whose planned value differs only in letter case, so
+// the backend never sees a "change" to an id that is the same resource.
+func (r *dynamicResource) sendStoredCasing(ctx context.Context, req resource.UpdateRequest, body map[string]any, diags *diag.Diagnostics) {
+	for i := range r.spec.Attributes {
+		a := r.spec.Attributes[i]
+		if !a.CaseInsensitive {
+			continue
+		}
+		path := a.effectiveUpdatePath()
+		if path == "" {
+			continue
+		}
+		planVal, _ := readPlanGoValue(ctx, req.Plan, a, diags)
+		stateVal, _ := readPlanGoValue(ctx, req.State, a, diags)
+		if diags.HasError() {
+			return
+		}
+		ps, ok1 := planVal.(string)
+		ss, ok2 := stateVal.(string)
+		if ok1 && ok2 && ps != ss && strings.EqualFold(ps, ss) {
+			setPath(body, strings.Split(path, "."), ss)
+		}
+	}
+}
+
+// deletePathPruning deletes the value at segs and then removes each ancestor
+// object the deletion left empty. Indexed segments are left alone.
+func deletePathPruning(root map[string]any, segs []string) {
+	if len(segs) == 0 {
+		return
+	}
+	parents := []map[string]any{root}
+	m := root
+	for _, s := range segs[:len(segs)-1] {
+		next, ok := m[s].(map[string]any)
+		if !ok {
+			return
+		}
+		parents = append(parents, next)
+		m = next
+	}
+	delete(m, segs[len(segs)-1])
+	for i := len(parents) - 1; i > 0; i-- {
+		if len(parents[i]) != 0 {
+			return
+		}
+		delete(parents[i-1], segs[i-1])
+	}
 }
 
 // singleIntentUpdate applies each changed UpdateIntent attribute as its own PUT
@@ -1838,13 +1932,96 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		// read) keep whatever the base value already held rather than the empty
 		// value the response carries.
 		next[a.Name] = restorePreservedValues(a, current[a.Name], next[a.Name])
+		// A user-settable value the API echoes as empty ("" / [] / {}) where
+		// the user has null — or omits where the user wrote an empty value —
+		// keeps the user's form. Only a user-only attribute keeps a null over
+		// the API's empty value; see keepEmptyForm. Computed-only outputs never
+		// produce a diff, so they keep exactly what the API said.
+		if !computedOnly {
+			next[a.Name] = keepEmptyForm(current[a.Name], next[a.Name], !a.Computed)
+		}
+		if a.CaseInsensitive {
+			next[a.Name] = keepPriorCasing(current[a.Name], next[a.Name])
+		}
 	}
 
 	return tftypes.NewValue(objType, next)
 }
 
 func (r *dynamicResource) stateFromResponse(_ context.Context, baseRaw tftypes.Value, resp map[string]any, scope map[string]string, id string, refreshInputs bool, diags *diag.Diagnostics) tftypes.Value {
-	return buildStateRaw(r.spec.Attributes, baseRaw, resp, scope, id, refreshInputs, true, diags)
+	return nullInapplicable(r.spec.Attributes, buildStateRaw(r.spec.Attributes, baseRaw, resp, scope, id, refreshInputs, true, diags))
+}
+
+// nullInapplicable sets every AppliesWhen attribute whose conditions don't hold
+// to null in an object value (a plan or a state). Conditions are read from the
+// same object; an attribute's spec default stands in for a null value, and an
+// unknown value counts as holding.
+func nullInapplicable(attrs []AttributeSpec, raw tftypes.Value) tftypes.Value {
+	if !raw.IsKnown() || raw.IsNull() {
+		return raw
+	}
+	objType, ok := raw.Type().(tftypes.Object)
+	if !ok {
+		return raw
+	}
+	var m map[string]tftypes.Value
+	if raw.As(&m) != nil {
+		return raw
+	}
+	changed := false
+	for _, a := range attrs {
+		if len(a.AppliesWhen) == 0 || rawConditionsHold(attrs, m, a.AppliesWhen) {
+			continue
+		}
+		if t, ok := objType.AttributeTypes[a.Name]; ok && !m[a.Name].IsNull() {
+			m[a.Name] = tftypes.NewValue(t, nil)
+			changed = true
+		}
+	}
+	if !changed {
+		return raw
+	}
+	return tftypes.NewValue(objType, m)
+}
+
+// rawConditionsHold evaluates appliesWhen conditions against an object's
+// attribute values (logical AND). Unknown counts as holding; null falls back to
+// the attribute's spec default.
+func rawConditionsHold(attrs []AttributeSpec, m map[string]tftypes.Value, conds []RequiredIfCondition) bool {
+	for _, c := range conds {
+		v, ok := m[c.Attribute]
+		if !ok {
+			continue
+		}
+		if !v.IsKnown() {
+			return true
+		}
+		val := ""
+		if !v.IsNull() {
+			val = toStringValue(tftypesToGo(v))
+		} else if a := findAttr(attrs, c.Attribute); a != nil {
+			val = defaultString(*a)
+		}
+		switch {
+		case c.IsEmpty:
+			if val != "" {
+				return false
+			}
+		case c.IsNotEmpty:
+			if val == "" {
+				return false
+			}
+		case c.NotEquals != "":
+			if val == c.NotEquals {
+				return false
+			}
+		default:
+			if val != c.Equals {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // ── value conversion helpers ──────────────────────────────────────────────────

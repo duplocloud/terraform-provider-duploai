@@ -7,6 +7,11 @@
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AwsEc2Hosts",
     "deprovision": {}
   },
+  "singleIntentUpdate": {
+    "discriminatorPath": "spec.updateRequest.updateType",
+    "readyPath": "result.liveState",
+    "readyState": "running"
+  },
   "waiter": {
     "statusPath": "status",
     "successState": "Complete",
@@ -113,7 +118,8 @@
       "default": "V2Only",
       "oneOf": ["V2Only", "V1AndV2", "Disabled"],
       "apiPath": "spec.metadataServiceOption",
-      "description": "Instance metadata service mode. V2Only requires IMDSv2 and disables IMDSv1 (recommended)."
+      "updateIntent": {"discriminatorValue": "ChangeMetadataService", "valuePath": "spec.updateRequest.metadataServiceOption"},
+      "description": "Instance metadata service mode. V2Only requires IMDSv2 and disables IMDSv1 (recommended). Can be changed in place."
     },
     {
       "name": "metadata_hop_limit",
@@ -121,8 +127,9 @@
       "optional": true,
       "computed": true,
       "default": 1,
+      "forceNew": true,
       "apiPath": "spec.metadataHopLimit",
-      "description": "Maximum number of network hops for instance metadata service requests."
+      "description": "Maximum number of network hops for instance metadata service requests. Changing it replaces the host: the platform has no in-place update for it."
     },
     {
       "name": "subnet_type",
@@ -150,7 +157,8 @@
       "optional": true,
       "computed": true,
       "apiPath": "spec.tags",
-      "description": "Key/value tags applied to the host. Platform ownership tags are added automatically."
+      "updateIntent": {"discriminatorValue": "UpdateTags", "valuePath": "spec.updateRequest.tags"},
+      "description": "Key/value tags applied to the host. Platform ownership tags are added automatically. Can be changed in place."
     },
     {
       "name": "instance_type",
@@ -160,7 +168,8 @@
       "default": "t3a.small",
       "forceNew": true,
       "createPath": "spec.createRequest.InstanceType",
-      "description": "EC2 instance type (e.g. t3a.small). Cannot be changed after creation."
+      "responsePath": "result.cloudDetails.instanceType",
+      "description": "EC2 instance type (e.g. t3a.small). Read back from the instance. Cannot be changed after creation."
     },
     {
       "name": "ebs_optimized",
@@ -170,15 +179,18 @@
       "default": true,
       "forceNew": true,
       "createPath": "spec.createRequest.EbsOptimized",
-      "description": "Whether the instance is EBS-optimized (higher IOPS/throughput on supported instance types)."
+      "responsePath": "result.cloudDetails.ebsOptimized",
+      "description": "Whether the instance is EBS-optimized (higher IOPS/throughput on supported instance types). Read back from the instance."
     },
     {
       "name": "image_id",
       "type": "string",
       "optional": true,
+      "computed": true,
       "forceNew": true,
       "createPath": "spec.createRequest.ImageId",
-      "description": "AMI ID to launch (ami-...). Leave unset to use the default AMI for the selected OS platform."
+      "responsePath": "result.cloudDetails.imageId",
+      "description": "AMI ID to launch (ami-...). Leave unset to use the default AMI for the selected OS platform; the AMI actually used is read back from the instance."
     },
     {
       "name": "user_data",
@@ -186,7 +198,8 @@
       "optional": true,
       "forceNew": true,
       "createPath": "spec.createRequest.UserData",
-      "description": "Base64-encoded user data script run on first boot."
+      "importAdoptsConfig": true,
+      "description": "Base64-encoded user data script run on first boot. Not returned by the API, so after `terraform import` the configured value is recorded without replacing the host; changing it later replaces the host."
     },
     {
       "name": "block_device_mappings",
@@ -194,7 +207,8 @@
       "optional": true,
       "forceNew": true,
       "createPath": "spec.createRequest.BlockDeviceMappings",
-      "description": "Block device mappings (root and additional volumes).",
+      "importAdoptsConfig": true,
+      "description": "Block device mappings (root and additional volumes). Not returned by the API in full (sizes and types are missing), so after `terraform import` the configured value is recorded without replacing the host; changing it later replaces the host.",
       "attributes": [
         {
           "name": "device_name",
@@ -289,6 +303,7 @@
       "name": "private_ip_address",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.privateIpAddress",
       "description": "Private IP address of the host."
     },
@@ -332,6 +347,7 @@
       "name": "created_at",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,
       "description": "Timestamp when the host was created (RFC 3339, normalized to UTC at second precision)."

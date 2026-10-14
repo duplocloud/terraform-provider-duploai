@@ -348,6 +348,7 @@
       "name": "endpoint",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.details.Endpoint.Address",
       "description": "Connection endpoint (DNS address) of the RDS instance."
@@ -356,6 +357,7 @@
       "name": "port",
       "type": "int",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.details.Endpoint.Port",
       "description": "Port the RDS instance listens on."

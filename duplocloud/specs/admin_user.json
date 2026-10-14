@@ -84,6 +84,7 @@
       "name": "created_at",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,

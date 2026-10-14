@@ -402,6 +402,7 @@
       "name": "configuration_endpoint",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.configurationEndpoint",
       "description": "Configuration endpoint (cluster-mode-enabled Redis/Valkey and Memcached)."
@@ -410,6 +411,7 @@
       "name": "primary_endpoint",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.primaryEndpoint",
       "description": "Primary endpoint address (Redis/Valkey)."
@@ -418,6 +420,7 @@
       "name": "reader_endpoint",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.readerEndpoint",
       "description": "Reader endpoint address (Redis/Valkey)."

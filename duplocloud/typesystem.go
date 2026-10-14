@@ -153,17 +153,21 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 	switch elem {
 	case "string":
 		o := schema.StringAttribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
+		var def string
 		if a.Default != nil {
-			var s string
-			_ = json.Unmarshal(*a.Default, &s)
-			o.Default = stringdefault.StaticString(s)
+			_ = json.Unmarshal(*a.Default, &def)
+			o.Default = stringdefault.StaticString(def)
 		}
 		o.Validators = stringValidators(a)
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, stringplanmodifier.UseStateForUnknown(), stringplanmodifier.UseNonNullStateForUnknown()))
 		}
+		if a.Computed && a.Default != nil && def == "" {
+			// Must run before RequiresReplace: see nullStateMatchesEmptyDefault.
+			o.PlanModifiers = append(o.PlanModifiers, nullStateMatchesEmptyDefault{})
+		}
 		if a.ForceNew {
-			o.PlanModifiers = append(o.PlanModifiers, stringplanmodifier.RequiresReplace())
+			o.PlanModifiers = append(o.PlanModifiers, stringRequiresReplace(a))
 		}
 		return o
 	case "bool":
@@ -243,19 +247,31 @@ func useStateForUnknown(a AttributeSpec) bool {
 }
 
 // preserveNonNullOnly reports whether an attribute that keeps its prior state
-// should keep only a non-null one. That is the case when Stable is the sole
-// reason it is preserved: a stable output (an ID, an ARM id, an endpoint)
-// always exists once created, so a null in state means a read missed it, and
-// leaving it unknown lets the next apply fill it in. Since framework v1.15.1,
-// UseStateForUnknown pins a null forever. Every other reason keeps null:
-// optional values may legitimately be unset, and a forceNew value turning
-// unknown would force replacement.
+// should keep only a non-null one (UseNonNullStateForUnknown); otherwise it
+// keeps whatever the prior holds, null included (UseStateForUnknown, which
+// since framework v1.15.1 pins a null forever). Non-null only applies to:
+//
+//   - a stable output (an ID, an ARM id, an endpoint): it always exists once
+//     created, so a null in state means a read missed it, and leaving it
+//     unknown lets the next apply fill it in.
+//   - a child of a nested attribute: UseStateForUnknown only skips a resource
+//     being created, not a nested object being added, so a child the user
+//     leaves unset in a new list element would be planned as null instead of
+//     the value the server fills in. HashiCorp recommends
+//     UseNonNullStateForUnknown here (framework v1.17.0, issue #1197).
+//
+// A forceNew value always keeps null — turning unknown would force
+// replacement — as do values the engine needs at plan time (preserveTarget,
+// SendFromState). A top-level optional value may legitimately be unset.
 func preserveNonNullOnly(a AttributeSpec) bool {
-	return a.Stable && !a.Optional && !a.ForceNew && !a.preserveTarget && !a.SendFromState
+	if a.ForceNew || a.preserveTarget || a.SendFromState {
+		return false
+	}
+	return a.nested || (a.Stable && !a.Optional)
 }
 
-// preserveModifier picks the type's UseNonNullStateForUnknown (nonNull) for a
-// stable-only attribute and its UseStateForUnknown (keep) otherwise.
+// preserveModifier picks the type's UseNonNullStateForUnknown (nonNull) when
+// preserveNonNullOnly holds and its UseStateForUnknown (keep) otherwise.
 func preserveModifier[T any](a AttributeSpec, keep, nonNull T) T {
 	if preserveNonNullOnly(a) {
 		return nonNull
@@ -355,7 +371,7 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, listplanmodifier.UseStateForUnknown(), listplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
-			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.RequiresReplace())
+			o.PlanModifiers = append(o.PlanModifiers, listRequiresReplace(a))
 		}
 		return o
 	}
@@ -364,6 +380,7 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 func nestedAttrMap(attrs []AttributeSpec) map[string]schema.Attribute {
 	out := make(map[string]schema.Attribute, len(attrs))
 	for _, na := range attrs {
+		na.nested = true
 		out[na.Name] = attrSchema(na)
 	}
 	return out
@@ -389,7 +406,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, listplanmodifier.UseStateForUnknown(), listplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
-			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.RequiresReplace())
+			o.PlanModifiers = append(o.PlanModifiers, listRequiresReplace(a))
 		}
 		if a.OrderByKey != "" {
 			// Sort the planned config by the key so it matches the read side's
@@ -446,6 +463,87 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 		}
 		return o
 	}
+}
+
+// stringRequiresReplace / listRequiresReplace return the forceNew modifier for
+// an attribute: RequiresReplace normally, or — with ImportAdoptsConfig — one
+// that replaces only when the prior value is set, so a value the API never
+// returns (null after import) adopts the config instead of replacing.
+func stringRequiresReplace(a AttributeSpec) planmodifier.String {
+	if !a.ImportAdoptsConfig && !a.CaseInsensitive {
+		return stringplanmodifier.RequiresReplace()
+	}
+	desc := importAdoptsConfigDescription
+	if a.CaseInsensitive {
+		desc = "Changing this value replaces the resource, except for a change in letter case only."
+	}
+	return stringplanmodifier.RequiresReplaceIf(
+		func(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+			if a.ImportAdoptsConfig && req.StateValue.IsNull() {
+				return // imported: adopt the config
+			}
+			if a.CaseInsensitive && !req.StateValue.IsNull() && !req.PlanValue.IsNull() && !req.PlanValue.IsUnknown() &&
+				strings.EqualFold(req.StateValue.ValueString(), req.PlanValue.ValueString()) {
+				return // same id, other casing
+			}
+			resp.RequiresReplace = true
+		},
+		desc, desc)
+}
+
+// keepPriorCasing returns prior when next is the same string in other letter
+// case (a CaseInsensitive attribute read back from an API that re-cases it).
+func keepPriorCasing(prior, next tftypes.Value) tftypes.Value {
+	if !prior.IsKnown() || prior.IsNull() || !next.IsKnown() || next.IsNull() ||
+		!prior.Type().Is(tftypes.String) || !next.Type().Is(tftypes.String) {
+		return next
+	}
+	var p, n string
+	if prior.As(&p) != nil || next.As(&n) != nil || p == n || !strings.EqualFold(p, n) {
+		return next
+	}
+	return prior
+}
+
+func listRequiresReplace(a AttributeSpec) planmodifier.List {
+	if !a.ImportAdoptsConfig {
+		return listplanmodifier.RequiresReplace()
+	}
+	return listplanmodifier.RequiresReplaceIf(
+		func(_ context.Context, req planmodifier.ListRequest, resp *listplanmodifier.RequiresReplaceIfFuncResponse) {
+			resp.RequiresReplace = !req.StateValue.IsNull()
+		},
+		importAdoptsConfigDescription, importAdoptsConfigDescription)
+}
+
+const importAdoptsConfigDescription = "Changing this value replaces the resource, except when no prior value is known (after import), where the configured value is adopted."
+
+// nullStateMatchesEmptyDefault plans the prior null instead of an empty-string
+// default when the user has not set the attribute. A value the API never
+// echoes back (provisioner_version) is null in state after an import, while the
+// default plans ""; Terraform sees null -> "" as a change, and on a forceNew
+// attribute as a replacement of the resource just imported. Null and "" mean
+// the same thing here, as they did in SDKv2, so the plan keeps the state.
+// It must run before RequiresReplace, which compares the final plan to state.
+type nullStateMatchesEmptyDefault struct{}
+
+func (m nullStateMatchesEmptyDefault) Description(_ context.Context) string {
+	return "keeps a null prior value instead of planning an empty-string default"
+}
+
+func (m nullStateMatchesEmptyDefault) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m nullStateMatchesEmptyDefault) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	// Create (no state), a configured value, or a real prior value: nothing to do.
+	if req.State.Raw.IsNull() || !req.ConfigValue.IsNull() || !req.StateValue.IsNull() {
+		return
+	}
+	if req.PlanValue.IsUnknown() || req.PlanValue.IsNull() || req.PlanValue.ValueString() != "" {
+		return
+	}
+	resp.PlanValue = req.StateValue
 }
 
 // immutableOnceTrueModifier fails the plan when a one-way boolean is turned back
@@ -1017,6 +1115,116 @@ func restoreObjectPreserved(attrs []AttributeSpec, prior, next tftypes.Value) tf
 		out[na.Name] = restorePreservedValues(na, p, child)
 	}
 	return tftypes.NewValue(next.Type(), out)
+}
+
+// keepEmptyForm treats null and an empty value ("", [], {}, or an object whose
+// attributes are all null or empty) as the same thing, and keeps whichever of
+// the two the prior value already holds. SDKv2 did this implicitly; the Plugin
+// Framework compares them as different values. Without it, an optional field
+// the user left unset that the API echoes back as "" or [] plans `"" -> null`
+// on every run (and the reverse when the user wrote "" and the API omits it).
+// It recurses into objects, lists of equal length and maps (by key), so nested
+// optional children get the same treatment. A real value on either side is
+// never touched, so genuine drift still shows.
+//
+// keepNull says whether a null prior may win over an empty API value. It is
+// true only for a user-only attribute (optional, not computed), where null is
+// the user's own choice. For a computed attribute — one with a default or that
+// the server fills — a null prior just means nothing was known yet (after an
+// import every value starts null), so the API's "" is taken: keeping null there
+// would turn a default of "" into a spurious change, and on a forceNew
+// attribute into a replacement.
+func keepEmptyForm(prior, next tftypes.Value, keepNull bool) tftypes.Value {
+	if !prior.IsKnown() || !next.IsKnown() || !prior.Type().Is(next.Type()) {
+		return next
+	}
+	if prior.IsNull() {
+		if keepNull && isEmptyForm(next) {
+			return prior
+		}
+		return next
+	}
+	if next.IsNull() {
+		if isEmptyForm(prior) {
+			return prior
+		}
+		return next
+	}
+	switch t := next.Type().(type) {
+	case tftypes.Object:
+		var pm, nm map[string]tftypes.Value
+		if prior.As(&pm) != nil || next.As(&nm) != nil {
+			return next
+		}
+		out := make(map[string]tftypes.Value, len(nm))
+		for k, v := range nm {
+			if p, ok := pm[k]; ok {
+				v = keepEmptyForm(p, v, keepNull)
+			}
+			out[k] = v
+		}
+		return tftypes.NewValue(t, out)
+	case tftypes.List:
+		var pe, ne []tftypes.Value
+		if prior.As(&pe) != nil || next.As(&ne) != nil || len(pe) != len(ne) {
+			return next
+		}
+		out := make([]tftypes.Value, len(ne))
+		for i := range ne {
+			out[i] = keepEmptyForm(pe[i], ne[i], keepNull)
+		}
+		return tftypes.NewValue(t, out)
+	case tftypes.Map:
+		var pm, nm map[string]tftypes.Value
+		if prior.As(&pm) != nil || next.As(&nm) != nil {
+			return next
+		}
+		out := make(map[string]tftypes.Value, len(nm))
+		for k, v := range nm {
+			if p, ok := pm[k]; ok {
+				v = keepEmptyForm(p, v, keepNull)
+			}
+			out[k] = v
+		}
+		return tftypes.NewValue(t, out)
+	}
+	return next
+}
+
+// isEmptyForm reports whether a known, non-null value carries nothing: the
+// empty string, an empty list/set/map, or an object whose attributes are all
+// null or themselves empty.
+func isEmptyForm(v tftypes.Value) bool {
+	if v.IsNull() {
+		return true
+	}
+	if !v.IsKnown() {
+		return false
+	}
+	switch v.Type().(type) {
+	case tftypes.List, tftypes.Set, tftypes.Tuple:
+		var elems []tftypes.Value
+		return v.As(&elems) == nil && len(elems) == 0
+	case tftypes.Map:
+		var m map[string]tftypes.Value
+		return v.As(&m) == nil && len(m) == 0
+	case tftypes.Object:
+		var m map[string]tftypes.Value
+		if v.As(&m) != nil {
+			return false
+		}
+		for _, c := range m {
+			if !isEmptyForm(c) {
+				return false
+			}
+		}
+		return true
+	}
+	if v.Type().Is(tftypes.String) {
+		var s string
+		return v.As(&s) == nil && s == ""
+	}
+	return false
 }
 
 // elemAt returns the i-th element of elems, or a typed null when the prior

@@ -142,10 +142,9 @@
       "name": "backup",
       "type": "bool",
       "optional": true,
-      "forceNew": true,
-      "createOnly": true,
-      "requestPath": "spec.createRequest.backup",
-      "description": "Whether to enable automatic backups (AWS Backup) at creation. Immutable after creation."
+      "computed": true,
+      "apiPath": "spec.backup",
+      "description": "Whether automatic backups (AWS Backup) are enabled. Defaults to `true` on create. Can be changed in place: the platform applies it to the file system's backup policy. In regions without AWS Backup, a file system created with the default reads back as `false`; explicitly setting `true` there fails."
     },
     {
       "name": "throughput_mode",
@@ -160,6 +159,7 @@
       ],
       "createPath": "spec.createRequest.throughputMode",
       "updatePath": "spec.updateRequest.throughputMode",
+      "updateOnlyIfChanged": true,
       "responsePath": "result.cloudDetails.fileSystem.throughputMode",
       "description": "Throughput mode: bursting (default), provisioned, or elastic. Mutable."
     },
@@ -170,6 +170,7 @@
       "computed": true,
       "createPath": "spec.createRequest.provisionedThroughputInMibps",
       "updatePath": "spec.updateRequest.provisionedThroughputInMibps",
+      "updateOnlyIfChanged": true,
       "responsePath": "result.cloudDetails.fileSystem.provisionedThroughputInMibps",
       "description": "Provisioned throughput in MiB/s. Required when throughput_mode is provisioned; ignored otherwise."
     },
@@ -179,7 +180,7 @@
       "optional": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.tags",
-      "description": "Tags applied to the file system at creation.",
+      "description": "Tags applied to the file system at creation. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing file system.",
       "attributes": [
         {
           "name": "key",
@@ -225,6 +226,7 @@
       "name": "file_system_arn",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.cloudDetails.fileSystem.fileSystemArn",
       "description": "ARN of the provisioned file system."
