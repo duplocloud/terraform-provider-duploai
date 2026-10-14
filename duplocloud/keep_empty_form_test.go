@@ -225,8 +225,11 @@ func TestImportAdoptsConfig(t *testing.T) {
 	adopt := AttributeSpec{Type: "string", Optional: true, ForceNew: true, ImportAdoptsConfig: true}
 	plain := AttributeSpec{Type: "string", Optional: true, ForceNew: true}
 
-	if run(adopt, types.StringNull(), types.StringValue("ZWNobw==")) {
-		t.Error("importAdoptsConfig: null prior (after import) must not replace")
+	// No import mark in private state (a request without one): a null prior
+	// means the value was unset at creation, so setting it replaces, as it did
+	// before importAdoptsConfig. The imported case is covered by TestJustImported.
+	if !run(adopt, types.StringNull(), types.StringValue("ZWNobw==")) {
+		t.Error("importAdoptsConfig: null prior without an import mark must replace")
 	}
 	if !run(adopt, types.StringValue("b2xk"), types.StringValue("ZWNobw==")) {
 		t.Error("importAdoptsConfig: a change from a known value must still replace")
@@ -234,19 +237,59 @@ func TestImportAdoptsConfig(t *testing.T) {
 	if !run(plain, types.StringNull(), types.StringValue("ZWNobw==")) {
 		t.Error("plain forceNew: null prior still replaces (unchanged behavior)")
 	}
-	ok := AttributeSpec{Name: "x", Type: "list(string)", Optional: true, ForceNew: true, ImportAdoptsConfig: true}
-	if _, err := validateAttributes([]AttributeSpec{ok}); err != nil {
-		t.Errorf("forceNew list with importAdoptsConfig should validate, got %v", err)
+	for _, typ := range []string{"list(string)", "int", "bool"} {
+		ok := AttributeSpec{Name: "x", Type: typ, Optional: true, ForceNew: true, ImportAdoptsConfig: true}
+		if _, err := validateAttributes([]AttributeSpec{ok}); err != nil {
+			t.Errorf("forceNew %s with importAdoptsConfig should validate, got %v", typ, err)
+		}
 	}
 
-	// Spec validation: only on forceNew string/list attributes.
+	// Spec validation: only on forceNew string/int/bool/list attributes.
 	for _, bad := range []AttributeSpec{
 		{Name: "x", Type: "string", Optional: true, ImportAdoptsConfig: true},
-		{Name: "x", Type: "bool", Optional: true, ForceNew: true, ImportAdoptsConfig: true},
+		{Name: "x", Type: "number", Optional: true, ForceNew: true, ImportAdoptsConfig: true},
+		{Name: "x", Type: "map(string)", Optional: true, ForceNew: true, ImportAdoptsConfig: true},
 	} {
 		if _, err := validateAttributes([]AttributeSpec{bad}); err == nil || !strings.Contains(err.Error(), "importAdoptsConfig") {
 			t.Errorf("validate(%+v) = %v, want an importAdoptsConfig error", bad, err)
 		}
+	}
+}
+
+// importAdoptsConfig on int and bool (msk_kafka.configuration_revision,
+// native_host.ebs_optimized): without an import mark a null prior still
+// replaces, and a known prior that changes always replaces.
+func TestImportAdoptsConfigIntBool(t *testing.T) {
+	obj := tftypes.NewValue(tftypes.Object{}, map[string]tftypes.Value{})
+	runInt := func(prior, planned types.Int64) bool {
+		a := AttributeSpec{Type: "int", Optional: true, ForceNew: true, ImportAdoptsConfig: true}
+		req := planmodifier.Int64Request{State: tfsdk.State{Raw: obj}, Plan: tfsdk.Plan{Raw: obj}, StateValue: prior, PlanValue: planned, ConfigValue: planned}
+		resp := &planmodifier.Int64Response{PlanValue: planned}
+		for _, m := range attrSchema(a).(schema.Int64Attribute).PlanModifiers {
+			m.PlanModifyInt64(context.Background(), req, resp)
+		}
+		return resp.RequiresReplace
+	}
+	runBool := func(prior, planned types.Bool) bool {
+		a := AttributeSpec{Type: "bool", Optional: true, Computed: true, ForceNew: true, ImportAdoptsConfig: true}
+		req := planmodifier.BoolRequest{State: tfsdk.State{Raw: obj}, Plan: tfsdk.Plan{Raw: obj}, StateValue: prior, PlanValue: planned, ConfigValue: planned}
+		resp := &planmodifier.BoolResponse{PlanValue: planned}
+		for _, m := range attrSchema(a).(schema.BoolAttribute).PlanModifiers {
+			m.PlanModifyBool(context.Background(), req, resp)
+		}
+		return resp.RequiresReplace
+	}
+	if !runInt(types.Int64Null(), types.Int64Value(3)) {
+		t.Error("int: null prior without an import mark must replace")
+	}
+	if !runInt(types.Int64Value(2), types.Int64Value(3)) {
+		t.Error("int: a change from a known value must still replace")
+	}
+	if !runBool(types.BoolNull(), types.BoolValue(true)) {
+		t.Error("bool: null prior without an import mark must replace")
+	}
+	if !runBool(types.BoolValue(false), types.BoolValue(true)) {
+		t.Error("bool: a change from a known value must still replace")
 	}
 }
 
@@ -431,5 +474,71 @@ func TestAppliesWhenUnknownAttribute(t *testing.T) {
 				t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
 			}
 		})
+	}
+}
+
+// A stable output is planned as its prior value, so a write response that
+// leaves it out must not null it (inconsistent result after apply). A read
+// still reflects the API, and a non-stable output still takes the response.
+func TestBuildStateRaw_StableKeptWhenWriteResponseOmitsIt(t *testing.T) {
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"id":         tftypes.String,
+		"created_at": tftypes.String,
+		"status":     tftypes.String,
+	}}
+	base := tftypes.NewValue(objType, map[string]tftypes.Value{
+		"id":         str("obj-1"),
+		"created_at": str("2026-10-14T10:00:00Z"),
+		"status":     str("Complete"),
+	})
+	attrs := []AttributeSpec{
+		{Name: "created_at", Type: "string", Computed: true, Stable: true, APIPath: "createdAt"},
+		{Name: "status", Type: "string", Computed: true, APIPath: "status"},
+	}
+	build := func(refresh bool) map[string]tftypes.Value {
+		var diags diag.Diagnostics
+		out := buildStateRaw(attrs, base, map[string]any{"status": "Updating"},
+			map[string]string{}, "obj-1", refresh, true, &diags)
+		if diags.HasError() {
+			t.Fatalf("diags: %v", diags)
+		}
+		m := map[string]tftypes.Value{}
+		if err := out.As(&m); err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	w := build(false)
+	if !w["created_at"].Equal(str("2026-10-14T10:00:00Z")) {
+		t.Errorf("write: stable created_at missing from the response must keep the planned value, got %v", w["created_at"])
+	}
+	if !w["status"].Equal(str("Updating")) {
+		t.Errorf("write: non-stable status must take the response, got %v", w["status"])
+	}
+	if r := build(true); !r["created_at"].IsNull() {
+		t.Errorf("read: a stable output the API omits must read as null, got %v", r["created_at"])
+	}
+}
+
+type fakePrivate map[string][]byte
+
+func (f fakePrivate) GetKey(_ context.Context, key string) ([]byte, diag.Diagnostics) {
+	return f[key], nil
+}
+
+// TestJustImported: only the mark ImportState writes counts as "imported".
+func TestJustImported(t *testing.T) {
+	ctx := context.Background()
+	if !justImported(ctx, fakePrivate{importedPrivateKey: []byte("true")}) {
+		t.Error("the import mark must read as imported")
+	}
+	if justImported(ctx, fakePrivate{}) {
+		t.Error("no mark must read as not imported")
+	}
+	if justImported(ctx, fakePrivate{importedPrivateKey: nil}) {
+		t.Error("a cleared mark must read as not imported")
+	}
+	if justImported(ctx, nil) {
+		t.Error("no private state must read as not imported")
 	}
 }

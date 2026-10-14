@@ -44,14 +44,10 @@ output "status" {
 
 - `created_at` (String) Timestamp when the host was created (RFC 3339, normalized to UTC at second precision).
 - `disk_size_gb` (Number) Root EBS volume size in GiB (20-16384, gp3).
-- `ebs_optimized` (Boolean) Whether the instance is EBS-optimized (higher IOPS/throughput on supported instance types). Read back from the instance.
 - `enable_os_disk_encryption` (Boolean) Whether the root EBS volume is encrypted at rest.
 - `environment_id` (String) ID of the environment this host is provisioned in.
-- `image_id` (String) AMI ID to launch (ami-...). Leave unset to use the default AMI for the selected OS platform; the AMI actually used is read back from the instance.
 - `instance_id` (String) AWS EC2 instance ID of the provisioned host.
-- `instance_type` (String) EC2 instance type (e.g. t3a.small). Read back from the instance. Cannot be changed after creation.
 - `live_state` (String) Current live state of the EC2 instance (e.g. running, stopped).
-- `metadata_hop_limit` (Number) Maximum number of network hops for instance metadata service requests. Changing it replaces the host: the platform has no in-place update for it.
 - `metadata_service_option` (String) Instance metadata service mode. V2Only requires IMDSv2 and disables IMDSv1 (recommended). Can be changed in place.
 - `name` (String) Name of the host. Letters, numbers, and hyphens; must start with a letter or number. Cannot be changed after creation.
 - `native_host_id` (String) ID of this native host, for reference by dependent resources.

@@ -68,12 +68,12 @@ output "host_private_ip" {
 
 - `block_device_mappings` (Attributes List) Block device mappings (root and additional volumes). Not returned by the API in full (sizes and types are missing), so after `terraform import` the configured value is recorded without replacing the host; changing it later replaces the host. (see [below for nested schema](#nestedatt--block_device_mappings))
 - `disk_size_gb` (Number) Root EBS volume size in GiB (20-16384, gp3).
-- `ebs_optimized` (Boolean) Whether the instance is EBS-optimized (higher IOPS/throughput on supported instance types). Read back from the instance.
+- `ebs_optimized` (Boolean) Whether the instance is EBS-optimized (higher IOPS/throughput on supported instance types). Changing it replaces the host. Not read back, so a change made outside Terraform never replaces the host; after `terraform import` the configured value is recorded without replacing it.
 - `enable_os_disk_encryption` (Boolean) Whether the root EBS volume is encrypted at rest.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
-- `image_id` (String) AMI ID to launch (ami-...). Leave unset to use the default AMI for the selected OS platform; the AMI actually used is read back from the instance.
-- `instance_type` (String) EC2 instance type (e.g. t3a.small). Read back from the instance. Cannot be changed after creation.
-- `metadata_hop_limit` (Number) Maximum number of network hops for instance metadata service requests. Changing it replaces the host: the platform has no in-place update for it.
+- `image_id` (String) AMI ID to launch (ami-...). Leave unset to use the default AMI for the selected OS platform. Changing it replaces the host. After `terraform import` the configured value is recorded without replacing the host.
+- `instance_type` (String) EC2 instance type (e.g. t3a.small). Cannot be changed after creation: changing it replaces the host. Not read back from the instance, so a host resized outside Terraform is not replaced; after `terraform import` the configured value is recorded without replacing the host.
+- `metadata_hop_limit` (Number) Maximum number of network hops for instance metadata service requests. Set at creation only: the platform has no update for it, so changing it later is recorded in state but not applied to the instance. To change it, replace the host (`terraform apply -replace=<address>`).
 - `metadata_service_option` (String) Instance metadata service mode. V2Only requires IMDSv2 and disables IMDSv1 (recommended). Can be changed in place.
 - `os_disk_encryption_key` (String) KMS key ARN used to encrypt the root volume. Leave unset to use the resource group's default key.
 - `os_platform` (Number) OS platform: 0 = Linux, 1 = Windows. Cannot be changed after creation.

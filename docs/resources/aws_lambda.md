@@ -107,13 +107,13 @@ resource "duploai_aws_lambda" "container" {
 
 ### Optional
 
-- `architectures` (List of String) Instruction set architectures for the function. Valid values: x86_64, arm64. Defaults to [x86_64]. Changing it replaces the function.
+- `architectures` (List of String) Instruction set architectures for the function. Valid values: x86_64, arm64. Defaults to [x86_64]. Set at creation only: the platform cannot change it on an existing function, so to change it replace the function (`terraform apply -replace=<address>`).
 - `description` (String) Optional description of the Lambda function.
 - `environment_variables` (Map of String) Environment variables available to the function at runtime.
 - `ephemeral_storage_size` (Number) Size (in MB) of the /tmp directory available to the function. Between 512 and 10240. Defaults to 512.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `handler` (String) Function entrypoint in the format file.method (e.g. index.handler). Not required for container image deployments.
-- `image_uri` (String) URI of a container image in Amazon ECR. Use instead of s3_bucket/s3_key for container image deployments. Read back from the function. Changing it replaces the function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code.
+- `image_uri` (String) URI of a container image in Amazon ECR. Use instead of s3_bucket/s3_key for container image deployments. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`).
 - `kms_key_arn` (String) ARN of a KMS key used to encrypt the function's environment variables.
 - `layers` (List of String) List of Lambda layer ARNs to attach to the function (maximum 5).
 - `memory_size` (Number) Amount of memory (in MB) allocated to the function. Defaults to 128.
@@ -121,9 +121,9 @@ resource "duploai_aws_lambda" "container" {
 - `provisioner_version` (String) Optional provisioner version.
 - `role_arn` (String) ARN of the IAM role the function assumes when it runs.
 - `runtime` (String) Lambda runtime identifier (e.g. python3.12, nodejs20.x, java21, provided.al2023). Not required for container image deployments.
-- `s3_bucket` (String) S3 bucket containing the deployment package. Use with s3_key. Not returned by the API, so after import the configured value is recorded without replacing the function. Changing it replaces the function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code.
-- `s3_key` (String) S3 object key of the deployment package. Not returned by the API, so after import the configured value is recorded without replacing the function. Changing it replaces the function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code.
-- `s3_object_version` (String) S3 object version of the deployment package. Not returned by the API, so after import the configured value is recorded without replacing the function. Changing it replaces the function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code.
+- `s3_bucket` (String) S3 bucket containing the deployment package. Use with s3_key. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`).
+- `s3_key` (String) S3 object key of the deployment package. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`).
+- `s3_object_version` (String) S3 object version of the deployment package. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`).
 - `security_group_ids` (List of String) IDs of the VPC security groups to attach to the function.
 - `subnet_ids` (List of String) IDs of the VPC subnets to attach to the function. Required when the function needs to access VPC resources.
 - `tags` (Map of String) Tags applied to the Lambda function at creation. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing function.

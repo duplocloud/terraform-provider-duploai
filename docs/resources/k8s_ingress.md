@@ -140,14 +140,11 @@ Required:
 <a id="nestedatt--rules--http--paths"></a>
 ### Nested Schema for `rules.http.paths`
 
-Required:
-
-- `path_type` (String) Path matching semantics: Exact, Prefix, or ImplementationSpecific. Required: Kubernetes rejects an Ingress path without a pathType (it has no default).
-
 Optional:
 
 - `backend` (Attributes) Backend to route matched traffic to. (see [below for nested schema](#nestedatt--rules--http--paths--backend))
 - `path` (String) URL path to match (e.g. /api).
+- `path_type` (String) Path matching semantics: Exact, Prefix, or ImplementationSpecific. Set it on every path: Kubernetes requires a pathType and rejects a path without one.
 
 <a id="nestedatt--rules--http--paths--backend"></a>
 ### Nested Schema for `rules.http.paths.backend`

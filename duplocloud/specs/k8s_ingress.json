@@ -175,14 +175,15 @@
                 {
                   "name": "path_type",
                   "type": "string",
-                  "required": true,
+                  "optional": true,
+                  "computed": true,
                   "apiPath": "pathType",
                   "oneOf": [
                     "Exact",
                     "Prefix",
                     "ImplementationSpecific"
                   ],
-                  "description": "Path matching semantics: Exact, Prefix, or ImplementationSpecific. Required: Kubernetes rejects an Ingress path without a pathType (it has no default)."
+                  "description": "Path matching semantics: Exact, Prefix, or ImplementationSpecific. Set it on every path: Kubernetes requires a pathType and rejects a path without one."
                 },
                 {
                   "name": "backend",

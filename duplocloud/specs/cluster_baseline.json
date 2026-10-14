@@ -264,7 +264,7 @@
           "type": "list(string)",
           "computed": true,
           "stable": true,
-                    "apiPath": "nodeSubnetIds",
+          "apiPath": "nodeSubnetIds",
           "description": "Private subnet IDs the system node group is placed in. Populated server-side from the linked network's private subnets on create, and sent back unchanged on update (the platform rebuilds the system node group from the update request and requires them)."
         }
       ]
@@ -431,7 +431,6 @@
     },
     {
       "name": "cluster_arn",
-      "appliesWhen": [{"attribute": "cloud", "equals": "Aws"}],
       "type": "string",
       "computed": true,
       "stable": true,
@@ -440,7 +439,6 @@
     },
     {
       "name": "helpdesk_vpc_peering",
-      "appliesWhen": [{"attribute": "cloud", "equals": "Aws"}],
       "type": "object",
       "computed": true,
       "apiPath": "spec.helpdeskVpcPeeringConfig",
@@ -493,7 +491,6 @@
     },
     {
       "name": "oidc_issuer_url",
-      "appliesWhen": [{"attribute": "cloud", "equals": "Aws"}],
       "type": "string",
       "computed": true,
       "stable": true,
@@ -502,7 +499,6 @@
     },
     {
       "name": "certificate_authority",
-      "appliesWhen": [{"attribute": "cloud", "notEquals": "Azure"}],
       "type": "string",
       "computed": true,
       "stable": true,
@@ -511,7 +507,6 @@
     },
     {
       "name": "cluster_sg_id",
-      "appliesWhen": [{"attribute": "cloud", "equals": "Aws"}],
       "type": "string",
       "computed": true,
       "stable": true,
@@ -520,7 +515,6 @@
     },
     {
       "name": "cluster_all_host_sg_id",
-      "appliesWhen": [{"attribute": "cloud", "equals": "Aws"}],
       "type": "string",
       "computed": true,
       "stable": true,
@@ -529,7 +523,6 @@
     },
     {
       "name": "stack_id",
-      "appliesWhen": [{"attribute": "cloud", "equals": "Aws"}],
       "type": "string",
       "computed": true,
       "stable": true,
@@ -538,7 +531,6 @@
     },
     {
       "name": "azure_resource_group",
-      "appliesWhen": [{"attribute": "cloud", "equals": "Azure"}],
       "type": "string",
       "computed": true,
       "stable": true,
@@ -547,7 +539,6 @@
     },
     {
       "name": "azure_node_resource_group",
-      "appliesWhen": [{"attribute": "cloud", "equals": "Azure"}],
       "type": "string",
       "computed": true,
       "stable": true,
@@ -556,7 +547,6 @@
     },
     {
       "name": "azure_fqdn",
-      "appliesWhen": [{"attribute": "cloud", "equals": "Azure"}],
       "type": "string",
       "computed": true,
       "stable": true,
@@ -565,7 +555,6 @@
     },
     {
       "name": "azure_oidc_issuer_url",
-      "appliesWhen": [{"attribute": "cloud", "equals": "Azure"}],
       "type": "string",
       "computed": true,
       "stable": true,
@@ -574,7 +563,6 @@
     },
     {
       "name": "azure_provisioning_state",
-      "appliesWhen": [{"attribute": "cloud", "equals": "Azure"}],
       "type": "string",
       "computed": true,
       "apiPath": "result.azure.provisioningState",

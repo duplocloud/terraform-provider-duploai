@@ -142,9 +142,10 @@
       "name": "backup",
       "type": "bool",
       "optional": true,
-      "computed": true,
-      "apiPath": "spec.backup",
-      "description": "Whether automatic backups (AWS Backup) are enabled. Defaults to `true` on create. Can be changed in place: the platform applies it to the file system's backup policy. In regions without AWS Backup, a file system created with the default reads back as `false`; explicitly setting `true` there fails."
+      "forceNew": true,
+      "createOnly": true,
+      "requestPath": "spec.createRequest.backup",
+      "description": "Whether to enable automatic backups (AWS Backup) at creation. Immutable after creation."
     },
     {
       "name": "throughput_mode",

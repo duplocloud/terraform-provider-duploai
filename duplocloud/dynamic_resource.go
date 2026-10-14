@@ -651,6 +651,11 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if err != nil || resp.Diagnostics.HasError() {
 		return
 	}
+	// The first apply after an import has recorded the adopted values, so from
+	// here on a null importAdoptsConfig value means "unset", not "imported".
+	if resp.Private != nil {
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, importedPrivateKey, nil)...)
+	}
 
 	// An association has no readable object and nothing to update — every
 	// attribute is a forceNew path parameter, so a real change replaces the link.
@@ -865,11 +870,18 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 		changes = append(changes, change{intent: a.UpdateIntent, value: planVal})
 	}
 
-	// No update-intent change (e.g. only the timeouts block differs) — persist
-	// the plan without any API call.
+	// No update-intent change (only timeouts, or values adopted after an
+	// import) — nothing to send. Read the resource rather than persisting the
+	// plan as-is: the plan can still hold computed outputs as unknown (status,
+	// updated_at, ...), and Terraform rejects an apply that leaves any unknown.
 	if len(changes) == 0 {
-		resp.State.Raw = req.Plan.Raw
-		log.Printf("[TRACE] dynamic %s Update(%s): no update-intent change, skipped", r.spec.Name, id)
+		cur, clientErr := r.api(scope, 0).Get(objID)
+		if clientErr != nil {
+			resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after update", clientErr.Error())
+			return
+		}
+		resp.State.Raw = r.stateFromResponse(ctx, req.Plan.Raw, *cur, scope, id, false, &resp.Diagnostics)
+		log.Printf("[TRACE] dynamic %s Update(%s): no update-intent change, state refreshed without an update call", r.spec.Name, id)
 		return
 	}
 
@@ -1035,6 +1047,12 @@ func (r *dynamicResource) deprovisionSkipped(ctx context.Context, state attrRead
 
 func (r *dynamicResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	// Mark the resource as just imported, so an importAdoptsConfig attribute
+	// the API can't return adopts its configured value instead of replacing
+	// the resource. The first update clears the mark.
+	if resp.Private != nil {
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, importedPrivateKey, []byte("true"))...)
+	}
 }
 
 // ── Conditional-required validation ───────────────────────────────────────────
@@ -1939,6 +1957,14 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		// produce a diff, so they keep exactly what the API said.
 		if !computedOnly {
 			next[a.Name] = keepEmptyForm(current[a.Name], next[a.Name], !a.Computed)
+		}
+		// A stable output is planned as its prior value. A write response that
+		// leaves it out (a PUT echo without createdAt, say) must not turn it
+		// null, or Terraform fails the apply as an inconsistent result; the
+		// value never changes, so the prior one is still right.
+		if a.Stable && !refreshInputs && isEmptyForm(next[a.Name]) &&
+			current[a.Name].IsFullyKnown() && !isEmptyForm(current[a.Name]) {
+			next[a.Name] = current[a.Name]
 		}
 		if a.CaseInsensitive {
 			next[a.Name] = keepPriorCasing(current[a.Name], next[a.Name])

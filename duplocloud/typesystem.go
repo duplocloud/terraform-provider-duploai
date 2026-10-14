@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -181,7 +182,7 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, boolplanmodifier.UseStateForUnknown(), boolplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
-			o.PlanModifiers = append(o.PlanModifiers, boolplanmodifier.RequiresReplace())
+			o.PlanModifiers = append(o.PlanModifiers, boolRequiresReplace(a))
 		}
 		if a.ImmutableOnceTrue {
 			o.PlanModifiers = append(o.PlanModifiers, immutableOnceTrueModifier{attr: a.Name})
@@ -204,7 +205,7 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, int64planmodifier.UseStateForUnknown(), int64planmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
-			o.PlanModifiers = append(o.PlanModifiers, int64planmodifier.RequiresReplace())
+			o.PlanModifiers = append(o.PlanModifiers, int64RequiresReplace(a))
 		}
 		return o
 	default: // number
@@ -260,6 +261,11 @@ func useStateForUnknown(a AttributeSpec) bool {
 //     the value the server fills in. HashiCorp recommends
 //     UseNonNullStateForUnknown here (framework v1.17.0, issue #1197).
 //
+// Not under a forceNew parent, though: an unknown child makes the parent's
+// planned value differ from state, and its RequiresReplace would then replace
+// the resource on every unrelated update (k8s_job containers). A new element
+// there replaces the resource anyway, so the case above can't arise.
+//
 // A forceNew value always keeps null — turning unknown would force
 // replacement — as do values the engine needs at plan time (preserveTarget,
 // SendFromState). A top-level optional value may legitimately be unset.
@@ -267,7 +273,7 @@ func preserveNonNullOnly(a AttributeSpec) bool {
 	if a.ForceNew || a.preserveTarget || a.SendFromState {
 		return false
 	}
-	return a.nested || (a.Stable && !a.Optional)
+	return (a.nested && !a.underForceNew) || (a.Stable && !a.Optional)
 }
 
 // preserveModifier picks the type's UseNonNullStateForUnknown (nonNull) when
@@ -377,17 +383,18 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 	}
 }
 
-func nestedAttrMap(attrs []AttributeSpec) map[string]schema.Attribute {
-	out := make(map[string]schema.Attribute, len(attrs))
-	for _, na := range attrs {
+func nestedAttrMap(parent AttributeSpec) map[string]schema.Attribute {
+	out := make(map[string]schema.Attribute, len(parent.Attributes))
+	for _, na := range parent.Attributes {
 		na.nested = true
+		na.underForceNew = parent.ForceNew || parent.underForceNew
 		out[na.Name] = attrSchema(na)
 	}
 	return out
 }
 
 func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
-	nested := nestedAttrMap(a.Attributes)
+	nested := nestedAttrMap(a)
 	switch info.coll {
 	case "list":
 		o := schema.ListNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
@@ -478,8 +485,8 @@ func stringRequiresReplace(a AttributeSpec) planmodifier.String {
 		desc = "Changing this value replaces the resource, except for a change in letter case only."
 	}
 	return stringplanmodifier.RequiresReplaceIf(
-		func(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
-			if a.ImportAdoptsConfig && req.StateValue.IsNull() {
+		func(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+			if a.ImportAdoptsConfig && req.StateValue.IsNull() && justImported(ctx, req.Private) {
 				return // imported: adopt the config
 			}
 			if a.CaseInsensitive && !req.StateValue.IsNull() && !req.PlanValue.IsNull() && !req.PlanValue.IsUnknown() &&
@@ -510,13 +517,57 @@ func listRequiresReplace(a AttributeSpec) planmodifier.List {
 		return listplanmodifier.RequiresReplace()
 	}
 	return listplanmodifier.RequiresReplaceIf(
-		func(_ context.Context, req planmodifier.ListRequest, resp *listplanmodifier.RequiresReplaceIfFuncResponse) {
-			resp.RequiresReplace = !req.StateValue.IsNull()
+		func(ctx context.Context, req planmodifier.ListRequest, resp *listplanmodifier.RequiresReplaceIfFuncResponse) {
+			resp.RequiresReplace = !req.StateValue.IsNull() || !justImported(ctx, req.Private)
 		},
 		importAdoptsConfigDescription, importAdoptsConfigDescription)
 }
 
-const importAdoptsConfigDescription = "Changing this value replaces the resource, except when no prior value is known (after import), where the configured value is adopted."
+func boolRequiresReplace(a AttributeSpec) planmodifier.Bool {
+	if !a.ImportAdoptsConfig {
+		return boolplanmodifier.RequiresReplace()
+	}
+	return boolplanmodifier.RequiresReplaceIf(
+		func(ctx context.Context, req planmodifier.BoolRequest, resp *boolplanmodifier.RequiresReplaceIfFuncResponse) {
+			resp.RequiresReplace = !req.StateValue.IsNull() || !justImported(ctx, req.Private)
+		},
+		importAdoptsConfigDescription, importAdoptsConfigDescription)
+}
+
+func int64RequiresReplace(a AttributeSpec) planmodifier.Int64 {
+	if !a.ImportAdoptsConfig {
+		return int64planmodifier.RequiresReplace()
+	}
+	return int64planmodifier.RequiresReplaceIf(
+		func(ctx context.Context, req planmodifier.Int64Request, resp *int64planmodifier.RequiresReplaceIfFuncResponse) {
+			resp.RequiresReplace = !req.StateValue.IsNull() || !justImported(ctx, req.Private)
+		},
+		importAdoptsConfigDescription, importAdoptsConfigDescription)
+}
+
+const importAdoptsConfigDescription = "Changing this value replaces the resource, except on the first plan after an import, where the configured value is adopted."
+
+// importedPrivateKey is the private-state mark ImportState sets and the first
+// Update clears. A null prior value of an importAdoptsConfig attribute means
+// "not returned by the API" only while it is present; otherwise the value was
+// unset at creation, and setting it now replaces the resource as it always has.
+const importedPrivateKey = "imported"
+
+// privateGetter is the part of the framework's private-state handle the plan
+// modifiers need.
+type privateGetter interface {
+	GetKey(ctx context.Context, key string) ([]byte, diag.Diagnostics)
+}
+
+// The framework's GetKey is nil-safe, so a request without private state
+// (a unit test, a create) simply reads as "not imported".
+func justImported(ctx context.Context, p privateGetter) bool {
+	if p == nil {
+		return false
+	}
+	v, diags := p.GetKey(ctx, importedPrivateKey)
+	return !diags.HasError() && string(v) == "true"
+}
 
 // nullStateMatchesEmptyDefault plans the prior null instead of an empty-string
 // default when the user has not set the attribute. A value the API never

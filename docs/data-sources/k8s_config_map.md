@@ -34,7 +34,7 @@ output "status" {
 
 ### Read-Only
 
-- `annotations` (Map of String) Kubernetes annotations applied to the config map.
+- `annotations` (Map of String) Kubernetes annotations applied to the config map. Only annotations set in configuration are tracked; annotations added outside Terraform are ignored.
 - `binary_data` (Map of String) Binary configuration entries, base64-encoded values keyed by name.
 - `data` (Map of String) Configuration key/value pairs (UTF-8 string data).
 - `environment_id` (String) ID of the environment that owns the resource group.

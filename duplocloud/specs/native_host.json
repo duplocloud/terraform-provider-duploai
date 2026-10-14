@@ -127,9 +127,8 @@
       "optional": true,
       "computed": true,
       "default": 1,
-      "forceNew": true,
-      "apiPath": "spec.metadataHopLimit",
-      "description": "Maximum number of network hops for instance metadata service requests. Changing it replaces the host: the platform has no in-place update for it."
+      "requestPath": "spec.metadataHopLimit",
+      "description": "Maximum number of network hops for instance metadata service requests. Set at creation only: the platform has no update for it, so changing it later is recorded in state but not applied to the instance. To change it, replace the host (`terraform apply -replace=<address>`)."
     },
     {
       "name": "subnet_type",
@@ -168,8 +167,8 @@
       "default": "t3a.small",
       "forceNew": true,
       "createPath": "spec.createRequest.InstanceType",
-      "responsePath": "result.cloudDetails.instanceType",
-      "description": "EC2 instance type (e.g. t3a.small). Read back from the instance. Cannot be changed after creation."
+      "importAdoptsConfig": true,
+      "description": "EC2 instance type (e.g. t3a.small). Cannot be changed after creation: changing it replaces the host. Not read back from the instance, so a host resized outside Terraform is not replaced; after `terraform import` the configured value is recorded without replacing the host."
     },
     {
       "name": "ebs_optimized",
@@ -179,18 +178,17 @@
       "default": true,
       "forceNew": true,
       "createPath": "spec.createRequest.EbsOptimized",
-      "responsePath": "result.cloudDetails.ebsOptimized",
-      "description": "Whether the instance is EBS-optimized (higher IOPS/throughput on supported instance types). Read back from the instance."
+      "importAdoptsConfig": true,
+      "description": "Whether the instance is EBS-optimized (higher IOPS/throughput on supported instance types). Changing it replaces the host. Not read back, so a change made outside Terraform never replaces the host; after `terraform import` the configured value is recorded without replacing it."
     },
     {
       "name": "image_id",
       "type": "string",
       "optional": true,
-      "computed": true,
       "forceNew": true,
       "createPath": "spec.createRequest.ImageId",
-      "responsePath": "result.cloudDetails.imageId",
-      "description": "AMI ID to launch (ami-...). Leave unset to use the default AMI for the selected OS platform; the AMI actually used is read back from the instance."
+      "importAdoptsConfig": true,
+      "description": "AMI ID to launch (ami-...). Leave unset to use the default AMI for the selected OS platform. Changing it replaces the host. After `terraform import` the configured value is recorded without replacing the host."
     },
     {
       "name": "user_data",

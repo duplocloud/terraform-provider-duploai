@@ -57,7 +57,7 @@ resource "duploai_aws_efs" "db_backups" {
 ### Optional
 
 - `availability_zone_name` (String) AWS Availability Zone to create a One Zone file system in (e.g. us-east-1a). Omit for a Regional (multi-AZ) file system. Immutable after creation.
-- `backup` (Boolean) Whether automatic backups (AWS Backup) are enabled. Defaults to `true` on create. Can be changed in place: the platform applies it to the file system's backup policy. In regions without AWS Backup, a file system created with the default reads back as `false`; explicitly setting `true` there fails.
+- `backup` (Boolean) Whether to enable automatic backups (AWS Backup) at creation. Immutable after creation.
 - `creation_token` (String) Idempotency token used at creation. Defaults to the file system name if omitted. Immutable after creation.
 - `description` (String) Optional description of the EFS file system.
 - `encryption` (String) Encryption at rest mode. NoEncryption disables encryption; AwsManagedKey uses the AWS-managed EFS key; ResourceGroupKmsKey uses the resource group's KMS key. Immutable after creation.

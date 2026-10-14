@@ -78,7 +78,6 @@
       "optional": true,
       "createPath": "spec.createRequest.runtime",
       "updatePath": "spec.updateRequest.runtime",
-      "responsePath": "result.cloudDetails.configuration.runtime",
       "description": "Lambda runtime identifier (e.g. python3.12, nodejs20.x, java21, provided.al2023). Not required for container image deployments."
     },
     {
@@ -140,13 +139,12 @@
       "optional": true,
       "computed": true,
       "createOnly": true,
-      "forceNew": true,
       "default": [
         "x86_64"
       ],
       "requestPath": "spec.createRequest.architectures",
       "responsePath": "result.cloudDetails.configuration.architectures",
-      "description": "Instruction set architectures for the function. Valid values: x86_64, arm64. Defaults to [x86_64]. Changing it replaces the function."
+      "description": "Instruction set architectures for the function. Valid values: x86_64, arm64. Defaults to [x86_64]. Set at creation only: the platform cannot change it on an existing function, so to change it replace the function (`terraform apply -replace=<address>`)."
     },
     {
       "name": "kms_key_arn",
@@ -163,41 +161,32 @@
       "type": "string",
       "optional": true,
       "createOnly": true,
-      "forceNew": true,
-      "importAdoptsConfig": true,
       "requestPath": "spec.createRequest.code.s3Bucket",
-      "description": "S3 bucket containing the deployment package. Use with s3_key. Not returned by the API, so after import the configured value is recorded without replacing the function. Changing it replaces the function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code."
+      "description": "S3 bucket containing the deployment package. Use with s3_key. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`)."
     },
     {
       "name": "s3_key",
       "type": "string",
       "optional": true,
       "createOnly": true,
-      "forceNew": true,
-      "importAdoptsConfig": true,
       "requestPath": "spec.createRequest.code.s3Key",
-      "description": "S3 object key of the deployment package. Not returned by the API, so after import the configured value is recorded without replacing the function. Changing it replaces the function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code."
+      "description": "S3 object key of the deployment package. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`)."
     },
     {
       "name": "s3_object_version",
       "type": "string",
       "optional": true,
       "createOnly": true,
-      "forceNew": true,
-      "importAdoptsConfig": true,
       "requestPath": "spec.createRequest.code.s3ObjectVersion",
-      "description": "S3 object version of the deployment package. Not returned by the API, so after import the configured value is recorded without replacing the function. Changing it replaces the function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code."
+      "description": "S3 object version of the deployment package. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`)."
     },
     {
       "name": "image_uri",
       "type": "string",
       "optional": true,
       "createOnly": true,
-      "forceNew": true,
-      "importAdoptsConfig": true,
       "requestPath": "spec.createRequest.code.imageUri",
-      "responsePath": "result.cloudDetails.code.imageUri",
-      "description": "URI of a container image in Amazon ECR. Use instead of s3_bucket/s3_key for container image deployments. Read back from the function. Changing it replaces the function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code."
+      "description": "URI of a container image in Amazon ECR. Use instead of s3_bucket/s3_key for container image deployments. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`)."
     },
     {
       "name": "environment_variables",
@@ -296,8 +285,6 @@
   ],
   "waiter": {
     "deprovisionedState": "DeProvisioned",
-    "failureRetries": 3,
-    "readyPath": "result.cloudDetails.configuration.state",
-    "readyState": "Active"
+    "failureRetries": 3
   }
 }

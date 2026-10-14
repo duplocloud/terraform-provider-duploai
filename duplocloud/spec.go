@@ -421,7 +421,8 @@ type AttributeSpec struct {
 	// set. After `terraform import` such a value is null; with this flag the
 	// first plan adopts the configured value as an in-place, state-only change
 	// instead of replacing the resource just imported. A change from a known
-	// value still replaces it. Only valid on forceNew string or list attributes.
+	// value still replaces it. Only valid on forceNew string, int, bool or list
+	// attributes.
 	ImportAdoptsConfig bool `json:"importAdoptsConfig,omitempty"`
 
 	// UpdateOnlyIfChanged leaves the attribute out of the update (PUT) body
@@ -732,6 +733,10 @@ type AttributeSpec struct {
 	// nested is set internally (not from JSON) on an attribute declared inside
 	// an object-typed attribute. See preserveNonNullOnly.
 	nested bool
+
+	// underForceNew is set internally on a nested attribute when any ancestor
+	// is forceNew. See preserveNonNullOnly.
+	underForceNew bool
 }
 
 // requestPath / responsePath resolve the effective per-direction path.
@@ -1457,8 +1462,8 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			if !a.ForceNew {
 				return nil, fmt.Errorf("attribute %q: importAdoptsConfig only changes how a forceNew attribute replaces; add forceNew or drop it", a.Name)
 			}
-			if a.Type != "string" && !strings.HasPrefix(a.Type, "list(") {
-				return nil, fmt.Errorf("attribute %q: importAdoptsConfig is only supported on string and list attributes", a.Name)
+			if a.Type != "string" && a.Type != "int" && a.Type != "bool" && !strings.HasPrefix(a.Type, "list(") {
+				return nil, fmt.Errorf("attribute %q: importAdoptsConfig is only supported on string, int, bool and list attributes", a.Name)
 			}
 		}
 		if a.ImmutableOnceTrue {

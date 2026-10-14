@@ -58,17 +58,17 @@ output "kafka_cluster_arn" {
 
 ### Optional
 
-- `configuration_arn` (String) ARN of a saved MSK (Kafka broker) configuration to apply. Leave unset for the AWS default. Read back from the cluster. Changing it replaces the cluster.
-- `configuration_revision` (Number) Revision of the MSK configuration referenced by configuration_arn. Read back from the cluster. Changing it replaces the cluster.
+- `configuration_arn` (String) ARN of a saved MSK (Kafka broker) configuration to apply. Leave unset for the AWS default. Changing it replaces the cluster. Not read back, so a change made outside Terraform never replaces the cluster; after `terraform import` the configured value is recorded without replacing it.
+- `configuration_revision` (Number) Revision of the MSK configuration referenced by configuration_arn. Changing it replaces the cluster. Not read back, so a change made outside Terraform never replaces the cluster; after `terraform import` the configured value is recorded without replacing it.
 - `encryption` (String) Encryption at rest. AwsManagedKey uses the AWS-managed MSK key; ResourceGroupKmsKey uses the resource group's KMS key; NoEncryption disables it. Immutable after creation.
-- `encryption_in_transit` (String) How clients connect: TLS (encrypted), TLS_PLAINTEXT (both), or PLAINTEXT (unencrypted). Read back from the cluster. Changing it replaces the cluster.
+- `encryption_in_transit` (String) How clients connect: TLS (encrypted), TLS_PLAINTEXT (both), or PLAINTEXT (unencrypted). Changing it replaces the cluster. Not read back, so a change made outside Terraform never replaces the cluster; after `terraform import` the configured value is recorded without replacing it.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `kms_key_id` (String) KMS key to encrypt with, as a key id or ARN, honoured only when encryption is set to ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) — the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Immutable after creation.
 - `number_of_broker_nodes` (Number) Number of broker nodes. Must be a multiple of the number of broker subnets (Availability Zones); rounded up server-side. Can be increased in place.
 - `provisioner_type` (String) Provisioner type. Defaults to DirectApiCall for MSK.
 - `provisioner_version` (String) Optional provisioner version.
 - `scope_ids` (Set of String) IDs of the scopes attached to this cluster.
-- `subnet_ids` (Set of String) Private subnets (2-4, each in a distinct Availability Zone) to place brokers in. Leave unset to use all of the resource group's private subnets; the subnets actually used are read back either way. Changing it replaces the cluster.
+- `subnet_ids` (List of String) Private subnets (2-4, each in a distinct Availability Zone) to place brokers in. Leave unset to use all of the resource group's private subnets. Changing it replaces the cluster. Not read back, so a change made outside Terraform never replaces the cluster; after `terraform import` the configured value is recorded without replacing it.
 - `tags` (Map of String) Tags applied to the cluster at creation. Platform ownership tags are added automatically. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing cluster.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 

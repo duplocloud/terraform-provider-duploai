@@ -53,7 +53,7 @@ resource "duploai_k8s_secret" "app" {
 
 ### Optional
 
-- `annotations` (Map of String) Kubernetes annotations applied to the secret.
+- `annotations` (Map of String) Kubernetes annotations applied to the secret. Only annotations set in configuration are tracked; annotations added outside Terraform are ignored.
 - `data` (Map of String, Sensitive) Secret entries with base64-encoded values, keyed by name. Populated by the server from string_data if not set directly.
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
