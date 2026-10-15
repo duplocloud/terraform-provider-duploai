@@ -177,3 +177,65 @@ func TestUpdate_MergeUpdateIntoCurrent_MapKeyRemoved(t *testing.T) {
 		t.Errorf("unmodelled fields must still be kept: %v", put)
 	}
 }
+
+// The read before a merged update is retried: a body-only update made no
+// read, so a transient 503 on it must not fail the apply.
+func TestUpdate_MergeUpdateIntoCurrent_ReadRetried(t *testing.T) {
+	var mu sync.Mutex
+	gets, puts := 0, 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch req.Method {
+		case http.MethodGet:
+			gets++
+			if gets == 1 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+		case http.MethodPut:
+			puts++
+		}
+		_, _ = w.Write([]byte(`{"data":{"id":"obj1","name":"n","description":"old","status":"Complete"}}`))
+	}))
+	defer srv.Close()
+	client, err := duplosdk.NewClient(srv.URL, "tok", false, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &dynamicResource{
+		baseResource: baseResource{Client: client},
+		endpoint:     duplosdk.Endpoint{UriBase: "/v1/items/{workspace_id}", Update: duplosdk.Operation{Verb: http.MethodPut}},
+		spec: ResourceSpec{
+			Name: "merge", IDPath: "id", MergeUpdateIntoCurrent: true,
+			Attributes: []AttributeSpec{
+				{Name: "workspace_id", Type: "string", Required: true, ForceNew: true},
+				{Name: "name", Type: "string", Required: true, ForceNew: true, APIPath: "name"},
+				{Name: "description", Type: "string", Optional: true, APIPath: "description"},
+			},
+		},
+	}
+	ctx := context.Background()
+	var sr resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &sr)
+	objType := sr.Schema.Type().TerraformType(ctx).(tftypes.Object)
+	str := func(v string) tftypes.Value { return tftypes.NewValue(tftypes.String, v) }
+	mk := func(desc string) tftypes.Value {
+		vals := map[string]tftypes.Value{}
+		for n, typ := range objType.AttributeTypes {
+			vals[n] = tftypes.NewValue(typ, nil)
+		}
+		vals["id"], vals["workspace_id"], vals["name"], vals["description"] = str("ws1/obj1"), str("ws1"), str("n"), str(desc)
+		return tftypes.NewValue(objType, vals)
+	}
+	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: sr.Schema}}
+	r.Update(ctx, resource.UpdateRequest{Plan: tfsdk.Plan{Schema: sr.Schema, Raw: mk("new")}, State: tfsdk.State{Schema: sr.Schema, Raw: mk("old")}}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("a transient 503 on the pre-update read must be retried, got %v", resp.Diagnostics.Errors())
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if gets < 2 || puts != 1 {
+		t.Errorf("want the read retried then one PUT, got %d GETs and %d PUTs", gets, puts)
+	}
+}

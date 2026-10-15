@@ -325,53 +325,6 @@ func TestDeletePathPruning(t *testing.T) {
 	deletePathPruning(body2, []string{"spec", "missing", "x"}) // absent path: no-op, no panic
 }
 
-// appliesWhen: an AKS-only output on an AWS cluster is nulled (plan and state),
-// an applicable one is kept, and an unknown condition value never nulls.
-func TestNullInapplicable(t *testing.T) {
-	cloudDefault := json.RawMessage(`"Aws"`)
-	attrs := []AttributeSpec{
-		{Name: "cloud", Type: "string", Optional: true, Computed: true, Default: &cloudDefault},
-		{Name: "azure_fqdn", Type: "string", Computed: true, AppliesWhen: []RequiredIfCondition{{Attribute: "cloud", Equals: "Azure"}}},
-		{Name: "cluster_arn", Type: "string", Computed: true, AppliesWhen: []RequiredIfCondition{{Attribute: "cloud", Equals: "Aws"}}},
-	}
-	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-		"cloud": tftypes.String, "azure_fqdn": tftypes.String, "cluster_arn": tftypes.String,
-	}}
-	unknown := tftypes.NewValue(tftypes.String, tftypes.UnknownValue)
-	get := func(v tftypes.Value, k string) tftypes.Value {
-		var m map[string]tftypes.Value
-		_ = v.As(&m)
-		return m[k]
-	}
-
-	aws := tftypes.NewValue(objType, map[string]tftypes.Value{"cloud": str("Aws"), "azure_fqdn": unknown, "cluster_arn": unknown})
-	out := nullInapplicable(attrs, aws)
-	if !get(out, "azure_fqdn").IsNull() {
-		t.Errorf("azure_fqdn on an AWS cluster should be null, got %v", get(out, "azure_fqdn"))
-	}
-	if get(out, "cluster_arn").IsKnown() {
-		t.Errorf("cluster_arn applies on AWS and must stay as planned (unknown), got %v", get(out, "cluster_arn"))
-	}
-
-	// cloud unset -> default "Aws" stands in.
-	def := tftypes.NewValue(objType, map[string]tftypes.Value{"cloud": nullOf(tftypes.String), "azure_fqdn": unknown, "cluster_arn": unknown})
-	if !get(nullInapplicable(attrs, def), "azure_fqdn").IsNull() {
-		t.Error("with cloud defaulted to Aws, azure_fqdn should be null")
-	}
-
-	// cloud unknown -> nothing is nulled.
-	unk := tftypes.NewValue(objType, map[string]tftypes.Value{"cloud": unknown, "azure_fqdn": unknown, "cluster_arn": unknown})
-	if !get(nullInapplicable(attrs, unk), "azure_fqdn").Equal(unknown) {
-		t.Error("an unknown condition value must not null the attribute")
-	}
-
-	// Validation: only computed-only attributes.
-	bad := AttributeSpec{Name: "x", Type: "string", Optional: true, Computed: true, AppliesWhen: []RequiredIfCondition{{Attribute: "cloud", Equals: "Aws"}}}
-	if _, err := validateAttributes([]AttributeSpec{bad}); err == nil || !strings.Contains(err.Error(), "appliesWhen") {
-		t.Errorf("appliesWhen on an optional attribute should fail validation, got %v", err)
-	}
-}
-
 // caseInsensitive: a case-only change to a forceNew ARM id never replaces; a
 // real change still does; a read that re-cases the id keeps the stored value.
 func TestCaseInsensitive(t *testing.T) {
@@ -444,36 +397,6 @@ func TestFilterAllUndeclaredLabels(t *testing.T) {
 	server["app"] = "changed-outside"
 	if got := read(map[string]tftypes.Value{"app": str("web")}, server); !got["app"].Equal(str("changed-outside")) {
 		t.Errorf("drift on a declared label must still show, got %v", got)
-	}
-}
-
-// TestAppliesWhenUnknownAttribute: a condition naming an attribute the spec
-// doesn't declare must fail at load. rawConditionsHold skips such a condition,
-// so a typo would otherwise silently disable the rule.
-func TestAppliesWhenUnknownAttribute(t *testing.T) {
-	cases := []struct{ name, cond, wantErr string }{
-		{"declared attribute loads", `"cloud"`, ""},
-		{"unknown attribute is rejected", `"clould"`, `appliesWhen references unknown attribute "clould"`},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			raw := []byte(`{"name":"probe","description":"probe","idPath":"id",
-			  "endpoint":{"uriBase":"/v3/admin/things"},"attributes":[
-			  {"name":"cloud","type":"string","optional":true,"apiPath":"cloud"},
-			  {"name":"azure_fqdn","type":"string","computed":true,"apiPath":"fqdn",
-			   "appliesWhen":[{"attribute":` + tc.cond + `,"equals":"Azure"}]}]}`)
-			var spec ResourceSpec
-			if err := json.Unmarshal(raw, &spec); err != nil {
-				t.Fatalf("unmarshal: %v", err)
-			}
-			err := spec.validate()
-			switch {
-			case tc.wantErr == "" && err != nil:
-				t.Fatalf("expected the spec to load, got %v", err)
-			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
-				t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
-			}
-		})
 	}
 }
 
@@ -668,5 +591,27 @@ func TestClearImportMarkOnSuccess(t *testing.T) {
 	clearImportMarkOnSuccess(context.Background(), true, failed)
 	if failed.cleared {
 		t.Error("failed update: the import mark must be kept so the retry still adopts instead of replacing")
+	}
+}
+
+// A spec that repeats a key in one object fails to load: encoding/json would
+// keep the last value silently (the #245 merge produced 5 such duplicates).
+func TestCheckDuplicateKeys(t *testing.T) {
+	cases := []struct {
+		name, doc string
+		dup       bool
+	}{
+		{"clean", `{"name":"x","attributes":[{"name":"a","stable":true},{"name":"b","stable":true}]}`, false},
+		{"same key in sibling objects is fine", `{"a":{"k":1},"b":{"k":2}}`, false},
+		{"duplicate in attribute", `{"attributes":[{"name":"a","stable":true,"stable":true}]}`, true},
+		{"duplicate at top level", `{"name":"x","name":"y"}`, true},
+		{"duplicate after nested value", `{"a":{"x":[1,{"y":2}]},"a":3}`, true},
+		{"key equal to a string value is fine", `{"type":"name","name":"type"}`, false},
+	}
+	for _, tc := range cases {
+		err := checkDuplicateKeys([]byte(tc.doc))
+		if tc.dup != (err != nil) {
+			t.Errorf("%s: want duplicate=%v, got %v", tc.name, tc.dup, err)
+		}
 	}
 }

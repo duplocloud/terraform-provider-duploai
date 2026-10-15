@@ -334,15 +334,6 @@ func jsonEqual(a, b any) bool {
 // the apply is a true no-op (see Update). This is generic — it applies to every
 // resource the engine serves, current and future.
 func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
-	// Outputs that don't apply (appliesWhen) are planned null, on create and
-	// update alike — run last, after anything below adjusts the plan.
-	if !req.Plan.Raw.IsNull() {
-		defer func() {
-			if !resp.Diagnostics.HasError() {
-				resp.Plan.Raw = nullInapplicable(r.spec.Attributes, resp.Plan.Raw)
-			}
-		}()
-	}
 	// Only relevant on update: create has no prior state, destroy has no plan.
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
 		return
@@ -498,7 +489,7 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 			saveKnownState(*final)
 			return
 		}
-		if updBody = r.mergeIntoCurrent(api, objID, req.Plan.Raw, updBody, &resp.Diagnostics); resp.Diagnostics.HasError() {
+		if updBody = r.mergeIntoCurrent(ctx, api, objID, req.Plan.Raw, updBody, &resp.Diagnostics); resp.Diagnostics.HasError() {
 			saveKnownState(*final)
 			return
 		}
@@ -745,7 +736,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if body = r.mergeIntoCurrent(api, objID, req.Plan.Raw, body, &resp.Diagnostics); resp.Diagnostics.HasError() {
+	if body = r.mergeIntoCurrent(ctx, api, objID, req.Plan.Raw, body, &resp.Diagnostics); resp.Diagnostics.HasError() {
 		return
 	}
 	updated, clientErr := api.Update(objID, &body)
@@ -1988,79 +1979,7 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 }
 
 func (r *dynamicResource) stateFromResponse(_ context.Context, baseRaw tftypes.Value, resp map[string]any, scope map[string]string, id string, refreshInputs bool, diags *diag.Diagnostics) tftypes.Value {
-	return nullInapplicable(r.spec.Attributes, buildStateRaw(r.spec.Attributes, baseRaw, resp, scope, id, refreshInputs, true, diags))
-}
-
-// nullInapplicable sets every AppliesWhen attribute whose conditions don't hold
-// to null in an object value (a plan or a state). Conditions are read from the
-// same object; an attribute's spec default stands in for a null value, and an
-// unknown value counts as holding.
-func nullInapplicable(attrs []AttributeSpec, raw tftypes.Value) tftypes.Value {
-	if !raw.IsKnown() || raw.IsNull() {
-		return raw
-	}
-	objType, ok := raw.Type().(tftypes.Object)
-	if !ok {
-		return raw
-	}
-	var m map[string]tftypes.Value
-	if raw.As(&m) != nil {
-		return raw
-	}
-	changed := false
-	for _, a := range attrs {
-		if len(a.AppliesWhen) == 0 || rawConditionsHold(attrs, m, a.AppliesWhen) {
-			continue
-		}
-		if t, ok := objType.AttributeTypes[a.Name]; ok && !m[a.Name].IsNull() {
-			m[a.Name] = tftypes.NewValue(t, nil)
-			changed = true
-		}
-	}
-	if !changed {
-		return raw
-	}
-	return tftypes.NewValue(objType, m)
-}
-
-// rawConditionsHold evaluates appliesWhen conditions against an object's
-// attribute values (logical AND). Unknown counts as holding; null falls back to
-// the attribute's spec default.
-func rawConditionsHold(attrs []AttributeSpec, m map[string]tftypes.Value, conds []RequiredIfCondition) bool {
-	for _, c := range conds {
-		v, ok := m[c.Attribute]
-		if !ok {
-			continue
-		}
-		if !v.IsKnown() {
-			return true
-		}
-		val := ""
-		if !v.IsNull() {
-			val = toStringValue(tftypesToGo(v))
-		} else if a := findAttr(attrs, c.Attribute); a != nil {
-			val = defaultString(*a)
-		}
-		switch {
-		case c.IsEmpty:
-			if val != "" {
-				return false
-			}
-		case c.IsNotEmpty:
-			if val == "" {
-				return false
-			}
-		case c.NotEquals != "":
-			if val == c.NotEquals {
-				return false
-			}
-		default:
-			if val != c.Equals {
-				return false
-			}
-		}
-	}
-	return true
+	return buildStateRaw(r.spec.Attributes, baseRaw, resp, scope, id, refreshInputs, true, diags)
 }
 
 // ── value conversion helpers ──────────────────────────────────────────────────
@@ -2382,11 +2301,13 @@ func (s *ResourceSpec) attr(name string) *AttributeSpec {
 // current record and returns it with body overlaid. A settable attribute the
 // plan sets to null is removed from the record first, so clearing a value in
 // config still clears it. Returns body unchanged when the flag is off.
-func (r *dynamicResource) mergeIntoCurrent(api *duplosdk.RESTResource[map[string]any], objID string, plan tftypes.Value, body map[string]any, diags *diag.Diagnostics) map[string]any {
+func (r *dynamicResource) mergeIntoCurrent(ctx context.Context, api *duplosdk.RESTResource[map[string]any], objID string, plan tftypes.Value, body map[string]any, diags *diag.Diagnostics) map[string]any {
 	if !r.spec.MergeUpdateIntoCurrent || body == nil {
 		return body
 	}
-	cur, clientErr := api.Get(objID)
+	// Retried like a data source read: a body-only update made no read, so a
+	// transient 5xx/429 here must not become a new way for an apply to fail.
+	cur, clientErr := api.GetWithRetry(ctx, objID, dsReadRetryWindow)
 	if clientErr != nil {
 		diags.AddError("Error reading "+r.spec.Name+" before update", clientErr.Error())
 		return nil
