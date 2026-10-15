@@ -645,3 +645,28 @@ func TestStableUnlessModifierAttached(t *testing.T) {
 		t.Error("set: stableUnlessModifier not attached")
 	}
 }
+
+type fakePrivateSetter struct{ cleared bool }
+
+func (f *fakePrivateSetter) SetKey(_ context.Context, key string, value []byte) diag.Diagnostics {
+	if key == importedPrivateKey && value == nil {
+		f.cleared = true
+	}
+	return nil
+}
+
+// The import mark is cleared only after a successful update. On a failed apply
+// Terraform saves the prior (imported, null) state with the returned private
+// state; a cleared mark would make the retried plan replace the resource.
+func TestClearImportMarkOnSuccess(t *testing.T) {
+	ok := &fakePrivateSetter{}
+	clearImportMarkOnSuccess(context.Background(), false, ok)
+	if !ok.cleared {
+		t.Error("successful update: the import mark must be cleared")
+	}
+	failed := &fakePrivateSetter{}
+	clearImportMarkOnSuccess(context.Background(), true, failed)
+	if failed.cleared {
+		t.Error("failed update: the import mark must be kept so the retry still adopts instead of replacing")
+	}
+}

@@ -149,8 +149,10 @@ type ResourceSpec struct {
 	IDRequestPath string `json:"idRequestPath,omitempty"`
 
 	// MergeUpdateIntoCurrent makes every update read the current record and
-	// send it back with the update body overlaid (objects merged key by key; a
-	// value the body sets wins; a settable attribute planned null is removed),
+	// send it back with the update body overlaid (each attribute the body sets
+	// replaces its path as a whole, so a key removed from a map is removed; a
+	// settable attribute planned null is removed; only unmodelled containers
+	// are merged key by key),
 	// instead of sending the body alone. For backends whose update REPLACES the
 	// stored record with the request (GenericService -> ReplaceOne): a body-only
 	// PUT drops everything Terraform doesn't model — status, the ticket link,

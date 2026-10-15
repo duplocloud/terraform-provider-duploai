@@ -655,11 +655,17 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if err != nil || resp.Diagnostics.HasError() {
 		return
 	}
-	// The first apply after an import has recorded the adopted values, so from
-	// here on a null importAdoptsConfig value means "unset", not "imported".
-	if resp.Private != nil {
-		resp.Diagnostics.Append(resp.Private.SetKey(ctx, importedPrivateKey, nil)...)
-	}
+	// Once the first apply after an import has succeeded, the adopted values
+	// are recorded, so from then on a null importAdoptsConfig value means
+	// "unset", not "imported". Clear the mark only on success: on a failed
+	// apply Terraform saves the prior (imported, null) state together with the
+	// private state returned here, and a cleared mark would make the retried
+	// plan replace the imported resource.
+	defer func() {
+		if resp.Private != nil {
+			resp.Diagnostics.Append(clearImportMarkOnSuccess(ctx, resp.Diagnostics.HasError(), resp.Private)...)
+		}
+	}()
 
 	// An association has no readable object and nothing to update — every
 	// attribute is a forceNew path parameter, so a real change replaces the link.
@@ -2398,8 +2404,35 @@ func (r *dynamicResource) mergeIntoCurrent(api *duplosdk.RESTResource[map[string
 			}
 		}
 	}
+	// A value Terraform sends replaces that attribute as a whole: a map with a
+	// key removed in config (tags, labels) or an object with a child removed
+	// must not get the stored entry back from the current record. Only the
+	// containers Terraform doesn't model (spec, result, ...) are merged.
+	for _, a := range r.spec.Attributes {
+		if p := a.effectiveUpdatePath(); p != "" {
+			segs := strings.Split(p, ".")
+			if _, ok := lookupPath(body, segs); ok {
+				deletePath(merged, segs)
+			}
+		}
+	}
 	deepMergeInto(merged, body)
 	return merged
+}
+
+// lookupPath returns the value at path in m and whether it is present.
+func lookupPath(m map[string]any, path []string) (any, bool) {
+	var cur any = m
+	for _, seg := range path {
+		obj, ok := cur.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		if cur, ok = obj[seg]; !ok {
+			return nil, false
+		}
+	}
+	return cur, true
 }
 
 // deepMergeInto overlays src onto dst: nested objects are merged key by key,

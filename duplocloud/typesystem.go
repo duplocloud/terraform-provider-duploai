@@ -571,6 +571,20 @@ type privateGetter interface {
 
 // The framework's GetKey is nil-safe, so a request without private state
 // (a unit test, a create) simply reads as "not imported".
+// privateSetter is the part of the framework's private-state handle that
+// clears the import mark.
+type privateSetter interface {
+	SetKey(ctx context.Context, key string, value []byte) diag.Diagnostics
+}
+
+// clearImportMarkOnSuccess removes the import mark unless the update failed.
+func clearImportMarkOnSuccess(ctx context.Context, failed bool, p privateSetter) diag.Diagnostics {
+	if failed {
+		return nil
+	}
+	return p.SetKey(ctx, importedPrivateKey, nil)
+}
+
 func justImported(ctx context.Context, p privateGetter) bool {
 	if p == nil {
 		return false

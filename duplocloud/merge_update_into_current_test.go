@@ -101,3 +101,79 @@ func TestUpdate_MergeUpdateIntoCurrent(t *testing.T) {
 		mu.Unlock()
 	}
 }
+
+// A value Terraform sends replaces that attribute as a whole: removing one key
+// from a map (tags, labels) must remove it, not get the stored entry merged
+// back. Containers Terraform doesn't model are still kept.
+func TestUpdate_MergeUpdateIntoCurrent_MapKeyRemoved(t *testing.T) {
+	var mu sync.Mutex
+	var put map[string]any
+	current := `{"data":{"id":"obj1","name":"n","description":"old","status":"Complete",
+	  "spec":{"importVpcId":"vpc-1","tags":{"a":"1","old":"x"}}}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPut {
+			b, _ := io.ReadAll(req.Body)
+			mu.Lock()
+			_ = json.Unmarshal(b, &put)
+			mu.Unlock()
+		}
+		_, _ = w.Write([]byte(current))
+	}))
+	defer srv.Close()
+	client, err := duplosdk.NewClient(srv.URL, "tok", false, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &dynamicResource{
+		baseResource: baseResource{Client: client},
+		endpoint:     duplosdk.Endpoint{UriBase: "/v1/items/{workspace_id}", Update: duplosdk.Operation{Verb: http.MethodPut}},
+		spec: ResourceSpec{
+			Name: "merge", IDPath: "id", MergeUpdateIntoCurrent: true,
+			Attributes: []AttributeSpec{
+				{Name: "workspace_id", Type: "string", Required: true, ForceNew: true},
+				{Name: "name", Type: "string", Required: true, ForceNew: true, APIPath: "name"},
+				{Name: "description", Type: "string", Optional: true, APIPath: "description"},
+				{Name: "tags", Type: "map(string)", Optional: true, APIPath: "spec.tags"},
+			},
+		},
+	}
+	ctx := context.Background()
+	var sr resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &sr)
+	objType := sr.Schema.Type().TerraformType(ctx).(tftypes.Object)
+	str := func(v string) tftypes.Value { return tftypes.NewValue(tftypes.String, v) }
+	tags := func(kv map[string]string) tftypes.Value {
+		m := map[string]tftypes.Value{}
+		for k, v := range kv {
+			m[k] = str(v)
+		}
+		return tftypes.NewValue(tftypes.Map{ElementType: tftypes.String}, m)
+	}
+	mk := func(tg tftypes.Value) tftypes.Value {
+		vals := map[string]tftypes.Value{}
+		for n, typ := range objType.AttributeTypes {
+			vals[n] = tftypes.NewValue(typ, nil)
+		}
+		vals["id"], vals["workspace_id"], vals["name"], vals["description"] = str("ws1/obj1"), str("ws1"), str("n"), str("d")
+		vals["tags"] = tg
+		return tftypes.NewValue(objType, vals)
+	}
+	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: sr.Schema}}
+	r.Update(ctx, resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: sr.Schema, Raw: mk(tags(map[string]string{"a": "1"}))},
+		State: tfsdk.State{Schema: sr.Schema, Raw: mk(tags(map[string]string{"a": "1", "old": "x"}))},
+	}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Update diagnostics: %v", resp.Diagnostics.Errors())
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	spec, _ := put["spec"].(map[string]any)
+	got, _ := spec["tags"].(map[string]any)
+	if len(got) != 1 || got["a"] != "1" {
+		t.Errorf("tags must be exactly the configured map {a:1}; the removed key came back: %v", got)
+	}
+	if spec["importVpcId"] != "vpc-1" || put["status"] != "Complete" {
+		t.Errorf("unmodelled fields must still be kept: %v", put)
+	}
+}
