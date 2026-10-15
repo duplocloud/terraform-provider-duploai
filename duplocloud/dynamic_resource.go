@@ -21,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
 )
@@ -394,7 +395,7 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	// the URL, there is no body, and the response carries no content.
 	if r.spec.Association != nil {
 		id := r.resourceID(scopeVals, "")
-		log.Printf("[TRACE] dynamic %s Create(%s): association", r.spec.Name, id)
+		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Create(%s): association", r.spec.Name, id))
 		if clientErr := r.api(scope, r.specFailureRetries()).CreateNoContent(); clientErr != nil {
 			resp.Diagnostics.AddError("Error creating "+r.spec.Name, clientErr.Error())
 			return
@@ -411,7 +412,7 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	log.Printf("[TRACE] dynamic %s Create(%s): start", r.spec.Name, strings.Join(scopeVals, "/"))
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Create(%s): start", r.spec.Name, strings.Join(scopeVals, "/")))
 
 	retries := r.failureRetries(ctx, req.Plan, &resp.Diagnostics)
 	waitPopulated := r.waitForPopulated(ctx, req.Plan, &resp.Diagnostics)
@@ -523,7 +524,7 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 	resp.State.Raw = state
-	log.Printf("[TRACE] dynamic %s Create(%s): end", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Create(%s): end", r.spec.Name, id))
 }
 
 func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -531,7 +532,7 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 	if err != nil || resp.Diagnostics.HasError() {
 		return
 	}
-	log.Printf("[TRACE] dynamic %s Read(%s): start", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Read(%s): start", r.spec.Name, id))
 
 	if r.spec.Association != nil {
 		r.readAssociation(ctx, req, resp, scope, id)
@@ -545,7 +546,7 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 		if clientErr == nil && obj == nil {
 			// No longer in the collection — same meaning as a 404 on a
 			// conventional read: gone, so let the next plan recreate it.
-			log.Printf("[TRACE] dynamic %s Read(%s): not in collection, dropping from state", r.spec.Name, id)
+			tflog.Trace(ctx, fmt.Sprintf("dynamic %s Read(%s): not in collection, dropping from state", r.spec.Name, id))
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -566,7 +567,7 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 	resp.State.Raw = state
-	log.Printf("[TRACE] dynamic %s Read(%s): end", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Read(%s): end", r.spec.Name, id))
 }
 
 // createFromList issues a create whose response is a JSON array and returns the
@@ -628,8 +629,8 @@ func (r *dynamicResource) readAssociation(ctx context.Context, req resource.Read
 	want := scope[as.MemberAttribute]
 	members := anyToStringSlice(extractPath(*parent, strings.Split(as.MemberPath, ".")))
 	if !slices.Contains(members, want) {
-		log.Printf("[TRACE] dynamic %s Read(%s): %s no longer in %s, removing from state",
-			r.spec.Name, id, want, as.MemberPath)
+		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Read(%s): %s no longer in %s, removing from state",
+			r.spec.Name, id, want, as.MemberPath))
 		resp.State.RemoveResource(ctx)
 		return
 	}
@@ -638,7 +639,7 @@ func (r *dynamicResource) readAssociation(ctx context.Context, req resource.Read
 	// path parameter — but rebuilding state re-asserts them from the parsed id,
 	// which is what makes import work.
 	resp.State.Raw = r.stateFromResponse(ctx, req.State.Raw, map[string]any{}, scope, id, true, &resp.Diagnostics)
-	log.Printf("[TRACE] dynamic %s Read(%s): end", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Read(%s): end", r.spec.Name, id))
 }
 
 func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -663,7 +664,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	// Any diff reaching here is config-only; persist the plan as-is.
 	if r.spec.Association != nil {
 		resp.State.Raw = req.Plan.Raw
-		log.Printf("[TRACE] dynamic %s Update(%s): association, nothing to update", r.spec.Name, id)
+		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): association, nothing to update", r.spec.Name, id))
 		return
 	}
 
@@ -682,7 +683,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 			return
 		}
 		resp.State.Raw = state
-		log.Printf("[TRACE] dynamic %s Update(%s): immutable resource, refreshed without update call", r.spec.Name, id)
+		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): immutable resource, refreshed without update call", r.spec.Name, id))
 		return
 	}
 
@@ -698,7 +699,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	log.Printf("[TRACE] dynamic %s Update(%s): start", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): start", r.spec.Name, id))
 
 	// If nothing the API cares about changed (e.g. only the timeouts block
 	// differs, as on the first apply after import), skip the API call and the
@@ -713,7 +714,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 	if apiBodyEqual(body, stateBody) {
 		resp.State.Raw = req.Plan.Raw
-		log.Printf("[TRACE] dynamic %s Update(%s): no API-relevant change, skipped", r.spec.Name, id)
+		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): no API-relevant change, skipped", r.spec.Name, id))
 		return
 	}
 
@@ -766,7 +767,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 	resp.State.Raw = state
-	log.Printf("[TRACE] dynamic %s Update(%s): end", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): end", r.spec.Name, id))
 }
 
 // dropUnchangedUpdateFields removes each UpdateOnlyIfChanged attribute whose
@@ -885,7 +886,7 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 			return
 		}
 		resp.State.Raw = r.stateFromResponse(ctx, req.Plan.Raw, *cur, scope, id, false, &resp.Diagnostics)
-		log.Printf("[TRACE] dynamic %s Update(%s): no update-intent change, state refreshed without an update call", r.spec.Name, id)
+		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): no update-intent change, state refreshed without an update call", r.spec.Name, id))
 		return
 	}
 
@@ -931,7 +932,7 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 		}
 		setPath(body, discSegs, c.intent.DiscriminatorValue)
 		setPath(body, strings.Split(c.intent.ValuePath, "."), c.value)
-		log.Printf("[TRACE] dynamic %s Update(%s): single-intent %s", r.spec.Name, id, c.intent.DiscriminatorValue)
+		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): single-intent %s", r.spec.Name, id, c.intent.DiscriminatorValue))
 		if _, clientErr := api.Update(objID, &body); clientErr != nil {
 			resp.Diagnostics.AddError("Error updating "+r.spec.Name+" ("+c.intent.DiscriminatorValue+")", clientErr.Error())
 			return
@@ -951,7 +952,7 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 		return
 	}
 	resp.State.Raw = state
-	log.Printf("[TRACE] dynamic %s Update(%s): single-intent updates complete (%d)", r.spec.Name, id, len(changes))
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): single-intent updates complete (%d)", r.spec.Name, id, len(changes)))
 }
 
 func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -959,7 +960,7 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 	if err != nil || resp.Diagnostics.HasError() {
 		return
 	}
-	log.Printf("[TRACE] dynamic %s Delete(%s): start", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Delete(%s): start", r.spec.Name, id))
 	api := r.api(scope, r.failureRetries(ctx, req.State, &resp.Diagnostics))
 	if resp.Diagnostics.HasError() {
 		return
@@ -1006,7 +1007,7 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 			return
 		}
 	}
-	log.Printf("[TRACE] dynamic %s Delete(%s): end", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Delete(%s): end", r.spec.Name, id))
 }
 
 // deprovisionSkipped reports whether the pre-delete deprovision step should be
