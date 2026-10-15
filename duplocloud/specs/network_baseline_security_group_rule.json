@@ -227,6 +227,7 @@
     {
       "name": "referenced_group_id",
       "type": "string",
+      "stableUnlessChanged": ["source_resource_group_id"],
       "computed": true,
       "noSend": true,
       "apiPath": "referencedGroupInfo.groupId",

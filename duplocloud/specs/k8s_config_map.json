@@ -112,6 +112,7 @@
     {
       "name": "provisioner_version",
       "type": "string",
+      "importAdoptsConfig": true,
       "optional": true,
       "computed": true,
       "default": "",

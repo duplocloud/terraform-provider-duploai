@@ -205,6 +205,7 @@
     {
       "name": "security_group_ids",
       "type": "list(string)",
+      "stable": true,
       "computed": true,
       "noSend": true,
       "apiPath": "spec.securityGroupIds",
@@ -222,6 +223,7 @@
     {
       "name": "bootstrap_brokers",
       "type": "string",
+      "stableUnlessChanged": ["number_of_broker_nodes"],
       "computed": true,
       "noSend": true,
       "normalizeCsvOrder": true,
@@ -231,6 +233,7 @@
     {
       "name": "bootstrap_brokers_tls",
       "type": "string",
+      "stableUnlessChanged": ["number_of_broker_nodes"],
       "computed": true,
       "noSend": true,
       "normalizeCsvOrder": true,
@@ -240,6 +243,7 @@
     {
       "name": "bootstrap_brokers_sasl_scram",
       "type": "string",
+      "stableUnlessChanged": ["number_of_broker_nodes"],
       "computed": true,
       "noSend": true,
       "normalizeCsvOrder": true,
@@ -249,6 +253,7 @@
     {
       "name": "bootstrap_brokers_sasl_iam",
       "type": "string",
+      "stableUnlessChanged": ["number_of_broker_nodes"],
       "computed": true,
       "noSend": true,
       "normalizeCsvOrder": true,

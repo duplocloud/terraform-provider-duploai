@@ -542,3 +542,106 @@ func TestJustImported(t *testing.T) {
 		t.Error("no private state must read as not imported")
 	}
 }
+
+// stableUnlessChanged: an unrelated update keeps the output known; a change to
+// a listed input (or an unknown one), a create, or a null prior leaves it
+// unknown for the apply to fill.
+func TestStableUnlessModifier(t *testing.T) {
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"cidr": tftypes.String, "tags": tftypes.String, "subnet_id": tftypes.String,
+	}}
+	obj := func(cidr, tags, sub tftypes.Value) tftypes.Value {
+		return tftypes.NewValue(objType, map[string]tftypes.Value{"cidr": cidr, "tags": tags, "subnet_id": sub})
+	}
+	s := func(v string) tftypes.Value { return tftypes.NewValue(tftypes.String, v) }
+	unknown := tftypes.NewValue(tftypes.String, tftypes.UnknownValue)
+	m := stableUnlessModifier{inputs: []string{"cidr"}}
+	runC := func(state, plan, config tftypes.Value, prior types.String) types.String {
+		req := planmodifier.StringRequest{State: tfsdk.State{Raw: state}, Plan: tfsdk.Plan{Raw: plan}, Config: tfsdk.Config{Raw: config}, StateValue: prior, PlanValue: types.StringUnknown()}
+		resp := &planmodifier.StringResponse{PlanValue: types.StringUnknown()}
+		m.PlanModifyString(context.Background(), req, resp)
+		return resp.PlanValue
+	}
+	// Inputs set in config: the config matches the plan.
+	run := func(state, plan tftypes.Value, prior types.String) types.String {
+		return runC(state, plan, plan, prior)
+	}
+	prior := types.StringValue("subnet-1")
+	state := obj(s("10.0.0.0/16"), s("a"), s("subnet-1"))
+
+	if got := run(state, obj(s("10.0.0.0/16"), s("b"), unknown), prior); !got.Equal(prior) {
+		t.Errorf("unrelated change (tags): want the prior kept, got %v", got)
+	}
+	if got := run(state, obj(s("10.1.0.0/16"), s("a"), unknown), prior); !got.IsUnknown() {
+		t.Errorf("listed input changed: want unknown, got %v", got)
+	}
+	if got := run(state, obj(unknown, s("a"), unknown), prior); !got.IsUnknown() {
+		t.Errorf("listed input set in config to an unknown value: want unknown, got %v", got)
+	}
+	// Live case (network vpc_id): an optional+computed input left unset in
+	// config is unknown in the proposed plan, but its own UseStateForUnknown
+	// keeps the prior value, so it must count as unchanged.
+	nullStr := tftypes.NewValue(tftypes.String, nil)
+	if got := runC(state, obj(unknown, s("b"), unknown), obj(nullStr, s("b"), nullStr), prior); !got.Equal(prior) {
+		t.Errorf("listed input unset in config (unknown in plan): want the prior kept, got %v", got)
+	}
+	if got := run(tftypes.NewValue(objType, nil), obj(s("10.0.0.0/16"), s("a"), unknown), types.StringNull()); !got.IsUnknown() {
+		t.Errorf("create: want unknown, got %v", got)
+	}
+	if got := run(obj(s("10.0.0.0/16"), s("a"), tftypes.NewValue(tftypes.String, nil)), obj(s("10.0.0.0/16"), s("b"), unknown), types.StringNull()); !got.IsUnknown() {
+		t.Errorf("null prior: want unknown, got %v", got)
+	}
+}
+
+// stableUnlessChanged is validated at spec load: computed-only, primitive
+// collections or string, and only naming declared attributes.
+func TestStableUnlessChangedValidation(t *testing.T) {
+	cases := []struct{ name, attr, wantErr string }{
+		{"valid", `{"name":"subnet_ids","type":"list(string)","computed":true,"apiPath":"s","stableUnlessChanged":["cidr"]}`, ""},
+		{"unknown input", `{"name":"subnet_ids","type":"list(string)","computed":true,"apiPath":"s","stableUnlessChanged":["cdir"]}`, "references unknown attribute"},
+		{"settable", `{"name":"subnet_ids","type":"list(string)","optional":true,"computed":true,"apiPath":"s","stableUnlessChanged":["cidr"]}`, "computed-only"},
+		{"object", `{"name":"o","type":"object","computed":true,"apiPath":"s","stableUnlessChanged":["cidr"],"attributes":[{"name":"x","type":"string","computed":true,"apiPath":"x"}]}`, "only supported"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := []byte(`{"name":"probe","description":"probe","idPath":"id","endpoint":{"uriBase":"/v3/admin/things"},"attributes":[
+			  {"name":"cidr","type":"string","optional":true,"apiPath":"cidr"},` + tc.attr + `]}`)
+			var spec ResourceSpec
+			if err := json.Unmarshal(raw, &spec); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			err := spec.validate()
+			if tc.wantErr == "" && err != nil {
+				t.Fatalf("expected load, got %v", err)
+			}
+			if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
+				t.Fatalf("want error containing %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
+// The schema wires stableUnlessModifier on string, list and set outputs.
+func TestStableUnlessModifierAttached(t *testing.T) {
+	in := []string{"cidr"}
+	str := attrSchema(AttributeSpec{Type: "string", Computed: true, StableUnlessChanged: in}).(schema.StringAttribute)
+	lst := attrSchema(AttributeSpec{Type: "list(string)", Computed: true, StableUnlessChanged: in}).(schema.ListAttribute)
+	set := attrSchema(AttributeSpec{Type: "set(string)", Computed: true, StableUnlessChanged: in}).(schema.SetAttribute)
+	has := func(n int, get func(int) any) bool {
+		for i := 0; i < n; i++ {
+			if _, ok := get(i).(stableUnlessModifier); ok {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(len(str.PlanModifiers), func(i int) any { return str.PlanModifiers[i] }) {
+		t.Error("string: stableUnlessModifier not attached")
+	}
+	if !has(len(lst.PlanModifiers), func(i int) any { return lst.PlanModifiers[i] }) {
+		t.Error("list: stableUnlessModifier not attached")
+	}
+	if !has(len(set.PlanModifiers), func(i int) any { return set.PlanModifiers[i] }) {
+		t.Error("set: stableUnlessModifier not attached")
+	}
+}

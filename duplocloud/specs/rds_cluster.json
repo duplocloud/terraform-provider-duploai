@@ -3,6 +3,7 @@
   "description": "Manages a DuploCloud AI Helpdesk AWS RDS (Aurora) cluster.",
   "idPath": "id",
   "dataSource": true,
+  "mergeUpdateIntoCurrent": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AWSRdsClusters",
     "deprovision": {}
@@ -479,6 +480,7 @@
     {
       "name": "master_user_secret_arn",
       "type": "string",
+      "stableUnlessChanged": ["manage_master_user_password", "master_user_password"],
       "computed": true,
       "apiPath": "result.masterUserSecretArn",
       "description": "Secrets Manager ARN holding the master credentials (when manage_master_user_password is enabled)."

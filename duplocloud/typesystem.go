@@ -40,6 +40,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
@@ -162,6 +163,9 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 		o.Validators = stringValidators(a)
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, stringplanmodifier.UseStateForUnknown(), stringplanmodifier.UseNonNullStateForUnknown()))
+		}
+		if len(a.StableUnlessChanged) > 0 {
+			o.PlanModifiers = append(o.PlanModifiers, stableUnlessModifier{inputs: a.StableUnlessChanged})
 		}
 		if a.Computed && a.Default != nil && def == "" {
 			// Must run before RequiresReplace: see nullStateMatchesEmptyDefault.
@@ -336,6 +340,9 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, setplanmodifier.UseStateForUnknown(), setplanmodifier.UseNonNullStateForUnknown()))
 		}
+		if len(a.StableUnlessChanged) > 0 {
+			o.PlanModifiers = append(o.PlanModifiers, stableUnlessModifier{inputs: a.StableUnlessChanged})
+		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.RequiresReplace())
 		}
@@ -375,6 +382,9 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, listplanmodifier.UseStateForUnknown(), listplanmodifier.UseNonNullStateForUnknown()))
+		}
+		if len(a.StableUnlessChanged) > 0 {
+			o.PlanModifiers = append(o.PlanModifiers, stableUnlessModifier{inputs: a.StableUnlessChanged})
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, listRequiresReplace(a))
@@ -1464,5 +1474,77 @@ func dsObjectSchema(a AttributeSpec, info typeInfo) dsschema.Attribute {
 			Attributes: nested, Required: a.Required, Optional: a.Optional,
 			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
+	}
+}
+
+// stableUnlessModifier keeps a computed output's prior value in the plan unless
+// one of the named inputs changes (or is unknown) in the same plan — a
+// conditional stable. For outputs only a few inputs can change, such as a
+// network's subnet IDs (cidr) or MSK bootstrap brokers (broker count): an
+// unrelated in-place update (tags, description) then keeps them known, so a
+// dependent that uses them in a force-new argument is not replaced, while a
+// change that really alters them still plans "(known after apply)". A null
+// prior is never kept (a read missed it; the apply fills it in).
+type stableUnlessModifier struct{ inputs []string }
+
+func (m stableUnlessModifier) Description(_ context.Context) string {
+	return "Keeps the prior value unless one of " + strings.Join(m.inputs, ", ") + " changes."
+}
+
+func (m stableUnlessModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+// keep reports whether the prior value should be planned: an update (prior
+// state exists), the value would otherwise be unknown, the prior is non-null,
+// and no listed input changes.
+//
+// An input counts as unchanged when its planned value equals state, or when it
+// is unknown in the plan but unset in config: plan modifiers all see the plan
+// as proposed, before any of them run, so an optional+computed input the user
+// left unset (vpc_id, additional_cidrs) still shows as unknown here even though
+// its own UseStateForUnknown will plan the prior value. An input that is set in
+// config to a different or unknown value counts as changed.
+func (m stableUnlessModifier) keep(state tfsdk.State, plan tfsdk.Plan, config tfsdk.Config, prior, planned attr.Value) bool {
+	if state.Raw.IsNull() || plan.Raw.IsNull() || prior.IsNull() || prior.IsUnknown() || !planned.IsUnknown() {
+		return false
+	}
+	var p, s, c map[string]tftypes.Value
+	if plan.Raw.As(&p) != nil || state.Raw.As(&s) != nil || config.Raw.As(&c) != nil {
+		return false
+	}
+	for _, in := range m.inputs {
+		pv, ok := p[in]
+		if !ok {
+			return false
+		}
+		if pv.IsFullyKnown() {
+			if !pv.Equal(s[in]) {
+				return false
+			}
+			continue
+		}
+		if cv, ok := c[in]; !ok || !cv.IsNull() {
+			return false // set in config to an unknown value, or not in config at all
+		}
+	}
+	return true
+}
+
+func (m stableUnlessModifier) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if m.keep(req.State, req.Plan, req.Config, req.StateValue, req.PlanValue) {
+		resp.PlanValue = req.StateValue
+	}
+}
+
+func (m stableUnlessModifier) PlanModifyList(_ context.Context, req planmodifier.ListRequest, resp *planmodifier.ListResponse) {
+	if m.keep(req.State, req.Plan, req.Config, req.StateValue, req.PlanValue) {
+		resp.PlanValue = req.StateValue
+	}
+}
+
+func (m stableUnlessModifier) PlanModifySet(_ context.Context, req planmodifier.SetRequest, resp *planmodifier.SetResponse) {
+	if m.keep(req.State, req.Plan, req.Config, req.StateValue, req.PlanValue) {
+		resp.PlanValue = req.StateValue
 	}
 }

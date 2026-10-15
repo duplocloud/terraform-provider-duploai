@@ -498,6 +498,10 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 			saveKnownState(*final)
 			return
 		}
+		if updBody = r.mergeIntoCurrent(api, objID, req.Plan.Raw, updBody, &resp.Diagnostics); resp.Diagnostics.HasError() {
+			saveKnownState(*final)
+			return
+		}
 		if _, err = api.Update(objID, &updBody); err != nil {
 			saveKnownState(*final)
 			resp.Diagnostics.AddError("Error applying post-create update for "+r.spec.Name, err.Error())
@@ -733,6 +737,9 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	api := r.apiWaitingForPopulated(scope, retries, waitPopulated).
 		WithCallTimeout(r.operationTimeout(ctx, req.Plan, "update", &resp.Diagnostics))
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if body = r.mergeIntoCurrent(api, objID, req.Plan.Raw, body, &resp.Diagnostics); resp.Diagnostics.HasError() {
 		return
 	}
 	updated, clientErr := api.Update(objID, &body)
@@ -1962,7 +1969,7 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		// leaves it out (a PUT echo without createdAt, say) must not turn it
 		// null, or Terraform fails the apply as an inconsistent result; the
 		// value never changes, so the prior one is still right.
-		if a.Stable && !refreshInputs && isEmptyForm(next[a.Name]) &&
+		if (a.Stable || len(a.StableUnlessChanged) > 0) && !refreshInputs && isEmptyForm(next[a.Name]) &&
 			current[a.Name].IsFullyKnown() && !isEmptyForm(current[a.Name]) {
 			next[a.Name] = current[a.Name]
 		}
@@ -2363,4 +2370,86 @@ func (s *ResourceSpec) attr(name string) *AttributeSpec {
 		}
 	}
 	return nil
+}
+
+// mergeIntoCurrent implements ResourceSpec.MergeUpdateIntoCurrent: it reads the
+// current record and returns it with body overlaid. A settable attribute the
+// plan sets to null is removed from the record first, so clearing a value in
+// config still clears it. Returns body unchanged when the flag is off.
+func (r *dynamicResource) mergeIntoCurrent(api *duplosdk.RESTResource[map[string]any], objID string, plan tftypes.Value, body map[string]any, diags *diag.Diagnostics) map[string]any {
+	if !r.spec.MergeUpdateIntoCurrent || body == nil {
+		return body
+	}
+	cur, clientErr := api.Get(objID)
+	if clientErr != nil {
+		diags.AddError("Error reading "+r.spec.Name+" before update", clientErr.Error())
+		return nil
+	}
+	merged := deepCopyMap(*cur)
+	var top map[string]tftypes.Value
+	if err := plan.As(&top); err == nil {
+		for _, a := range r.spec.Attributes {
+			p := a.effectiveUpdatePath()
+			if p == "" || a.NoSend || (!a.Required && !a.Optional) {
+				continue
+			}
+			if v, ok := top[a.Name]; ok && v.IsNull() {
+				deletePath(merged, strings.Split(p, "."))
+			}
+		}
+	}
+	deepMergeInto(merged, body)
+	return merged
+}
+
+// deepMergeInto overlays src onto dst: nested objects are merged key by key,
+// anything else (scalars, lists) in src replaces dst's value.
+func deepMergeInto(dst, src map[string]any) {
+	for k, sv := range src {
+		if sm, ok := sv.(map[string]any); ok {
+			if dm, ok := dst[k].(map[string]any); ok {
+				deepMergeInto(dm, sm)
+				continue
+			}
+		}
+		dst[k] = sv
+	}
+}
+
+// deletePath removes the leaf at path, leaving its parents in place.
+func deletePath(m map[string]any, path []string) {
+	for i, seg := range path {
+		if i == len(path)-1 {
+			delete(m, seg)
+			return
+		}
+		next, ok := m[seg].(map[string]any)
+		if !ok {
+			return
+		}
+		m = next
+	}
+}
+
+func deepCopyMap(m map[string]any) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = deepCopyValue(v)
+	}
+	return out
+}
+
+func deepCopyValue(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		return deepCopyMap(t)
+	case []any:
+		c := make([]any, len(t))
+		for i, e := range t {
+			c[i] = deepCopyValue(e)
+		}
+		return c
+	default:
+		return v
+	}
 }

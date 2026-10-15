@@ -141,6 +141,7 @@
     {
       "name": "backup",
       "type": "bool",
+      "importAdoptsConfig": true,
       "optional": true,
       "forceNew": true,
       "createOnly": true,

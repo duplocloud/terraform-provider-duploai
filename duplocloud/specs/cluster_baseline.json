@@ -3,6 +3,7 @@
   "description": "Manages a DuploCloud AI Helpdesk Kubernetes cluster baseline (control plane, networking, and optional system node group), provisionable across any supported cloud. The target cloud is selected via the `cloud` attribute \u2014 AWS (EKS), Azure (AKS), GCP (GKE), or bare Kubernetes (K8S_ONLY) \u2014 and defaults to AWS.",
   "idPath": "id",
   "dataSource": true,
+  "mergeUpdateIntoCurrent": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Clusters",
     "deprovision": {

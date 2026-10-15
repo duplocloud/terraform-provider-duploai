@@ -148,6 +148,20 @@ type ResourceSpec struct {
 	// Never sent on create — the backend assigns the id there.
 	IDRequestPath string `json:"idRequestPath,omitempty"`
 
+	// MergeUpdateIntoCurrent makes every update read the current record and
+	// send it back with the update body overlaid (objects merged key by key; a
+	// value the body sets wins; a settable attribute planned null is removed),
+	// instead of sending the body alone. For backends whose update REPLACES the
+	// stored record with the request (GenericService -> ReplaceOne): a body-only
+	// PUT drops everything Terraform doesn't model — status, the ticket link,
+	// result, backend-set spec fields. On skill-provisioned resources (network,
+	// cluster, resource group, ...) that reset status to New and re-ran
+	// first-time provisioning on ANY update, even description-only; on AWS
+	// networks the agent then blocked for a human. The merged record is what the
+	// UI sends back. Don't combine with spec.updateRequest-style delta updates: a
+	// stale delta from the stored record would be re-sent.
+	MergeUpdateIntoCurrent bool `json:"mergeUpdateIntoCurrent,omitempty"`
+
 	// DataSource, when true, registers a read-only data source (data.duploai_<name>)
 	// from this spec in addition to the managed resource. The data source schema is
 	// derived automatically: path-parameter attributes stay Required, all other
@@ -424,6 +438,16 @@ type AttributeSpec struct {
 	// value still replaces it. Only valid on forceNew string, int, bool or list
 	// attributes.
 	ImportAdoptsConfig bool `json:"importAdoptsConfig,omitempty"`
+
+	// StableUnlessChanged, on a computed-only string, list or set attribute,
+	// names the top-level inputs that can change it. The prior value is kept in
+	// the plan unless one of them changes (or is unknown) in the same plan — a
+	// conditional Stable. Use it for an output a dependent may wire into a
+	// force-new argument (subnet IDs, security group IDs, broker strings) that a
+	// few inputs can legitimately change, so plain Stable would fail the apply
+	// as an inconsistent result. List every input that can change the value: a
+	// missed one makes that update fail with "inconsistent result".
+	StableUnlessChanged []string `json:"stableUnlessChanged,omitempty"`
 
 	// UpdateOnlyIfChanged leaves the attribute out of the update (PUT) body
 	// unless its value changed, and drops any parent object that leaves empty.
@@ -1095,6 +1119,11 @@ func (s *ResourceSpec) validate() error {
 	// rawConditionsHold skips a condition whose attribute isn't in the plan, so a
 	// misspelled name would silently disable the rule rather than fail.
 	for _, a := range s.Attributes {
+		for _, in := range a.StableUnlessChanged {
+			if !seen[in] {
+				return fmt.Errorf("attribute %q: stableUnlessChanged references unknown attribute %q", a.Name, in)
+			}
+		}
 		for _, c := range a.AppliesWhen {
 			if !seen[c.Attribute] {
 				return fmt.Errorf("attribute %q: appliesWhen references unknown attribute %q", a.Name, c.Attribute)
@@ -1450,6 +1479,14 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			if a.MaxLength > 0 && a.MinLength > a.MaxLength {
 				return nil, fmt.Errorf("attribute %q: minLength %d exceeds maxLength %d, so no value can satisfy both",
 					a.Name, a.MinLength, a.MaxLength)
+			}
+		}
+		if len(a.StableUnlessChanged) > 0 {
+			if a.Optional || a.Required || !a.Computed || a.Stable {
+				return nil, fmt.Errorf("attribute %q: stableUnlessChanged is only valid on a computed-only attribute without stable", a.Name)
+			}
+			if a.Type != "string" && !strings.HasPrefix(a.Type, "list(") && !strings.HasPrefix(a.Type, "set(") || strings.Contains(a.Type, "object") {
+				return nil, fmt.Errorf("attribute %q: stableUnlessChanged is only supported on string and list/set of primitives", a.Name)
 			}
 		}
 		if a.CaseInsensitive && a.Type != "string" {

@@ -3,6 +3,7 @@
   "description": "Manages a DuploCloud AI Helpdesk resource group (shared security groups, IAM role, KMS key).",
   "idPath": "id",
   "dataSource": true,
+  "mergeUpdateIntoCurrent": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/resource-groups",
     "deprovision": {}
@@ -229,6 +230,7 @@
     {
       "name": "kms_key_arn",
       "type": "string",
+      "stableUnlessChanged": ["aws_resource_name", "provisioner_version"],
       "computed": true,
       "noSend": true,
       "preserveOnEmptyResponse": true,
@@ -238,6 +240,7 @@
     {
       "name": "kms_key_alias",
       "type": "string",
+      "stableUnlessChanged": ["aws_resource_name", "provisioner_version"],
       "computed": true,
       "noSend": true,
       "preserveOnEmptyResponse": true,
