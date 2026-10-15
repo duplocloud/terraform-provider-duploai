@@ -61,3 +61,32 @@ func TestWithContext_SDKLogsThroughTflog(t *testing.T) {
 		}
 	}
 }
+
+// The client sends the configured User-Agent; without one, Go's default goes
+// out as before.
+func TestClientUserAgent(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		got = req.Header.Get("User-Agent")
+		_, _ = w.Write([]byte(`{"data":{"id":"obj1"}}`))
+	}))
+	defer srv.Close()
+	c, err := NewClient(srv.URL, "tok", false, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := NewRESTResource[map[string]any](c, Endpoint{UriBase: "/v1/items"}, nil, nil)
+	if _, err := r.Get("obj1"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(got, "Go-http-client/") {
+		t.Errorf("no UserAgent set: want Go's default, got %q", got)
+	}
+	c.UserAgent = "terraform-provider-duploai/1.2.3 (+x) Terraform/1.9.0"
+	if _, err := r.Get("obj1"); err != nil {
+		t.Fatal(err)
+	}
+	if got != c.UserAgent {
+		t.Errorf("User-Agent = %q, want %q", got, c.UserAgent)
+	}
+}

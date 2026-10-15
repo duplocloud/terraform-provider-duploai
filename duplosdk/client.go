@@ -136,6 +136,9 @@ type Client struct {
 	// http.Client.Timeout is a hard ceiling that would clamp a longer per-request
 	// context. See callAPIWithTimeout.
 	timeout time.Duration
+
+	// UserAgent, when set, is sent as the User-Agent header on every request.
+	UserAgent string
 }
 
 // NewClient constructs a new Client. sslNoVerify disables certificate checking
@@ -212,6 +215,9 @@ func (c *Client) doRequestWithTimeout(ctx context.Context, timeout time.Duration
 		return nil, newClientError(0, fmt.Errorf("creating request: %w", err))
 	}
 	req.Header.Set("Authorization", "Bearer "+c.Token)
+	if c.UserAgent != "" {
+		req.Header.Set("User-Agent", c.UserAgent)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

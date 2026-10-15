@@ -19,15 +19,29 @@ import (
 
 var _ provider.Provider = &duploaiProvider{}
 
-type duploaiProvider struct{}
+type duploaiProvider struct {
+	// version is the provider release version, set at build time (main.version
+	// via -ldflags); "dev" for local builds. Reported to Terraform in Metadata
+	// and sent to the API in the User-Agent header.
+	version string
+}
 
-// New returns a new instance of the DuploCloud AI provider.
+// New returns a new instance of the DuploCloud AI provider with version "dev".
 func New() provider.Provider {
-	return &duploaiProvider{}
+	return &duploaiProvider{version: "dev"}
+}
+
+// NewVersioned returns a provider factory that reports the given release
+// version (the Plugin Framework scaffold pattern).
+func NewVersioned(version string) func() provider.Provider {
+	return func() provider.Provider {
+		return &duploaiProvider{version: version}
+	}
 }
 
 func (p *duploaiProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "duploai"
+	resp.Version = p.version
 }
 
 func (p *duploaiProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
@@ -136,6 +150,7 @@ func (p *duploaiProvider) Configure(ctx context.Context, req provider.ConfigureR
 		resp.Diagnostics.AddError("Failed to create client", err.Error())
 		return
 	}
+	client.UserAgent = userAgent(p.version, req.TerraformVersion)
 
 	resp.DataSourceData = client
 	resp.ResourceData = client
@@ -193,4 +208,18 @@ func (p *duploaiProvider) DataSources(_ context.Context) []func() datasource.Dat
 		factories = append(factories, newDynamicDataSourceFactory(spec, endpoint))
 	}
 	return factories
+}
+
+// userAgent identifies the provider and Terraform versions on every API call,
+// so backend logs show which client made a request (HashiCorp's convention:
+// product/version, a link, then the Terraform version).
+func userAgent(providerVersion, terraformVersion string) string {
+	if providerVersion == "" {
+		providerVersion = "dev"
+	}
+	ua := "terraform-provider-duploai/" + providerVersion + " (+https://registry.terraform.io/providers/duplocloud/duploai)"
+	if terraformVersion != "" {
+		ua += " Terraform/" + terraformVersion
+	}
+	return ua
 }
