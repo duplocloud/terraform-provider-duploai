@@ -339,6 +339,7 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
 		return
 	}
+	r.warnIgnoredChanges(ctx, req, resp)
 	planBody := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
 	stateBody := r.bodyFromRaw(req.State.Raw, "update", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
@@ -2442,4 +2443,38 @@ func (r *dynamicResource) importIDProblem(id string) string {
 		}
 	}
 	return ""
+}
+
+// warnIgnoredChanges adds a plan warning for each configured change the
+// platform cannot apply to the existing resource: a createOnly attribute that
+// is not forceNew (e.g. tags the platform sets only at creation, Lambda code),
+// or any non-forceNew attribute of a resource with no update operation
+// (k8s_job). Such a change is recorded in state but never reaches the cloud.
+// Making these forceNew would replace resources in existing pipelines; a
+// warning gives the visibility without failing anything. Skipped on the first
+// plan after an import, where adopting config values is the intent.
+func (r *dynamicResource) warnIgnoredChanges(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	var plan, state, config map[string]tftypes.Value
+	if req.Plan.Raw.As(&plan) != nil || req.State.Raw.As(&state) != nil || req.Config.Raw.As(&config) != nil {
+		return
+	}
+	imported := justImported(ctx, req.Private)
+	immutable := !r.endpoint.HasUpdate()
+	for _, a := range r.spec.Attributes {
+		if a.ForceNew || (!a.Required && !a.Optional) || (!a.CreateOnly && !immutable) {
+			continue
+		}
+		cv, pv, sv := config[a.Name], plan[a.Name], state[a.Name]
+		if cv.IsNull() || !pv.IsFullyKnown() || pv.Equal(sv) || (sv.IsNull() && imported) {
+			continue
+		}
+		why := "The platform sets it only when the resource is created"
+		if immutable {
+			why = "This resource has no update operation"
+		}
+		resp.Diagnostics.AddAttributeWarning(path.Root(a.Name),
+			"Change to "+a.Name+" will not be applied",
+			why+", so the new value is recorded in Terraform state but the existing "+r.spec.Name+
+				" keeps its current setting. To apply it, replace the resource: terraform apply -replace=<resource address>.")
+	}
 }
