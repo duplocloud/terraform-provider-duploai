@@ -349,8 +349,9 @@
       "name": "endpoint",
       "type": "string",
       "computed": true,
-      "stable": true,
       "noSend": true,
+      "stable": true,
+      "preserveOnEmptyResponse": true,
       "apiPath": "result.details.Endpoint.Address",
       "description": "Connection endpoint (DNS address) of the RDS instance."
     },
@@ -358,8 +359,9 @@
       "name": "port",
       "type": "int",
       "computed": true,
-      "stable": true,
       "noSend": true,
+      "stable": true,
+      "preserveOnEmptyResponse": true,
       "apiPath": "result.details.Endpoint.Port",
       "description": "Port the RDS instance listens on."
     },
@@ -368,6 +370,7 @@
       "type": "string",
       "computed": true,
       "stable": true,
+      "preserveOnEmptyResponse": true,
       "apiPath": "result.stackId",
       "description": "ID of the underlying provisioning stack."
     }
