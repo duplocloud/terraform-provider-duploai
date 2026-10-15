@@ -1,0 +1,332 @@
+{
+  "name": "git_repository",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes Git repository (Flux GitRepository).",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/K8sGitRepositories",
+    "deprovision": {}
+  },
+  "requestConstants": [
+    {
+      "path": "spec.k8sResource.kind",
+      "value": "GitRepository"
+    }
+  ],
+  "conflictsWith": [
+    [
+      "ref_branch",
+      "ref_tag",
+      "ref_semver",
+      "ref_commit",
+      "ref_name"
+    ]
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned",
+    "createTimeoutMinutes": 15,
+    "updateTimeoutMinutes": 15,
+    "deleteTimeoutMinutes": 10
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this Git repository."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the Git repository resource. Must be unique within the namespace."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Free-text description of this Git repository, shown in the DuploCloud console."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs linking this Git repository to a cloud provider account. Derived from the parent resource group; values sent by the caller are rejected."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group (Kubernetes cluster) this Git repository belongs to. The cluster must have FluxCD enabled."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment that owns the resource group."
+    },
+    {
+      "name": "namespace_name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.namespaceName",
+      "description": "Kubernetes namespace the Git repository is created in. The namespace must already exist under the same resource group."
+    },
+    {
+      "name": "api_version",
+      "type": "string",
+      "computed": true,
+      "responsePath": "result.k8sResource.apiVersion",
+      "description": "Flux GitRepository CRD apiVersion. Read-only: the platform always stamps source.toolkit.fluxcd.io/v1, and any value sent is discarded."
+    },
+    {
+      "name": "url",
+      "type": "string",
+      "required": true,
+      "apiPath": "spec.k8sResource.spec.url",
+      "responsePath": "result.k8sResource.spec.url",
+      "description": "Repository address to clone. Use an https:// URL with a username/password secret, or an ssh:// URL with an SSH key secret - see secret_ref_name. Example: https://github.com/org/repo.git or ssh://git@github.com/org/repo.git."
+    },
+    {
+      "name": "interval",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "1m",
+      "apiPath": "spec.k8sResource.spec.interval",
+      "responsePath": "result.k8sResource.spec.interval",
+      "description": "How often Flux polls the repository for new commits, as a Go duration (30s, 1m, 5m, 1h). This is the sync cadence - not a limit on how long a single fetch may take, which is timeout."
+    },
+    {
+      "name": "ref_branch",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.k8sResource.spec.ref.branch",
+      "responsePath": "result.k8sResource.spec.ref.branch",
+      "description": "Branch to track, e.g. main. Flux re-checks it every interval and picks up new commits. When no ref_* attribute is set at all, Flux falls back to the master branch. Only one ref_* attribute may be set."
+    },
+    {
+      "name": "ref_tag",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.ref.tag",
+      "responsePath": "result.k8sResource.spec.ref.tag",
+      "description": "Tag to check out, as a bare tag name such as v1.0.0 (not refs/tags/v1.0.0 - use ref_name for a full refspec). Pins the source until you change the tag. Only one ref_* attribute may be set."
+    },
+    {
+      "name": "ref_semver",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.ref.semver",
+      "responsePath": "result.k8sResource.spec.ref.semver",
+      "description": "Semver range matched against the repository's tags; Flux checks out the highest tag that satisfies it, e.g. \">=1.0.0 <2.0.0\" or \"~1.2.0\". Use this to follow releases automatically. Only one ref_* attribute may be set."
+    },
+    {
+      "name": "ref_commit",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.ref.commit",
+      "responsePath": "result.k8sResource.spec.ref.commit",
+      "description": "Exact commit SHA to check out. The strictest option: the source never moves until you change this value. Only one ref_* attribute may be set."
+    },
+    {
+      "name": "ref_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.ref.name",
+      "responsePath": "result.k8sResource.spec.ref.name",
+      "description": "Full Git refspec, for references the other ref_* attributes cannot name - most often a pull request, e.g. refs/pull/123/head. Also accepts refs/heads/main or refs/tags/v1.0.0. Flux gives this precedence over ref_branch, ref_tag and ref_semver. Only one ref_* attribute may be set."
+    },
+    {
+      "name": "secret_ref_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.secretRef.name",
+      "responsePath": "result.k8sResource.spec.secretRef.name",
+      "description": "Name of an existing Kubernetes Secret in namespace_name that holds the credentials for a private repository. One secret covers every method - HTTPS uses username and password (a personal access token), SSH uses identity and known_hosts, and a self-signed HTTPS endpoint uses caFile. Leave unset for a public repository, or when git_provider handles authentication instead."
+    },
+    {
+      "name": "proxy_secret_ref_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.proxySecretRef.name",
+      "responsePath": "result.k8sResource.spec.proxySecretRef.name",
+      "description": "Name of a Kubernetes Secret holding HTTP proxy settings (address, username, password) to use when reaching the repository. Unrelated to repository credentials - those live in secret_ref_name."
+    },
+    {
+      "name": "git_provider",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "oneOf": [
+        "generic",
+        "azure",
+        "github"
+      ],
+      "apiPath": "spec.k8sResource.spec.provider",
+      "responsePath": "result.k8sResource.spec.provider",
+      "description": "Authenticate through the cloud provider rather than a stored secret: azure or github use workload identity, so no secret_ref_name is needed. Leave unset (or use generic) to authenticate with the credentials in secret_ref_name."
+    },
+    {
+      "name": "timeout",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.k8sResource.spec.timeout",
+      "responsePath": "result.k8sResource.spec.timeout",
+      "description": "How long a single clone or fetch may run before it is abandoned, as a Go duration. Keep it comfortably below interval so a slow fetch cannot overlap the next sync. The cluster defaults it to 60s when unset."
+    },
+    {
+      "name": "recurse_submodules",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.k8sResource.spec.recurseSubmodules",
+      "responsePath": "result.k8sResource.spec.recurseSubmodules",
+      "description": "Also clone the repository's Git submodules. Submodules are fetched with the same credentials as the parent repository."
+    },
+    {
+      "name": "sparse_checkout",
+      "type": "list(string)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.sparseCheckout",
+      "responsePath": "result.k8sResource.spec.sparseCheckout",
+      "description": "Check out only these directories instead of the whole repository, each a path relative to the repository root (e.g. clusters/production). Useful for large monorepos."
+    },
+    {
+      "name": "verify_mode",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.verify.mode",
+      "responsePath": "result.k8sResource.spec.verify.mode",
+      "description": "Verify Git signatures against the public keys in verify_secret_ref_name, and refuse to build an artifact if the signature does not check out. Flux accepts head (the checked-out commit), Tag, and TagAndHead. Passed to the cluster unchanged and validated there. Leave unset to skip verification."
+    },
+    {
+      "name": "verify_secret_ref_name",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.verify.secretRef.name",
+      "responsePath": "result.k8sResource.spec.verify.secretRef.name",
+      "description": "Name of a Kubernetes Secret holding the PGP public keys used to check commit or tag signatures. Required whenever verify_mode is set. Not a credential for cloning - that is secret_ref_name."
+    },
+    {
+      "name": "include",
+      "type": "list(object)",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.include",
+      "responsePath": "result.k8sResource.spec.include",
+      "description": "Overlay content from other Git repositories into this one's artifact, so a single source can assemble files from several repositories.",
+      "attributes": [
+        {
+          "name": "repository_name",
+          "type": "string",
+          "required": true,
+          "apiPath": "repository.name",
+          "description": "Name of another Git repository resource in the same namespace whose content should be overlaid."
+        },
+        {
+          "name": "from_path",
+          "type": "string",
+          "optional": true,
+          "apiPath": "fromPath",
+          "description": "Path inside the included repository to copy from. Defaults to its root."
+        },
+        {
+          "name": "to_path",
+          "type": "string",
+          "optional": true,
+          "apiPath": "toPath",
+          "description": "Path inside this repository's artifact to copy into. Defaults to the included repository's name."
+        }
+      ]
+    },
+    {
+      "name": "suspend",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.k8sResource.spec.suspend",
+      "responsePath": "result.k8sResource.spec.suspend",
+      "description": "Pause reconciliation. Flux stops polling the repository, and the artifact it has already produced stays in place. Set back to false to resume."
+    },
+    {
+      "name": "ignore",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.k8sResource.spec.ignore",
+      "responsePath": "result.k8sResource.spec.ignore",
+      "description": "Newline-separated .gitignore-style patterns to exclude from the produced artifact, overriding Flux's default exclusions."
+    },
+    {
+      "name": "labels",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.k8sResource.metadata.labels",
+      "responsePath": "result.k8sResource.metadata.labels",
+      "filterResponseKeys": [
+        "duplocloud.ai/*"
+      ],
+      "description": "Kubernetes labels applied to the GitRepository object. The platform's own duplocloud.ai/* labels are managed server-side and not tracked here."
+    },
+    {
+      "name": "annotations",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.k8sResource.metadata.annotations",
+      "responsePath": "result.k8sResource.metadata.annotations",
+      "filterResponseKeys": [
+        "duplocloud.ai/*"
+      ],
+      "description": "Kubernetes annotations applied to the GitRepository object. The platform's own duplocloud.ai/* annotations are managed server-side and not tracked here."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioning engine used to create the resource."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Version of the provisioning engine."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Provisioning status of the Git repository."
+    },
+    {
+      "name": "git_repository_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "id",
+      "description": "Unique identifier of the Git repository record."
+    }
+  ]
+}

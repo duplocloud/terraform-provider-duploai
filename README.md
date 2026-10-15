@@ -74,6 +74,7 @@ provider "duploai" {
 | [`duploai_ecr`](docs/resources/ecr.md) | Manages a DuploCloud AI Helpdesk AWS ECR (Elastic Container Registry) repository, provisioned within an environment and resource group |
 | [`duploai_elasticache`](docs/resources/elasticache.md) | Manages a DuploCloud AI Helpdesk AWS ElastiCache cluster (Redis, Valkey, or Memcached) |
 | [`duploai_environment`](docs/resources/environment.md) | Manages a DuploCloud AI environment within a workspace |
+| [`duploai_git_repository`](docs/resources/git_repository.md) | Manages a DuploCloud AI Helpdesk Kubernetes Git repository (Flux GitRepository) |
 | [`duploai_helm_release`](docs/resources/helm_release.md) | Manages a DuploCloud AI Helpdesk Kubernetes Helm release (Flux HelmRelease) |
 | [`duploai_helm_repository`](docs/resources/helm_repository.md) | Manages a DuploCloud AI Helpdesk Kubernetes Helm repository (Flux HelmRepository) |
 | [`duploai_k8s_config_map`](docs/resources/k8s_config_map.md) | Manages a DuploCloud AI Helpdesk Kubernetes ConfigMap |
@@ -138,6 +139,7 @@ provider "duploai" {
 | [`duploai_ecr`](docs/data-sources/ecr.md) | Manages a DuploCloud AI Helpdesk AWS ECR (Elastic Container Registry) repository, provisioned within an environment and resource group |
 | [`duploai_elasticache`](docs/data-sources/elasticache.md) | Manages a DuploCloud AI Helpdesk AWS ElastiCache cluster (Redis, Valkey, or Memcached) |
 | [`duploai_environment`](docs/data-sources/environment.md) | Manages a DuploCloud AI environment within a workspace |
+| [`duploai_git_repository`](docs/data-sources/git_repository.md) | Manages a DuploCloud AI Helpdesk Kubernetes Git repository (Flux GitRepository) |
 | [`duploai_helm_release`](docs/data-sources/helm_release.md) | Manages a DuploCloud AI Helpdesk Kubernetes Helm release (Flux HelmRelease) |
 | [`duploai_helm_repository`](docs/data-sources/helm_repository.md) | Manages a DuploCloud AI Helpdesk Kubernetes Helm repository (Flux HelmRepository) |
 | [`duploai_k8s_config_map`](docs/data-sources/k8s_config_map.md) | Manages a DuploCloud AI Helpdesk Kubernetes ConfigMap |
