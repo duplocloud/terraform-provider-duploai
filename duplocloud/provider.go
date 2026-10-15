@@ -82,6 +82,10 @@ func (p *duploaiProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
+	// A value set from another resource's output is unknown during plan. It is
+	// treated as unset, as before (the env var still wins when present); only
+	// the error says why, instead of calling a configured value "missing".
+	hostUnknown, tokenUnknown := config.DuploHost.IsUnknown(), config.DuploToken.IsUnknown()
 	if config.DuploHost.IsNull() || config.DuploHost.ValueString() == "" {
 		config.DuploHost = types.StringValue(envFallback("DUPLO_HOST", "duplo_host"))
 	}
@@ -118,18 +122,26 @@ func (p *duploaiProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 
 	if config.DuploHost.ValueString() == "" {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("duplo_host"),
-			"Missing duplo_host",
-			"Set duplo_host in the provider block or the DUPLO_HOST (or duplo_host) env var.",
-		)
+		if hostUnknown {
+			resp.Diagnostics.AddAttributeError(path.Root("duplo_host"), "Unknown duplo_host", unknownProviderValueDetail("duplo_host", "DUPLO_HOST"))
+		} else {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("duplo_host"),
+				"Missing duplo_host",
+				"Set duplo_host in the provider block or the DUPLO_HOST (or duplo_host) env var.",
+			)
+		}
 	}
 	if config.DuploToken.ValueString() == "" {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("duplo_token"),
-			"Missing duplo_token",
-			"Set duplo_token in the provider block or the DUPLO_TOKEN (or duplo_token) env var.",
-		)
+		if tokenUnknown {
+			resp.Diagnostics.AddAttributeError(path.Root("duplo_token"), "Unknown duplo_token", unknownProviderValueDetail("duplo_token", "DUPLO_TOKEN"))
+		} else {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("duplo_token"),
+				"Missing duplo_token",
+				"Set duplo_token in the provider block or the DUPLO_TOKEN (or duplo_token) env var.",
+			)
+		}
 	}
 	if resp.Diagnostics.HasError() {
 		return
@@ -222,4 +234,14 @@ func userAgent(providerVersion, terraformVersion string) string {
 		ua += " Terraform/" + terraformVersion
 	}
 	return ua
+}
+
+// unknownProviderValueDetail explains an unknown provider argument the way the
+// Plugin Framework scaffold recommends: the value can't be known at plan time,
+// and how to supply one that can.
+func unknownProviderValueDetail(attr, env string) string {
+	return "The provider cannot connect because " + attr + " is not known yet: it is set from a value " +
+		"(for example another resource's output) that is only known after apply. Set it from a value known " +
+		"at plan time, such as a variable or the " + env + " env var, or apply the resource it depends on " +
+		"first (terraform apply -target=...)."
 }
