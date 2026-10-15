@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 const defaultTimeout = 60 * time.Second
@@ -171,7 +172,7 @@ func NewClient(hostURL, token string, sslNoVerify bool, timeout time.Duration) (
 // non-positive or shorter-than-default timeout falls back to the client
 // default, so a caller can only ever ask for MORE room, never less — pass 0 for
 // the default.
-func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string, body interface{}) ([]byte, ClientError) {
+func (c *Client) doRequestWithTimeout(ctx context.Context, timeout time.Duration, method, path string, body interface{}) ([]byte, ClientError) {
 	// A Client built literally (rather than via NewClient) has a zero timeout,
 	// which would make every context deadline already expired — a confusing
 	// "context deadline exceeded" on the first call. Floor it.
@@ -183,7 +184,7 @@ func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string
 		timeout = base
 	}
 	url := c.HostURL + path
-	log.Printf("[TRACE] duplo-request: %s %s (deadline=%s)", method, url, timeout)
+	tflog.Trace(ctx, fmt.Sprintf("duplo-request: %s %s (deadline=%s)", method, url, timeout))
 
 	var reqBody io.Reader
 	if body != nil {
@@ -192,17 +193,22 @@ func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string
 			return nil, newClientError(0, fmt.Errorf("marshalling request: %w", err))
 		}
 		if bodyLoggingEnabled() {
-			log.Printf("[TRACE] duplo-request-body: %s %s: %s", method, url, redactBody(b))
+			tflog.Trace(ctx, fmt.Sprintf("duplo-request-body: %s %s: %s", method, url, redactBody(b)))
 		}
 		reqBody = strings.NewReader(string(b))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	// The request runs under its own per-call deadline and deliberately NOT
+	// under the Terraform request's cancellation (WithoutCancel keeps only its
+	// values, for logging). Cancelling an in-flight create on Ctrl-C could cut
+	// a request the backend already acted on, leaving an object Terraform never
+	// records; so backend calls behave exactly as before.
+	reqCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
+	req, err := http.NewRequestWithContext(reqCtx, method, url, reqBody)
 	if err != nil {
-		log.Printf("[TRACE] duplo-request: %s %s: cannot build request: %s", method, url, err)
+		tflog.Trace(ctx, fmt.Sprintf("duplo-request: %s %s: cannot build request: %s", method, url, err))
 		return nil, newClientError(0, fmt.Errorf("creating request: %w", err))
 	}
 	req.Header.Set("Authorization", "Bearer "+c.Token)
@@ -212,7 +218,7 @@ func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		log.Printf("[TRACE] duplo-request: %s %s: failed: %s", method, url, err)
+		tflog.Trace(ctx, fmt.Sprintf("duplo-request: %s %s: failed: %s", method, url, err))
 		return nil, newClientError(0, fmt.Errorf("executing request: %w", err))
 	}
 	defer resp.Body.Close() //nolint:errcheck
@@ -222,10 +228,10 @@ func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string
 		return nil, newClientError(resp.StatusCode, fmt.Errorf("reading response: %w", err))
 	}
 
-	log.Printf("[TRACE] duplo-response: %s %s: status=%d", method, url, resp.StatusCode)
+	tflog.Trace(ctx, fmt.Sprintf("duplo-response: %s %s: status=%d", method, url, resp.StatusCode))
 	if bodyLoggingEnabled() {
-		log.Printf("[TRACE] duplo-response-body: %s %s: status=%d: %s",
-			method, url, resp.StatusCode, redactBody(respBody))
+		tflog.Trace(ctx, fmt.Sprintf("duplo-response-body: %s %s: status=%d: %s",
+			method, url, resp.StatusCode, redactBody(respBody)))
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
@@ -243,7 +249,7 @@ func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string
 				detail += " (WWW-Authenticate: " + wa + ")"
 			}
 		}
-		log.Printf("[TRACE] duplo-response: %s %s: error body: %q", method, url, string(respBody))
+		tflog.Trace(ctx, fmt.Sprintf("duplo-response: %s %s: error body: %q", method, url, string(respBody)))
 		return nil, newClientError(resp.StatusCode, fmt.Errorf("API error %d: %s", resp.StatusCode, detail))
 	}
 
@@ -259,8 +265,8 @@ func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string
 // longer one to operations the backend performs synchronously and slowly — a
 // cloud teardown can run for minutes, and disconnecting mid-flight does not
 // merely lose the reply, it cancels the server's work.
-func (c *Client) callAPIWithTimeout(timeout time.Duration, method, path string, req, out interface{}) ClientError {
-	body, err := c.doRequestWithTimeout(timeout, method, path, req)
+func (c *Client) callAPIWithTimeout(ctx context.Context, timeout time.Duration, method, path string, req, out interface{}) ClientError {
+	body, err := c.doRequestWithTimeout(ctx, timeout, method, path, req)
 	if err != nil {
 		return err
 	}

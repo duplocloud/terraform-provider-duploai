@@ -115,8 +115,8 @@ func (r *dynamicResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 // ── SDK binding ───────────────────────────────────────────────────────────────
 
 // api binds an SDK client to this resource's endpoint and resolved scope.
-func (r *dynamicResource) api(scope map[string]string, failureRetries int) *duplosdk.RESTResource[map[string]any] {
-	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, r.waiter(failureRetries))
+func (r *dynamicResource) api(ctx context.Context, scope map[string]string, failureRetries int) *duplosdk.RESTResource[map[string]any] {
+	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, r.waiter(failureRetries)).WithContext(ctx)
 }
 
 // apiWaitingForPopulated is like api but, when waitForPopulated is true, extends
@@ -125,12 +125,12 @@ func (r *dynamicResource) api(scope map[string]string, failureRetries int) *dupl
 // controller assigns a load balancer address. Composes with any existing
 // readyPath/readyState gate (both must hold). No-op when the resource declares no
 // populatedPath, so callers can use it unconditionally.
-func (r *dynamicResource) apiWaitingForPopulated(scope map[string]string, failureRetries int, waitForPopulated bool) *duplosdk.RESTResource[map[string]any] {
+func (r *dynamicResource) apiWaitingForPopulated(ctx context.Context, scope map[string]string, failureRetries int, waitForPopulated bool) *duplosdk.RESTResource[map[string]any] {
 	w := r.waiter(failureRetries)
 	if w != nil && waitForPopulated && r.spec.Waiter.PopulatedPath != "" {
 		applyPopulatedGate(w, r.spec.Waiter.PopulatedPath)
 	}
-	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, w)
+	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, w).WithContext(ctx)
 }
 
 // applyPopulatedGate extends waiter w with a secondary success gate that holds
@@ -396,7 +396,7 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	if r.spec.Association != nil {
 		id := r.resourceID(scopeVals, "")
 		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Create(%s): association", r.spec.Name, id))
-		if clientErr := r.api(scope, r.specFailureRetries()).CreateNoContent(); clientErr != nil {
+		if clientErr := r.api(ctx, scope, r.specFailureRetries()).CreateNoContent(); clientErr != nil {
 			resp.Diagnostics.AddError("Error creating "+r.spec.Name, clientErr.Error())
 			return
 		}
@@ -421,7 +421,7 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 	// The create call itself gets the create timeout, not the client's 60s
 	// default — a backend that provisions synchronously can block for minutes.
-	api := r.apiWaitingForPopulated(scope, retries, waitPopulated).
+	api := r.apiWaitingForPopulated(ctx, scope, retries, waitPopulated).
 		WithCallTimeout(r.operationTimeout(ctx, req.Plan, "create", &resp.Diagnostics))
 	if resp.Diagnostics.HasError() {
 		return
@@ -542,7 +542,7 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 	var obj *map[string]any
 	var clientErr duplosdk.ClientError
 	if r.spec.Endpoint.ReadFromList {
-		obj, clientErr = r.readFromCollection(scope, objID)
+		obj, clientErr = r.readFromCollection(ctx, scope, objID)
 		if clientErr == nil && obj == nil {
 			// No longer in the collection — same meaning as a 404 on a
 			// conventional read: gone, so let the next plan recreate it.
@@ -551,7 +551,7 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 			return
 		}
 	} else {
-		obj, clientErr = r.api(scope, r.specFailureRetries()).Get(objID)
+		obj, clientErr = r.api(ctx, scope, r.specFailureRetries()).Get(objID)
 	}
 	if clientErr != nil {
 		if clientErr.IsNotFound() {
@@ -601,8 +601,8 @@ func (r *dynamicResource) createFromList(api *duplosdk.RESTResource[map[string]a
 // EndpointSpec.ReadFromList. The API does no server-side filtering (query
 // parameters on these routes are ignored), so the match is made here; the list
 // carries each element in full, so nothing further is fetched.
-func (r *dynamicResource) readFromCollection(scope map[string]string, objID string) (*map[string]any, duplosdk.ClientError) {
-	return specCollectionElement(&r.spec, r.api(scope, r.specFailureRetries()), objID)
+func (r *dynamicResource) readFromCollection(ctx context.Context, scope map[string]string, objID string) (*map[string]any, duplosdk.ClientError) {
+	return specCollectionElement(&r.spec, r.api(ctx, scope, r.specFailureRetries()), objID)
 }
 
 // readAssociation refreshes a link-only resource. The API offers no GET for the
@@ -615,7 +615,7 @@ func (r *dynamicResource) readAssociation(ctx context.Context, req resource.Read
 	as := r.spec.Association
 	parentPath := r.endpoint.ResolvePath(as.ReadPath, scope)
 
-	parent, clientErr := r.api(scope, r.specFailureRetries()).GetPath(parentPath)
+	parent, clientErr := r.api(ctx, scope, r.specFailureRetries()).GetPath(parentPath)
 	if clientErr != nil {
 		if clientErr.IsNotFound() {
 			// Parent gone ⇒ the link cannot exist either.
@@ -673,7 +673,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	// only diffs that do are config-only (e.g. the timeouts block) — refresh
 	// computed values from the API and persist, without issuing an update call.
 	if !r.endpoint.HasUpdate() {
-		obj, clientErr := r.api(scope, r.specFailureRetries()).Get(objID)
+		obj, clientErr := r.api(ctx, scope, r.specFailureRetries()).Get(objID)
 		if clientErr != nil {
 			resp.Diagnostics.AddError("Error reading "+r.spec.Name, clientErr.Error())
 			return
@@ -732,7 +732,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	api := r.apiWaitingForPopulated(scope, retries, waitPopulated).
+	api := r.apiWaitingForPopulated(ctx, scope, retries, waitPopulated).
 		WithCallTimeout(r.operationTimeout(ctx, req.Plan, "update", &resp.Diagnostics))
 	if resp.Diagnostics.HasError() {
 		return
@@ -880,7 +880,7 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 	// plan as-is: the plan can still hold computed outputs as unknown (status,
 	// updated_at, ...), and Terraform rejects an apply that leaves any unknown.
 	if len(changes) == 0 {
-		cur, clientErr := r.api(scope, 0).Get(objID)
+		cur, clientErr := r.api(ctx, scope, 0).Get(objID)
 		if clientErr != nil {
 			resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after update", clientErr.Error())
 			return
@@ -894,7 +894,7 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	api := r.api(scope, retries)
+	api := r.api(ctx, scope, retries)
 	timeout := r.timeout(ctx, req.Plan, "update", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -961,7 +961,7 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Delete(%s): start", r.spec.Name, id))
-	api := r.api(scope, r.failureRetries(ctx, req.State, &resp.Diagnostics))
+	api := r.api(ctx, scope, r.failureRetries(ctx, req.State, &resp.Diagnostics))
 	if resp.Diagnostics.HasError() {
 		return
 	}

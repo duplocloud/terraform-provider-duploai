@@ -123,7 +123,7 @@ func (d *dynamicDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		apiID = apiID[i+1:]
 	}
 
-	api := duplosdk.NewRESTResource[map[string]any](d.Client, d.endpoint, scope, nil)
+	api := duplosdk.NewRESTResource[map[string]any](d.Client, d.endpoint, scope, nil).WithContext(ctx)
 	var obj *map[string]any
 	var clientErr duplosdk.ClientError
 	if d.spec.Endpoint.ReadFromList {
