@@ -1051,6 +1051,14 @@ func (r *dynamicResource) deprovisionSkipped(ctx context.Context, state attrRead
 }
 
 func (r *dynamicResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Check the ID's shape up front and name the expected format, instead of
+	// failing later in Read with a generic "Invalid resource ID". Uses the same
+	// splitID as parseID, so every ID that imports today still does; only empty
+	// segments (which can never resolve) are added to what is rejected.
+	if msg := r.importIDProblem(req.ID); msg != "" {
+		resp.Diagnostics.AddError("Invalid import ID", msg)
+		return
+	}
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 	// Mark the resource as just imported, so an importAdoptsConfig attribute
 	// the API can't return adopts its configured value instead of replacing
@@ -2407,4 +2415,31 @@ func deepCopyValue(v any) any {
 	default:
 		return v
 	}
+}
+
+// importIDProblem returns why id can't be imported, or "" when it can. The
+// accepted shape mirrors parseID: the endpoint's path parameters, then the
+// object id (associations have no object id segment).
+func (r *dynamicResource) importIDProblem(id string) string {
+	params := r.endpoint.PathParams()
+	names := make([]string, 0, len(params)+1)
+	for _, p := range params {
+		names = append(names, "<"+p+">")
+	}
+	want := len(params)
+	if r.spec.Association == nil {
+		names = append(names, "<id>")
+		want++
+	}
+	format := strings.Join(names, "/")
+	parts, err := splitID(id, want)
+	if err != nil {
+		return fmt.Sprintf("Expected an import ID of the form %s, got %q.", format, id)
+	}
+	for i, p := range parts {
+		if strings.TrimSpace(p) == "" {
+			return fmt.Sprintf("Expected an import ID of the form %s, got %q: %s is empty.", format, id, names[i])
+		}
+	}
+	return ""
 }
