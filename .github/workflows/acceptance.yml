@@ -25,9 +25,11 @@ jobs:
       fail-fast: false
       matrix:
         terraform:
-          - "1.0.*"
+          - "1.0.*" # oldest supported (protocol 6); tests needing terraform_data skip below 1.4
           - "1.5.*"
           - "1.9.*"
+          - "1.12.*"
+          - "latest" # catch a new Terraform release before users do
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -43,4 +45,9 @@ jobs:
           TF_ACC: "1"
           DUPLO_HOST: ${{ secrets.DUPLO_TEST_HOST }}
           DUPLO_TOKEN: ${{ secrets.DUPLO_TEST_TOKEN }}
+          # Optional placement for cluster-backed tests; each skips when unset.
+          DUPLO_TEST_WORKSPACE_ID: ${{ vars.DUPLO_TEST_WORKSPACE_ID }}
+          DUPLO_TEST_ENVIRONMENT_ID: ${{ vars.DUPLO_TEST_ENVIRONMENT_ID }}
+          DUPLO_TEST_K8S_RESOURCE_GROUP_ID: ${{ vars.DUPLO_TEST_K8S_RESOURCE_GROUP_ID }}
+          DUPLO_TEST_K8S_NAMESPACE: ${{ vars.DUPLO_TEST_K8S_NAMESPACE }}
         run: go test ./... -v -timeout 120m
