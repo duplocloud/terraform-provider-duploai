@@ -1,6 +1,7 @@
 package duplocloud
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
@@ -39,6 +41,7 @@ var (
 	_ resource.ResourceWithImportState      = &dynamicResource{}
 	_ resource.ResourceWithConfigValidators = &dynamicResource{}
 	_ resource.ResourceWithModifyPlan       = &dynamicResource{}
+	_ resource.ResourceWithUpgradeState     = &dynamicResource{}
 )
 
 // dynamicResource is the single engine that turns a ResourceSpec plus its
@@ -103,6 +106,7 @@ func (r *dynamicResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 	out := schema.Schema{
 		Description: r.spec.Description,
 		Attributes:  attrs,
+		Version:     r.spec.SchemaVersion,
 	}
 	if r.spec.Waiter != nil {
 		out.Blocks = map[string]schema.Block{
@@ -2477,4 +2481,47 @@ func (r *dynamicResource) warnIgnoredChanges(ctx context.Context, req resource.M
 			why+", so the new value is recorded in Terraform state but the existing "+r.spec.Name+
 				" keeps its current setting. To apply it, replace the resource: terraform apply -replace=<resource address>.")
 	}
+}
+
+// UpgradeState implements ResourceSpec.SchemaVersion / StateUpgrades. The
+// framework calls the upgrader registered for the state's version, which must
+// return state at the CURRENT version, so each upgrader applies every declared
+// step from its version up. With SchemaVersion 0 (every spec today) the map is
+// empty and the framework reads state exactly as before: same version, no
+// upgrader, no change.
+func (r *dynamicResource) UpgradeState(_ context.Context) map[int64]resource.StateUpgrader {
+	ups := map[int64]resource.StateUpgrader{}
+	for v := int64(0); v < r.spec.SchemaVersion; v++ {
+		from := v
+		ups[from] = resource.StateUpgrader{
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				if req.RawState == nil || len(req.RawState.JSON) == 0 {
+					resp.Diagnostics.AddError("Cannot upgrade state", "the prior state has no JSON representation")
+					return
+				}
+				var m map[string]any
+				dec := json.NewDecoder(bytes.NewReader(req.RawState.JSON))
+				dec.UseNumber()
+				if err := dec.Decode(&m); err != nil {
+					resp.Diagnostics.AddError("Cannot upgrade state", err.Error())
+					return
+				}
+				for _, step := range r.spec.StateUpgrades {
+					if step.FromVersion >= from {
+						if err := step.apply(m); err != nil {
+							resp.Diagnostics.AddError(fmt.Sprintf("Cannot upgrade %s state from version %d", r.spec.Name, step.FromVersion), err.Error())
+							return
+						}
+					}
+				}
+				out, err := json.Marshal(m)
+				if err != nil {
+					resp.Diagnostics.AddError("Cannot upgrade state", err.Error())
+					return
+				}
+				resp.DynamicValue = &tfprotov6.DynamicValue{JSON: out}
+			},
+		}
+	}
+	return ups
 }

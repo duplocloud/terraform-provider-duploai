@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
@@ -165,6 +166,21 @@ type ResourceSpec struct {
 	// UI sends back. Don't combine with spec.updateRequest-style delta updates: a
 	// stale delta from the stored record would be re-sent.
 	MergeUpdateIntoCurrent bool `json:"mergeUpdateIntoCurrent,omitempty"`
+
+	// SchemaVersion is the resource schema's version (default 0). Bump it, and
+	// add a StateUpgrades step from the previous version, whenever a change
+	// alters how an attribute is STORED: a type change (string -> number), a
+	// rename, a removal. The Plugin Framework reads prior state strictly against
+	// the current schema, so without an upgrader such a change makes every
+	// existing state unreadable. Changes that keep the stored form (adding an
+	// attribute, list -> set) need no bump. Upgrades are one-way: an older
+	// provider cannot read state written at a newer version.
+	SchemaVersion int64 `json:"schemaVersion,omitempty"`
+
+	// StateUpgrades lists the steps that move stored state between versions,
+	// applied in order to every top-level attribute map from the state's own
+	// version up to SchemaVersion. See StateUpgradeStep.
+	StateUpgrades []StateUpgradeStep `json:"stateUpgrades,omitempty"`
 
 	// DataSource, when true, registers a read-only data source (data.duploai_<name>)
 	// from this spec in addition to the managed resource. The data source schema is
@@ -1114,6 +1130,9 @@ func (s *ResourceSpec) validate() error {
 	if s.LookupDescription != "" && s.LookupAttribute == "" {
 		return fmt.Errorf("lookupDescription requires lookupAttribute")
 	}
+	if err := s.validateStateUpgrades(seen); err != nil {
+		return err
+	}
 	// A misspelled input name would silently disable the rule rather than fail.
 	for _, a := range s.Attributes {
 		for _, in := range a.StableUnlessChanged {
@@ -1685,4 +1704,95 @@ func checkDuplicateKeys(data []byte) error {
 			}
 		}
 	}
+}
+
+// StateUpgradeStep moves stored state from FromVersion to FromVersion+1 with
+// declarative operations on top-level attributes, applied in this order:
+// Renames, ToNumber, ToString, Drop.
+type StateUpgradeStep struct {
+	FromVersion int64             `json:"fromVersion"`
+	Renames     map[string]string `json:"renames,omitempty"`  // old name -> new name
+	ToNumber    []string          `json:"toNumber,omitempty"` // string values parsed as numbers ("" -> null)
+	ToString    []string          `json:"toString,omitempty"` // numbers/bools formatted as strings
+	Drop        []string          `json:"drop,omitempty"`     // attributes removed from the schema
+}
+
+func (st StateUpgradeStep) apply(m map[string]any) error {
+	for oldName, newName := range st.Renames {
+		if v, ok := m[oldName]; ok {
+			if _, clash := m[newName]; !clash || m[newName] == nil {
+				m[newName] = v
+			}
+			delete(m, oldName)
+		}
+	}
+	for _, n := range st.ToNumber {
+		switch v := m[n].(type) {
+		case string:
+			if strings.TrimSpace(v) == "" {
+				m[n] = nil
+				continue
+			}
+			num := json.Number(strings.TrimSpace(v))
+			if _, err := num.Float64(); err != nil {
+				return fmt.Errorf("attribute %q: %q is not a number", n, v)
+			}
+			m[n] = num
+		case nil, json.Number:
+		default:
+			return fmt.Errorf("attribute %q: cannot convert %T to a number", n, v)
+		}
+	}
+	for _, n := range st.ToString {
+		switch v := m[n].(type) {
+		case json.Number:
+			m[n] = v.String()
+		case bool:
+			m[n] = strconv.FormatBool(v)
+		case nil, string:
+		default:
+			return fmt.Errorf("attribute %q: cannot convert %T to a string", n, v)
+		}
+	}
+	for _, n := range st.Drop {
+		delete(m, n)
+	}
+	return nil
+}
+
+// validateStateUpgrades checks SchemaVersion/StateUpgrades against the
+// attribute names (seen = top-level names).
+func (s *ResourceSpec) validateStateUpgrades(seen map[string]bool) error {
+	if s.SchemaVersion < 0 {
+		return fmt.Errorf("schemaVersion must not be negative")
+	}
+	from := map[int64]bool{}
+	for _, st := range s.StateUpgrades {
+		if st.FromVersion < 0 || st.FromVersion >= s.SchemaVersion {
+			return fmt.Errorf("stateUpgrades: fromVersion %d must be in [0, schemaVersion %d)", st.FromVersion, s.SchemaVersion)
+		}
+		if from[st.FromVersion] {
+			return fmt.Errorf("stateUpgrades: fromVersion %d listed twice", st.FromVersion)
+		}
+		from[st.FromVersion] = true
+		for _, n := range st.Renames {
+			if !seen[n] {
+				return fmt.Errorf("stateUpgrades %d: renames target %q is not an attribute", st.FromVersion, n)
+			}
+		}
+		for _, n := range append(append([]string{}, st.ToNumber...), st.ToString...) {
+			if !seen[n] {
+				return fmt.Errorf("stateUpgrades %d: %q is not an attribute", st.FromVersion, n)
+			}
+		}
+		for _, n := range st.Drop {
+			if seen[n] {
+				return fmt.Errorf("stateUpgrades %d: drop %q, but it is still an attribute", st.FromVersion, n)
+			}
+		}
+	}
+	if len(s.StateUpgrades) > 0 && s.SchemaVersion == 0 {
+		return fmt.Errorf("stateUpgrades needs schemaVersion > 0")
+	}
+	return nil
 }
