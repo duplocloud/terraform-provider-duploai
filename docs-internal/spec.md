@@ -1084,6 +1084,20 @@ Multiple groups are independent:
 
 ---
 
+## Resource identity
+
+Every resource has a Terraform 1.12+ **resource identity**, derived automatically
+from its composite ID: the endpoint's path parameters plus `id` (the object id);
+an association's identity is its path parameters only. No spec field is needed.
+It lets practitioners import with `import { to = …, identity = { workspace_id = "…", id = "…" } }`
+and is the prerequisite for list resources (`terraform query`).
+
+The framework treats identity as **immutable** ("Unexpected Identity Change"),
+so every path-parameter attribute must be `forceNew` —
+`TestIdentity_ImmutableForEverySpec` enforces this for every spec. Existing state
+gains its identity silently on the next refresh (no plan diff); Terraform below
+1.12 ignores identity, and import by ID keeps working.
+
 ## Auto-generated data source
 
 Setting `"dataSource": true` registers a read-only `data.duploai_<name>` data

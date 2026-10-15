@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/hashicorp/terraform-plugin-testing/tfversion"
@@ -175,6 +176,8 @@ resource "duploai_k8s_config_map" "test" {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		// The identity steps need Terraform 1.12+.
+		TerraformVersionChecks: []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_12_0)},
 		Steps: []resource.TestStep{
 			{
 				Config: cfg("test"),
@@ -189,6 +192,47 @@ resource "duploai_k8s_config_map" "test" {
 					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
 				Check: resource.TestCheckResourceAttr(addr, "labels.env", "stage2"),
+				// Identity {workspace_id, id} survives the in-place update.
+				ConfigStateChecks: []statecheck.StateCheck{statecheck.ExpectIdentity(addr, map[string]knownvalue.Check{
+					"workspace_id": knownvalue.StringExact(ws), "id": knownvalue.NotNull(),
+				})},
+			},
+			// No import step here: after import the labels filter keeps only keys
+			// already in state (none yet) and scope_ids reads null, so the first
+			// plan re-adds them. A known import-fidelity gap, separate from
+			// identity; import by identity is covered by the quota test.
+		},
+	})
+}
+
+// Resource identity (Terraform 1.12+): set on create, unchanged through an
+// in-place update (the framework itself fails with "Unexpected Identity
+// Change" if it moves), and importable with an `import { identity = {...} }`
+// block. The quota has no path parameters, so its identity is {id}.
+func TestAccAdminQuotaDefinition_identity(t *testing.T) {
+	name := acctest.RandomWithPrefix("tfacc-quota-id")
+	addr := "duploai_admin_quota_definition.test"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_12_0)},
+		CheckDestroy:             testAccCheckDestroyed("duploai_admin_quota_definition", "/v1/aiservicedesk/admin/data/Quotas"),
+		Steps: []resource.TestStep{
+			{
+				Config:            testAccQuotaConfig(name, 10, "identity test"),
+				ConfigStateChecks: []statecheck.StateCheck{statecheck.ExpectIdentity(addr, map[string]knownvalue.Check{"id": knownvalue.NotNull()})},
+			},
+			{
+				Config: testAccQuotaConfig(name, 20, "identity test updated"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(addr, plancheck.ResourceActionUpdate)},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{statecheck.ExpectIdentity(addr, map[string]knownvalue.Check{"id": knownvalue.NotNull()})},
+			},
+			{
+				ResourceName:    addr,
+				ImportState:     true,
+				ImportStateKind: resource.ImportBlockWithResourceIdentity,
 			},
 		},
 	})

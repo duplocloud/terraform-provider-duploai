@@ -17,9 +17,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
@@ -42,6 +44,7 @@ var (
 	_ resource.ResourceWithConfigValidators = &dynamicResource{}
 	_ resource.ResourceWithModifyPlan       = &dynamicResource{}
 	_ resource.ResourceWithUpgradeState     = &dynamicResource{}
+	_ resource.ResourceWithIdentity         = &dynamicResource{}
 )
 
 // dynamicResource is the single engine that turns a ResourceSpec plus its
@@ -391,6 +394,7 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 // ── CRUD ──────────────────────────────────────────────────────────────────────
 
 func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	defer func() { r.setIdentity(ctx, resp.State, resp.Identity, &resp.Diagnostics) }()
 	scope, scopeVals := r.scopeFromReader(ctx, req.Plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -533,6 +537,7 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 }
 
 func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	defer func() { r.setIdentity(ctx, resp.State, resp.Identity, &resp.Diagnostics) }()
 	scope, objID, id, err := r.parseID(ctx, req.State, &resp.Diagnostics)
 	if err != nil || resp.Diagnostics.HasError() {
 		return
@@ -648,6 +653,7 @@ func (r *dynamicResource) readAssociation(ctx context.Context, req resource.Read
 }
 
 func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	defer func() { r.setIdentity(ctx, resp.State, resp.Identity, &resp.Diagnostics) }()
 	scope, objID, id, err := r.parseID(ctx, req.State, &resp.Diagnostics)
 	if err != nil || resp.Diagnostics.HasError() {
 		return
@@ -1060,6 +1066,22 @@ func (r *dynamicResource) ImportState(ctx context.Context, req resource.ImportSt
 	// failing later in Read with a generic "Invalid resource ID". Uses the same
 	// splitID as parseID, so every ID that imports today still does; only empty
 	// segments (which can never resolve) are added to what is rejected.
+	// Import by identity (Terraform 1.12+: `import { identity = {...} }`) builds
+	// the same composite ID an import by ID would carry, then follows the same
+	// path; the Read that follows fills in everything else.
+	if req.ID == "" && req.Identity != nil {
+		id, diags := r.idFromIdentity(ctx, req.Identity)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if msg := r.importIDProblem(id); msg != "" {
+			resp.Diagnostics.AddError("Invalid import identity", msg)
+			return
+		}
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), id)...)
+		return
+	}
 	if msg := r.importIDProblem(req.ID); msg != "" {
 		resp.Diagnostics.AddError("Invalid import ID", msg)
 		return
@@ -2524,4 +2546,68 @@ func (r *dynamicResource) UpgradeState(_ context.Context) map[int64]resource.Sta
 		}
 	}
 	return ups
+}
+
+// ── Resource identity (Terraform 1.12+) ──────────────────────────────────────
+//
+// A resource's identity is its endpoint path parameters plus its object id
+// (an association: the path parameters alone) — exactly the parts of the
+// composite Terraform ID. It is derived from that ID, which never changes after
+// create (path parameters are forceNew; the object id is assigned once), so it
+// is immutable, as the framework requires. Import by ID keeps working;
+// Terraform below 1.12 never sees identity.
+
+// identityAttrs lists the identity attribute names in composite-ID order.
+func (r *dynamicResource) identityAttrs() []string {
+	names := append([]string{}, r.endpoint.PathParams()...)
+	if r.spec.Association == nil {
+		names = append(names, "id")
+	}
+	return names
+}
+
+func (r *dynamicResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	attrs := map[string]identityschema.Attribute{}
+	for _, n := range r.identityAttrs() {
+		desc := "Object id assigned by the platform (the last segment of the resource's id)."
+		if n != "id" {
+			desc = "Value of the " + n + " argument."
+		}
+		attrs[n] = identityschema.StringAttribute{RequiredForImport: true, Description: desc}
+	}
+	resp.IdentitySchema = identityschema.Schema{Attributes: attrs}
+}
+
+// setIdentity writes the identity derived from the state's composite id. A
+// no-op when the client doesn't support identity (nil), on error, or when the
+// resource is gone (null state).
+func (r *dynamicResource) setIdentity(ctx context.Context, state tfsdk.State, identity *tfsdk.ResourceIdentity, diags *diag.Diagnostics) {
+	if identity == nil || diags.HasError() || state.Raw.IsNull() {
+		return
+	}
+	var id types.String
+	if d := state.GetAttribute(ctx, path.Root("id"), &id); d.HasError() || id.IsNull() || id.IsUnknown() {
+		return
+	}
+	names := r.identityAttrs()
+	parts, err := splitID(id.ValueString(), len(names))
+	if err != nil {
+		return // parseID already reported a malformed id
+	}
+	for i, n := range names {
+		diags.Append(identity.SetAttribute(ctx, path.Root(n), parts[i])...)
+	}
+}
+
+// idFromIdentity composes the composite Terraform id from an import identity.
+func (r *dynamicResource) idFromIdentity(ctx context.Context, identity *tfsdk.ResourceIdentity) (string, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	names := r.identityAttrs()
+	parts := make([]string, 0, len(names))
+	for _, n := range names {
+		var v types.String
+		diags.Append(identity.GetAttribute(ctx, path.Root(n), &v)...)
+		parts = append(parts, v.ValueString())
+	}
+	return strings.Join(parts, "/"), diags
 }
