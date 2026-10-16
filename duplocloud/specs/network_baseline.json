@@ -163,6 +163,17 @@
       "description": "Flow logs retention in days. AWS only. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default)."
     },
     {
+      "name": "existing_iam_role_arn",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.existingIamRoleArn",
+      "description": "ARN of an existing, customer-managed IAM role for accounts that forbid IAM creation. Used as the VPC flow-logs delivery role instead of creating one, so it must trust vpc-flow-logs.amazonaws.com and allow logs:CreateLogStream, logs:PutLogEvents, logs:DescribeLogGroups and logs:DescribeLogStreams on /aws/vpc/flowlogs/*. Requires enable_flow_logs = true, since the role is used for nothing else. Leave unset to have the baseline create its own IAM as before. The role is customer-owned: the platform never edits or deletes it. Removing it from the configuration keeps the stored value; setting a different ARN replaces this resource. AWS only, and not allowed with mode = \"Import\".",
+      "pattern": "^arn:aws(-[a-z]+)*:iam::[0-9]{12}:role/([A-Za-z0-9_+=,.@-]+/)*[A-Za-z0-9_+=,.@-]{1,64}$",
+      "patternDescription": "must be an IAM role ARN of the form arn:aws:iam::<12-digit-account>:role/<name>, e.g. arn:aws:iam::123456789012:role/platform-shared. A path is allowed (role/<path>/<name>); the name is 1-64 characters from letters, digits and + = , . @ _ -. Other AWS partitions (aws-us-gov, aws-cn, ...) are accepted; an IAM ARN never carries a region"
+    },
+    {
       "name": "env_tag",
       "type": "string",
       "optional": true,
@@ -726,6 +737,48 @@
     }
   ],
   "invalidWhen": [
+    {
+      "attribute": "existing_iam_role_arn",
+      "when": [
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        },
+        {
+          "attribute": "existing_iam_role_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_iam_role_arn is not allowed with mode = \"Import\": an imported network creates no IAM, so there is nothing for the role to replace. Remove it."
+    },
+    {
+      "attribute": "existing_iam_role_arn",
+      "when": [
+        {
+          "attribute": "enable_flow_logs",
+          "equals": "false"
+        },
+        {
+          "attribute": "existing_iam_role_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_iam_role_arn is only used as the VPC flow-logs delivery role. Set enable_flow_logs = true, or remove it."
+    },
+    {
+      "attribute": "existing_iam_role_arn",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "existing_iam_role_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_iam_role_arn is AWS only: it replaces IAM the AWS baseline would create (the flow-logs role). Remove it, or set cloud = \"Aws\"."
+    },
     {
       "attribute": "custom_public_subnet_cidrs",
       "when": [
