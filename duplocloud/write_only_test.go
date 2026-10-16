@@ -228,6 +228,9 @@ func TestWriteOnly_ValidatorRequiresVersion(t *testing.T) {
 	if !check(map[string]tftypes.Value{"password_wo": str(woSecret)}) {
 		t.Error("password_wo without password_wo_version must be rejected")
 	}
+	if !check(map[string]tftypes.Value{"password_wo_version": num(1)}) {
+		t.Error("password_wo_version without password_wo must be rejected")
+	}
 	if check(map[string]tftypes.Value{"password_wo": str(woSecret), "password_wo_version": num(1)}) || check(nil) {
 		t.Error("with a version, or with neither set, the config is valid")
 	}

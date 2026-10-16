@@ -150,17 +150,17 @@ func TestAccAdminQuotaDefinition_lifecycle(t *testing.T) {
 	})
 }
 
-// The k8s labels drift fix: platform-stamped labels never show as drift, and a
-// declared label still round-trips. Needs a cluster, so it runs only when the
-// placement IDs are provided.
-func TestAccK8sConfigMap_labelsNoDrift(t *testing.T) {
-	ws, env, rg, ns := os.Getenv("DUPLO_TEST_WORKSPACE_ID"), os.Getenv("DUPLO_TEST_ENVIRONMENT_ID"), os.Getenv("DUPLO_TEST_K8S_RESOURCE_GROUP_ID"), os.Getenv("DUPLO_TEST_K8S_NAMESPACE")
+func testAccK8sPlacement(t *testing.T) (ws, env, rg, ns string) {
+	t.Helper()
+	ws, env, rg, ns = os.Getenv("DUPLO_TEST_WORKSPACE_ID"), os.Getenv("DUPLO_TEST_ENVIRONMENT_ID"), os.Getenv("DUPLO_TEST_K8S_RESOURCE_GROUP_ID"), os.Getenv("DUPLO_TEST_K8S_NAMESPACE")
 	if ws == "" || env == "" || rg == "" || ns == "" {
 		t.Skip("set DUPLO_TEST_WORKSPACE_ID, DUPLO_TEST_ENVIRONMENT_ID, DUPLO_TEST_K8S_RESOURCE_GROUP_ID and DUPLO_TEST_K8S_NAMESPACE to run")
 	}
-	name := acctest.RandomWithPrefix("tfacc-cm")
-	cfg := func(env2 string) string {
-		return fmt.Sprintf(`
+	return ws, env, rg, ns
+}
+
+func testAccK8sConfigMapConfig(ws, env, rg, ns, name, envLabel string) string {
+	return fmt.Sprintf(`
 resource "duploai_k8s_config_map" "test" {
   workspace_id      = %[1]q
   environment_id    = %[2]q
@@ -170,37 +170,65 @@ resource "duploai_k8s_config_map" "test" {
   labels            = { app = "tfacc", env = %[6]q }
   data              = { key = "value" }
 }
-`, ws, env, rg, ns, name, env2)
-	}
+`, ws, env, rg, ns, name, envLabel)
+}
+
+// The k8s labels drift fix: platform-stamped labels never show as drift, and a
+// declared label still round-trips. Needs a cluster, so it runs only when the
+// placement IDs are provided. Runs on every Terraform version (identity is
+// checked separately, as it needs 1.12+).
+func TestAccK8sConfigMap_labelsNoDrift(t *testing.T) {
+	ws, env, rg, ns := testAccK8sPlacement(t)
+	name := acctest.RandomWithPrefix("tfacc-cm")
 	addr := "duploai_k8s_config_map.test"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		// The identity steps need Terraform 1.12+.
-		TerraformVersionChecks: []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_12_0)},
 		Steps: []resource.TestStep{
 			{
-				Config: cfg("test"),
+				Config: testAccK8sConfigMapConfig(ws, env, rg, ns, name, "test"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
 			},
 			{
-				Config: cfg("stage2"),
+				Config: testAccK8sConfigMapConfig(ws, env, rg, ns, name, "stage2"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply:             []plancheck.PlanCheck{plancheck.ExpectResourceAction(addr, plancheck.ResourceActionUpdate)},
 					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
 				Check: resource.TestCheckResourceAttr(addr, "labels.env", "stage2"),
-				// Identity {workspace_id, id} survives the in-place update.
-				ConfigStateChecks: []statecheck.StateCheck{statecheck.ExpectIdentity(addr, map[string]knownvalue.Check{
-					"workspace_id": knownvalue.StringExact(ws), "id": knownvalue.NotNull(),
-				})},
 			},
 			// No import step here: after import the labels filter keeps only keys
 			// already in state (none yet) and scope_ids reads null, so the first
 			// plan re-adds them. A known import-fidelity gap, separate from
-			// identity; import by identity is covered by the quota test.
+			// labels; import by identity is covered by the quota test.
+		},
+	})
+}
+
+// Identity {workspace_id, id} of a path-parameter resource survives an in-place
+// update (Terraform 1.12+).
+func TestAccK8sConfigMap_identity(t *testing.T) {
+	ws, env, rg, ns := testAccK8sPlacement(t)
+	name := acctest.RandomWithPrefix("tfacc-cm-id")
+	addr := "duploai_k8s_config_map.test"
+	identity := []statecheck.StateCheck{statecheck.ExpectIdentity(addr, map[string]knownvalue.Check{
+		"workspace_id": knownvalue.StringExact(ws), "id": knownvalue.NotNull(),
+	})}
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_12_0)},
+		Steps: []resource.TestStep{
+			{Config: testAccK8sConfigMapConfig(ws, env, rg, ns, name, "test"), ConfigStateChecks: identity},
+			{
+				Config: testAccK8sConfigMapConfig(ws, env, rg, ns, name, "stage2"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(addr, plancheck.ResourceActionUpdate)},
+				},
+				ConfigStateChecks: identity,
+			},
 		},
 	})
 }

@@ -127,9 +127,10 @@ func (r *dynamicResource) keepShadowedNull(prior, next tftypes.Value) tftypes.Va
 	return tftypes.NewValue(next.Type(), n)
 }
 
-// writeOnlyValidator rejects a WriteOnly value set without its version: with no
-// version there is nothing that could ever send a changed value on update, so a
-// later edit would be silently ignored.
+// writeOnlyValidator requires a WriteOnly value and its version together: a value
+// with no version could never send a later change (silently ignored), and a
+// version with no value would keep the write-only handling active for a secret
+// that is no longer configured.
 type writeOnlyValidator struct{ spec ResourceSpec }
 
 func (v writeOnlyValidator) Description(_ context.Context) string {
@@ -145,10 +146,17 @@ func (v writeOnlyValidator) ValidateResource(_ context.Context, req resource.Val
 		if !a.WriteOnly {
 			continue
 		}
-		if !configAttrNull(req.Config.Raw, a.Name) && configAttrNull(req.Config.Raw, a.VersionAttribute) {
+		valueSet, versionSet := !configAttrNull(req.Config.Raw, a.Name), !configAttrNull(req.Config.Raw, a.VersionAttribute)
+		if valueSet && !versionSet {
 			resp.Diagnostics.AddAttributeError(path.Root(a.VersionAttribute), "Missing "+a.VersionAttribute,
 				fmt.Sprintf("%s is write-only, so Terraform cannot detect when it changes. Set %s (for example to 1) "+
 					"and increase it whenever %s changes; only then is the new value sent.", a.Name, a.VersionAttribute, a.Name))
+		}
+		// A version with no value would make updates re-send the stored secret
+		// as if the write-only argument were still in use.
+		if versionSet && !valueSet {
+			resp.Diagnostics.AddAttributeError(path.Root(a.VersionAttribute), "Missing "+a.Name,
+				fmt.Sprintf("%s versions %s; set %s too, or remove %s.", a.VersionAttribute, a.Name, a.Name, a.VersionAttribute))
 		}
 	}
 }
