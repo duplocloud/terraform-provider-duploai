@@ -120,8 +120,9 @@ Two special labels exist for filtering:
 | `Generate` | Docs and examples are up to date (`make doc`) | Yes |
 | `CodeQL` | Security scanning | Yes (on protected branches) |
 
-Acceptance tests (`TF_ACC=1`) do **not** run automatically. Add the label
-`run-acceptance` to your PR to trigger them, or run them locally with `make testacc`.
+Acceptance tests (`TF_ACC=1`) do **not** run in CI: the repo is public and DuploAI
+tokens expire with the session, so there is no token CI could hold. Run them locally
+with `make testacc` (see CONTRIBUTING.md) and note the result in the PR.
 
 ---
 

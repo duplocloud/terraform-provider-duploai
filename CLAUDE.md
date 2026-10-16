@@ -65,7 +65,7 @@ Most problems originate in the spec JSON, not the Go engine. The engine is share
 
 ```bash
 make doc      # regenerate docs (run after any spec or example change)
-make testacc  # acceptance tests — requires a live DuploAI host (TF_ACC=1)
+make testacc  # acceptance tests, LOCAL ONLY (no CI: public repo + session tokens) — live DuploAI host (TF_ACC=1)
               # needs DUPLO_HOST/DUPLO_TOKEN; cluster tests also read DUPLO_TEST_WORKSPACE_ID,
               # DUPLO_TEST_ENVIRONMENT_ID, DUPLO_TEST_K8S_RESOURCE_GROUP_ID, DUPLO_TEST_K8S_NAMESPACE (skip if unset)
 ```

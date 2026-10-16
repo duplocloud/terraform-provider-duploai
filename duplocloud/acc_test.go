@@ -24,8 +24,8 @@ import (
 )
 
 // Acceptance tests run only with TF_ACC=1 (`make testacc`) against a live
-// DuploAI host given by DUPLO_HOST / DUPLO_TOKEN (CI: the DUPLO_TEST_HOST /
-// DUPLO_TEST_TOKEN secrets). Without TF_ACC, resource.Test skips them, so
+// DuploAI host given by DUPLO_HOST / DUPLO_TOKEN. They run locally only: the
+// token is a session token, so CI cannot hold one. Without TF_ACC, resource.Test skips them, so
 // `go test ./...` stays a pure unit run.
 //
 // They pin the behaviour this provider has had to fix live: no drift after
