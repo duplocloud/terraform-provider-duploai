@@ -62,6 +62,7 @@ Saving this file, running `go generate ./...` (to regenerate docs), and running
 | `requiredIf` | array | no | Conditional-required rules evaluated at plan time. See [RequiredIf rules](#requiredif-rules). |
 | `conflictsWith` | array | no | Mutually-exclusive attribute groups enforced at plan time. See [ConflictsWith rules](#conflictswith-rules). |
 | `invalidWhen` | array | no | Combinations the API rejects, failed at plan time instead of apply time. Covers numeric bounds, comparisons between attributes, and rules between leaves of one object. See [InvalidWhen rules](#invalidwhen-rules). |
+| `mergeUpdateIntoCurrent` | bool | no | Every update reads the current record and sends it back with the update body overlaid. Each attribute Terraform sends replaces its path as a whole (so a key removed from a map such as `tags`, or a child removed from an object, really is removed); a settable attribute planned null is removed; only containers Terraform doesn't model (`spec`, `result`, ...) are merged key by key. For backends whose update **replaces** the stored record with the request body: a body-only PUT drops everything Terraform doesn't model — `status`, the ticket link, `result`, backend-set spec fields. On skill-provisioned resources that reset `status` to New and re-ran first-time provisioning on **any** update, even description-only (an AWS network then blocked for a human). Set on every skill-provisioned spec: `network_baseline`, `cluster_baseline`, `resource_group`, `plan`, `k8s_namespace`, `node_group`, `cluster_attributes`, `rds_instance`, `rds_cluster`, `elasticache`. Don't combine with `spec.updateRequest`-style delta updates, which would re-send a stale delta from the stored record. |
 | `resendCreatePathsOnUpdate` | bool | no | Also write each attribute's **create** path in the PUT body, with the same value. For a backend whose update body is a delta envelope over a record it rebuilds from that body. See [Delta envelopes over a rebuilt record](#delta-envelopes-over-a-rebuilt-record). |
 | `dataSource` | bool | no | When `true`, also registers a read-only `data.duploai_<name>` data source derived automatically from this spec. See [Auto-generated data source](#auto-generated-data-source). |
 | `dataSourceOnly` | bool | no | When `true`, registers **only** a read-only `data.duploai_<name>` data source — no managed resource is registered. Use this for purely read-only APIs (e.g. look-up endpoints with no create/update/delete). Implies data source semantics; `dataSource` need not also be set. |
@@ -343,6 +344,11 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `preserveOnEmptyResponse` | bool | Keep the value already held for this attribute — the configured plan value on create/update, the prior state value on refresh — whenever the API returns null or empty for it. See [Write-only fields](#write-only-fields). |
 | `mapValuePath` | string | For a **`map(string)`** attribute whose response entries are objects rather than plain strings, take each value from the named field. Use when the backend keeps per-entry bookkeeping alongside the value but accepts the flat `{"key":"value"}` shape on write, so Terraform can expose an ordinary `map(string)` in both directions — e.g. `resource_group.tags`, returned as `{"cost-center":{"value":"fin-1024","remove":false}}`. Entries already carrying a plain string pass through, so a mixed payload is handled; an entry whose named field is missing or non-string is dropped. Read-side only. Rejected at spec load on any type other than `map(string)`. |
 | `mapDropWhenTrue` | string | Names a sibling **boolean** inside the wrapped entry `mapValuePath` unwraps; an entry whose flag is true is omitted from state entirely. Use for a backend that soft-deletes map entries — `resource_group.tags` keeps a removed tag with `"remove":true` until a reconciler has taken it off every resource, and without this the key reappears in state on the next read and diffs forever against a config that no longer lists it. Requires `mapValuePath`. |
+| `stable` | bool | For a **computed-only** attribute assigned once at creation and never changed afterwards (the record's own id, a cloud ARN or resource id, an endpoint, `created_at`), keep the prior state value in the plan instead of `(known after apply)`. Without it, every in-place update makes the value unknown, and any dependent resource that uses it in a force-new argument is **replaced** (an azurerm `storage_account_id` fed from `storage_account.azure_resource_id` did exactly this on a tags-only change). Only a non-null prior is kept (`UseNonNullStateForUnknown`): a null means the read missed the value, and the next apply should fill it in. Never put it on a value that can change: a planned value that differs from the apply result fails as "Provider produced inconsistent result". See [Keeping values known across updates](#keeping-values-known-across-updates). |
+| `stableUnlessChanged` | array | For a **computed-only** `string` or `list`/`set` of primitives: the top-level inputs that can change it. The prior value is kept in the plan unless one of them changes (or is unknown) in the same plan — a conditional `stable`. Use it for an output a dependent may wire into a force-new argument that some inputs can legitimately change: `network_baseline.subnet_ids` (unless `cidr`, `additional_cidrs`, `vpc_id`), MSK bootstrap brokers (unless `number_of_broker_nodes`). An unrelated update (tags, description) then can't replace dependents. List **every** input that can change the value: a missed one makes that update fail with "inconsistent result". Rejected at spec load on a settable attribute, together with `stable`, on another type, or when it names an unknown attribute. |
+| `importAdoptsConfig` | bool | For a **`forceNew`** `string`, `int`, `bool` or `list` attribute with no read path: on the first plan after `terraform import`, adopt the configured value as an in-place, state-only change instead of replacing the resource just imported (the API can't return the value, so it is null in the imported state). `ImportState` sets an `imported` mark in Terraform's private state and the first update clears it; outside that window the attribute behaves exactly like plain `forceNew`, including a value that was unset at creation and is set later (that still replaces). Prefer it over adding a read path to a `forceNew` attribute whose value can change outside Terraform: a read path would turn that out-of-band change into a replacement on the next plan, which breaks pipelines that never touched the field. Used by `native_host.instance_type` / `ebs_optimized` / `image_id` / `user_data` / `block_device_mappings` and `msk_kafka.subnet_ids` / `encryption_in_transit` / `configuration_arn` / `configuration_revision`. Rejected at spec load without `forceNew`, or on another type. |
+| `updateOnlyIfChanged` | bool | Leave the attribute out of the update (PUT) body unless its value changed, and drop any parent object that ends up empty. For backends that act on every field present in an update delta: AWS EFS calls `UpdateFileSystem` whenever `spec.updateRequest` is present, and AWS rejects an unchanged throughput, so an unrelated update (description, backup) failed. Used by `aws_efs.throughput_mode` / `provisioned_throughput_in_mibps`. |
+| `caseInsensitive` | bool | For a **`string`** whose value compares case-insensitively, such as an Azure ARM id (`resourceGroups` and `resourcegroups` name the same resource, and the API may return either). A case-only difference never replaces the resource (a `forceNew` attribute plans an in-place, state-only change). A read that returns other casing keeps the stored value, and an update request carries the stored casing, so a backend's case-sensitive immutability check isn't tripped. Used on `azure_private_endpoint` and `azure_postgres_flexible_server` ARM-id inputs. Rejected at spec load on a non-string. |
 | `deprecated` | string | Marks the attribute deprecated: the message is wired to the framework's `DeprecationMessage` and shown as a warning whenever the attribute is set in config. Use when renaming an attribute — keep the old one with a deprecation message pointing at the replacement (pair with `conflictsWith` + `requiredIf`/`isEmpty` for a backwards-compatible rename). |
 | `attributes` | array | Nested `AttributeSpec` entries. Required when `type` is an object form. Recurses to any depth. |
 
@@ -668,6 +674,52 @@ Notes:
 - This is a workaround for backend behaviour. The durable fix is for the API to
   merge updates into the stored entity instead of replacing it; until then, every
   server-assigned field in that resource's write path needs the flag.
+
+### Keeping values known across updates
+
+The plugin framework marks every computed value `(known after apply)` whenever
+a resource has any change. SDKv2 providers kept the prior value implicitly; the
+framework needs an explicit `UseStateForUnknown`-style plan modifier. The engine
+adds one as follows:
+
+- **Optional + computed** attributes keep their prior value, null included
+  (`UseStateForUnknown`). So do computed `forceNew` attributes: turning one
+  unknown would force a replacement.
+- **Computed-only** attributes stay unknown by default, because most of them
+  (`status`, `updated_at`, `version`) really do change on every update. Mark the
+  ones that never change after creation with `stable` (ids, ARNs, endpoints,
+  `created_at`). Leave an output unmarked when some updates change it: for
+  example, MSK bootstrap brokers change when brokers are added.
+- **Nested attributes** (children of an object, list(object) or set(object))
+  keep a non-null prior (`UseNonNullStateForUnknown`), so a new list element's
+  unset children stay unknown and are filled by the apply, rather than
+  inheriting a null. Children of a **`forceNew`** parent, at any depth, keep
+  `UseStateForUnknown` instead: an unknown child would make the parent differ
+  from state and replace the resource on every unrelated update.
+- An output that only some inputs can change uses `stableUnlessChanged`
+  instead of `stable`: kept unless one of those inputs changes in the plan.
+- A `stable` (or kept `stableUnlessChanged`) output that a create/update
+  response leaves out keeps its planned (prior) value, so a partial write
+  response can't fail the apply as an inconsistent result. A read still
+  reflects the API.
+- **Audit rule:** every computed-only identifier, ARN, endpoint or name a
+  dependent could reference must be `stable`, `stableUnlessChanged`,
+  `sendFromState` or `forceNew`. Only volatile values (status, timestamps,
+  version, counters) may stay unknown on update.
+
+The engine also treats null and an empty value (`""`, `[]`, `{}`) as the same
+on read: when the API returns one and state holds the other, the prior form is
+kept, so an unset optional field the API echoes as `""` doesn't drift. A
+computed attribute takes the API's empty value on import, and an
+optional + computed attribute with a `""` default keeps a null state rather than
+planning the default, which would otherwise replace a `forceNew` attribute
+after import.
+
+To check a change, make a `terraform_data` with `triggers_replace` set to the
+outputs, then change an unrelated attribute in place. The plan must update the
+resource in place and must not replace the `terraform_data`. The plain-text
+plan hides null ↔ `""` changes; `terraform show -json <planfile>` lists them
+under `replace_paths`.
 
 ### Path mapping
 

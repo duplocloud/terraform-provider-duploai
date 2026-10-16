@@ -42,7 +42,7 @@ output "code_sha256" {
 
 ### Read-Only
 
-- `architectures` (List of String) Instruction set architectures for the function. Valid values: x86_64, arm64. Defaults to [x86_64].
+- `architectures` (List of String) Instruction set architectures for the function. Valid values: x86_64, arm64. Defaults to [x86_64]. Set at creation only: the platform cannot change it on an existing function, so to change it replace the function (`terraform apply -replace=<address>`).
 - `aws_lambda_id` (String) ID of this Lambda function resource, for reference by dependent resources.
 - `code_sha256` (String) SHA-256 hash of the deployed function package.
 - `description` (String) Optional description of the Lambda function.

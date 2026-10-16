@@ -22,7 +22,7 @@ resource "duploai_rds_instance" "basic" {
   environment_id    = "<environment-id>"
 
   engine               = "postgres"
-  engine_version       = "16.4"
+  engine_version       = "16.15"
   db_instance_class    = "db.t3.medium"
   allocated_storage    = 50
   db_name              = "appdb"

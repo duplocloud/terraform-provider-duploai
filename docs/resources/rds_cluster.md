@@ -22,7 +22,7 @@ resource "duploai_rds_cluster" "basic" {
   scope_ids         = ["<scope-id>"]
 
   engine          = "aurora-postgresql"
-  engine_version  = "16.4"
+  engine_version  = "16.15"
   db_name         = "appdb"
   master_username = "dbadmin"
 
@@ -45,7 +45,7 @@ resource "duploai_rds_cluster" "serverless" {
   scope_ids         = ["<scope-id>"]
 
   engine          = "aurora-postgresql"
-  engine_version  = "16.4"
+  engine_version  = "16.15"
   db_name         = "analytics"
   master_username = "dbadmin"
 

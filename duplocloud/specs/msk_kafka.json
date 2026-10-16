@@ -93,8 +93,9 @@
       "type": "list(string)",
       "optional": true,
       "forceNew": true,
+      "importAdoptsConfig": true,
       "createPath": "spec.subnetIds",
-      "description": "Private subnets (2-4, each in a distinct Availability Zone) to place brokers in. Leave unset to use all of the resource group's private subnets. Write-only at creation."
+      "description": "Private subnets (2-4, each in a distinct Availability Zone) to place brokers in. Leave unset to use all of the resource group's private subnets. Changing it replaces the cluster. Not read back, so a change made outside Terraform never replaces the cluster; after `terraform import` the configured value is recorded without replacing it."
     },
     {
       "name": "encryption",
@@ -126,7 +127,8 @@
       "createOnly": true,
       "oneOf": ["TLS", "TLS_PLAINTEXT", "PLAINTEXT"],
       "requestPath": "spec.createRequest.provisioned.encryptionInfo.encryptionInTransit.clientBroker.value",
-      "description": "How clients connect: TLS (encrypted), TLS_PLAINTEXT (both), or PLAINTEXT (unencrypted)."
+      "importAdoptsConfig": true,
+      "description": "How clients connect: TLS (encrypted), TLS_PLAINTEXT (both), or PLAINTEXT (unencrypted). Changing it replaces the cluster. Not read back, so a change made outside Terraform never replaces the cluster; after `terraform import` the configured value is recorded without replacing it."
     },
     {
       "name": "configuration_arn",
@@ -135,7 +137,8 @@
       "forceNew": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.provisioned.configurationInfo.arn",
-      "description": "ARN of a saved MSK (Kafka broker) configuration to apply. Leave unset for the AWS default."
+      "importAdoptsConfig": true,
+      "description": "ARN of a saved MSK (Kafka broker) configuration to apply. Leave unset for the AWS default. Changing it replaces the cluster. Not read back, so a change made outside Terraform never replaces the cluster; after `terraform import` the configured value is recorded without replacing it."
     },
     {
       "name": "configuration_revision",
@@ -144,7 +147,8 @@
       "forceNew": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.provisioned.configurationInfo.revision",
-      "description": "Revision of the MSK configuration referenced by configuration_arn."
+      "importAdoptsConfig": true,
+      "description": "Revision of the MSK configuration referenced by configuration_arn. Changing it replaces the cluster. Not read back, so a change made outside Terraform never replaces the cluster; after `terraform import` the configured value is recorded without replacing it."
     },
     {
       "name": "scope_ids",
@@ -181,7 +185,7 @@
       "optional": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.tags",
-      "description": "Tags applied to the cluster at creation. Platform ownership tags are added automatically."
+      "description": "Tags applied to the cluster at creation. Platform ownership tags are added automatically. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing cluster."
     },
     {
       "name": "status",
@@ -201,6 +205,7 @@
     {
       "name": "security_group_ids",
       "type": "list(string)",
+      "stable": true,
       "computed": true,
       "noSend": true,
       "apiPath": "spec.securityGroupIds",
@@ -210,6 +215,7 @@
       "name": "cluster_arn",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.cloudDetails.clusterArn",
       "description": "ARN of the provisioned MSK cluster."
@@ -217,6 +223,7 @@
     {
       "name": "bootstrap_brokers",
       "type": "string",
+      "stableUnlessChanged": ["number_of_broker_nodes"],
       "computed": true,
       "noSend": true,
       "normalizeCsvOrder": true,
@@ -226,6 +233,7 @@
     {
       "name": "bootstrap_brokers_tls",
       "type": "string",
+      "stableUnlessChanged": ["number_of_broker_nodes"],
       "computed": true,
       "noSend": true,
       "normalizeCsvOrder": true,
@@ -235,6 +243,7 @@
     {
       "name": "bootstrap_brokers_sasl_scram",
       "type": "string",
+      "stableUnlessChanged": ["number_of_broker_nodes"],
       "computed": true,
       "noSend": true,
       "normalizeCsvOrder": true,
@@ -244,6 +253,7 @@
     {
       "name": "bootstrap_brokers_sasl_iam",
       "type": "string",
+      "stableUnlessChanged": ["number_of_broker_nodes"],
       "computed": true,
       "noSend": true,
       "normalizeCsvOrder": true,
@@ -254,6 +264,7 @@
       "name": "created_at",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,
       "description": "Timestamp when the cluster was created (RFC 3339, normalized to UTC at second precision)."

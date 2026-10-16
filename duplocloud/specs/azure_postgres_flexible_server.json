@@ -67,8 +67,9 @@
       "type": "list(string)",
       "computed": true,
       "forceNew": true,
+      "sendFromState": true,
       "apiPath": "spec.scopeIds",
-      "description": "Scopes the server is visible to. Inherited from the resource group."
+      "description": "Scopes the server is visible to. Inherited from the resource group. Sent back unchanged on update: the platform rebuilds the server record from the update request and would otherwise drop them."
     },
 
     {
@@ -368,6 +369,7 @@
     },
     {
       "name": "delegated_subnet_resource_id",
+      "caseInsensitive": true,
       "type": "string",
       "optional": true,
       "computed": true,
@@ -378,6 +380,7 @@
     },
     {
       "name": "private_dns_zone_arm_resource_id",
+      "caseInsensitive": true,
       "type": "string",
       "optional": true,
       "computed": true,
@@ -460,6 +463,7 @@
       "name": "server_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "Backend identifier of the server record."
     },
@@ -467,10 +471,11 @@
       "name": "postgres_server_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "responsePaths": ["spec.uniqueCloudResourceId", "result.cloudDetails.id", "result.postgresServerId"],
       "preserveOnEmptyResponse": true,
-      "description": "ARM resource id of the PostgreSQL Flexible Server in Azure. Confirmed live (centxforge/staging, 2026-10-08): a refresh can come back with none of the three responsePaths populated even though the server is Ready and otherwise unchanged, which without this flag null's out the value and forces a destroy/recreate of every azurerm_postgresql_flexible_server_configuration that keys off it (server_id is ForceNew there). preserveOnEmptyResponse keeps the last known-good id across that kind of transient gap, same as administrator_password above."
+      "description": "ARM resource id of the PostgreSQL Flexible Server in Azure. Read-only; the backend can occasionally omit it from an otherwise-normal read, so the last known value is kept rather than cleared. Feeds server_id on dependent azurerm_postgresql_flexible_server_configuration resources, where it is ForceNew."
     },
     {
       "name": "provisioning_state",
@@ -546,6 +551,7 @@
       "name": "fully_qualified_domain_name",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.fullyQualifiedDomainName",
       "description": "Hostname clients connect to on port 5432."
@@ -554,6 +560,7 @@
       "name": "created_at",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,
       "description": "Timestamp when the server record was created (RFC 3339, normalized to UTC at second precision)."

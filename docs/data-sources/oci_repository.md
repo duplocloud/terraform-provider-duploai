@@ -42,7 +42,7 @@ output "status" {
 - `ignore` (String) Cluster-ignore (.gitignore-style) patterns of files to exclude from the artifact.
 - `insecure` (Boolean) Allow connecting to an HTTP (non-TLS) OCI registry.
 - `interval` (String) Interval at which the OCI artifact is fetched (Go duration, e.g. 5m, 1h).
-- `labels` (Map of String) Kubernetes labels applied to the OCI repository.
+- `labels` (Map of String) Kubernetes labels applied to the OCI repository. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored.
 - `layer_selector_media_type` (String) Media type of the OCI layer to extract.
 - `layer_selector_operation` (String) How to handle the selected layer: extract or copy.
 - `name` (String) Name of the OCI repository resource.

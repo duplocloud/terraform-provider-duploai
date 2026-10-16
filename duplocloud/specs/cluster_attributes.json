@@ -3,6 +3,7 @@
   "description": "Manages DuploCloud AI Helpdesk cluster attributes \u2014 add-ons and components installed onto an existing EKS cluster (autoscaler, ALB controller, EFS, external-dns, and more).",
   "idPath": "id",
   "dataSource": true,
+  "mergeUpdateIntoCurrent": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/ClusterAttributes",
     "deprovision": {}
@@ -326,6 +327,7 @@
     {
       "name": "cf_stack_name",
       "type": "string",
+      "stable": true,
       "computed": true,
       "noSend": true,
       "apiPath": "result.cfStackName",

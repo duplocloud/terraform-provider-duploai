@@ -489,6 +489,10 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 			saveKnownState(*final)
 			return
 		}
+		if updBody = r.mergeIntoCurrent(ctx, api, objID, req.Plan.Raw, updBody, &resp.Diagnostics); resp.Diagnostics.HasError() {
+			saveKnownState(*final)
+			return
+		}
 		if _, err = api.Update(objID, &updBody); err != nil {
 			saveKnownState(*final)
 			resp.Diagnostics.AddError("Error applying post-create update for "+r.spec.Name, err.Error())
@@ -642,6 +646,17 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if err != nil || resp.Diagnostics.HasError() {
 		return
 	}
+	// Once the first apply after an import has succeeded, the adopted values
+	// are recorded, so from then on a null importAdoptsConfig value means
+	// "unset", not "imported". Clear the mark only on success: on a failed
+	// apply Terraform saves the prior (imported, null) state together with the
+	// private state returned here, and a cleared mark would make the retried
+	// plan replace the imported resource.
+	defer func() {
+		if resp.Private != nil {
+			resp.Diagnostics.Append(clearImportMarkOnSuccess(ctx, resp.Diagnostics.HasError(), resp.Private)...)
+		}
+	}()
 
 	// An association has no readable object and nothing to update — every
 	// attribute is a forceNew path parameter, so a real change replaces the link.
@@ -702,6 +717,15 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
+	r.dropUnchangedUpdateFields(ctx, req, body, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.sendStoredCasing(ctx, req, body, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	retries := r.failureRetries(ctx, req.Plan, &resp.Diagnostics)
 	waitPopulated := r.waitForPopulated(ctx, req.Plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
@@ -710,6 +734,9 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	api := r.apiWaitingForPopulated(scope, retries, waitPopulated).
 		WithCallTimeout(r.operationTimeout(ctx, req.Plan, "update", &resp.Diagnostics))
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if body = r.mergeIntoCurrent(ctx, api, objID, req.Plan.Raw, body, &resp.Diagnostics); resp.Diagnostics.HasError() {
 		return
 	}
 	updated, clientErr := api.Update(objID, &body)
@@ -742,6 +769,82 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	log.Printf("[TRACE] dynamic %s Update(%s): end", r.spec.Name, id)
 }
 
+// dropUnchangedUpdateFields removes each UpdateOnlyIfChanged attribute whose
+// value did not change from the update body, pruning parent objects it leaves
+// empty — so a backend that acts on any field present (EFS UpdateFileSystem)
+// is not asked to "change" a value to what it already is.
+func (r *dynamicResource) dropUnchangedUpdateFields(ctx context.Context, req resource.UpdateRequest, body map[string]any, diags *diag.Diagnostics) {
+	for i := range r.spec.Attributes {
+		a := r.spec.Attributes[i]
+		if !a.UpdateOnlyIfChanged {
+			continue
+		}
+		path := a.effectiveUpdatePath()
+		if path == "" {
+			continue
+		}
+		planVal, _ := readPlanGoValue(ctx, req.Plan, a, diags)
+		stateVal, _ := readPlanGoValue(ctx, req.State, a, diags)
+		if diags.HasError() {
+			return
+		}
+		if jsonEqual(planVal, stateVal) {
+			deletePathPruning(body, strings.Split(path, "."))
+		}
+	}
+}
+
+// sendStoredCasing writes the prior state's value into the update body for a
+// CaseInsensitive attribute whose planned value differs only in letter case, so
+// the backend never sees a "change" to an id that is the same resource.
+func (r *dynamicResource) sendStoredCasing(ctx context.Context, req resource.UpdateRequest, body map[string]any, diags *diag.Diagnostics) {
+	for i := range r.spec.Attributes {
+		a := r.spec.Attributes[i]
+		if !a.CaseInsensitive {
+			continue
+		}
+		path := a.effectiveUpdatePath()
+		if path == "" {
+			continue
+		}
+		planVal, _ := readPlanGoValue(ctx, req.Plan, a, diags)
+		stateVal, _ := readPlanGoValue(ctx, req.State, a, diags)
+		if diags.HasError() {
+			return
+		}
+		ps, ok1 := planVal.(string)
+		ss, ok2 := stateVal.(string)
+		if ok1 && ok2 && ps != ss && strings.EqualFold(ps, ss) {
+			setPath(body, strings.Split(path, "."), ss)
+		}
+	}
+}
+
+// deletePathPruning deletes the value at segs and then removes each ancestor
+// object the deletion left empty. Indexed segments are left alone.
+func deletePathPruning(root map[string]any, segs []string) {
+	if len(segs) == 0 {
+		return
+	}
+	parents := []map[string]any{root}
+	m := root
+	for _, s := range segs[:len(segs)-1] {
+		next, ok := m[s].(map[string]any)
+		if !ok {
+			return
+		}
+		parents = append(parents, next)
+		m = next
+	}
+	delete(m, segs[len(segs)-1])
+	for i := len(parents) - 1; i > 0; i-- {
+		if len(parents[i]) != 0 {
+			return
+		}
+		delete(parents[i-1], segs[i-1])
+	}
+}
+
 // singleIntentUpdate applies each changed UpdateIntent attribute as its own PUT
 // (discriminator + one target value), waiting for the resource to reach the
 // configured ready state before and after each update. Used by APIs (e.g. AWS
@@ -771,11 +874,18 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 		changes = append(changes, change{intent: a.UpdateIntent, value: planVal})
 	}
 
-	// No update-intent change (e.g. only the timeouts block differs) — persist
-	// the plan without any API call.
+	// No update-intent change (only timeouts, or values adopted after an
+	// import) — nothing to send. Read the resource rather than persisting the
+	// plan as-is: the plan can still hold computed outputs as unknown (status,
+	// updated_at, ...), and Terraform rejects an apply that leaves any unknown.
 	if len(changes) == 0 {
-		resp.State.Raw = req.Plan.Raw
-		log.Printf("[TRACE] dynamic %s Update(%s): no update-intent change, skipped", r.spec.Name, id)
+		cur, clientErr := r.api(scope, 0).Get(objID)
+		if clientErr != nil {
+			resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after update", clientErr.Error())
+			return
+		}
+		resp.State.Raw = r.stateFromResponse(ctx, req.Plan.Raw, *cur, scope, id, false, &resp.Diagnostics)
+		log.Printf("[TRACE] dynamic %s Update(%s): no update-intent change, state refreshed without an update call", r.spec.Name, id)
 		return
 	}
 
@@ -941,6 +1051,12 @@ func (r *dynamicResource) deprovisionSkipped(ctx context.Context, state attrRead
 
 func (r *dynamicResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	// Mark the resource as just imported, so an importAdoptsConfig attribute
+	// the API can't return adopts its configured value instead of replacing
+	// the resource. The first update clears the mark.
+	if resp.Private != nil {
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, importedPrivateKey, []byte("true"))...)
+	}
 }
 
 // ── Conditional-required validation ───────────────────────────────────────────
@@ -1838,6 +1954,25 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		// read) keep whatever the base value already held rather than the empty
 		// value the response carries.
 		next[a.Name] = restorePreservedValues(a, current[a.Name], next[a.Name])
+		// A user-settable value the API echoes as empty ("" / [] / {}) where
+		// the user has null — or omits where the user wrote an empty value —
+		// keeps the user's form. Only a user-only attribute keeps a null over
+		// the API's empty value; see keepEmptyForm. Computed-only outputs never
+		// produce a diff, so they keep exactly what the API said.
+		if !computedOnly {
+			next[a.Name] = keepEmptyForm(current[a.Name], next[a.Name], !a.Computed)
+		}
+		// A stable output is planned as its prior value. A write response that
+		// leaves it out (a PUT echo without createdAt, say) must not turn it
+		// null, or Terraform fails the apply as an inconsistent result; the
+		// value never changes, so the prior one is still right.
+		if (a.Stable || len(a.StableUnlessChanged) > 0) && !refreshInputs && isEmptyForm(next[a.Name]) &&
+			current[a.Name].IsFullyKnown() && !isEmptyForm(current[a.Name]) {
+			next[a.Name] = current[a.Name]
+		}
+		if a.CaseInsensitive {
+			next[a.Name] = keepPriorCasing(current[a.Name], next[a.Name])
+		}
 	}
 
 	return tftypes.NewValue(objType, next)
@@ -2160,4 +2295,115 @@ func (s *ResourceSpec) attr(name string) *AttributeSpec {
 		}
 	}
 	return nil
+}
+
+// mergeIntoCurrent implements ResourceSpec.MergeUpdateIntoCurrent: it reads the
+// current record and returns it with body overlaid. A settable attribute the
+// plan sets to null is removed from the record first, so clearing a value in
+// config still clears it. Returns body unchanged when the flag is off.
+func (r *dynamicResource) mergeIntoCurrent(ctx context.Context, api *duplosdk.RESTResource[map[string]any], objID string, plan tftypes.Value, body map[string]any, diags *diag.Diagnostics) map[string]any {
+	if !r.spec.MergeUpdateIntoCurrent || body == nil {
+		return body
+	}
+	// Retried like a data source read: a body-only update made no read, so a
+	// transient 5xx/429 here must not become a new way for an apply to fail.
+	cur, clientErr := api.GetWithRetry(ctx, objID, dsReadRetryWindow)
+	if clientErr != nil {
+		diags.AddError("Error reading "+r.spec.Name+" before update", clientErr.Error())
+		return nil
+	}
+	merged := deepCopyMap(*cur)
+	var top map[string]tftypes.Value
+	if err := plan.As(&top); err == nil {
+		for _, a := range r.spec.Attributes {
+			p := a.effectiveUpdatePath()
+			if p == "" || a.NoSend || (!a.Required && !a.Optional) {
+				continue
+			}
+			if v, ok := top[a.Name]; ok && v.IsNull() {
+				deletePath(merged, strings.Split(p, "."))
+			}
+		}
+	}
+	// A value Terraform sends replaces that attribute as a whole: a map with a
+	// key removed in config (tags, labels) or an object with a child removed
+	// must not get the stored entry back from the current record. Only the
+	// containers Terraform doesn't model (spec, result, ...) are merged.
+	for _, a := range r.spec.Attributes {
+		if p := a.effectiveUpdatePath(); p != "" {
+			segs := strings.Split(p, ".")
+			if _, ok := lookupPath(body, segs); ok {
+				deletePath(merged, segs)
+			}
+		}
+	}
+	deepMergeInto(merged, body)
+	return merged
+}
+
+// lookupPath returns the value at path in m and whether it is present.
+func lookupPath(m map[string]any, path []string) (any, bool) {
+	var cur any = m
+	for _, seg := range path {
+		obj, ok := cur.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		if cur, ok = obj[seg]; !ok {
+			return nil, false
+		}
+	}
+	return cur, true
+}
+
+// deepMergeInto overlays src onto dst: nested objects are merged key by key,
+// anything else (scalars, lists) in src replaces dst's value.
+func deepMergeInto(dst, src map[string]any) {
+	for k, sv := range src {
+		if sm, ok := sv.(map[string]any); ok {
+			if dm, ok := dst[k].(map[string]any); ok {
+				deepMergeInto(dm, sm)
+				continue
+			}
+		}
+		dst[k] = sv
+	}
+}
+
+// deletePath removes the leaf at path, leaving its parents in place.
+func deletePath(m map[string]any, path []string) {
+	for i, seg := range path {
+		if i == len(path)-1 {
+			delete(m, seg)
+			return
+		}
+		next, ok := m[seg].(map[string]any)
+		if !ok {
+			return
+		}
+		m = next
+	}
+}
+
+func deepCopyMap(m map[string]any) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = deepCopyValue(v)
+	}
+	return out
+}
+
+func deepCopyValue(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		return deepCopyMap(t)
+	case []any:
+		c := make([]any, len(t))
+		for i, e := range t {
+			c[i] = deepCopyValue(e)
+		}
+		return c
+	default:
+		return v
+	}
 }

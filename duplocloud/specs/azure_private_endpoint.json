@@ -52,6 +52,7 @@
     },
     {
       "name": "target_resource_arm_id",
+      "caseInsensitive": true,
       "type": "string",
       "required": true,
       "forceNew": true,
@@ -68,6 +69,7 @@
     },
     {
       "name": "subnet_id",
+      "caseInsensitive": true,
       "type": "string",
       "required": true,
       "forceNew": true,

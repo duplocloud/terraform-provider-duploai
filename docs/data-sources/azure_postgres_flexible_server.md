@@ -65,7 +65,7 @@ output "postgres_server_id" {
 - `maintenance_window` (Attributes) When Azure may apply planned maintenance. Leave unset to let Azure pick the window. (see [below for nested schema](#nestedatt--maintenance_window))
 - `name` (String) Server name. 3–63 characters, lowercase letters, numbers and hyphens only; cannot start or end with a hyphen. Must be globally unique within Azure.
 - `password_auth` (String) Whether PostgreSQL password authentication is accepted. At least one of password_auth and active_directory_auth must be Enabled.
-- `postgres_server_id` (String) ARM resource id of the PostgreSQL Flexible Server in Azure. Confirmed live (centxforge/staging, 2026-10-08): a refresh can come back with none of the three responsePaths populated even though the server is Ready and otherwise unchanged, which without this flag null's out the value and forces a destroy/recreate of every azurerm_postgresql_flexible_server_configuration that keys off it (server_id is ForceNew there). preserveOnEmptyResponse keeps the last known-good id across that kind of transient gap, same as administrator_password above.
+- `postgres_server_id` (String) ARM resource id of the PostgreSQL Flexible Server in Azure. Read-only; the backend can occasionally omit it from an otherwise-normal read, so the last known value is kept rather than cleared. Feeds server_id on dependent azurerm_postgresql_flexible_server_configuration resources, where it is ForceNew.
 - `postgres_version` (String) PostgreSQL major version. Immutable — Azure does not support in-place major version upgrades.
 - `private_dns_zone_arm_resource_id` (String) ARM resource id of the private DNS zone for private access. Leave unset to let the platform create or reuse the well-known zone.
 - `provisioner_type` (String) How the platform provisions the server. Defaults to the environment's provisioner.
@@ -73,7 +73,7 @@ output "postgres_server_id" {
 - `provisioning_state` (String) Azure-reported provisioning state of the server.
 - `public_network_access` (String) Enabled exposes the server publicly, gated by firewall_rules. Disabled selects private access (VNet integration) and requires delegated_subnet_resource_id. Immutable after creation — Azure does not allow changing the connectivity method, VNet, or private DNS zone afterwards.
 - `resource_group_id` (String) Resource group the server is provisioned into.
-- `scope_ids` (List of String) Scopes the server is visible to. Inherited from the resource group.
+- `scope_ids` (List of String) Scopes the server is visible to. Inherited from the resource group. Sent back unchanged on update: the platform rebuilds the server record from the update request and would otherwise drop them.
 - `server_id` (String) Backend identifier of the server record.
 - `sku_name` (String) Compute size, e.g. Standard_B1ms (1 vCore, 2 GiB) or Standard_B2s (2 vCore, 4 GiB) for Burstable. Must be a size Azure offers for the chosen sku_tier.
 - `sku_tier` (String) Compute tier. Burstable is cost-effective for low or variable workloads; GeneralPurpose balances compute and memory; MemoryOptimized suits demanding workloads.
