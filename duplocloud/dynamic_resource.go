@@ -352,7 +352,7 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !apiBodyEqual(planBody, stateBody) {
+	if !apiBodyEqual(planBody, stateBody) || len(r.writeOnlyVersionChanged(req.Plan.Raw, req.State.Raw)) > 0 {
 		return // a real update — let computed outputs recompute normally
 	}
 
@@ -421,6 +421,7 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	r.addWriteOnlyValues(req.Config.Raw, "create", body, func(AttributeSpec) bool { return true })
 	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Create(%s): start", r.spec.Name, strings.Join(scopeVals, "/")))
 
 	retries := r.failureRetries(ctx, req.Plan, &resp.Diagnostics)
@@ -499,6 +500,8 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 			saveKnownState(*final)
 			return
 		}
+		// The same body a state-stored secret would contribute.
+		r.addWriteOnlyValues(req.Config.Raw, "update", updBody, func(AttributeSpec) bool { return true })
 		if updBody = r.mergeIntoCurrent(ctx, api, objID, req.Plan.Raw, updBody, &resp.Diagnostics); resp.Diagnostics.HasError() {
 			saveKnownState(*final)
 			return
@@ -723,7 +726,10 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if apiBodyEqual(body, stateBody) {
+	// A changed write-only version is a real update even though the body (which
+	// never carries write-only values from the plan) looks unchanged.
+	woChanged := r.writeOnlyVersionChanged(req.Plan.Raw, req.State.Raw)
+	if apiBodyEqual(body, stateBody) && len(woChanged) == 0 {
 		resp.State.Raw = req.Plan.Raw
 		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): no API-relevant change, skipped", r.spec.Name, id))
 		return
@@ -748,6 +754,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	r.addWriteOnlyValues(req.Config.Raw, "update", body, func(a AttributeSpec) bool { return woChanged[a.Name] || a.SendOnEveryUpdate })
 	if body = r.mergeIntoCurrent(ctx, api, objID, req.Plan.Raw, body, &resp.Diagnostics); resp.Diagnostics.HasError() {
 		return
 	}
@@ -1107,6 +1114,9 @@ func (r *dynamicResource) ConfigValidators(_ context.Context) []resource.ConfigV
 	}
 	if len(r.spec.InvalidWhen) > 0 {
 		vs = append(vs, invalidWhenValidator{spec: r.spec})
+	}
+	if len(r.writeOnlyAttrs()) > 0 {
+		vs = append(vs, writeOnlyValidator{spec: r.spec})
 	}
 	return vs
 }
@@ -2015,7 +2025,7 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 }
 
 func (r *dynamicResource) stateFromResponse(_ context.Context, baseRaw tftypes.Value, resp map[string]any, scope map[string]string, id string, refreshInputs bool, diags *diag.Diagnostics) tftypes.Value {
-	return buildStateRaw(r.spec.Attributes, baseRaw, resp, scope, id, refreshInputs, true, diags)
+	return r.keepShadowedNull(baseRaw, buildStateRaw(r.spec.Attributes, baseRaw, resp, scope, id, refreshInputs, true, diags))
 }
 
 // ── value conversion helpers ──────────────────────────────────────────────────
@@ -2351,9 +2361,10 @@ func (r *dynamicResource) mergeIntoCurrent(ctx context.Context, api *duplosdk.RE
 	merged := deepCopyMap(*cur)
 	var top map[string]tftypes.Value
 	if err := plan.As(&top); err == nil {
+		keep := r.writeOnlyInUsePaths(top)
 		for _, a := range r.spec.Attributes {
 			p := a.effectiveUpdatePath()
-			if p == "" || a.NoSend || (!a.Required && !a.Optional) {
+			if p == "" || a.NoSend || (!a.Required && !a.Optional) || keep[p] {
 				continue
 			}
 			if v, ok := top[a.Name]; ok && v.IsNull() {

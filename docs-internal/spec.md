@@ -339,6 +339,9 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `createOnly` | bool | Send this field in POST (create) only; never in PUT (update). Useful for fields immutable after creation that do not trigger replacement. |
 | `noSend` | bool | Read from the response but never sent in requests. Use for computed-only output fields. |
 | `sendFromState` | bool | The inverse of `noSend`: send a **computed-only** attribute in request bodies, carrying the value Terraform already holds in state. See [Server-assigned fields the API wants back](#server-assigned-fields-the-api-wants-back). |
+| `writeOnly` | bool | Top-level `string` only. A Terraform 1.11+ **write-only argument**: read from config, sent in the request, never stored in plan or state. Request paths only (`createPath` / `updatePath` / `requestPath`); must be `optional`, not computed or defaulted. Requires `versionAttribute`. See [Write-only secrets and version compatibility](#write-only-secrets-and-version-compatibility). |
+| `versionAttribute` | string | With `writeOnly`: names the optional `int` attribute (no paths of its own) whose change sends the write-only value on update. |
+| `sendOnEveryUpdate` | bool | With `writeOnly`: send the value on **every** update, not only on a version change — for a backend whose update fails without it (Key Vault secrets: a value-less update takes a metadata path that errors with `Value cannot be null. (Parameter 'Version')`). Same as what the state-stored alternative does. |
 | `normalizeCsvOrder` | bool | For a `string` field, sort its comma-separated tokens into a canonical (lexical) order before storing in state. Use for order-insensitive values the backend returns non-deterministically (e.g. AWS MSK bootstrap broker strings) to prevent perpetual refresh drift. |
 | `filterResponseKeys` | array | For a `map(string)` field, drop matching keys from the response before it reaches state, so keys the backend injects into a map the user only partially manages do not show perpetual drift. See [Server-managed map keys](#server-managed-map-keys). |
 | `normalizeTimestamp` | bool | For a **computed-only** `string` field, rewrite an RFC 3339 response value to one canonical spelling — UTC, a `Z` offset, whole seconds — before storing it in state. Use for every server-assigned timestamp: the write response renders one from memory at .NET tick precision (`…53.1452297Z`) while the read response renders what storage kept (`…53.145Z`), so refresh reports "Objects have changed outside of Terraform" after every apply even though nothing moved. The fraction is dropped rather than kept at a fixed width because any digit that survives is a digit the two responses could still disagree about; these fields are only read at second resolution. Normalizing both sides also absorbs the two offset spellings the platform emits (a `DateTimeOffset` with a zero offset serializes as `+00:00`, a UTC `DateTime` as `Z`). Idempotent; unparseable values and the empty string pass through untouched. One consequence to be aware of: two updates inside the same second leave the value unchanged, so `updated_at` cannot be used to distinguish them. Rejected at spec load on a non-`string` type, or on a `required`/`optional` attribute — rewriting a value the user set makes state disagree with the plan, which Terraform fails as an inconsistent result after apply. |
@@ -1081,6 +1084,62 @@ Multiple groups are independent:
   ["replica_of", "num_cache_clusters"]
 ]
 ```
+
+---
+
+## Write-only secrets and version compatibility
+
+A secret held in a normal attribute is stored in Terraform state in plain text
+(`sensitive` only redacts CLI output). Terraform 1.11 added **write-only
+arguments**, which are sent to the provider but never written to plan or state.
+
+The framework rejects any configured write-only value from a Terraform client
+older than 1.11 ("Write-only attributes are only supported in Terraform 1.11
+and later"). Turning an existing attribute into a write-only one would therefore
+break every pipeline still on an older Terraform. Instead, a secret gets a
+**second, additive** attribute next to the existing one, which is left exactly
+as it was (not deprecated):
+
+| Terraform version | Use | Secret in state |
+|---|---|---|
+| any | `<secret>` (existing attribute) | yes |
+| 1.11 and later | `<secret>_wo` + `<secret>_wo_version` | no |
+
+```json
+{ "name": "master_user_password", "type": "string", "optional": true, "sensitive": true,
+  "apiPath": "spec.masterUserPassword" },
+{ "name": "master_user_password_wo", "type": "string", "optional": true, "sensitive": true,
+  "writeOnly": true, "versionAttribute": "master_user_password_wo_version",
+  "createPath": "spec.masterUserPassword", "updatePath": "spec.masterUserPassword" },
+{ "name": "master_user_password_wo_version", "type": "int", "optional": true }
+```
+plus `"conflictsWith": [["master_user_password", "master_user_password_wo"]]`.
+If the existing attribute was `required`, make it `optional` and add a
+`requiredIf` rule `{ "attribute": "<secret>", "when": [{ "attribute": "<secret>_wo", "isEmpty": true }] }`
+(required → optional is compatible).
+
+How the engine handles it:
+
+- **Create** sends the write-only value from config whenever it is set.
+- **Update** sends it only when `<secret>_wo_version` changed (or on every update with `sendOnEveryUpdate`). A write-only value
+  cannot be diffed, so changing only the secret plans "No changes" — the version
+  is the signal. A version change is a real update (computed outputs are not
+  pinned, the API call is never skipped as a no-op). Any other update leaves the
+  secret out of the body; every backend using this keeps the current secret when
+  the field is empty.
+- **Refresh**: while the version is set, an attribute sharing the write-only
+  one's create path that is null in state stays null, so an API that echoes the
+  secret back (RDS and ElastiCache decrypt on read) cannot put it into state.
+- Setting `<secret>_wo` without `<secret>_wo_version` fails at plan time.
+- The data source never exposes either attribute (they have no response path).
+- **Switching** an existing resource from `<secret>` to `<secret>_wo` is one
+  in-place update: the old value leaves state and the `_wo` value is sent once.
+
+Not a fit: a secret the API returns and the resource must read back (k8s_secret
+`data`), or one nested inside a collection (admin_provider credentials).
+`conflictsWith` treats an unknown value as set, so choose between the two
+attributes with separate configurations, not a conditional expression on a
+variable.
 
 ---
 

@@ -612,6 +612,34 @@ type AttributeSpec struct {
 	// the request (computed-only fields like status, vpc_id).
 	NoSend bool `json:"noSend,omitempty"`
 
+	// WriteOnly makes a top-level string attribute a Terraform write-only
+	// argument (Terraform 1.11+): the value is read from config, sent in the
+	// request, and never stored in plan or state. It is declared next to the
+	// existing state-stored attribute it is an alternative to (same request
+	// path), which stays unchanged for older Terraform versions.
+	//
+	// A write-only value cannot be diffed, so the paired VersionAttribute
+	// decides when it is sent: always on create, and on update only when the
+	// version changes. Request paths only (createPath / updatePath /
+	// requestPath): with no response path, no read fills it and the data
+	// source never exposes it.
+	WriteOnly bool `json:"writeOnly,omitempty"`
+
+	// VersionAttribute names the optional int attribute that triggers sending a
+	// WriteOnly value on update. Required with WriteOnly; the named attribute
+	// has no paths of its own (it lives only in config and state). While it is
+	// set, an attribute sharing the write-only one's create path that is null
+	// in state stays null on refresh, so the alternative never reads the secret
+	// back into state.
+	VersionAttribute string `json:"versionAttribute,omitempty"`
+
+	// SendOnEveryUpdate, with WriteOnly, sends the value on every update, not
+	// only when the version changes — for a backend whose update cannot work
+	// without it (Key Vault secrets: a value-less update takes a metadata path
+	// that fails). Matches what the state-stored alternative already does,
+	// since that one is always in the plan and so in every update body.
+	SendOnEveryUpdate bool `json:"sendOnEveryUpdate,omitempty"`
+
 	// FilterResponseKeys, for a map(string) attribute (including one nested inside
 	// an object, e.g. azure.tags), drops matching keys from the response map before
 	// it is stored in state. Each pattern is an exact key, or a prefix when it ends
@@ -1131,6 +1159,9 @@ func (s *ResourceSpec) validate() error {
 		return fmt.Errorf("lookupDescription requires lookupAttribute")
 	}
 	if err := s.validateStateUpgrades(seen); err != nil {
+		return err
+	}
+	if err := s.validateWriteOnly(); err != nil {
 		return err
 	}
 	// A misspelled input name would silently disable the rule rather than fail.
@@ -1793,6 +1824,63 @@ func (s *ResourceSpec) validateStateUpgrades(seen map[string]bool) error {
 	}
 	if len(s.StateUpgrades) > 0 && s.SchemaVersion == 0 {
 		return fmt.Errorf("stateUpgrades needs schemaVersion > 0")
+	}
+	return nil
+}
+
+// validateWriteOnly checks each WriteOnly attribute and its VersionAttribute.
+// The constraints mirror what keeps the secret out of state: request paths
+// only, never computed or defaulted, top-level (the request is built from the
+// config's top-level values), and a resource whose updates send a full body.
+func (s *ResourceSpec) validateWriteOnly() error {
+	var nested func(attrs []AttributeSpec) error
+	nested = func(attrs []AttributeSpec) error {
+		for _, a := range attrs {
+			if a.WriteOnly || a.VersionAttribute != "" {
+				return fmt.Errorf("attribute %q: writeOnly is supported on top-level attributes only", a.Name)
+			}
+			if err := nested(a.Attributes); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, a := range s.Attributes {
+		if err := nested(a.Attributes); err != nil {
+			return err
+		}
+		if (a.VersionAttribute != "" || a.SendOnEveryUpdate) && !a.WriteOnly {
+			return fmt.Errorf("attribute %q: versionAttribute and sendOnEveryUpdate require writeOnly", a.Name)
+		}
+		if !a.WriteOnly {
+			continue
+		}
+		switch {
+		case a.Type != "string":
+			return fmt.Errorf("attribute %q: writeOnly requires type string", a.Name)
+		case !a.Optional || a.Required || a.Computed || a.Default != nil:
+			return fmt.Errorf("attribute %q: writeOnly must be optional, not required, computed or defaulted", a.Name)
+		case a.APIPath != "" || len(a.responsePathList()) > 0:
+			return fmt.Errorf("attribute %q: writeOnly takes request paths only (createPath/updatePath/requestPath), never apiPath or a response path", a.Name)
+		case a.effectiveCreatePath() == "":
+			return fmt.Errorf("attribute %q: writeOnly needs a createPath or requestPath", a.Name)
+		case a.NoSend || a.SendFromState || a.UpdateIntent != nil || a.PreserveUnmanagedInto != "":
+			return fmt.Errorf("attribute %q: writeOnly cannot be combined with noSend, sendFromState, updateIntent or preserveUnmanagedInto", a.Name)
+		case s.SingleIntentUpdate != nil:
+			return fmt.Errorf("attribute %q: writeOnly is not supported with singleIntentUpdate", a.Name)
+		case a.VersionAttribute == "":
+			return fmt.Errorf("attribute %q: writeOnly requires versionAttribute", a.Name)
+		}
+		v := findAttr(s.Attributes, a.VersionAttribute)
+		if v == nil {
+			return fmt.Errorf("attribute %q: versionAttribute %q is not an attribute", a.Name, a.VersionAttribute)
+		}
+		if v.Type != "int" || !v.Optional || v.Required || v.Computed || v.Default != nil || v.ForceNew {
+			return fmt.Errorf("attribute %q: versionAttribute %q must be an optional int, not computed, defaulted or forceNew", a.Name, v.Name)
+		}
+		if v.APIPath != "" || v.RequestPath != "" || v.CreatePath != "" || v.UpdatePath != "" || len(v.responsePathList()) > 0 {
+			return fmt.Errorf("attribute %q: versionAttribute %q must have no paths; it lives only in config and state", a.Name, v.Name)
+		}
 	}
 	return nil
 }

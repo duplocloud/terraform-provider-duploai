@@ -76,3 +76,21 @@ resource "duploai_azure_postgres_flexible_server" "private" {
     start_minute  = 0
   }
 }
+
+# Terraform 1.11 and later: the write-only argument keeps the secret out of the
+# plan and state. Change the _wo_version number whenever the secret changes —
+# that is what sends the new value. On older Terraform, use the attribute above.
+resource "duploai_azure_postgres_flexible_server" "write_only" {
+  workspace_id      = "<workspace-id>"
+  environment_id    = "<environment-id>"
+  resource_group_id = "<resource-group-id>"
+
+  name                              = "my-postgres-server-wo"
+  postgres_version                  = "16"
+  administrator_login               = "pgadmin"
+  administrator_password_wo         = var.postgres_admin_password
+  administrator_password_wo_version = 1
+
+  sku_tier = "Burstable"
+  sku_name = "Standard_B1ms"
+}
