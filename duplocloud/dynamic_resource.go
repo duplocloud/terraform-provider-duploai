@@ -1,6 +1,7 @@
 package duplocloud
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,11 +17,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
 )
@@ -38,6 +43,8 @@ var (
 	_ resource.ResourceWithImportState      = &dynamicResource{}
 	_ resource.ResourceWithConfigValidators = &dynamicResource{}
 	_ resource.ResourceWithModifyPlan       = &dynamicResource{}
+	_ resource.ResourceWithUpgradeState     = &dynamicResource{}
+	_ resource.ResourceWithIdentity         = &dynamicResource{}
 )
 
 // dynamicResource is the single engine that turns a ResourceSpec plus its
@@ -102,6 +109,7 @@ func (r *dynamicResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 	out := schema.Schema{
 		Description: r.spec.Description,
 		Attributes:  attrs,
+		Version:     r.spec.SchemaVersion,
 	}
 	if r.spec.Waiter != nil {
 		out.Blocks = map[string]schema.Block{
@@ -114,8 +122,8 @@ func (r *dynamicResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 // ── SDK binding ───────────────────────────────────────────────────────────────
 
 // api binds an SDK client to this resource's endpoint and resolved scope.
-func (r *dynamicResource) api(scope map[string]string, failureRetries int) *duplosdk.RESTResource[map[string]any] {
-	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, r.waiter(failureRetries))
+func (r *dynamicResource) api(ctx context.Context, scope map[string]string, failureRetries int) *duplosdk.RESTResource[map[string]any] {
+	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, r.waiter(failureRetries)).WithContext(ctx)
 }
 
 // apiWaitingForPopulated is like api but, when waitForPopulated is true, extends
@@ -124,12 +132,12 @@ func (r *dynamicResource) api(scope map[string]string, failureRetries int) *dupl
 // controller assigns a load balancer address. Composes with any existing
 // readyPath/readyState gate (both must hold). No-op when the resource declares no
 // populatedPath, so callers can use it unconditionally.
-func (r *dynamicResource) apiWaitingForPopulated(scope map[string]string, failureRetries int, waitForPopulated bool) *duplosdk.RESTResource[map[string]any] {
+func (r *dynamicResource) apiWaitingForPopulated(ctx context.Context, scope map[string]string, failureRetries int, waitForPopulated bool) *duplosdk.RESTResource[map[string]any] {
 	w := r.waiter(failureRetries)
 	if w != nil && waitForPopulated && r.spec.Waiter.PopulatedPath != "" {
 		applyPopulatedGate(w, r.spec.Waiter.PopulatedPath)
 	}
-	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, w)
+	return duplosdk.NewRESTResource[map[string]any](r.Client, r.endpoint, scope, w).WithContext(ctx)
 }
 
 // applyPopulatedGate extends waiter w with a secondary success gate that holds
@@ -338,12 +346,13 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
 		return
 	}
+	r.warnIgnoredChanges(ctx, req, resp)
 	planBody := r.bodyFromRaw(req.Plan.Raw, "update", &resp.Diagnostics)
 	stateBody := r.bodyFromRaw(req.State.Raw, "update", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !apiBodyEqual(planBody, stateBody) {
+	if !apiBodyEqual(planBody, stateBody) || len(r.writeOnlyVersionChanged(req.Plan.Raw, req.State.Raw)) > 0 {
 		return // a real update — let computed outputs recompute normally
 	}
 
@@ -385,6 +394,7 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 // ── CRUD ──────────────────────────────────────────────────────────────────────
 
 func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	defer func() { r.setIdentity(ctx, resp.State, resp.Identity, &resp.Diagnostics) }()
 	scope, scopeVals := r.scopeFromReader(ctx, req.Plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -394,8 +404,8 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	// the URL, there is no body, and the response carries no content.
 	if r.spec.Association != nil {
 		id := r.resourceID(scopeVals, "")
-		log.Printf("[TRACE] dynamic %s Create(%s): association", r.spec.Name, id)
-		if clientErr := r.api(scope, r.specFailureRetries()).CreateNoContent(); clientErr != nil {
+		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Create(%s): association", r.spec.Name, id))
+		if clientErr := r.api(ctx, scope, r.specFailureRetries()).CreateNoContent(); clientErr != nil {
 			resp.Diagnostics.AddError("Error creating "+r.spec.Name, clientErr.Error())
 			return
 		}
@@ -411,7 +421,8 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	log.Printf("[TRACE] dynamic %s Create(%s): start", r.spec.Name, strings.Join(scopeVals, "/"))
+	r.addWriteOnlyValues(req.Config.Raw, "create", body, func(AttributeSpec) bool { return true })
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Create(%s): start", r.spec.Name, strings.Join(scopeVals, "/")))
 
 	retries := r.failureRetries(ctx, req.Plan, &resp.Diagnostics)
 	waitPopulated := r.waitForPopulated(ctx, req.Plan, &resp.Diagnostics)
@@ -420,7 +431,7 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 	// The create call itself gets the create timeout, not the client's 60s
 	// default — a backend that provisions synchronously can block for minutes.
-	api := r.apiWaitingForPopulated(scope, retries, waitPopulated).
+	api := r.apiWaitingForPopulated(ctx, scope, retries, waitPopulated).
 		WithCallTimeout(r.operationTimeout(ctx, req.Plan, "create", &resp.Diagnostics))
 	if resp.Diagnostics.HasError() {
 		return
@@ -489,6 +500,12 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 			saveKnownState(*final)
 			return
 		}
+		// The same body a state-stored secret would contribute.
+		r.addWriteOnlyValues(req.Config.Raw, "update", updBody, func(AttributeSpec) bool { return true })
+		if updBody = r.mergeIntoCurrent(ctx, api, objID, req.Plan.Raw, updBody, &resp.Diagnostics); resp.Diagnostics.HasError() {
+			saveKnownState(*final)
+			return
+		}
 		if _, err = api.Update(objID, &updBody); err != nil {
 			saveKnownState(*final)
 			resp.Diagnostics.AddError("Error applying post-create update for "+r.spec.Name, err.Error())
@@ -519,15 +536,16 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 	resp.State.Raw = state
-	log.Printf("[TRACE] dynamic %s Create(%s): end", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Create(%s): end", r.spec.Name, id))
 }
 
 func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	defer func() { r.setIdentity(ctx, resp.State, resp.Identity, &resp.Diagnostics) }()
 	scope, objID, id, err := r.parseID(ctx, req.State, &resp.Diagnostics)
 	if err != nil || resp.Diagnostics.HasError() {
 		return
 	}
-	log.Printf("[TRACE] dynamic %s Read(%s): start", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Read(%s): start", r.spec.Name, id))
 
 	if r.spec.Association != nil {
 		r.readAssociation(ctx, req, resp, scope, id)
@@ -537,16 +555,16 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 	var obj *map[string]any
 	var clientErr duplosdk.ClientError
 	if r.spec.Endpoint.ReadFromList {
-		obj, clientErr = r.readFromCollection(scope, objID)
+		obj, clientErr = r.readFromCollection(ctx, scope, objID)
 		if clientErr == nil && obj == nil {
 			// No longer in the collection — same meaning as a 404 on a
 			// conventional read: gone, so let the next plan recreate it.
-			log.Printf("[TRACE] dynamic %s Read(%s): not in collection, dropping from state", r.spec.Name, id)
+			tflog.Trace(ctx, fmt.Sprintf("dynamic %s Read(%s): not in collection, dropping from state", r.spec.Name, id))
 			resp.State.RemoveResource(ctx)
 			return
 		}
 	} else {
-		obj, clientErr = r.api(scope, r.specFailureRetries()).Get(objID)
+		obj, clientErr = r.api(ctx, scope, r.specFailureRetries()).Get(objID)
 	}
 	if clientErr != nil {
 		if clientErr.IsNotFound() {
@@ -562,7 +580,7 @@ func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 	resp.State.Raw = state
-	log.Printf("[TRACE] dynamic %s Read(%s): end", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Read(%s): end", r.spec.Name, id))
 }
 
 // createFromList issues a create whose response is a JSON array and returns the
@@ -596,8 +614,8 @@ func (r *dynamicResource) createFromList(api *duplosdk.RESTResource[map[string]a
 // EndpointSpec.ReadFromList. The API does no server-side filtering (query
 // parameters on these routes are ignored), so the match is made here; the list
 // carries each element in full, so nothing further is fetched.
-func (r *dynamicResource) readFromCollection(scope map[string]string, objID string) (*map[string]any, duplosdk.ClientError) {
-	return specCollectionElement(&r.spec, r.api(scope, r.specFailureRetries()), objID)
+func (r *dynamicResource) readFromCollection(ctx context.Context, scope map[string]string, objID string) (*map[string]any, duplosdk.ClientError) {
+	return specCollectionElement(&r.spec, r.api(ctx, scope, r.specFailureRetries()), objID)
 }
 
 // readAssociation refreshes a link-only resource. The API offers no GET for the
@@ -610,7 +628,7 @@ func (r *dynamicResource) readAssociation(ctx context.Context, req resource.Read
 	as := r.spec.Association
 	parentPath := r.endpoint.ResolvePath(as.ReadPath, scope)
 
-	parent, clientErr := r.api(scope, r.specFailureRetries()).GetPath(parentPath)
+	parent, clientErr := r.api(ctx, scope, r.specFailureRetries()).GetPath(parentPath)
 	if clientErr != nil {
 		if clientErr.IsNotFound() {
 			// Parent gone ⇒ the link cannot exist either.
@@ -624,8 +642,8 @@ func (r *dynamicResource) readAssociation(ctx context.Context, req resource.Read
 	want := scope[as.MemberAttribute]
 	members := anyToStringSlice(extractPath(*parent, strings.Split(as.MemberPath, ".")))
 	if !slices.Contains(members, want) {
-		log.Printf("[TRACE] dynamic %s Read(%s): %s no longer in %s, removing from state",
-			r.spec.Name, id, want, as.MemberPath)
+		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Read(%s): %s no longer in %s, removing from state",
+			r.spec.Name, id, want, as.MemberPath))
 		resp.State.RemoveResource(ctx)
 		return
 	}
@@ -634,21 +652,33 @@ func (r *dynamicResource) readAssociation(ctx context.Context, req resource.Read
 	// path parameter — but rebuilding state re-asserts them from the parsed id,
 	// which is what makes import work.
 	resp.State.Raw = r.stateFromResponse(ctx, req.State.Raw, map[string]any{}, scope, id, true, &resp.Diagnostics)
-	log.Printf("[TRACE] dynamic %s Read(%s): end", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Read(%s): end", r.spec.Name, id))
 }
 
 func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	defer func() { r.setIdentity(ctx, resp.State, resp.Identity, &resp.Diagnostics) }()
 	scope, objID, id, err := r.parseID(ctx, req.State, &resp.Diagnostics)
 	if err != nil || resp.Diagnostics.HasError() {
 		return
 	}
+	// Once the first apply after an import has succeeded, the adopted values
+	// are recorded, so from then on a null importAdoptsConfig value means
+	// "unset", not "imported". Clear the mark only on success: on a failed
+	// apply Terraform saves the prior (imported, null) state together with the
+	// private state returned here, and a cleared mark would make the retried
+	// plan replace the imported resource.
+	defer func() {
+		if resp.Private != nil {
+			resp.Diagnostics.Append(clearImportMarkOnSuccess(ctx, resp.Diagnostics.HasError(), resp.Private)...)
+		}
+	}()
 
 	// An association has no readable object and nothing to update — every
 	// attribute is a forceNew path parameter, so a real change replaces the link.
 	// Any diff reaching here is config-only; persist the plan as-is.
 	if r.spec.Association != nil {
 		resp.State.Raw = req.Plan.Raw
-		log.Printf("[TRACE] dynamic %s Update(%s): association, nothing to update", r.spec.Name, id)
+		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): association, nothing to update", r.spec.Name, id))
 		return
 	}
 
@@ -657,7 +687,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	// only diffs that do are config-only (e.g. the timeouts block) — refresh
 	// computed values from the API and persist, without issuing an update call.
 	if !r.endpoint.HasUpdate() {
-		obj, clientErr := r.api(scope, r.specFailureRetries()).Get(objID)
+		obj, clientErr := r.api(ctx, scope, r.specFailureRetries()).Get(objID)
 		if clientErr != nil {
 			resp.Diagnostics.AddError("Error reading "+r.spec.Name, clientErr.Error())
 			return
@@ -667,7 +697,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 			return
 		}
 		resp.State.Raw = state
-		log.Printf("[TRACE] dynamic %s Update(%s): immutable resource, refreshed without update call", r.spec.Name, id)
+		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): immutable resource, refreshed without update call", r.spec.Name, id))
 		return
 	}
 
@@ -683,7 +713,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	log.Printf("[TRACE] dynamic %s Update(%s): start", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): start", r.spec.Name, id))
 
 	// If nothing the API cares about changed (e.g. only the timeouts block
 	// differs, as on the first apply after import), skip the API call and the
@@ -696,9 +726,21 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if apiBodyEqual(body, stateBody) {
+	// A changed write-only version is a real update even though the body (which
+	// never carries write-only values from the plan) looks unchanged.
+	woChanged := r.writeOnlyVersionChanged(req.Plan.Raw, req.State.Raw)
+	if apiBodyEqual(body, stateBody) && len(woChanged) == 0 {
 		resp.State.Raw = req.Plan.Raw
-		log.Printf("[TRACE] dynamic %s Update(%s): no API-relevant change, skipped", r.spec.Name, id)
+		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): no API-relevant change, skipped", r.spec.Name, id))
+		return
+	}
+
+	r.dropUnchangedUpdateFields(ctx, req, body, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.sendStoredCasing(ctx, req, body, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -707,9 +749,13 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	api := r.apiWaitingForPopulated(scope, retries, waitPopulated).
+	api := r.apiWaitingForPopulated(ctx, scope, retries, waitPopulated).
 		WithCallTimeout(r.operationTimeout(ctx, req.Plan, "update", &resp.Diagnostics))
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.addWriteOnlyValues(req.Config.Raw, "update", body, func(a AttributeSpec) bool { return woChanged[a.Name] || a.SendOnEveryUpdate })
+	if body = r.mergeIntoCurrent(ctx, api, objID, req.Plan.Raw, body, &resp.Diagnostics); resp.Diagnostics.HasError() {
 		return
 	}
 	updated, clientErr := api.Update(objID, &body)
@@ -739,7 +785,83 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 	resp.State.Raw = state
-	log.Printf("[TRACE] dynamic %s Update(%s): end", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): end", r.spec.Name, id))
+}
+
+// dropUnchangedUpdateFields removes each UpdateOnlyIfChanged attribute whose
+// value did not change from the update body, pruning parent objects it leaves
+// empty — so a backend that acts on any field present (EFS UpdateFileSystem)
+// is not asked to "change" a value to what it already is.
+func (r *dynamicResource) dropUnchangedUpdateFields(ctx context.Context, req resource.UpdateRequest, body map[string]any, diags *diag.Diagnostics) {
+	for i := range r.spec.Attributes {
+		a := r.spec.Attributes[i]
+		if !a.UpdateOnlyIfChanged {
+			continue
+		}
+		path := a.effectiveUpdatePath()
+		if path == "" {
+			continue
+		}
+		planVal, _ := readPlanGoValue(ctx, req.Plan, a, diags)
+		stateVal, _ := readPlanGoValue(ctx, req.State, a, diags)
+		if diags.HasError() {
+			return
+		}
+		if jsonEqual(planVal, stateVal) {
+			deletePathPruning(body, strings.Split(path, "."))
+		}
+	}
+}
+
+// sendStoredCasing writes the prior state's value into the update body for a
+// CaseInsensitive attribute whose planned value differs only in letter case, so
+// the backend never sees a "change" to an id that is the same resource.
+func (r *dynamicResource) sendStoredCasing(ctx context.Context, req resource.UpdateRequest, body map[string]any, diags *diag.Diagnostics) {
+	for i := range r.spec.Attributes {
+		a := r.spec.Attributes[i]
+		if !a.CaseInsensitive {
+			continue
+		}
+		path := a.effectiveUpdatePath()
+		if path == "" {
+			continue
+		}
+		planVal, _ := readPlanGoValue(ctx, req.Plan, a, diags)
+		stateVal, _ := readPlanGoValue(ctx, req.State, a, diags)
+		if diags.HasError() {
+			return
+		}
+		ps, ok1 := planVal.(string)
+		ss, ok2 := stateVal.(string)
+		if ok1 && ok2 && ps != ss && strings.EqualFold(ps, ss) {
+			setPath(body, strings.Split(path, "."), ss)
+		}
+	}
+}
+
+// deletePathPruning deletes the value at segs and then removes each ancestor
+// object the deletion left empty. Indexed segments are left alone.
+func deletePathPruning(root map[string]any, segs []string) {
+	if len(segs) == 0 {
+		return
+	}
+	parents := []map[string]any{root}
+	m := root
+	for _, s := range segs[:len(segs)-1] {
+		next, ok := m[s].(map[string]any)
+		if !ok {
+			return
+		}
+		parents = append(parents, next)
+		m = next
+	}
+	delete(m, segs[len(segs)-1])
+	for i := len(parents) - 1; i > 0; i-- {
+		if len(parents[i]) != 0 {
+			return
+		}
+		delete(parents[i-1], segs[i-1])
+	}
 }
 
 // singleIntentUpdate applies each changed UpdateIntent attribute as its own PUT
@@ -771,11 +893,18 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 		changes = append(changes, change{intent: a.UpdateIntent, value: planVal})
 	}
 
-	// No update-intent change (e.g. only the timeouts block differs) — persist
-	// the plan without any API call.
+	// No update-intent change (only timeouts, or values adopted after an
+	// import) — nothing to send. Read the resource rather than persisting the
+	// plan as-is: the plan can still hold computed outputs as unknown (status,
+	// updated_at, ...), and Terraform rejects an apply that leaves any unknown.
 	if len(changes) == 0 {
-		resp.State.Raw = req.Plan.Raw
-		log.Printf("[TRACE] dynamic %s Update(%s): no update-intent change, skipped", r.spec.Name, id)
+		cur, clientErr := r.api(ctx, scope, 0).Get(objID)
+		if clientErr != nil {
+			resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after update", clientErr.Error())
+			return
+		}
+		resp.State.Raw = r.stateFromResponse(ctx, req.Plan.Raw, *cur, scope, id, false, &resp.Diagnostics)
+		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): no update-intent change, state refreshed without an update call", r.spec.Name, id))
 		return
 	}
 
@@ -783,7 +912,7 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	api := r.api(scope, retries)
+	api := r.api(ctx, scope, retries)
 	timeout := r.timeout(ctx, req.Plan, "update", &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -821,7 +950,7 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 		}
 		setPath(body, discSegs, c.intent.DiscriminatorValue)
 		setPath(body, strings.Split(c.intent.ValuePath, "."), c.value)
-		log.Printf("[TRACE] dynamic %s Update(%s): single-intent %s", r.spec.Name, id, c.intent.DiscriminatorValue)
+		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): single-intent %s", r.spec.Name, id, c.intent.DiscriminatorValue))
 		if _, clientErr := api.Update(objID, &body); clientErr != nil {
 			resp.Diagnostics.AddError("Error updating "+r.spec.Name+" ("+c.intent.DiscriminatorValue+")", clientErr.Error())
 			return
@@ -841,7 +970,7 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 		return
 	}
 	resp.State.Raw = state
-	log.Printf("[TRACE] dynamic %s Update(%s): single-intent updates complete (%d)", r.spec.Name, id, len(changes))
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): single-intent updates complete (%d)", r.spec.Name, id, len(changes)))
 }
 
 func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -849,8 +978,8 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 	if err != nil || resp.Diagnostics.HasError() {
 		return
 	}
-	log.Printf("[TRACE] dynamic %s Delete(%s): start", r.spec.Name, id)
-	api := r.api(scope, r.failureRetries(ctx, req.State, &resp.Diagnostics))
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Delete(%s): start", r.spec.Name, id))
+	api := r.api(ctx, scope, r.failureRetries(ctx, req.State, &resp.Diagnostics))
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -896,7 +1025,7 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 			return
 		}
 	}
-	log.Printf("[TRACE] dynamic %s Delete(%s): end", r.spec.Name, id)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Delete(%s): end", r.spec.Name, id))
 }
 
 // deprovisionSkipped reports whether the pre-delete deprovision step should be
@@ -940,7 +1069,37 @@ func (r *dynamicResource) deprovisionSkipped(ctx context.Context, state attrRead
 }
 
 func (r *dynamicResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Check the ID's shape up front and name the expected format, instead of
+	// failing later in Read with a generic "Invalid resource ID". Uses the same
+	// splitID as parseID, so every ID that imports today still does; only empty
+	// segments (which can never resolve) are added to what is rejected.
+	// Import by identity (Terraform 1.12+: `import { identity = {...} }`) builds
+	// the same composite ID an import by ID would carry, then follows the same
+	// path; the Read that follows fills in everything else.
+	if req.ID == "" && req.Identity != nil {
+		id, diags := r.idFromIdentity(ctx, req.Identity)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if msg := r.importIDProblem(id); msg != "" {
+			resp.Diagnostics.AddError("Invalid import identity", msg)
+			return
+		}
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), id)...)
+		return
+	}
+	if msg := r.importIDProblem(req.ID); msg != "" {
+		resp.Diagnostics.AddError("Invalid import ID", msg)
+		return
+	}
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	// Mark the resource as just imported, so an importAdoptsConfig attribute
+	// the API can't return adopts its configured value instead of replacing
+	// the resource. The first update clears the mark.
+	if resp.Private != nil {
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, importedPrivateKey, []byte("true"))...)
+	}
 }
 
 // ── Conditional-required validation ───────────────────────────────────────────
@@ -955,6 +1114,9 @@ func (r *dynamicResource) ConfigValidators(_ context.Context) []resource.ConfigV
 	}
 	if len(r.spec.InvalidWhen) > 0 {
 		vs = append(vs, invalidWhenValidator{spec: r.spec})
+	}
+	if len(r.writeOnlyAttrs()) > 0 {
+		vs = append(vs, writeOnlyValidator{spec: r.spec})
 	}
 	return vs
 }
@@ -1838,13 +2000,32 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		// read) keep whatever the base value already held rather than the empty
 		// value the response carries.
 		next[a.Name] = restorePreservedValues(a, current[a.Name], next[a.Name])
+		// A user-settable value the API echoes as empty ("" / [] / {}) where
+		// the user has null — or omits where the user wrote an empty value —
+		// keeps the user's form. Only a user-only attribute keeps a null over
+		// the API's empty value; see keepEmptyForm. Computed-only outputs never
+		// produce a diff, so they keep exactly what the API said.
+		if !computedOnly {
+			next[a.Name] = keepEmptyForm(current[a.Name], next[a.Name], !a.Computed)
+		}
+		// A stable output is planned as its prior value. A write response that
+		// leaves it out (a PUT echo without createdAt, say) must not turn it
+		// null, or Terraform fails the apply as an inconsistent result; the
+		// value never changes, so the prior one is still right.
+		if (a.Stable || len(a.StableUnlessChanged) > 0) && !refreshInputs && isEmptyForm(next[a.Name]) &&
+			current[a.Name].IsFullyKnown() && !isEmptyForm(current[a.Name]) {
+			next[a.Name] = current[a.Name]
+		}
+		if a.CaseInsensitive {
+			next[a.Name] = keepPriorCasing(current[a.Name], next[a.Name])
+		}
 	}
 
 	return tftypes.NewValue(objType, next)
 }
 
 func (r *dynamicResource) stateFromResponse(_ context.Context, baseRaw tftypes.Value, resp map[string]any, scope map[string]string, id string, refreshInputs bool, diags *diag.Diagnostics) tftypes.Value {
-	return buildStateRaw(r.spec.Attributes, baseRaw, resp, scope, id, refreshInputs, true, diags)
+	return r.keepShadowedNull(baseRaw, buildStateRaw(r.spec.Attributes, baseRaw, resp, scope, id, refreshInputs, true, diags))
 }
 
 // ── value conversion helpers ──────────────────────────────────────────────────
@@ -2160,4 +2341,284 @@ func (s *ResourceSpec) attr(name string) *AttributeSpec {
 		}
 	}
 	return nil
+}
+
+// mergeIntoCurrent implements ResourceSpec.MergeUpdateIntoCurrent: it reads the
+// current record and returns it with body overlaid. A settable attribute the
+// plan sets to null is removed from the record first, so clearing a value in
+// config still clears it. Returns body unchanged when the flag is off.
+func (r *dynamicResource) mergeIntoCurrent(ctx context.Context, api *duplosdk.RESTResource[map[string]any], objID string, plan tftypes.Value, body map[string]any, diags *diag.Diagnostics) map[string]any {
+	if !r.spec.MergeUpdateIntoCurrent || body == nil {
+		return body
+	}
+	// Retried like a data source read: a body-only update made no read, so a
+	// transient 5xx/429 here must not become a new way for an apply to fail.
+	cur, clientErr := api.GetWithRetry(ctx, objID, dsReadRetryWindow)
+	if clientErr != nil {
+		diags.AddError("Error reading "+r.spec.Name+" before update", clientErr.Error())
+		return nil
+	}
+	merged := deepCopyMap(*cur)
+	var top map[string]tftypes.Value
+	if err := plan.As(&top); err == nil {
+		keep := r.writeOnlyInUsePaths(top)
+		for _, a := range r.spec.Attributes {
+			p := a.effectiveUpdatePath()
+			if p == "" || a.NoSend || (!a.Required && !a.Optional) || keep[p] {
+				continue
+			}
+			if v, ok := top[a.Name]; ok && v.IsNull() {
+				deletePath(merged, strings.Split(p, "."))
+			}
+		}
+	}
+	// A value Terraform sends replaces that attribute as a whole: a map with a
+	// key removed in config (tags, labels) or an object with a child removed
+	// must not get the stored entry back from the current record. Only the
+	// containers Terraform doesn't model (spec, result, ...) are merged.
+	for _, a := range r.spec.Attributes {
+		if p := a.effectiveUpdatePath(); p != "" {
+			segs := strings.Split(p, ".")
+			if _, ok := lookupPath(body, segs); ok {
+				deletePath(merged, segs)
+			}
+		}
+	}
+	deepMergeInto(merged, body)
+	return merged
+}
+
+// lookupPath returns the value at path in m and whether it is present.
+func lookupPath(m map[string]any, path []string) (any, bool) {
+	var cur any = m
+	for _, seg := range path {
+		obj, ok := cur.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		if cur, ok = obj[seg]; !ok {
+			return nil, false
+		}
+	}
+	return cur, true
+}
+
+// deepMergeInto overlays src onto dst: nested objects are merged key by key,
+// anything else (scalars, lists) in src replaces dst's value.
+func deepMergeInto(dst, src map[string]any) {
+	for k, sv := range src {
+		if sm, ok := sv.(map[string]any); ok {
+			if dm, ok := dst[k].(map[string]any); ok {
+				deepMergeInto(dm, sm)
+				continue
+			}
+		}
+		dst[k] = sv
+	}
+}
+
+// deletePath removes the leaf at path, leaving its parents in place.
+func deletePath(m map[string]any, path []string) {
+	for i, seg := range path {
+		if i == len(path)-1 {
+			delete(m, seg)
+			return
+		}
+		next, ok := m[seg].(map[string]any)
+		if !ok {
+			return
+		}
+		m = next
+	}
+}
+
+func deepCopyMap(m map[string]any) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = deepCopyValue(v)
+	}
+	return out
+}
+
+func deepCopyValue(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		return deepCopyMap(t)
+	case []any:
+		c := make([]any, len(t))
+		for i, e := range t {
+			c[i] = deepCopyValue(e)
+		}
+		return c
+	default:
+		return v
+	}
+}
+
+// importIDProblem returns why id can't be imported, or "" when it can. The
+// accepted shape mirrors parseID: the endpoint's path parameters, then the
+// object id (associations have no object id segment).
+func (r *dynamicResource) importIDProblem(id string) string {
+	params := r.endpoint.PathParams()
+	names := make([]string, 0, len(params)+1)
+	for _, p := range params {
+		names = append(names, "<"+p+">")
+	}
+	want := len(params)
+	if r.spec.Association == nil {
+		names = append(names, "<id>")
+		want++
+	}
+	format := strings.Join(names, "/")
+	parts, err := splitID(id, want)
+	if err != nil {
+		return fmt.Sprintf("Expected an import ID of the form %s, got %q.", format, id)
+	}
+	for i, p := range parts {
+		if strings.TrimSpace(p) == "" {
+			return fmt.Sprintf("Expected an import ID of the form %s, got %q: %s is empty.", format, id, names[i])
+		}
+	}
+	return ""
+}
+
+// warnIgnoredChanges adds a plan warning for each configured change the
+// platform cannot apply to the existing resource: a createOnly attribute that
+// is not forceNew (e.g. tags the platform sets only at creation, Lambda code),
+// or any non-forceNew attribute of a resource with no update operation
+// (k8s_job). Such a change is recorded in state but never reaches the cloud.
+// Making these forceNew would replace resources in existing pipelines; a
+// warning gives the visibility without failing anything. Skipped on the first
+// plan after an import, where adopting config values is the intent.
+func (r *dynamicResource) warnIgnoredChanges(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	var plan, state, config map[string]tftypes.Value
+	if req.Plan.Raw.As(&plan) != nil || req.State.Raw.As(&state) != nil || req.Config.Raw.As(&config) != nil {
+		return
+	}
+	imported := justImported(ctx, req.Private)
+	immutable := !r.endpoint.HasUpdate()
+	for _, a := range r.spec.Attributes {
+		if a.ForceNew || (!a.Required && !a.Optional) || (!a.CreateOnly && !immutable) {
+			continue
+		}
+		cv, pv, sv := config[a.Name], plan[a.Name], state[a.Name]
+		if cv.IsNull() || !pv.IsFullyKnown() || pv.Equal(sv) || (sv.IsNull() && imported) {
+			continue
+		}
+		why := "The platform sets it only when the resource is created"
+		if immutable {
+			why = "This resource has no update operation"
+		}
+		resp.Diagnostics.AddAttributeWarning(path.Root(a.Name),
+			"Change to "+a.Name+" will not be applied",
+			why+", so the new value is recorded in Terraform state but the existing "+r.spec.Name+
+				" keeps its current setting. To apply it, replace the resource: terraform apply -replace=<resource address>.")
+	}
+}
+
+// UpgradeState implements ResourceSpec.SchemaVersion / StateUpgrades. The
+// framework calls the upgrader registered for the state's version, which must
+// return state at the CURRENT version, so each upgrader applies every declared
+// step from its version up. With SchemaVersion 0 (every spec today) the map is
+// empty and the framework reads state exactly as before: same version, no
+// upgrader, no change.
+func (r *dynamicResource) UpgradeState(_ context.Context) map[int64]resource.StateUpgrader {
+	ups := map[int64]resource.StateUpgrader{}
+	for v := int64(0); v < r.spec.SchemaVersion; v++ {
+		from := v
+		ups[from] = resource.StateUpgrader{
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				if req.RawState == nil || len(req.RawState.JSON) == 0 {
+					resp.Diagnostics.AddError("Cannot upgrade state", "the prior state has no JSON representation")
+					return
+				}
+				var m map[string]any
+				dec := json.NewDecoder(bytes.NewReader(req.RawState.JSON))
+				dec.UseNumber()
+				if err := dec.Decode(&m); err != nil {
+					resp.Diagnostics.AddError("Cannot upgrade state", err.Error())
+					return
+				}
+				for _, step := range r.spec.StateUpgrades {
+					if step.FromVersion >= from {
+						if err := step.apply(m); err != nil {
+							resp.Diagnostics.AddError(fmt.Sprintf("Cannot upgrade %s state from version %d", r.spec.Name, step.FromVersion), err.Error())
+							return
+						}
+					}
+				}
+				out, err := json.Marshal(m)
+				if err != nil {
+					resp.Diagnostics.AddError("Cannot upgrade state", err.Error())
+					return
+				}
+				resp.DynamicValue = &tfprotov6.DynamicValue{JSON: out}
+			},
+		}
+	}
+	return ups
+}
+
+// ── Resource identity (Terraform 1.12+) ──────────────────────────────────────
+//
+// A resource's identity is its endpoint path parameters plus its object id
+// (an association: the path parameters alone) — exactly the parts of the
+// composite Terraform ID. It is derived from that ID, which never changes after
+// create (path parameters are forceNew; the object id is assigned once), so it
+// is immutable, as the framework requires. Import by ID keeps working;
+// Terraform below 1.12 never sees identity.
+
+// identityAttrs lists the identity attribute names in composite-ID order.
+func (r *dynamicResource) identityAttrs() []string {
+	names := append([]string{}, r.endpoint.PathParams()...)
+	if r.spec.Association == nil {
+		names = append(names, "id")
+	}
+	return names
+}
+
+func (r *dynamicResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	attrs := map[string]identityschema.Attribute{}
+	for _, n := range r.identityAttrs() {
+		desc := "Object id assigned by the platform (the last segment of the resource's id)."
+		if n != "id" {
+			desc = "Value of the " + n + " argument."
+		}
+		attrs[n] = identityschema.StringAttribute{RequiredForImport: true, Description: desc}
+	}
+	resp.IdentitySchema = identityschema.Schema{Attributes: attrs}
+}
+
+// setIdentity writes the identity derived from the state's composite id. A
+// no-op when the client doesn't support identity (nil), on error, or when the
+// resource is gone (null state).
+func (r *dynamicResource) setIdentity(ctx context.Context, state tfsdk.State, identity *tfsdk.ResourceIdentity, diags *diag.Diagnostics) {
+	if identity == nil || diags.HasError() || state.Raw.IsNull() {
+		return
+	}
+	var id types.String
+	if d := state.GetAttribute(ctx, path.Root("id"), &id); d.HasError() || id.IsNull() || id.IsUnknown() {
+		return
+	}
+	names := r.identityAttrs()
+	parts, err := splitID(id.ValueString(), len(names))
+	if err != nil {
+		return // parseID already reported a malformed id
+	}
+	for i, n := range names {
+		diags.Append(identity.SetAttribute(ctx, path.Root(n), parts[i])...)
+	}
+}
+
+// idFromIdentity composes the composite Terraform id from an import identity.
+func (r *dynamicResource) idFromIdentity(ctx context.Context, identity *tfsdk.ResourceIdentity) (string, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	names := r.identityAttrs()
+	parts := make([]string, 0, len(names))
+	for _, n := range names {
+		var v types.String
+		diags.Append(identity.GetAttribute(ctx, path.Root(n), &v)...)
+		parts = append(parts, v.ValueString())
+	}
+	return strings.Join(parts, "/"), diags
 }

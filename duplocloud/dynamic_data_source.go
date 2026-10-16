@@ -2,7 +2,7 @@ package duplocloud
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"strings"
 	"time"
 
@@ -10,6 +10,7 @@ import (
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
 )
@@ -111,7 +112,7 @@ func (d *dynamicDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 	objID := idVal.ValueString()
-	log.Printf("[TRACE] dynamic datasource %s Read(%s): start", d.spec.Name, objID)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic datasource %s Read(%s): start", d.spec.Name, objID))
 
 	// A resource's Terraform ID is composite ("scope.../object's id", see composeID)
 	// so users can chain `id = duploai_x.y.id` directly; the API itself takes only
@@ -122,7 +123,7 @@ func (d *dynamicDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		apiID = apiID[i+1:]
 	}
 
-	api := duplosdk.NewRESTResource[map[string]any](d.Client, d.endpoint, scope, nil)
+	api := duplosdk.NewRESTResource[map[string]any](d.Client, d.endpoint, scope, nil).WithContext(ctx)
 	var obj *map[string]any
 	var clientErr duplosdk.ClientError
 	if d.spec.Endpoint.ReadFromList {
@@ -163,5 +164,5 @@ func (d *dynamicDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 	resp.State.Raw = state
-	log.Printf("[TRACE] dynamic datasource %s Read(%s): end", d.spec.Name, objID)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic datasource %s Read(%s): end", d.spec.Name, objID))
 }

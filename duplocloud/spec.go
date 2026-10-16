@@ -1,12 +1,15 @@
 package duplocloud
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
@@ -147,6 +150,37 @@ type ResourceSpec struct {
 	//
 	// Never sent on create — the backend assigns the id there.
 	IDRequestPath string `json:"idRequestPath,omitempty"`
+
+	// MergeUpdateIntoCurrent makes every update read the current record and
+	// send it back with the update body overlaid (each attribute the body sets
+	// replaces its path as a whole, so a key removed from a map is removed; a
+	// settable attribute planned null is removed; only unmodelled containers
+	// are merged key by key),
+	// instead of sending the body alone. For backends whose update REPLACES the
+	// stored record with the request (GenericService -> ReplaceOne): a body-only
+	// PUT drops everything Terraform doesn't model — status, the ticket link,
+	// result, backend-set spec fields. On skill-provisioned resources (network,
+	// cluster, resource group, ...) that reset status to New and re-ran
+	// first-time provisioning on ANY update, even description-only; on AWS
+	// networks the agent then blocked for a human. The merged record is what the
+	// UI sends back. Don't combine with spec.updateRequest-style delta updates: a
+	// stale delta from the stored record would be re-sent.
+	MergeUpdateIntoCurrent bool `json:"mergeUpdateIntoCurrent,omitempty"`
+
+	// SchemaVersion is the resource schema's version (default 0). Bump it, and
+	// add a StateUpgrades step from the previous version, whenever a change
+	// alters how an attribute is STORED: a type change (string -> number), a
+	// rename, a removal. The Plugin Framework reads prior state strictly against
+	// the current schema, so without an upgrader such a change makes every
+	// existing state unreadable. Changes that keep the stored form (adding an
+	// attribute, list -> set) need no bump. Upgrades are one-way: an older
+	// provider cannot read state written at a newer version.
+	SchemaVersion int64 `json:"schemaVersion,omitempty"`
+
+	// StateUpgrades lists the steps that move stored state between versions,
+	// applied in order to every top-level attribute map from the state's own
+	// version up to SchemaVersion. See StateUpgradeStep.
+	StateUpgrades []StateUpgradeStep `json:"stateUpgrades,omitempty"`
 
 	// DataSource, when true, registers a read-only data source (data.duploai_<name>)
 	// from this spec in addition to the managed resource. The data source schema is
@@ -411,8 +445,47 @@ type AttributeSpec struct {
 	// recomputed. Stable opts a specific attribute back into preserving its
 	// prior value, so it does not spuriously show "(known after apply)" (and
 	// ripple into dependent resources) every time an unrelated attribute on
-	// the same resource changes.
+	// the same resource changes. Only a non-null prior value is kept
+	// (UseNonNullStateForUnknown, see preserveNonNullOnly): a null means a
+	// read missed the value, and the next apply should fill it in.
 	Stable bool `json:"stable,omitempty"`
+
+	// ImportAdoptsConfig, on a forceNew attribute the API never returns (so no
+	// read path can fill it), replaces the resource only when the prior value is
+	// set. After `terraform import` such a value is null; with this flag the
+	// first plan adopts the configured value as an in-place, state-only change
+	// instead of replacing the resource just imported. A change from a known
+	// value still replaces it. Only valid on forceNew string, int, bool or list
+	// attributes.
+	ImportAdoptsConfig bool `json:"importAdoptsConfig,omitempty"`
+
+	// StableUnlessChanged, on a computed-only string, list or set attribute,
+	// names the top-level inputs that can change it. The prior value is kept in
+	// the plan unless one of them changes (or is unknown) in the same plan — a
+	// conditional Stable. Use it for an output a dependent may wire into a
+	// force-new argument (subnet IDs, security group IDs, broker strings) that a
+	// few inputs can legitimately change, so plain Stable would fail the apply
+	// as an inconsistent result. List every input that can change the value: a
+	// missed one makes that update fail with "inconsistent result".
+	StableUnlessChanged []string `json:"stableUnlessChanged,omitempty"`
+
+	// UpdateOnlyIfChanged leaves the attribute out of the update (PUT) body
+	// unless its value changed, and drops any parent object that leaves empty.
+	// For backends that act on every field present in an update delta — AWS EFS
+	// calls UpdateFileSystem whenever spec.updateRequest is present, and AWS
+	// rejects an unchanged throughput, so an unrelated (description/backup)
+	// update failed. Matches the AWS provider, which only calls UpdateFileSystem
+	// when the throughput settings changed.
+	UpdateOnlyIfChanged bool `json:"updateOnlyIfChanged,omitempty"`
+
+	// CaseInsensitive marks a string whose value compares case-insensitively —
+	// an Azure ARM id, where "resourceGroups" and "resourcegroups" name the same
+	// resource and the API is free to return either. A case-only difference
+	// then never replaces the resource (a forceNew attribute plans an in-place,
+	// state-only change), a read that returns other casing keeps the stored
+	// value, and an update request carries the stored casing so a backend's
+	// case-sensitive immutability check isn't tripped. Only valid on strings.
+	CaseInsensitive bool `json:"caseInsensitive,omitempty"`
 
 	// Default supplies a static default for Optional+Computed attributes.
 	// Interpreted according to Type.
@@ -538,6 +611,34 @@ type AttributeSpec struct {
 	// NoSend marks an attribute that maps from the response but is never sent in
 	// the request (computed-only fields like status, vpc_id).
 	NoSend bool `json:"noSend,omitempty"`
+
+	// WriteOnly makes a top-level string attribute a Terraform write-only
+	// argument (Terraform 1.11+): the value is read from config, sent in the
+	// request, and never stored in plan or state. It is declared next to the
+	// existing state-stored attribute it is an alternative to (same request
+	// path), which stays unchanged for older Terraform versions.
+	//
+	// A write-only value cannot be diffed, so the paired VersionAttribute
+	// decides when it is sent: always on create, and on update only when the
+	// version changes. Request paths only (createPath / updatePath /
+	// requestPath): with no response path, no read fills it and the data
+	// source never exposes it.
+	WriteOnly bool `json:"writeOnly,omitempty"`
+
+	// VersionAttribute names the optional int attribute that triggers sending a
+	// WriteOnly value on update. Required with WriteOnly; the named attribute
+	// has no paths of its own (it lives only in config and state). While it is
+	// set, an attribute sharing the write-only one's create path that is null
+	// in state stays null on refresh, so the alternative never reads the secret
+	// back into state.
+	VersionAttribute string `json:"versionAttribute,omitempty"`
+
+	// SendOnEveryUpdate, with WriteOnly, sends the value on every update, not
+	// only when the version changes — for a backend whose update cannot work
+	// without it (Key Vault secrets: a value-less update takes a metadata path
+	// that fails). Matches what the state-stored alternative already does,
+	// since that one is always in the plan and so in every update body.
+	SendOnEveryUpdate bool `json:"sendOnEveryUpdate,omitempty"`
 
 	// FilterResponseKeys, for a map(string) attribute (including one nested inside
 	// an object, e.g. azure.tags), drops matching keys from the response map before
@@ -691,6 +792,14 @@ type AttributeSpec struct {
 	// adopt UseStateForUnknown so its prior-state value is known at plan time —
 	// required for the union-on-write to keep server-managed entries.
 	preserveTarget bool
+
+	// nested is set internally (not from JSON) on an attribute declared inside
+	// an object-typed attribute. See preserveNonNullOnly.
+	nested bool
+
+	// underForceNew is set internally on a nested attribute when any ancestor
+	// is forceNew. See preserveNonNullOnly.
+	underForceNew bool
 }
 
 // requestPath / responsePath resolve the effective per-direction path.
@@ -967,6 +1076,9 @@ func loadResourceSpecs() ([]ResourceSpec, error) {
 		if readErr != nil {
 			return nil, fmt.Errorf("reading spec %s: %w", e.Name(), readErr)
 		}
+		if dupErr := checkDuplicateKeys(data); dupErr != nil {
+			return nil, fmt.Errorf("parsing spec %s: %w", e.Name(), dupErr)
+		}
 		var spec ResourceSpec
 		if jsonErr := json.Unmarshal(data, &spec); jsonErr != nil {
 			return nil, fmt.Errorf("parsing spec %s: %w", e.Name(), jsonErr)
@@ -1045,6 +1157,20 @@ func (s *ResourceSpec) validate() error {
 	}
 	if s.LookupDescription != "" && s.LookupAttribute == "" {
 		return fmt.Errorf("lookupDescription requires lookupAttribute")
+	}
+	if err := s.validateStateUpgrades(seen); err != nil {
+		return err
+	}
+	if err := s.validateWriteOnly(); err != nil {
+		return err
+	}
+	// A misspelled input name would silently disable the rule rather than fail.
+	for _, a := range s.Attributes {
+		for _, in := range a.StableUnlessChanged {
+			if !seen[in] {
+				return fmt.Errorf("attribute %q: stableUnlessChanged references unknown attribute %q", a.Name, in)
+			}
+		}
 	}
 	for _, r := range s.RequiredIf {
 		if !seen[r.Attribute] {
@@ -1397,6 +1523,25 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 					a.Name, a.MinLength, a.MaxLength)
 			}
 		}
+		if len(a.StableUnlessChanged) > 0 {
+			if a.Optional || a.Required || !a.Computed || a.Stable {
+				return nil, fmt.Errorf("attribute %q: stableUnlessChanged is only valid on a computed-only attribute without stable", a.Name)
+			}
+			if a.Type != "string" && !strings.HasPrefix(a.Type, "list(") && !strings.HasPrefix(a.Type, "set(") || strings.Contains(a.Type, "object") {
+				return nil, fmt.Errorf("attribute %q: stableUnlessChanged is only supported on string and list/set of primitives", a.Name)
+			}
+		}
+		if a.CaseInsensitive && a.Type != "string" {
+			return nil, fmt.Errorf("attribute %q: caseInsensitive is only valid on a string", a.Name)
+		}
+		if a.ImportAdoptsConfig {
+			if !a.ForceNew {
+				return nil, fmt.Errorf("attribute %q: importAdoptsConfig only changes how a forceNew attribute replaces; add forceNew or drop it", a.Name)
+			}
+			if a.Type != "string" && a.Type != "int" && a.Type != "bool" && !strings.HasPrefix(a.Type, "list(") {
+				return nil, fmt.Errorf("attribute %q: importAdoptsConfig is only supported on string, int, bool and list attributes", a.Name)
+			}
+		}
 		if a.ImmutableOnceTrue {
 			if a.Type != "bool" {
 				return nil, fmt.Errorf("attribute %q: immutableOnceTrue is only valid on a bool", a.Name)
@@ -1534,4 +1679,208 @@ func isStringOrStringCollection(t string) bool {
 		return true
 	}
 	return false
+}
+
+// checkDuplicateKeys rejects a JSON document that repeats a key within one
+// object. encoding/json silently keeps the last value, so a duplicate (easy to
+// produce when two branches add the same flag and git merges them as text)
+// would otherwise load without notice, and a later edit to one copy could be
+// shadowed by the other.
+func checkDuplicateKeys(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	type frame struct {
+		object bool
+		keys   map[string]bool
+		expect bool // next string token in an object is a key
+	}
+	var stack []*frame
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		var top *frame
+		if len(stack) > 0 {
+			top = stack[len(stack)-1]
+		}
+		switch t := tok.(type) {
+		case json.Delim:
+			switch t {
+			case '{', '[':
+				if top != nil && top.object {
+					top.expect = true
+				}
+				stack = append(stack, &frame{object: t == '{', keys: map[string]bool{}, expect: t == '{'})
+			case '}', ']':
+				stack = stack[:len(stack)-1]
+			}
+		case string:
+			if top != nil && top.object && top.expect {
+				if top.keys[t] {
+					return fmt.Errorf("duplicate key %q in one object (offset %d)", t, dec.InputOffset())
+				}
+				top.keys[t] = true
+				top.expect = false
+				continue
+			}
+			if top != nil && top.object {
+				top.expect = true
+			}
+		default:
+			if top != nil && top.object {
+				top.expect = true
+			}
+		}
+	}
+}
+
+// StateUpgradeStep moves stored state from FromVersion to FromVersion+1 with
+// declarative operations on top-level attributes, applied in this order:
+// Renames, ToNumber, ToString, Drop.
+type StateUpgradeStep struct {
+	FromVersion int64             `json:"fromVersion"`
+	Renames     map[string]string `json:"renames,omitempty"`  // old name -> new name
+	ToNumber    []string          `json:"toNumber,omitempty"` // string values parsed as numbers ("" -> null)
+	ToString    []string          `json:"toString,omitempty"` // numbers/bools formatted as strings
+	Drop        []string          `json:"drop,omitempty"`     // attributes removed from the schema
+}
+
+func (st StateUpgradeStep) apply(m map[string]any) error {
+	for oldName, newName := range st.Renames {
+		if v, ok := m[oldName]; ok {
+			if _, clash := m[newName]; !clash || m[newName] == nil {
+				m[newName] = v
+			}
+			delete(m, oldName)
+		}
+	}
+	for _, n := range st.ToNumber {
+		switch v := m[n].(type) {
+		case string:
+			if strings.TrimSpace(v) == "" {
+				m[n] = nil
+				continue
+			}
+			num := json.Number(strings.TrimSpace(v))
+			if _, err := num.Float64(); err != nil {
+				return fmt.Errorf("attribute %q: %q is not a number", n, v)
+			}
+			m[n] = num
+		case nil, json.Number:
+		default:
+			return fmt.Errorf("attribute %q: cannot convert %T to a number", n, v)
+		}
+	}
+	for _, n := range st.ToString {
+		switch v := m[n].(type) {
+		case json.Number:
+			m[n] = v.String()
+		case bool:
+			m[n] = strconv.FormatBool(v)
+		case nil, string:
+		default:
+			return fmt.Errorf("attribute %q: cannot convert %T to a string", n, v)
+		}
+	}
+	for _, n := range st.Drop {
+		delete(m, n)
+	}
+	return nil
+}
+
+// validateStateUpgrades checks SchemaVersion/StateUpgrades against the
+// attribute names (seen = top-level names).
+func (s *ResourceSpec) validateStateUpgrades(seen map[string]bool) error {
+	if s.SchemaVersion < 0 {
+		return fmt.Errorf("schemaVersion must not be negative")
+	}
+	from := map[int64]bool{}
+	for _, st := range s.StateUpgrades {
+		if st.FromVersion < 0 || st.FromVersion >= s.SchemaVersion {
+			return fmt.Errorf("stateUpgrades: fromVersion %d must be in [0, schemaVersion %d)", st.FromVersion, s.SchemaVersion)
+		}
+		if from[st.FromVersion] {
+			return fmt.Errorf("stateUpgrades: fromVersion %d listed twice", st.FromVersion)
+		}
+		from[st.FromVersion] = true
+		for _, n := range st.Renames {
+			if !seen[n] {
+				return fmt.Errorf("stateUpgrades %d: renames target %q is not an attribute", st.FromVersion, n)
+			}
+		}
+		for _, n := range append(append([]string{}, st.ToNumber...), st.ToString...) {
+			if !seen[n] {
+				return fmt.Errorf("stateUpgrades %d: %q is not an attribute", st.FromVersion, n)
+			}
+		}
+		for _, n := range st.Drop {
+			if seen[n] {
+				return fmt.Errorf("stateUpgrades %d: drop %q, but it is still an attribute", st.FromVersion, n)
+			}
+		}
+	}
+	if len(s.StateUpgrades) > 0 && s.SchemaVersion == 0 {
+		return fmt.Errorf("stateUpgrades needs schemaVersion > 0")
+	}
+	return nil
+}
+
+// validateWriteOnly checks each WriteOnly attribute and its VersionAttribute.
+// The constraints mirror what keeps the secret out of state: request paths
+// only, never computed or defaulted, top-level (the request is built from the
+// config's top-level values), and a resource whose updates send a full body.
+func (s *ResourceSpec) validateWriteOnly() error {
+	var nested func(attrs []AttributeSpec) error
+	nested = func(attrs []AttributeSpec) error {
+		for _, a := range attrs {
+			if a.WriteOnly || a.VersionAttribute != "" {
+				return fmt.Errorf("attribute %q: writeOnly is supported on top-level attributes only", a.Name)
+			}
+			if err := nested(a.Attributes); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, a := range s.Attributes {
+		if err := nested(a.Attributes); err != nil {
+			return err
+		}
+		if (a.VersionAttribute != "" || a.SendOnEveryUpdate) && !a.WriteOnly {
+			return fmt.Errorf("attribute %q: versionAttribute and sendOnEveryUpdate require writeOnly", a.Name)
+		}
+		if !a.WriteOnly {
+			continue
+		}
+		switch {
+		case a.Type != "string":
+			return fmt.Errorf("attribute %q: writeOnly requires type string", a.Name)
+		case !a.Optional || a.Required || a.Computed || a.Default != nil:
+			return fmt.Errorf("attribute %q: writeOnly must be optional, not required, computed or defaulted", a.Name)
+		case a.APIPath != "" || len(a.responsePathList()) > 0:
+			return fmt.Errorf("attribute %q: writeOnly takes request paths only (createPath/updatePath/requestPath), never apiPath or a response path", a.Name)
+		case a.effectiveCreatePath() == "":
+			return fmt.Errorf("attribute %q: writeOnly needs a createPath or requestPath", a.Name)
+		case a.NoSend || a.SendFromState || a.UpdateIntent != nil || a.PreserveUnmanagedInto != "":
+			return fmt.Errorf("attribute %q: writeOnly cannot be combined with noSend, sendFromState, updateIntent or preserveUnmanagedInto", a.Name)
+		case s.SingleIntentUpdate != nil:
+			return fmt.Errorf("attribute %q: writeOnly is not supported with singleIntentUpdate", a.Name)
+		case a.VersionAttribute == "":
+			return fmt.Errorf("attribute %q: writeOnly requires versionAttribute", a.Name)
+		}
+		v := findAttr(s.Attributes, a.VersionAttribute)
+		if v == nil {
+			return fmt.Errorf("attribute %q: versionAttribute %q is not an attribute", a.Name, a.VersionAttribute)
+		}
+		if v.Type != "int" || !v.Optional || v.Required || v.Computed || v.Default != nil || v.ForceNew {
+			return fmt.Errorf("attribute %q: versionAttribute %q must be an optional int, not computed, defaulted or forceNew", a.Name, v.Name)
+		}
+		if v.APIPath != "" || v.RequestPath != "" || v.CreatePath != "" || v.UpdatePath != "" || len(v.responsePathList()) > 0 {
+			return fmt.Errorf("attribute %q: versionAttribute %q must have no paths; it lives only in config and state", a.Name, v.Name)
+		}
+	}
+	return nil
 }

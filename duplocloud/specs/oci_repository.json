@@ -217,10 +217,8 @@
       "computed": true,
       "apiPath": "spec.k8sResource.metadata.labels",
       "responsePath": "result.k8sResource.metadata.labels",
-      "filterResponseKeys": [
-        "duplocloud.ai/*"
-      ],
-      "description": "Kubernetes labels applied to the OCI repository."
+      "filterResponseKeys": ["*"],
+      "description": "Kubernetes labels applied to the OCI repository. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored."
     },
     {
       "name": "annotations",

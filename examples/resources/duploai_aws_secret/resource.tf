@@ -26,3 +26,22 @@ resource "duploai_aws_secret" "app_config" {
     delete = "10m"
   }
 }
+
+# Terraform 1.11 and later: the write-only argument keeps the secret out of the
+# plan and state. Change the _wo_version number whenever the secret changes —
+# that is what sends the new value. On older Terraform, use the attribute above.
+resource "duploai_aws_secret" "write_only" {
+  workspace_id      = "<workspace-id>"
+  name              = "db-password-wo"
+  resource_group_id = "<resource-group-id>"
+  environment_id    = "<environment-id>"
+
+  secret_value_type        = "PlainText"
+  secret_string_wo         = var.db_password
+  secret_string_wo_version = 1
+}
+
+variable "db_password" {
+  type      = string
+  sensitive = true
+}

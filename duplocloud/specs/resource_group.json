@@ -3,6 +3,7 @@
   "description": "Manages a DuploCloud AI Helpdesk resource group (shared security groups, IAM role, KMS key).",
   "idPath": "id",
   "dataSource": true,
+  "mergeUpdateIntoCurrent": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/resource-groups",
     "deprovision": {}
@@ -190,6 +191,7 @@
       "name": "security_group_name",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "preserveOnEmptyResponse": true,
       "apiPath": "result.securityGroup.GroupName",
@@ -209,6 +211,7 @@
       "name": "iam_role_arn",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "preserveOnEmptyResponse": true,
       "apiPath": "result.iamRole.IamRoleArn",
@@ -218,6 +221,7 @@
       "name": "iam_role_name",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "preserveOnEmptyResponse": true,
       "apiPath": "result.iamRole.RoleName",
@@ -226,6 +230,7 @@
     {
       "name": "kms_key_arn",
       "type": "string",
+      "stableUnlessChanged": ["aws_resource_name", "provisioner_version"],
       "computed": true,
       "noSend": true,
       "preserveOnEmptyResponse": true,
@@ -235,6 +240,7 @@
     {
       "name": "kms_key_alias",
       "type": "string",
+      "stableUnlessChanged": ["aws_resource_name", "provisioner_version"],
       "computed": true,
       "noSend": true,
       "preserveOnEmptyResponse": true,

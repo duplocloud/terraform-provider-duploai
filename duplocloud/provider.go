@@ -19,15 +19,29 @@ import (
 
 var _ provider.Provider = &duploaiProvider{}
 
-type duploaiProvider struct{}
+type duploaiProvider struct {
+	// version is the provider release version, set at build time (main.version
+	// via -ldflags); "dev" for local builds. Reported to Terraform in Metadata
+	// and sent to the API in the User-Agent header.
+	version string
+}
 
-// New returns a new instance of the DuploCloud AI provider.
+// New returns a new instance of the DuploCloud AI provider with version "dev".
 func New() provider.Provider {
-	return &duploaiProvider{}
+	return &duploaiProvider{version: "dev"}
+}
+
+// NewVersioned returns a provider factory that reports the given release
+// version (the Plugin Framework scaffold pattern).
+func NewVersioned(version string) func() provider.Provider {
+	return func() provider.Provider {
+		return &duploaiProvider{version: version}
+	}
 }
 
 func (p *duploaiProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "duploai"
+	resp.Version = p.version
 }
 
 func (p *duploaiProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
@@ -68,6 +82,10 @@ func (p *duploaiProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
+	// A value set from another resource's output is unknown during plan. It is
+	// treated as unset, as before (the env var still wins when present); only
+	// the error says why, instead of calling a configured value "missing".
+	hostUnknown, tokenUnknown := config.DuploHost.IsUnknown(), config.DuploToken.IsUnknown()
 	if config.DuploHost.IsNull() || config.DuploHost.ValueString() == "" {
 		config.DuploHost = types.StringValue(envFallback("DUPLO_HOST", "duplo_host"))
 	}
@@ -104,18 +122,26 @@ func (p *duploaiProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 
 	if config.DuploHost.ValueString() == "" {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("duplo_host"),
-			"Missing duplo_host",
-			"Set duplo_host in the provider block or the DUPLO_HOST (or duplo_host) env var.",
-		)
+		if hostUnknown {
+			resp.Diagnostics.AddAttributeError(path.Root("duplo_host"), "Unknown duplo_host", unknownProviderValueDetail("duplo_host", "DUPLO_HOST"))
+		} else {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("duplo_host"),
+				"Missing duplo_host",
+				"Set duplo_host in the provider block or the DUPLO_HOST (or duplo_host) env var.",
+			)
+		}
 	}
 	if config.DuploToken.ValueString() == "" {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("duplo_token"),
-			"Missing duplo_token",
-			"Set duplo_token in the provider block or the DUPLO_TOKEN (or duplo_token) env var.",
-		)
+		if tokenUnknown {
+			resp.Diagnostics.AddAttributeError(path.Root("duplo_token"), "Unknown duplo_token", unknownProviderValueDetail("duplo_token", "DUPLO_TOKEN"))
+		} else {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("duplo_token"),
+				"Missing duplo_token",
+				"Set duplo_token in the provider block or the DUPLO_TOKEN (or duplo_token) env var.",
+			)
+		}
 	}
 	if resp.Diagnostics.HasError() {
 		return
@@ -136,6 +162,7 @@ func (p *duploaiProvider) Configure(ctx context.Context, req provider.ConfigureR
 		resp.Diagnostics.AddError("Failed to create client", err.Error())
 		return
 	}
+	client.UserAgent = userAgent(p.version, req.TerraformVersion)
 
 	resp.DataSourceData = client
 	resp.ResourceData = client
@@ -193,4 +220,28 @@ func (p *duploaiProvider) DataSources(_ context.Context) []func() datasource.Dat
 		factories = append(factories, newDynamicDataSourceFactory(spec, endpoint))
 	}
 	return factories
+}
+
+// userAgent identifies the provider and Terraform versions on every API call,
+// so backend logs show which client made a request (HashiCorp's convention:
+// product/version, a link, then the Terraform version).
+func userAgent(providerVersion, terraformVersion string) string {
+	if providerVersion == "" {
+		providerVersion = "dev"
+	}
+	ua := "terraform-provider-duploai/" + providerVersion + " (+https://registry.terraform.io/providers/duplocloud/duploai)"
+	if terraformVersion != "" {
+		ua += " Terraform/" + terraformVersion
+	}
+	return ua
+}
+
+// unknownProviderValueDetail explains an unknown provider argument the way the
+// Plugin Framework scaffold recommends: the value can't be known at plan time,
+// and how to supply one that can.
+func unknownProviderValueDetail(attr, env string) string {
+	return "The provider cannot connect because " + attr + " is not known yet: it is set from a value " +
+		"(for example another resource's output) that is only known after apply. Set it from a value known " +
+		"at plan time, such as a variable or the " + env + " env var, or apply the resource it depends on " +
+		"first (terraform apply -target=...)."
 }

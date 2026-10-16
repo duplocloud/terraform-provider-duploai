@@ -3,6 +3,7 @@
   "description": "Manages a DuploCloud AI Helpdesk AWS ElastiCache cluster (Redis, Valkey, or Memcached).",
   "idPath": "id",
   "dataSource": true,
+  "mergeUpdateIntoCurrent": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AWSElastiCaches",
     "deprovision": {}
@@ -201,6 +202,23 @@
       "sensitive": true,
       "apiPath": "spec.authToken",
       "description": "Redis/Valkey AUTH token. Requires transit_encryption_enabled = true."
+    },
+    {
+      "name": "auth_token_wo",
+      "type": "string",
+      "optional": true,
+      "sensitive": true,
+      "writeOnly": true,
+      "versionAttribute": "auth_token_wo_version",
+      "createPath": "spec.authToken",
+      "updatePath": "spec.authToken",
+      "description": "Write-only alternative to `auth_token`, for Terraform 1.11 and later: the value is sent to the API but never stored in the plan or state. Set `auth_token_wo_version` with it, and change `auth_token_wo_version` whenever this value changes — that is the only signal that sends the new value. On Terraform earlier than 1.11, use `auth_token` instead. Only one of the two may be set. Choose one field per configuration: a conditional on a variable that sets one or the other fails validation, because Terraform validates before variable values are known. Requires transit_encryption_enabled = true."
+    },
+    {
+      "name": "auth_token_wo_version",
+      "type": "int",
+      "optional": true,
+      "description": "Version of `auth_token_wo`. Required when `auth_token_wo` is set. The value itself is arbitrary (1, 2, 3, …): changing it sends the current `auth_token_wo` on the next apply. Stored in state; the secret is not."
     },
     {
       "name": "auto_minor_version_upgrade",
@@ -403,6 +421,8 @@
       "type": "string",
       "computed": true,
       "noSend": true,
+      "stable": true,
+      "preserveOnEmptyResponse": true,
       "apiPath": "result.configurationEndpoint",
       "description": "Configuration endpoint (cluster-mode-enabled Redis/Valkey and Memcached)."
     },
@@ -411,6 +431,8 @@
       "type": "string",
       "computed": true,
       "noSend": true,
+      "stable": true,
+      "preserveOnEmptyResponse": true,
       "apiPath": "result.primaryEndpoint",
       "description": "Primary endpoint address (Redis/Valkey)."
     },
@@ -419,12 +441,15 @@
       "type": "string",
       "computed": true,
       "noSend": true,
+      "stable": true,
+      "preserveOnEmptyResponse": true,
       "apiPath": "result.readerEndpoint",
       "description": "Reader endpoint address (Redis/Valkey)."
     },
     {
       "name": "auth_token_secret_arn",
       "type": "string",
+      "stableUnlessChanged": ["auth_token", "auth_token_wo_version", "transit_encryption_enabled"],
       "computed": true,
       "noSend": true,
       "apiPath": "result.authTokenSecretArn",
@@ -436,6 +461,7 @@
       "computed": true,
       "stable": true,
       "noSend": true,
+      "preserveOnEmptyResponse": true,
       "apiPath": "result.stackId",
       "description": "Provisioned CloudFormation stack identifier."
     }
@@ -444,7 +470,8 @@
     [
       "snapshot_name",
       "snapshot_arns"
-    ]
+    ],
+    ["auth_token", "auth_token_wo"]
   ],
   "requiredIf": [
     {

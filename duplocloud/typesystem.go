@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -39,6 +40,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
@@ -152,18 +154,25 @@ func attrSchema(a AttributeSpec) schema.Attribute {
 func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 	switch elem {
 	case "string":
-		o := schema.StringAttribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
+		o := schema.StringAttribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, WriteOnly: a.WriteOnly, Description: a.Description, DeprecationMessage: a.Deprecated}
+		var def string
 		if a.Default != nil {
-			var s string
-			_ = json.Unmarshal(*a.Default, &s)
-			o.Default = stringdefault.StaticString(s)
+			_ = json.Unmarshal(*a.Default, &def)
+			o.Default = stringdefault.StaticString(def)
 		}
 		o.Validators = stringValidators(a)
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, stringplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, stringplanmodifier.UseStateForUnknown(), stringplanmodifier.UseNonNullStateForUnknown()))
+		}
+		if len(a.StableUnlessChanged) > 0 {
+			o.PlanModifiers = append(o.PlanModifiers, stableUnlessModifier{inputs: a.StableUnlessChanged})
+		}
+		if a.Computed && a.Default != nil && def == "" {
+			// Must run before RequiresReplace: see nullStateMatchesEmptyDefault.
+			o.PlanModifiers = append(o.PlanModifiers, nullStateMatchesEmptyDefault{})
 		}
 		if a.ForceNew {
-			o.PlanModifiers = append(o.PlanModifiers, stringplanmodifier.RequiresReplace())
+			o.PlanModifiers = append(o.PlanModifiers, stringRequiresReplace(a))
 		}
 		return o
 	case "bool":
@@ -174,10 +183,10 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			o.Default = booldefault.StaticBool(b)
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, boolplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, boolplanmodifier.UseStateForUnknown(), boolplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
-			o.PlanModifiers = append(o.PlanModifiers, boolplanmodifier.RequiresReplace())
+			o.PlanModifiers = append(o.PlanModifiers, boolRequiresReplace(a))
 		}
 		if a.ImmutableOnceTrue {
 			o.PlanModifiers = append(o.PlanModifiers, immutableOnceTrueModifier{attr: a.Name})
@@ -197,10 +206,10 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			o.Validators = append(o.Validators, int64validator.AtMost(int64(*a.Max)))
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, int64planmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, int64planmodifier.UseStateForUnknown(), int64planmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
-			o.PlanModifiers = append(o.PlanModifiers, int64planmodifier.RequiresReplace())
+			o.PlanModifiers = append(o.PlanModifiers, int64RequiresReplace(a))
 		}
 		return o
 	default: // number
@@ -217,7 +226,7 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			o.Validators = append(o.Validators, float64validator.AtMost(*a.Max))
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, float64planmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, float64planmodifier.UseStateForUnknown(), float64planmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, float64planmodifier.RequiresReplace())
@@ -240,6 +249,44 @@ func useStateForUnknown(a AttributeSpec) bool {
 	// must keep its prior-state value at plan time so the union-on-write can
 	// re-send the server-managed entries it holds.
 	return a.Computed && (a.Optional || a.ForceNew || a.preserveTarget || a.Stable || a.SendFromState)
+}
+
+// preserveNonNullOnly reports whether an attribute that keeps its prior state
+// should keep only a non-null one (UseNonNullStateForUnknown); otherwise it
+// keeps whatever the prior holds, null included (UseStateForUnknown, which
+// since framework v1.15.1 pins a null forever). Non-null only applies to:
+//
+//   - a stable output (an ID, an ARM id, an endpoint): it always exists once
+//     created, so a null in state means a read missed it, and leaving it
+//     unknown lets the next apply fill it in.
+//   - a child of a nested attribute: UseStateForUnknown only skips a resource
+//     being created, not a nested object being added, so a child the user
+//     leaves unset in a new list element would be planned as null instead of
+//     the value the server fills in. HashiCorp recommends
+//     UseNonNullStateForUnknown here (framework v1.17.0, issue #1197).
+//
+// Not under a forceNew parent, though: an unknown child makes the parent's
+// planned value differ from state, and its RequiresReplace would then replace
+// the resource on every unrelated update (k8s_job containers). A new element
+// there replaces the resource anyway, so the case above can't arise.
+//
+// A forceNew value always keeps null — turning unknown would force
+// replacement — as do values the engine needs at plan time (preserveTarget,
+// SendFromState). A top-level optional value may legitimately be unset.
+func preserveNonNullOnly(a AttributeSpec) bool {
+	if a.ForceNew || a.preserveTarget || a.SendFromState {
+		return false
+	}
+	return (a.nested && !a.underForceNew) || (a.Stable && !a.Optional)
+}
+
+// preserveModifier picks the type's UseNonNullStateForUnknown (nonNull) when
+// preserveNonNullOnly holds and its UseStateForUnknown (keep) otherwise.
+func preserveModifier[T any](a AttributeSpec, keep, nonNull T) T {
+	if preserveNonNullOnly(a) {
+		return nonNull
+	}
+	return keep
 }
 
 // staticDefaultValue decodes a spec's raw JSON `default` into a framework
@@ -291,7 +338,10 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 			o.Validators = append(o.Validators, setvalidator.ValueStringsAre(elemValidators...))
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, setplanmodifier.UseStateForUnknown(), setplanmodifier.UseNonNullStateForUnknown()))
+		}
+		if len(a.StableUnlessChanged) > 0 {
+			o.PlanModifiers = append(o.PlanModifiers, stableUnlessModifier{inputs: a.StableUnlessChanged})
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.RequiresReplace())
@@ -308,7 +358,7 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 			o.Validators = append(o.Validators, mapvalidator.ValueStringsAre(elemValidators...))
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, mapplanmodifier.UseStateForUnknown(), mapplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.RequiresReplace())
@@ -331,25 +381,30 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 			o.Validators = append(o.Validators, listvalidator.ValueStringsAre(elemValidators...))
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, listplanmodifier.UseStateForUnknown(), listplanmodifier.UseNonNullStateForUnknown()))
+		}
+		if len(a.StableUnlessChanged) > 0 {
+			o.PlanModifiers = append(o.PlanModifiers, stableUnlessModifier{inputs: a.StableUnlessChanged})
 		}
 		if a.ForceNew {
-			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.RequiresReplace())
+			o.PlanModifiers = append(o.PlanModifiers, listRequiresReplace(a))
 		}
 		return o
 	}
 }
 
-func nestedAttrMap(attrs []AttributeSpec) map[string]schema.Attribute {
-	out := make(map[string]schema.Attribute, len(attrs))
-	for _, na := range attrs {
+func nestedAttrMap(parent AttributeSpec) map[string]schema.Attribute {
+	out := make(map[string]schema.Attribute, len(parent.Attributes))
+	for _, na := range parent.Attributes {
+		na.nested = true
+		na.underForceNew = parent.ForceNew || parent.underForceNew
 		out[na.Name] = attrSchema(na)
 	}
 	return out
 }
 
 func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
-	nested := nestedAttrMap(a.Attributes)
+	nested := nestedAttrMap(a)
 	switch info.coll {
 	case "list":
 		o := schema.ListNestedAttribute{NestedObject: schema.NestedAttributeObject{Attributes: nested}, Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
@@ -365,10 +420,10 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 			o.Validators = append(o.Validators, listvalidator.SizeAtMost(a.MaxItems))
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, listplanmodifier.UseStateForUnknown(), listplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
-			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.RequiresReplace())
+			o.PlanModifiers = append(o.PlanModifiers, listRequiresReplace(a))
 		}
 		if a.OrderByKey != "" {
 			// Sort the planned config by the key so it matches the read side's
@@ -390,7 +445,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 			o.Validators = append(o.Validators, setvalidator.SizeAtMost(a.MaxItems))
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, setplanmodifier.UseStateForUnknown(), setplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.RequiresReplace())
@@ -404,7 +459,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 			}
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, mapplanmodifier.UseStateForUnknown(), mapplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.RequiresReplace())
@@ -418,13 +473,152 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 			}
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, objectplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, objectplanmodifier.UseStateForUnknown(), objectplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, objectplanmodifier.RequiresReplace())
 		}
 		return o
 	}
+}
+
+// stringRequiresReplace / listRequiresReplace return the forceNew modifier for
+// an attribute: RequiresReplace normally, or — with ImportAdoptsConfig — one
+// that replaces only when the prior value is set, so a value the API never
+// returns (null after import) adopts the config instead of replacing.
+func stringRequiresReplace(a AttributeSpec) planmodifier.String {
+	if !a.ImportAdoptsConfig && !a.CaseInsensitive {
+		return stringplanmodifier.RequiresReplace()
+	}
+	desc := importAdoptsConfigDescription
+	if a.CaseInsensitive {
+		desc = "Changing this value replaces the resource, except for a change in letter case only."
+	}
+	return stringplanmodifier.RequiresReplaceIf(
+		func(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+			if a.ImportAdoptsConfig && req.StateValue.IsNull() && justImported(ctx, req.Private) {
+				return // imported: adopt the config
+			}
+			if a.CaseInsensitive && !req.StateValue.IsNull() && !req.PlanValue.IsNull() && !req.PlanValue.IsUnknown() &&
+				strings.EqualFold(req.StateValue.ValueString(), req.PlanValue.ValueString()) {
+				return // same id, other casing
+			}
+			resp.RequiresReplace = true
+		},
+		desc, desc)
+}
+
+// keepPriorCasing returns prior when next is the same string in other letter
+// case (a CaseInsensitive attribute read back from an API that re-cases it).
+func keepPriorCasing(prior, next tftypes.Value) tftypes.Value {
+	if !prior.IsKnown() || prior.IsNull() || !next.IsKnown() || next.IsNull() ||
+		!prior.Type().Is(tftypes.String) || !next.Type().Is(tftypes.String) {
+		return next
+	}
+	var p, n string
+	if prior.As(&p) != nil || next.As(&n) != nil || p == n || !strings.EqualFold(p, n) {
+		return next
+	}
+	return prior
+}
+
+func listRequiresReplace(a AttributeSpec) planmodifier.List {
+	if !a.ImportAdoptsConfig {
+		return listplanmodifier.RequiresReplace()
+	}
+	return listplanmodifier.RequiresReplaceIf(
+		func(ctx context.Context, req planmodifier.ListRequest, resp *listplanmodifier.RequiresReplaceIfFuncResponse) {
+			resp.RequiresReplace = !req.StateValue.IsNull() || !justImported(ctx, req.Private)
+		},
+		importAdoptsConfigDescription, importAdoptsConfigDescription)
+}
+
+func boolRequiresReplace(a AttributeSpec) planmodifier.Bool {
+	if !a.ImportAdoptsConfig {
+		return boolplanmodifier.RequiresReplace()
+	}
+	return boolplanmodifier.RequiresReplaceIf(
+		func(ctx context.Context, req planmodifier.BoolRequest, resp *boolplanmodifier.RequiresReplaceIfFuncResponse) {
+			resp.RequiresReplace = !req.StateValue.IsNull() || !justImported(ctx, req.Private)
+		},
+		importAdoptsConfigDescription, importAdoptsConfigDescription)
+}
+
+func int64RequiresReplace(a AttributeSpec) planmodifier.Int64 {
+	if !a.ImportAdoptsConfig {
+		return int64planmodifier.RequiresReplace()
+	}
+	return int64planmodifier.RequiresReplaceIf(
+		func(ctx context.Context, req planmodifier.Int64Request, resp *int64planmodifier.RequiresReplaceIfFuncResponse) {
+			resp.RequiresReplace = !req.StateValue.IsNull() || !justImported(ctx, req.Private)
+		},
+		importAdoptsConfigDescription, importAdoptsConfigDescription)
+}
+
+const importAdoptsConfigDescription = "Changing this value replaces the resource, except on the first plan after an import, where the configured value is adopted."
+
+// importedPrivateKey is the private-state mark ImportState sets and the first
+// Update clears. A null prior value of an importAdoptsConfig attribute means
+// "not returned by the API" only while it is present; otherwise the value was
+// unset at creation, and setting it now replaces the resource as it always has.
+const importedPrivateKey = "imported"
+
+// privateGetter is the part of the framework's private-state handle the plan
+// modifiers need.
+type privateGetter interface {
+	GetKey(ctx context.Context, key string) ([]byte, diag.Diagnostics)
+}
+
+// The framework's GetKey is nil-safe, so a request without private state
+// (a unit test, a create) simply reads as "not imported".
+// privateSetter is the part of the framework's private-state handle that
+// clears the import mark.
+type privateSetter interface {
+	SetKey(ctx context.Context, key string, value []byte) diag.Diagnostics
+}
+
+// clearImportMarkOnSuccess removes the import mark unless the update failed.
+func clearImportMarkOnSuccess(ctx context.Context, failed bool, p privateSetter) diag.Diagnostics {
+	if failed {
+		return nil
+	}
+	return p.SetKey(ctx, importedPrivateKey, nil)
+}
+
+func justImported(ctx context.Context, p privateGetter) bool {
+	if p == nil {
+		return false
+	}
+	v, diags := p.GetKey(ctx, importedPrivateKey)
+	return !diags.HasError() && string(v) == "true"
+}
+
+// nullStateMatchesEmptyDefault plans the prior null instead of an empty-string
+// default when the user has not set the attribute. A value the API never
+// echoes back (provisioner_version) is null in state after an import, while the
+// default plans ""; Terraform sees null -> "" as a change, and on a forceNew
+// attribute as a replacement of the resource just imported. Null and "" mean
+// the same thing here, as they did in SDKv2, so the plan keeps the state.
+// It must run before RequiresReplace, which compares the final plan to state.
+type nullStateMatchesEmptyDefault struct{}
+
+func (m nullStateMatchesEmptyDefault) Description(_ context.Context) string {
+	return "keeps a null prior value instead of planning an empty-string default"
+}
+
+func (m nullStateMatchesEmptyDefault) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m nullStateMatchesEmptyDefault) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	// Create (no state), a configured value, or a real prior value: nothing to do.
+	if req.State.Raw.IsNull() || !req.ConfigValue.IsNull() || !req.StateValue.IsNull() {
+		return
+	}
+	if req.PlanValue.IsUnknown() || req.PlanValue.IsNull() || req.PlanValue.ValueString() != "" {
+		return
+	}
+	resp.PlanValue = req.StateValue
 }
 
 // immutableOnceTrueModifier fails the plan when a one-way boolean is turned back
@@ -998,6 +1192,116 @@ func restoreObjectPreserved(attrs []AttributeSpec, prior, next tftypes.Value) tf
 	return tftypes.NewValue(next.Type(), out)
 }
 
+// keepEmptyForm treats null and an empty value ("", [], {}, or an object whose
+// attributes are all null or empty) as the same thing, and keeps whichever of
+// the two the prior value already holds. SDKv2 did this implicitly; the Plugin
+// Framework compares them as different values. Without it, an optional field
+// the user left unset that the API echoes back as "" or [] plans `"" -> null`
+// on every run (and the reverse when the user wrote "" and the API omits it).
+// It recurses into objects, lists of equal length and maps (by key), so nested
+// optional children get the same treatment. A real value on either side is
+// never touched, so genuine drift still shows.
+//
+// keepNull says whether a null prior may win over an empty API value. It is
+// true only for a user-only attribute (optional, not computed), where null is
+// the user's own choice. For a computed attribute — one with a default or that
+// the server fills — a null prior just means nothing was known yet (after an
+// import every value starts null), so the API's "" is taken: keeping null there
+// would turn a default of "" into a spurious change, and on a forceNew
+// attribute into a replacement.
+func keepEmptyForm(prior, next tftypes.Value, keepNull bool) tftypes.Value {
+	if !prior.IsKnown() || !next.IsKnown() || !prior.Type().Is(next.Type()) {
+		return next
+	}
+	if prior.IsNull() {
+		if keepNull && isEmptyForm(next) {
+			return prior
+		}
+		return next
+	}
+	if next.IsNull() {
+		if isEmptyForm(prior) {
+			return prior
+		}
+		return next
+	}
+	switch t := next.Type().(type) {
+	case tftypes.Object:
+		var pm, nm map[string]tftypes.Value
+		if prior.As(&pm) != nil || next.As(&nm) != nil {
+			return next
+		}
+		out := make(map[string]tftypes.Value, len(nm))
+		for k, v := range nm {
+			if p, ok := pm[k]; ok {
+				v = keepEmptyForm(p, v, keepNull)
+			}
+			out[k] = v
+		}
+		return tftypes.NewValue(t, out)
+	case tftypes.List:
+		var pe, ne []tftypes.Value
+		if prior.As(&pe) != nil || next.As(&ne) != nil || len(pe) != len(ne) {
+			return next
+		}
+		out := make([]tftypes.Value, len(ne))
+		for i := range ne {
+			out[i] = keepEmptyForm(pe[i], ne[i], keepNull)
+		}
+		return tftypes.NewValue(t, out)
+	case tftypes.Map:
+		var pm, nm map[string]tftypes.Value
+		if prior.As(&pm) != nil || next.As(&nm) != nil {
+			return next
+		}
+		out := make(map[string]tftypes.Value, len(nm))
+		for k, v := range nm {
+			if p, ok := pm[k]; ok {
+				v = keepEmptyForm(p, v, keepNull)
+			}
+			out[k] = v
+		}
+		return tftypes.NewValue(t, out)
+	}
+	return next
+}
+
+// isEmptyForm reports whether a known, non-null value carries nothing: the
+// empty string, an empty list/set/map, or an object whose attributes are all
+// null or themselves empty.
+func isEmptyForm(v tftypes.Value) bool {
+	if v.IsNull() {
+		return true
+	}
+	if !v.IsKnown() {
+		return false
+	}
+	switch v.Type().(type) {
+	case tftypes.List, tftypes.Set, tftypes.Tuple:
+		var elems []tftypes.Value
+		return v.As(&elems) == nil && len(elems) == 0
+	case tftypes.Map:
+		var m map[string]tftypes.Value
+		return v.As(&m) == nil && len(m) == 0
+	case tftypes.Object:
+		var m map[string]tftypes.Value
+		if v.As(&m) != nil {
+			return false
+		}
+		for _, c := range m {
+			if !isEmptyForm(c) {
+				return false
+			}
+		}
+		return true
+	}
+	if v.Type().Is(tftypes.String) {
+		var s string
+		return v.As(&s) == nil && s == ""
+	}
+	return false
+}
+
 // elemAt returns the i-th element of elems, or a typed null when the prior
 // collection is shorter (or absent).
 func elemAt(elems []tftypes.Value, i int, t tftypes.Type) tftypes.Value {
@@ -1184,5 +1488,77 @@ func dsObjectSchema(a AttributeSpec, info typeInfo) dsschema.Attribute {
 			Attributes: nested, Required: a.Required, Optional: a.Optional,
 			Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated,
 		}
+	}
+}
+
+// stableUnlessModifier keeps a computed output's prior value in the plan unless
+// one of the named inputs changes (or is unknown) in the same plan — a
+// conditional stable. For outputs only a few inputs can change, such as a
+// network's subnet IDs (cidr) or MSK bootstrap brokers (broker count): an
+// unrelated in-place update (tags, description) then keeps them known, so a
+// dependent that uses them in a force-new argument is not replaced, while a
+// change that really alters them still plans "(known after apply)". A null
+// prior is never kept (a read missed it; the apply fills it in).
+type stableUnlessModifier struct{ inputs []string }
+
+func (m stableUnlessModifier) Description(_ context.Context) string {
+	return "Keeps the prior value unless one of " + strings.Join(m.inputs, ", ") + " changes."
+}
+
+func (m stableUnlessModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+// keep reports whether the prior value should be planned: an update (prior
+// state exists), the value would otherwise be unknown, the prior is non-null,
+// and no listed input changes.
+//
+// An input counts as unchanged when its planned value equals state, or when it
+// is unknown in the plan but unset in config: plan modifiers all see the plan
+// as proposed, before any of them run, so an optional+computed input the user
+// left unset (vpc_id, additional_cidrs) still shows as unknown here even though
+// its own UseStateForUnknown will plan the prior value. An input that is set in
+// config to a different or unknown value counts as changed.
+func (m stableUnlessModifier) keep(state tfsdk.State, plan tfsdk.Plan, config tfsdk.Config, prior, planned attr.Value) bool {
+	if state.Raw.IsNull() || plan.Raw.IsNull() || prior.IsNull() || prior.IsUnknown() || !planned.IsUnknown() {
+		return false
+	}
+	var p, s, c map[string]tftypes.Value
+	if plan.Raw.As(&p) != nil || state.Raw.As(&s) != nil || config.Raw.As(&c) != nil {
+		return false
+	}
+	for _, in := range m.inputs {
+		pv, ok := p[in]
+		if !ok {
+			return false
+		}
+		if pv.IsFullyKnown() {
+			if !pv.Equal(s[in]) {
+				return false
+			}
+			continue
+		}
+		if cv, ok := c[in]; !ok || !cv.IsNull() {
+			return false // set in config to an unknown value, or not in config at all
+		}
+	}
+	return true
+}
+
+func (m stableUnlessModifier) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if m.keep(req.State, req.Plan, req.Config, req.StateValue, req.PlanValue) {
+		resp.PlanValue = req.StateValue
+	}
+}
+
+func (m stableUnlessModifier) PlanModifyList(_ context.Context, req planmodifier.ListRequest, resp *planmodifier.ListResponse) {
+	if m.keep(req.State, req.Plan, req.Config, req.StateValue, req.PlanValue) {
+		resp.PlanValue = req.StateValue
+	}
+}
+
+func (m stableUnlessModifier) PlanModifySet(_ context.Context, req planmodifier.SetRequest, resp *planmodifier.SetResponse) {
+	if m.keep(req.State, req.Plan, req.Config, req.StateValue, req.PlanValue) {
+		resp.PlanValue = req.StateValue
 	}
 }

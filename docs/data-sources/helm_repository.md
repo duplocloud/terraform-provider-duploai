@@ -41,7 +41,7 @@ output "status" {
 - `helm_repository_id` (String) ID of this Helm repository, for reference by dependent resources.
 - `insecure` (Boolean) Allow connecting to an HTTP (non-TLS) OCI registry.
 - `interval` (String) Interval at which the repository index is fetched (Go duration, e.g. 5m, 1h).
-- `labels` (Map of String) Kubernetes labels applied to the Helm repository.
+- `labels` (Map of String) Kubernetes labels applied to the Helm repository. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored.
 - `name` (String) Name of the Helm repository resource.
 - `namespace_name` (String) Kubernetes namespace the Helm repository is created in.
 - `oci_provider` (String) OCI provider for authentication (e.g. generic, aws, azure, gcp). Only used when type is oci. Server-defaulted to generic by Flux when omitted.

@@ -72,7 +72,7 @@ resource "duploai_helm_repository" "private_oci" {
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `insecure` (Boolean) Allow connecting to an HTTP (non-TLS) OCI registry.
 - `interval` (String) Interval at which the repository index is fetched (Go duration, e.g. 5m, 1h).
-- `labels` (Map of String) Kubernetes labels applied to the Helm repository.
+- `labels` (Map of String) Kubernetes labels applied to the Helm repository. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored.
 - `oci_provider` (String) OCI provider for authentication (e.g. generic, aws, azure, gcp). Only used when type is oci. Server-defaulted to generic by Flux when omitted.
 - `pass_credentials` (Boolean) Pass credentials to all domains the repository redirects to.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.

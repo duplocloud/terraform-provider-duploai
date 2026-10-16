@@ -34,12 +34,12 @@ output "status" {
 
 ### Read-Only
 
-- `annotations` (Map of String) Kubernetes annotations applied to the config map.
+- `annotations` (Map of String) Kubernetes annotations applied to the config map. Only annotations set in configuration are tracked; annotations added outside Terraform are ignored.
 - `binary_data` (Map of String) Binary configuration entries, base64-encoded values keyed by name.
 - `data` (Map of String) Configuration key/value pairs (UTF-8 string data).
 - `environment_id` (String) ID of the environment that owns the resource group.
 - `k8s_config_map_id` (String) ID of this config map, for reference by dependent resources.
-- `labels` (Map of String) Kubernetes labels applied to the config map.
+- `labels` (Map of String) Kubernetes labels applied to the config map. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored.
 - `name` (String) Name of the config map resource.
 - `namespace_name` (String) Kubernetes namespace the config map is created in.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.

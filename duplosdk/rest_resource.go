@@ -3,10 +3,11 @@ package duplosdk
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // RESTResource is the generic REST client for a spec-driven resource. It pairs a
@@ -23,6 +24,31 @@ type RESTResource[T any] struct {
 	// for the operation-initiating calls (create/update/deprovision/delete). Set
 	// it via WithCallTimeout.
 	callTimeout time.Duration
+
+	// ctx carries the Terraform request's values (its tflog logger) into each
+	// HTTP call. Set it via WithContext. Only values are used, never its
+	// cancellation: see Client.doRequestWithTimeout.
+	ctx context.Context
+}
+
+// WithContext returns a copy of the resource whose requests log through the
+// given (Terraform request) context. Requests are not cancelled by it, so a
+// call the backend has already received is never cut off mid-flight.
+func (r *RESTResource[T]) WithContext(ctx context.Context) *RESTResource[T] {
+	if ctx == nil {
+		return r
+	}
+	c := *r
+	c.ctx = ctx
+	return &c
+}
+
+// context returns the resource's request context, or Background when none was set.
+func (r *RESTResource[T]) context() context.Context {
+	if r.ctx == nil {
+		return context.Background()
+	}
+	return r.ctx
 }
 
 // WithCallTimeout returns a copy of the resource whose operation-initiating
@@ -62,7 +88,7 @@ func (r *RESTResource[T]) decode(verb, path string, req *T) (*T, ClientError) {
 // the operation-initiating calls, which may legitimately block for minutes.
 func (r *RESTResource[T]) decodeWithTimeout(timeout time.Duration, verb, path string, req *T) (*T, ClientError) {
 	var resp apiResponse[T]
-	if err := r.client.callAPIWithTimeout(timeout, verb, path, req, &resp); err != nil {
+	if err := r.client.callAPIWithTimeout(r.context(), timeout, verb, path, req, &resp); err != nil {
 		return nil, err
 	}
 	if resp.Data == nil {
@@ -82,7 +108,7 @@ func (r *RESTResource[T]) Create(req *T) (*T, ClientError) {
 // returns nothing, so decode's "no data" check would reject a perfectly good
 // response.
 func (r *RESTResource[T]) CreateNoContent() ClientError {
-	return r.client.callAPIWithTimeout(r.callTimeout, r.endpoint.createVerb(), r.endpoint.createPath(r.scope), nil, nil)
+	return r.client.callAPIWithTimeout(r.context(), r.callTimeout, r.endpoint.createVerb(), r.endpoint.createPath(r.scope), nil, nil)
 }
 
 // Get fetches a single object by id.
@@ -106,7 +132,7 @@ func (r *RESTResource[T]) GetPath(path string) (*T, ClientError) {
 func (r *RESTResource[T]) GetCollection() ([]map[string]any, ClientError) {
 	var resp apiResponse[[]map[string]any]
 	path := r.endpoint.ResolvePath(r.endpoint.UriBase, r.scope)
-	if err := r.client.callAPIWithTimeout(0, http.MethodGet, path, nil, &resp); err != nil {
+	if err := r.client.callAPIWithTimeout(r.context(), 0, http.MethodGet, path, nil, &resp); err != nil {
 		return nil, err
 	}
 	if resp.Data == nil {
@@ -123,7 +149,7 @@ func (r *RESTResource[T]) GetCollection() ([]map[string]any, ClientError) {
 func (r *RESTResource[T]) GetCollectionEnvelope() (map[string]any, ClientError) {
 	var resp apiResponse[map[string]any]
 	path := r.endpoint.ResolvePath(r.endpoint.UriBase, r.scope)
-	if err := r.client.callAPIWithTimeout(0, http.MethodGet, path, nil, &resp); err != nil {
+	if err := r.client.callAPIWithTimeout(r.context(), 0, http.MethodGet, path, nil, &resp); err != nil {
 		return nil, err
 	}
 	if resp.Data == nil {
@@ -141,7 +167,7 @@ func (r *RESTResource[T]) CreateList(req *T) ([]map[string]any, ClientError) {
 	verb := r.endpoint.createVerb()
 	path := r.endpoint.createPath(r.scope)
 	var resp apiResponse[[]map[string]any]
-	if err := r.client.callAPIWithTimeout(r.callTimeout, verb, path, req, &resp); err != nil {
+	if err := r.client.callAPIWithTimeout(r.context(), r.callTimeout, verb, path, req, &resp); err != nil {
 		return nil, err
 	}
 	if resp.Data == nil {
@@ -173,7 +199,7 @@ func (r *RESTResource[T]) GetWithRetry(ctx context.Context, id string, maxWait t
 		if err == nil || !isRetryableRead(err) || !time.Now().Add(delay).Before(deadline) {
 			return obj, err
 		}
-		log.Printf("[TRACE] GetWithRetry(%s/%s): status %d, retrying in %s", r.scopeLabel(), id, err.Status(), delay)
+		tflog.Trace(ctx, fmt.Sprintf("GetWithRetry(%s/%s): status %d, retrying in %s", r.scopeLabel(), id, err.Status(), delay))
 		select {
 		case <-ctx.Done():
 			return nil, err
@@ -200,7 +226,7 @@ func (r *RESTResource[T]) Update(id string, req *T) (*T, ClientError) {
 
 // Delete removes the object. A 404 is treated as success (already gone).
 func (r *RESTResource[T]) Delete(id string) ClientError {
-	err := r.client.callAPIWithTimeout(r.callTimeout, r.endpoint.deleteVerb(), r.endpoint.deletePath(r.scope, id), nil, nil)
+	err := r.client.callAPIWithTimeout(r.context(), r.callTimeout, r.endpoint.deleteVerb(), r.endpoint.deletePath(r.scope, id), nil, nil)
 	if err != nil && err.IsNotFound() {
 		return nil
 	}
@@ -211,7 +237,7 @@ func (r *RESTResource[T]) Delete(id string) ClientError {
 // without removing the record itself. It is the pre-delete step for resources
 // the API will not delete while live. A 404 is treated as success (already gone).
 func (r *RESTResource[T]) Deprovision(id string) ClientError {
-	err := r.client.callAPIWithTimeout(r.callTimeout, r.endpoint.deprovisionVerb(), r.endpoint.deprovisionPath(r.scope, id), map[string]any{}, nil)
+	err := r.client.callAPIWithTimeout(r.context(), r.callTimeout, r.endpoint.deprovisionVerb(), r.endpoint.deprovisionPath(r.scope, id), map[string]any{}, nil)
 	if err != nil && err.IsNotFound() {
 		return nil
 	}
