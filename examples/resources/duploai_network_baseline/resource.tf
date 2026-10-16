@@ -289,6 +289,7 @@ resource "duploai_network_baseline" "customer_managed_iam" {
   az_count      = 2
   subnet_prefix = 24
 
-  enable_flow_logs      = true
-  existing_iam_role_arn = "arn:aws:iam::123456789012:role/platform-shared"
+  enable_flow_logs         = true
+  flow_logs_retention_days = 30
+  existing_iam_role_arn    = "arn:aws:iam::123456789012:role/platform-shared"
 }
