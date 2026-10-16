@@ -273,3 +273,22 @@ output "private_eks_peering_state" {
 output "private_eks_peering_connection_id" {
   value = duploai_network_baseline.private_eks.helpdesk_vpc_peering.peering_connection_id
 }
+
+# Account that forbids IAM creation — the customer supplies an existing role, and
+# the network baseline uses it as the VPC flow-logs delivery role instead of
+# creating one. The role must trust vpc-flow-logs.amazonaws.com and be allowed to
+# write to the /aws/vpc/flowlogs/* log groups, and needs enable_flow_logs = true.
+# The platform never edits or deletes it. Removing it from the configuration
+# keeps it; setting a different role replaces the network.
+resource "duploai_network_baseline" "customer_managed_iam" {
+  workspace_id  = "<workspace-id>"
+  name          = "prod-network-no-iam"
+  scope_ids     = ["<scope-id>"]
+  region        = "us-east-1"
+  cidr          = "10.5.0.0/16"
+  az_count      = 2
+  subnet_prefix = 24
+
+  enable_flow_logs      = true
+  existing_iam_role_arn = "arn:aws:iam::123456789012:role/platform-shared"
+}

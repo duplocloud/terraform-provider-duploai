@@ -362,3 +362,20 @@ resource "azapi_update_resource" "agic_appgw_buffers" {
     }
   }
 }
+
+# Account that forbids IAM creation — the customer supplies one existing role,
+# used as both the EKS service role and the node role. It must trust
+# eks.amazonaws.com (sts:AssumeRole and sts:TagSession) and ec2.amazonaws.com.
+# The baseline creates no IAM at all, so the cluster gets no -read-only scope and
+# no IAM OIDC provider: create the provider for the cluster's issuer yourself
+# before cluster attributes or namespace IRSA can work. Not allowed with
+# mode = "Import". Removing it from the configuration keeps it; setting a
+# different role replaces the cluster.
+resource "duploai_cluster_baseline" "customer_managed_iam" {
+  workspace_id = "<workspace-id>"
+  name         = "prod-cluster-no-iam"
+  network_id   = "<network-baseline-id>"
+  version      = "1.34"
+
+  existing_iam_role_arn = "arn:aws:iam::123456789012:role/platform-shared"
+}

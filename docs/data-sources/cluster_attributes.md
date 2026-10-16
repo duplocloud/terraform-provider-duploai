@@ -49,6 +49,7 @@ output "vpc_id" {
 - `components` (Attributes) Cluster components to install. (see [below for nested schema](#nestedatt--components))
 - `description` (String) Optional description.
 - `eks_addons` (Attributes List) EKS managed add-ons to install on the cluster. (see [below for nested schema](#nestedatt--eks_addons))
+- `existing_iam_role_arn` (String) The customer-managed IAM role copied from the parent cluster's existing_iam_role_arn (server-owned; not settable here). When set, no IRSA roles are created and every component's service account and auto-roled EKS add-on uses this role; its trust policy must allow each service account through the cluster's OIDC provider. Null for clusters that build their own IAM, and for imported clusters.
 - `external_dns_config` (Attributes) Configuration for ExternalDNS. Takes effect when components.external_dns is true. (see [below for nested schema](#nestedatt--external_dns_config))
 - `installed_components` (Attributes List) Components currently installed on the cluster. (see [below for nested schema](#nestedatt--installed_components))
 - `installed_eks_addons` (Attributes List) EKS managed add-ons currently installed on the cluster. (see [below for nested schema](#nestedatt--installed_eks_addons))
