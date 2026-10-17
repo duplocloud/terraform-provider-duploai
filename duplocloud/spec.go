@@ -411,7 +411,9 @@ type AttributeSpec struct {
 	// recomputed. Stable opts a specific attribute back into preserving its
 	// prior value, so it does not spuriously show "(known after apply)" (and
 	// ripple into dependent resources) every time an unrelated attribute on
-	// the same resource changes.
+	// the same resource changes. Only a non-null prior value is kept
+	// (UseNonNullStateForUnknown, see preserveNonNullOnly): a null means a
+	// read missed the value, and the next apply should fill it in.
 	Stable bool `json:"stable,omitempty"`
 
 	// Default supplies a static default for Optional+Computed attributes.

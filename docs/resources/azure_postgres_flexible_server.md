@@ -141,7 +141,7 @@ resource "duploai_azure_postgres_flexible_server" "private" {
 - `effective_firewall_rules` (Attributes List) Firewall rules Azure actually reports for the server. Applied best-effort immediately after create and reconciled on the next update, so this can lag firewall_rules briefly. (see [below for nested schema](#nestedatt--effective_firewall_rules))
 - `fully_qualified_domain_name` (String) Hostname clients connect to on port 5432.
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `postgres_server_id` (String) ARM resource id of the PostgreSQL Flexible Server in Azure. Confirmed live (centxforge/staging, 2026-10-08): a refresh can come back with none of the three responsePaths populated even though the server is Ready and otherwise unchanged, which without this flag null's out the value and forces a destroy/recreate of every azurerm_postgresql_flexible_server_configuration that keys off it (server_id is ForceNew there). preserveOnEmptyResponse keeps the last known-good id across that kind of transient gap, same as administrator_password above.
+- `postgres_server_id` (String) ARM resource id of the PostgreSQL Flexible Server in Azure. Read-only; the backend can occasionally omit it from an otherwise-normal read, so the last known value is kept rather than cleared. Feeds server_id on dependent azurerm_postgresql_flexible_server_configuration resources, where it is ForceNew.
 - `provisioning_state` (String) Azure-reported provisioning state of the server.
 - `scope_ids` (List of String) Scopes the server is visible to. Inherited from the resource group.
 - `server_id` (String) Backend identifier of the server record.

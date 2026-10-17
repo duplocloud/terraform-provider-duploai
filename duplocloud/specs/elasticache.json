@@ -403,6 +403,8 @@
       "type": "string",
       "computed": true,
       "noSend": true,
+      "stable": true,
+      "preserveOnEmptyResponse": true,
       "apiPath": "result.configurationEndpoint",
       "description": "Configuration endpoint (cluster-mode-enabled Redis/Valkey and Memcached)."
     },
@@ -411,6 +413,8 @@
       "type": "string",
       "computed": true,
       "noSend": true,
+      "stable": true,
+      "preserveOnEmptyResponse": true,
       "apiPath": "result.primaryEndpoint",
       "description": "Primary endpoint address (Redis/Valkey)."
     },
@@ -419,6 +423,8 @@
       "type": "string",
       "computed": true,
       "noSend": true,
+      "stable": true,
+      "preserveOnEmptyResponse": true,
       "apiPath": "result.readerEndpoint",
       "description": "Reader endpoint address (Redis/Valkey)."
     },
@@ -436,6 +442,7 @@
       "computed": true,
       "stable": true,
       "noSend": true,
+      "preserveOnEmptyResponse": true,
       "apiPath": "result.stackId",
       "description": "Provisioned CloudFormation stack identifier."
     }

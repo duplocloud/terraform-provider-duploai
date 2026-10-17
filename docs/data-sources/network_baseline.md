@@ -79,6 +79,7 @@ output "azure_nat_gateway_ids" {
 - `enable_dns` (Boolean) Enable DNS support in the VPC. AWS only; Azure custom DNS is configured via azure.dns_servers.
 - `enable_flow_logs` (Boolean) Enable VPC flow logs. AWS only.
 - `env_tag` (String) Environment tag applied to provisioned resources. AWS only; Azure virtual network tags are set via azure.tags.
+- `existing_iam_role_arn` (String) ARN of an existing, customer-managed IAM role for accounts that forbid IAM creation. Used as the VPC flow-logs delivery role instead of creating one, so it must trust vpc-flow-logs.amazonaws.com and allow logs:CreateLogStream, logs:PutLogEvents, logs:DescribeLogGroups and logs:DescribeLogStreams on /aws/vpc/flowlogs/*. Requires enable_flow_logs = true, since the role is used for nothing else. Leave unset to have the baseline create its own IAM as before. The role is customer-owned: the platform never edits or deletes it. Removing it from the configuration keeps the stored value; setting a different ARN replaces this resource. AWS only, and not allowed with mode = "Import".
 - `flow_logs_retention_days` (Number) Flow logs retention in days. AWS only. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default).
 - `helpdesk_account_id` (String) AWS only. AWS account that owns the helpdesk VPC. Stamped by the platform.
 - `helpdesk_region` (String) AWS only. Region of the helpdesk VPC. Stamped by the platform; only meaningful when the peering crosses regions.
