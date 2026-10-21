@@ -198,6 +198,7 @@ resource "duploai_cluster_attributes" "full" {
 - `cf_stack_name` (String) CloudFormation stack name for provisioned infrastructure.
 - `cluster_attributes_id` (String) ID of this cluster attributes resource, for reference by dependent resources.
 - `cluster_name` (String) Name of the cluster. Inherited from the linked cluster baseline.
+- `existing_iam_role_arn` (String) The customer-managed IAM role copied from the parent cluster's existing_iam_role_arn (server-owned; not settable here). When set, no IRSA roles are created and every component's service account and auto-roled EKS add-on uses this role; its trust policy must allow each service account through the cluster's OIDC provider. Null for clusters that build their own IAM, and for imported clusters.
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `installed_components` (Attributes List) Components currently installed on the cluster. (see [below for nested schema](#nestedatt--installed_components))
 - `installed_eks_addons` (Attributes List) EKS managed add-ons currently installed on the cluster. (see [below for nested schema](#nestedatt--installed_eks_addons))

@@ -218,6 +218,24 @@ func (r *RESTResource[T]) Deprovision(id string) ClientError {
 	return err
 }
 
+// CurrentStatus reads the object once and returns its status as the waiter sees
+// it. gone is true when the object no longer exists (404). For a resource with
+// no waiter the status is always empty. Use it before a teardown step to learn
+// whether that step already happened out of band.
+func (r *RESTResource[T]) CurrentStatus(id string) (status string, gone bool, err ClientError) {
+	obj, err := r.Get(id)
+	if err != nil {
+		if err.IsNotFound() {
+			return "", true, nil
+		}
+		return "", false, err
+	}
+	if r.waiter == nil || r.waiter.StatusFn == nil {
+		return "", false, nil
+	}
+	return r.waiter.StatusFn(obj), false, nil
+}
+
 // WaitUntilDeprovisioned polls Get until the resource reaches the deprovisioned
 // state or is gone (404), erroring on a terminal failure state. Use it between
 // Deprovision and Delete so the record is in a deletable state before removal.
