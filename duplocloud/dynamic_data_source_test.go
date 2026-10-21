@@ -456,6 +456,11 @@ func TestK8sCredentialsReadsJitAccessPath(t *testing.T) {
 		if got := endpoint.Read.Path; got != "/{id}/k8s/jitAccess" {
 			t.Errorf("read path = %q, want %q", got, "/{id}/k8s/jitAccess")
 		}
+		// The backend route is [HttpPost] since 2026-08-25 (DUPLOAI-2001); a GET
+		// gets 405 Method Not Allowed.
+		if got := endpoint.Read.Verb; got != "POST" {
+			t.Errorf("read verb = %q, want POST (the jitAccess route is POST-only)", got)
+		}
 		if got := endpoint.UriBase; got != "/v1/aiservicedesk/admin/data/Scopes" {
 			t.Errorf("uriBase = %q, want the Scopes collection", got)
 		}

@@ -871,9 +871,16 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 	// "skipWhen" condition (e.g. cloud=K8S_ONLY, which provisions no cloud infra)
 	// bypasses this step and deletes directly.
 	if r.endpoint.HasDeprovision() && !r.deprovisionSkipped(ctx, req.State) {
-		if clientErr := api.Deprovision(objID); clientErr != nil {
-			resp.Diagnostics.AddError("Error deprovisioning "+r.spec.Name, clientErr.Error())
+		trigger, gone := r.deprovisionNeeded(api, id, objID)
+		if gone {
+			log.Printf("[TRACE] dynamic %s Delete(%s): already gone, nothing to delete", r.spec.Name, id)
 			return
+		}
+		if trigger {
+			if clientErr := api.Deprovision(objID); clientErr != nil {
+				resp.Diagnostics.AddError("Error deprovisioning "+r.spec.Name, clientErr.Error())
+				return
+			}
 		}
 		if r.spec.Waiter != nil && r.spec.Waiter.DeprovisionedState != "" {
 			if clientErr := api.WaitUntilDeprovisioned(ctx, objID, r.spec.Waiter.DeprovisionedState, timeout); clientErr != nil {
@@ -897,6 +904,42 @@ func (r *dynamicResource) Delete(ctx context.Context, req resource.DeleteRequest
 		}
 	}
 	log.Printf("[TRACE] dynamic %s Delete(%s): end", r.spec.Name, id)
+}
+
+// deprovisionInFlightStates are the platform statuses of a record whose
+// deprovision has already started: calling deprovision again is refused or
+// redundant, so the engine only waits for it to finish.
+var deprovisionInFlightStates = map[string]bool{
+	"DeprovisionInitiated": true,
+	"DeProvisioning":       true,
+}
+
+// deprovisionNeeded reads the object before the pre-delete deprovision call to
+// learn whether teardown already happened out of band (deleted or deprovisioned
+// from the UI, for example). gone means the object no longer exists, so there
+// is nothing left to delete. trigger is false when the record is already
+// deprovisioned or deprovisioning: the API can refuse a second deprovision on
+// such a record (a namespace with its spec stripped answers 400 "Invalid
+// state"), so the engine moves on to wait/delete. A failed read says nothing
+// about the record, so it falls back to issuing the deprovision as before.
+func (r *dynamicResource) deprovisionNeeded(api *duplosdk.RESTResource[map[string]any], id, objID string) (trigger, gone bool) {
+	status, gone, clientErr := api.CurrentStatus(objID)
+	if clientErr != nil {
+		log.Printf("[TRACE] dynamic %s Delete(%s): pre-deprovision read failed (%s), deprovisioning anyway", r.spec.Name, id, clientErr)
+		return true, false
+	}
+	if gone {
+		return false, true
+	}
+	if r.spec.Waiter != nil && r.spec.Waiter.DeprovisionedState != "" && status == r.spec.Waiter.DeprovisionedState {
+		log.Printf("[TRACE] dynamic %s Delete(%s): already %s, skipping deprovision", r.spec.Name, id, status)
+		return false, false
+	}
+	if deprovisionInFlightStates[status] {
+		log.Printf("[TRACE] dynamic %s Delete(%s): deprovision already in flight (%s), skipping deprovision call", r.spec.Name, id, status)
+		return false, false
+	}
+	return true, false
 }
 
 // deprovisionSkipped reports whether the pre-delete deprovision step should be
