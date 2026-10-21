@@ -44,6 +44,7 @@ func TestCustomerManagedInputsAreOptionalComputedForceNew(t *testing.T) {
 		{"resource_group", "existing_iam_role_arn", "spec.existingIamRoleArn"},
 		{"resource_group", "existing_kms_key_arn", "spec.existingKmsKeyArn"},
 		{"cluster_baseline", "existing_iam_role_arn", "spec.existingIamRoleArn"},
+		{"cluster_baseline", "existing_kms_key_arn", "spec.existingKmsKeyArn"},
 	}
 	for _, c := range cases {
 		t.Run(c.resource+"."+c.attr, func(t *testing.T) {
@@ -174,34 +175,36 @@ func TestExistingIamRoleArnPattern(t *testing.T) {
 
 // Accept/reject cases mirroring the API's own KMS-key-ARN validation.
 func TestExistingKmsKeyArnPattern(t *testing.T) {
-	re := specPattern(t, "resource_group", "existing_kms_key_arn")
-	for _, ok := range []string{
-		"arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
-		"arn:aws-us-gov:kms:us-gov-west-1:123456789012:key/mrk-1234abcd12ab34cd56ef1234567890ab",
-		"arn:aws-cn:kms:cn-north-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
-		"arn:aws-iso:kms:us-iso-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
-		"arn:aws-eusc:kms:eusc-de-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
-	} {
-		if !re.MatchString(ok) {
-			t.Errorf("rejected valid key ARN %q", ok)
+	for _, resource := range []string{"resource_group", "cluster_baseline"} {
+		re := specPattern(t, resource, "existing_kms_key_arn")
+		for _, ok := range []string{
+			"arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+			"arn:aws-us-gov:kms:us-gov-west-1:123456789012:key/mrk-1234abcd12ab34cd56ef1234567890ab",
+			"arn:aws-cn:kms:cn-north-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+			"arn:aws-iso:kms:us-iso-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+			"arn:aws-eusc:kms:eusc-de-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+		} {
+			if !re.MatchString(ok) {
+				t.Errorf("%s: rejected valid key ARN %q", resource, ok)
+			}
 		}
-	}
-	for _, bad := range []string{
-		"1234abcd-12ab-34cd-56ef-1234567890ab",
-		"alias/my-key",
-		"arn:aws:kms:us-east-1:123456789012:alias/my-key",
-		"arn:aws:iam::123456789012:role/platform-shared",
-		"arn:aws:kms:us-east-1:12345:key/1234abcd-12ab-34cd-56ef-1234567890ab",
-		"arn:aws:kms::123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
-		"arn:aws:kms:us-east-1:123456789012:key/",
-		"arn:aws:kms:us-east-1:123456789012:key/$(id)",
-		"arn:aws:kms:us-east-1:123456789012:key/not-a-key-id",
-		"arn:aws:kms:us-east-1:123456789012:key/mrk-1234",
-		"arn:aws:kms:us-east-1:123456789012:key/1234ABCD-12AB-34CD-56EF-1234567890AB", // key ids are lowercase
-		"arn:aws:kms:us-east-1$(id):123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
-	} {
-		if re.MatchString(bad) {
-			t.Errorf("accepted invalid key ARN %q", bad)
+		for _, bad := range []string{
+			"1234abcd-12ab-34cd-56ef-1234567890ab",
+			"alias/my-key",
+			"arn:aws:kms:us-east-1:123456789012:alias/my-key",
+			"arn:aws:iam::123456789012:role/platform-shared",
+			"arn:aws:kms:us-east-1:12345:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+			"arn:aws:kms::123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+			"arn:aws:kms:us-east-1:123456789012:key/",
+			"arn:aws:kms:us-east-1:123456789012:key/$(id)",
+			"arn:aws:kms:us-east-1:123456789012:key/not-a-key-id",
+			"arn:aws:kms:us-east-1:123456789012:key/mrk-1234",
+			"arn:aws:kms:us-east-1:123456789012:key/1234ABCD-12AB-34CD-56EF-1234567890AB", // key ids are lowercase
+			"arn:aws:kms:us-east-1$(id):123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+		} {
+			if re.MatchString(bad) {
+				t.Errorf("%s: accepted invalid key ARN %q", resource, bad)
+			}
 		}
 	}
 }
@@ -268,6 +271,10 @@ func TestCustomerManagedInvalidWhenRules(t *testing.T) {
 		{"cluster_baseline", map[string]string{"existing_iam_role_arn": role, "cloud": "Gcp"}, true},
 		{"cluster_baseline", map[string]string{"existing_iam_role_arn": role, "mode": "Import"}, true},
 		{"cluster_baseline", map[string]string{"mode": "Import"}, false},
+		{"cluster_baseline", map[string]string{"existing_kms_key_arn": key}, false},
+		{"cluster_baseline", map[string]string{"existing_iam_role_arn": role, "existing_kms_key_arn": key}, false},
+		{"cluster_baseline", map[string]string{"existing_kms_key_arn": key, "cloud": "Azure"}, true},
+		{"cluster_baseline", map[string]string{"existing_kms_key_arn": key, "mode": "Import"}, true},
 	}
 	for _, c := range cases {
 		if got := invalidWhenFires(t, c.resource, c.set); got != c.want {
