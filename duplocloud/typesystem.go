@@ -162,6 +162,10 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, stringplanmodifier.UseStateForUnknown(), stringplanmodifier.UseNonNullStateForUnknown()))
 		}
+		if len(a.RecomputeWhenChanged) > 0 {
+			// After UseStateForUnknown, so it can undo the kept prior value.
+			o.PlanModifiers = append(o.PlanModifiers, recomputeWhenChangedModifier{inputs: a.RecomputeWhenChanged})
+		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, stringplanmodifier.RequiresReplace())
 		}

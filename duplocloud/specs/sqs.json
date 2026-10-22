@@ -124,6 +124,7 @@
     },
     {
       "name": "kms_master_key_id",
+      "recomputeWhenChanged": ["encryption_mode"],
       "type": "string",
       "optional": true,
       "computed": true,
