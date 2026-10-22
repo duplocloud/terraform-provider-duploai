@@ -1,0 +1,90 @@
+{
+  "name": "access_grant",
+  "description": "Lets one resource group use another resource group's AWS resources. The grantor resource group (`resource_group_id`) shares every resource of one `area` it owns — all its S3 buckets, all its ECR repositories, or its KMS key — with the grantee resource group (`grantee_resource_group_id`). The grantee may be in a different environment of the same workspace.\n\nThe grant covers resources by their platform tags, not by name: every bucket or repository in the grantor resource group is included, including ones created later, and one that is deleted simply drops out. To share a single bucket or repository, use a resource policy instead.\n\nHow it is applied in AWS: for `S3` and `Ecr`, an inline IAM policy on the grantee's role allows `s3:*` or `ecr:*` on resources tagged with the grantor's `duplocloud.ai/environment` and `duplocloud.ai/resourcegroup`. For `Kms`, a statement on the grantor's resource group KMS key lets the grantee's role encrypt, decrypt and generate data keys.\n\nThe grantee resource group must already have its IAM role (provisioned to `Complete`), and a `Kms` grant needs the grantor to have a KMS key; otherwise the grant fails. Access is one-way: create a second grant for the reverse direction.\n\nEvery argument is fixed once the grant exists: changing any of them replaces the grant (the old one is removed, then the new one is created, so the grantee briefly loses access). To avoid the gap when changing the grantee or area, set `lifecycle { create_before_destroy = true }`.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AccessGrants",
+    "immutable": true,
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns both resource groups (path parameter)."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$",
+      "patternDescription": "must be a DNS-style label: letters, digits and hyphens only, starting and ending with a letter or digit",
+      "description": "Name of the grant, unique within the workspace. A DNS-style label (letters, digits and hyphens). Changing it replaces the grant."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment that owns the grantor resource group."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the grantor resource group: the one sharing its resources."
+    },
+    {
+      "name": "grantee_resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.granteeResourceGroupId",
+      "description": "ID of the grantee resource group: the one being given access. Any other resource group in the same workspace, in any environment. Must differ from `resource_group_id`."
+    },
+    {
+      "name": "area",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.area",
+      "oneOf": ["S3", "Ecr", "Kms"],
+      "description": "What is shared: `S3` (all the grantor's S3 buckets), `Ecr` (all its ECR repositories) or `Kms` (its resource group KMS key). Only one grant may exist per grantor, grantee and area."
+    },
+    {
+      "name": "access_grant_id",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "id",
+      "description": "ID of the access grant."
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "status",
+      "description": "Current provisioning status (`Complete` once the grant is applied in AWS)."
+    },
+    {
+      "name": "artifact_name",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.artifactName",
+      "description": "Name of what was applied in AWS: the IAM inline policy name on the grantee's role (`S3` / `Ecr`), or the Sid of the statement on the grantor's KMS key policy (`Kms`)."
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned"
+  }
+}
