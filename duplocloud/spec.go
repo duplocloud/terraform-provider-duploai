@@ -148,6 +148,13 @@ type ResourceSpec struct {
 	// Never sent on create — the backend assigns the id there.
 	IDRequestPath string `json:"idRequestPath,omitempty"`
 
+	// Ephemeral also registers the spec's data source as an ephemeral resource
+	// (`ephemeral "duploai_<name>"`, Terraform 1.10+) that reads the same values
+	// but is never stored in plan or state. For short-lived secrets such as
+	// k8s_credentials' token. Requires dataSource or dataSourceOnly; the data
+	// source stays, so existing configs are unaffected.
+	Ephemeral bool `json:"ephemeral,omitempty"`
+
 	// DataSource, when true, registers a read-only data source (data.duploai_<name>)
 	// from this spec in addition to the managed resource. The data source schema is
 	// derived automatically: path-parameter attributes stay Required, all other
@@ -411,7 +418,9 @@ type AttributeSpec struct {
 	// recomputed. Stable opts a specific attribute back into preserving its
 	// prior value, so it does not spuriously show "(known after apply)" (and
 	// ripple into dependent resources) every time an unrelated attribute on
-	// the same resource changes.
+	// the same resource changes. Only a non-null prior value is kept
+	// (UseNonNullStateForUnknown, see preserveNonNullOnly): a null means a
+	// read missed the value, and the next apply should fill it in.
 	Stable bool `json:"stable,omitempty"`
 
 	// Default supplies a static default for Optional+Computed attributes.
@@ -1045,6 +1054,9 @@ func (s *ResourceSpec) validate() error {
 	}
 	if s.LookupDescription != "" && s.LookupAttribute == "" {
 		return fmt.Errorf("lookupDescription requires lookupAttribute")
+	}
+	if s.Ephemeral && !s.DataSource && !s.DataSourceOnly {
+		return fmt.Errorf("ephemeral requires dataSource or dataSourceOnly")
 	}
 	for _, r := range s.RequiredIf {
 		if !seen[r.Attribute] {

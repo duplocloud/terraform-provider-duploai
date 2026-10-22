@@ -15,6 +15,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/defaults"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
@@ -57,6 +59,43 @@ func TestAttrSchema_UseStateForUnknownPlanModifier(t *testing.T) {
 				t.Errorf("plan modifiers = %d, want %d", n, tc.want)
 			}
 		})
+	}
+}
+
+// A stable output (an ID, an ARM id) must keep only a non-null prior value: a
+// null means a read missed it, and UseStateForUnknown would pin that null
+// forever. Every other preserved attribute keeps UseStateForUnknown — for a
+// forceNew one, a null going unknown would force replacement.
+func TestAttrSchema_StableUsesNonNullStateForUnknown(t *testing.T) {
+	nonNull := reflect.TypeOf(stringplanmodifier.UseNonNullStateForUnknown())
+	keep := reflect.TypeOf(stringplanmodifier.UseStateForUnknown())
+	cases := []struct {
+		name string
+		a    AttributeSpec
+		want reflect.Type
+	}{
+		{"stable computed", AttributeSpec{Type: "string", Computed: true, Stable: true}, nonNull},
+		{"stable + forceNew", AttributeSpec{Type: "string", Computed: true, Stable: true, ForceNew: true}, keep},
+		{"stable + sendFromState", AttributeSpec{Type: "string", Computed: true, Stable: true, SendFromState: true}, keep},
+		{"optional+computed", AttributeSpec{Type: "string", Optional: true, Computed: true}, keep},
+		{"computed+forceNew", AttributeSpec{Type: "string", Computed: true, ForceNew: true}, keep},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mods := attrSchema(tc.a).(schema.StringAttribute).PlanModifiers
+			if len(mods) == 0 {
+				t.Fatal("expected a preserve plan modifier")
+			}
+			if got := reflect.TypeOf(mods[0]); got != tc.want {
+				t.Errorf("first plan modifier = %v, want %v", got, tc.want)
+			}
+		})
+	}
+
+	// The collection and object builders route through the same selector.
+	list := attrSchema(AttributeSpec{Type: "list(string)", Computed: true, Stable: true}).(schema.ListAttribute)
+	if got, want := reflect.TypeOf(list.PlanModifiers[0]), reflect.TypeOf(listplanmodifier.UseNonNullStateForUnknown()); got != want {
+		t.Errorf("stable list plan modifier = %v, want %v", got, want)
 	}
 }
 

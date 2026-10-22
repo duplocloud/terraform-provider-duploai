@@ -141,7 +141,7 @@ resource "duploai_azure_postgres_flexible_server" "private" {
 - `effective_firewall_rules` (Attributes List) Firewall rules Azure actually reports for the server. Applied best-effort immediately after create and reconciled on the next update, so this can lag firewall_rules briefly. (see [below for nested schema](#nestedatt--effective_firewall_rules))
 - `fully_qualified_domain_name` (String) Hostname clients connect to on port 5432.
 - `id` (String) Composite resource identifier (workspace_id/id).
-- `postgres_server_id` (String) ARM resource id of the PostgreSQL Flexible Server in Azure.
+- `postgres_server_id` (String) ARM resource id of the PostgreSQL Flexible Server in Azure. Read-only; the backend can occasionally omit it from an otherwise-normal read, so the last known value is kept rather than cleared. Feeds server_id on dependent azurerm_postgresql_flexible_server_configuration resources, where it is ForceNew.
 - `provisioning_state` (String) Azure-reported provisioning state of the server.
 - `scope_ids` (List of String) Scopes the server is visible to. Inherited from the resource group.
 - `server_id` (String) Backend identifier of the server record.

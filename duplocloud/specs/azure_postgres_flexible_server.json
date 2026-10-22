@@ -469,7 +469,8 @@
       "computed": true,
       "noSend": true,
       "responsePaths": ["spec.uniqueCloudResourceId", "result.cloudDetails.id", "result.postgresServerId"],
-      "description": "ARM resource id of the PostgreSQL Flexible Server in Azure."
+      "preserveOnEmptyResponse": true,
+      "description": "ARM resource id of the PostgreSQL Flexible Server in Azure. Read-only; the backend can occasionally omit it from an otherwise-normal read, so the last known value is kept rather than cleared. Feeds server_id on dependent azurerm_postgresql_flexible_server_configuration resources, where it is ForceNew."
     },
     {
       "name": "provisioning_state",

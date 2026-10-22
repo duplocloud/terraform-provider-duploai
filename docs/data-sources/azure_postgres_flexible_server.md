@@ -65,7 +65,7 @@ output "postgres_server_id" {
 - `maintenance_window` (Attributes) When Azure may apply planned maintenance. Leave unset to let Azure pick the window. (see [below for nested schema](#nestedatt--maintenance_window))
 - `name` (String) Server name. 3–63 characters, lowercase letters, numbers and hyphens only; cannot start or end with a hyphen. Must be globally unique within Azure.
 - `password_auth` (String) Whether PostgreSQL password authentication is accepted. At least one of password_auth and active_directory_auth must be Enabled.
-- `postgres_server_id` (String) ARM resource id of the PostgreSQL Flexible Server in Azure.
+- `postgres_server_id` (String) ARM resource id of the PostgreSQL Flexible Server in Azure. Read-only; the backend can occasionally omit it from an otherwise-normal read, so the last known value is kept rather than cleared. Feeds server_id on dependent azurerm_postgresql_flexible_server_configuration resources, where it is ForceNew.
 - `postgres_version` (String) PostgreSQL major version. Immutable — Azure does not support in-place major version upgrades.
 - `private_dns_zone_arm_resource_id` (String) ARM resource id of the private DNS zone for private access. Leave unset to let the platform create or reuse the well-known zone.
 - `provisioner_type` (String) How the platform provisions the server. Defaults to the environment's provisioner.

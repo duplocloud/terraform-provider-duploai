@@ -160,7 +160,7 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 		}
 		o.Validators = stringValidators(a)
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, stringplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, stringplanmodifier.UseStateForUnknown(), stringplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, stringplanmodifier.RequiresReplace())
@@ -174,7 +174,7 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			o.Default = booldefault.StaticBool(b)
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, boolplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, boolplanmodifier.UseStateForUnknown(), boolplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, boolplanmodifier.RequiresReplace())
@@ -197,7 +197,7 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			o.Validators = append(o.Validators, int64validator.AtMost(int64(*a.Max)))
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, int64planmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, int64planmodifier.UseStateForUnknown(), int64planmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, int64planmodifier.RequiresReplace())
@@ -217,7 +217,7 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 			o.Validators = append(o.Validators, float64validator.AtMost(*a.Max))
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, float64planmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, float64planmodifier.UseStateForUnknown(), float64planmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, float64planmodifier.RequiresReplace())
@@ -240,6 +240,27 @@ func useStateForUnknown(a AttributeSpec) bool {
 	// must keep its prior-state value at plan time so the union-on-write can
 	// re-send the server-managed entries it holds.
 	return a.Computed && (a.Optional || a.ForceNew || a.preserveTarget || a.Stable || a.SendFromState)
+}
+
+// preserveNonNullOnly reports whether an attribute that keeps its prior state
+// should keep only a non-null one. That is the case when Stable is the sole
+// reason it is preserved: a stable output (an ID, an ARM id, an endpoint)
+// always exists once created, so a null in state means a read missed it, and
+// leaving it unknown lets the next apply fill it in. Since framework v1.15.1,
+// UseStateForUnknown pins a null forever. Every other reason keeps null:
+// optional values may legitimately be unset, and a forceNew value turning
+// unknown would force replacement.
+func preserveNonNullOnly(a AttributeSpec) bool {
+	return a.Stable && !a.Optional && !a.ForceNew && !a.preserveTarget && !a.SendFromState
+}
+
+// preserveModifier picks the type's UseNonNullStateForUnknown (nonNull) for a
+// stable-only attribute and its UseStateForUnknown (keep) otherwise.
+func preserveModifier[T any](a AttributeSpec, keep, nonNull T) T {
+	if preserveNonNullOnly(a) {
+		return nonNull
+	}
+	return keep
 }
 
 // staticDefaultValue decodes a spec's raw JSON `default` into a framework
@@ -291,7 +312,7 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 			o.Validators = append(o.Validators, setvalidator.ValueStringsAre(elemValidators...))
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, setplanmodifier.UseStateForUnknown(), setplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.RequiresReplace())
@@ -308,7 +329,7 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 			o.Validators = append(o.Validators, mapvalidator.ValueStringsAre(elemValidators...))
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, mapplanmodifier.UseStateForUnknown(), mapplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.RequiresReplace())
@@ -331,7 +352,7 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 			o.Validators = append(o.Validators, listvalidator.ValueStringsAre(elemValidators...))
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, listplanmodifier.UseStateForUnknown(), listplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.RequiresReplace())
@@ -365,7 +386,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 			o.Validators = append(o.Validators, listvalidator.SizeAtMost(a.MaxItems))
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, listplanmodifier.UseStateForUnknown(), listplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, listplanmodifier.RequiresReplace())
@@ -390,7 +411,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 			o.Validators = append(o.Validators, setvalidator.SizeAtMost(a.MaxItems))
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, setplanmodifier.UseStateForUnknown(), setplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, setplanmodifier.RequiresReplace())
@@ -404,7 +425,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 			}
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, mapplanmodifier.UseStateForUnknown(), mapplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.RequiresReplace())
@@ -418,7 +439,7 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 			}
 		}
 		if useStateForUnknown(a) {
-			o.PlanModifiers = append(o.PlanModifiers, objectplanmodifier.UseStateForUnknown())
+			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, objectplanmodifier.UseStateForUnknown(), objectplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, objectplanmodifier.RequiresReplace())

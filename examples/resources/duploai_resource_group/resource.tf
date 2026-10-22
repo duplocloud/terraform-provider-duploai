@@ -76,3 +76,22 @@ resource "duploai_resource_group" "disposable" {
 
   delete_protection = false
 }
+
+# Account that forbids IAM and KMS creation — the customer supplies an existing
+# role and key. The baseline then creates no IAM role, managed policies, instance
+# profile, KMS key or alias; it looks up the role's instance profile for EC2
+# hosts, and every resource that defaults to the group key encrypts with this
+# key. The key must be in the group's region. Both are customer-owned: the
+# platform never edits or deletes them, so S3/ECR access grants to this group and
+# KMS access grants from it are rejected. Removing either from the configuration
+# keeps it; setting a different one replaces the group.
+resource "duploai_resource_group" "customer_managed_iam" {
+  workspace_id   = "<workspace-id>"
+  name           = "<resource-group-name>"
+  environment_id = "<environment-id>"
+  region         = ""
+  network_id     = "<network-id>"
+
+  existing_iam_role_arn = "arn:aws:iam::123456789012:role/platform-shared"
+  existing_kms_key_arn  = "arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab"
+}

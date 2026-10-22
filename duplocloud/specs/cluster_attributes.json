@@ -65,6 +65,14 @@
       "description": "AWS region. Inherited from the linked cluster baseline."
     },
     {
+      "name": "existing_iam_role_arn",
+      "type": "string",
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.existingIamRoleArn",
+      "description": "The customer-managed IAM role copied from the parent cluster's existing_iam_role_arn (server-owned; not settable here). When set, no IRSA roles are created and every component's service account and auto-roled EKS add-on uses this role; its trust policy must allow each service account through the cluster's OIDC provider. Null for clusters that build their own IAM, and for imported clusters."
+    },
+    {
       "name": "scope_ids",
       "type": "list(string)",
       "computed": true,
