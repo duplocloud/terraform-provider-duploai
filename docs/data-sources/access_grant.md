@@ -7,7 +7,7 @@ description: |-
   The grant covers resources by their platform tags, not by name: every bucket or repository in the grantor resource group is included, including ones created later, and one that is deleted simply drops out. To share a single bucket or repository, use a resource policy instead.
   How it is applied in AWS: for S3 and Ecr, an inline IAM policy on the grantee's role allows s3:* or ecr:* on resources tagged with the grantor's duplocloud.ai/environment and duplocloud.ai/resourcegroup. For Kms, a statement on the grantor's resource group KMS key lets the grantee's role encrypt, decrypt and generate data keys.
   The grantee resource group must already have its IAM role (provisioned to Complete), and a Kms grant needs the grantor to have a KMS key; otherwise the grant fails. Access is one-way: create a second grant for the reverse direction.
-  Every argument is fixed once the grant exists: changing any of them replaces the grant (the old one is removed, then the new one is created, so the grantee briefly loses access). To avoid the gap when changing the grantee or area, set lifecycle { create_before_destroy = true }.
+  Every argument is fixed once the grant exists: changing any of them replaces the grant (the old one is removed, then the new one is created, so the grantee briefly loses access). To avoid the gap when changing the grantee or area, set lifecycle { create_before_destroy = true } and change name in the same apply: the new grant is created while the old one still holds its name, and names are unique within the grantor resource group. With that set, renaming alone fails, since the old grant still covers the same grantee and area.
 ---
 
 # duploai_access_grant (Data Source)
@@ -20,7 +20,7 @@ How it is applied in AWS: for `S3` and `Ecr`, an inline IAM policy on the grante
 
 The grantee resource group must already have its IAM role (provisioned to `Complete`), and a `Kms` grant needs the grantor to have a KMS key; otherwise the grant fails. Access is one-way: create a second grant for the reverse direction.
 
-Every argument is fixed once the grant exists: changing any of them replaces the grant (the old one is removed, then the new one is created, so the grantee briefly loses access). To avoid the gap when changing the grantee or area, set `lifecycle { create_before_destroy = true }`.
+Every argument is fixed once the grant exists: changing any of them replaces the grant (the old one is removed, then the new one is created, so the grantee briefly loses access). To avoid the gap when changing the grantee or area, set `lifecycle { create_before_destroy = true }` and change `name` in the same apply: the new grant is created while the old one still holds its name, and names are unique within the grantor resource group. With that set, renaming alone fails, since the old grant still covers the same grantee and area.
 
 ## Example Usage
 
@@ -59,6 +59,6 @@ output "artifact_name" {
 - `artifact_name` (String) Name of what was applied in AWS: the IAM inline policy name on the grantee's role (`S3` / `Ecr`), or the Sid of the statement on the grantor's KMS key policy (`Kms`).
 - `environment_id` (String) ID of the environment that owns the grantor resource group.
 - `grantee_resource_group_id` (String) ID of the grantee resource group: the one being given access. Any other resource group in the same workspace, in any environment. Must differ from `resource_group_id`.
-- `name` (String) Name of the grant, unique within the workspace. A DNS-style label (letters, digits and hyphens). Changing it replaces the grant.
+- `name` (String) Name of the grant, unique within the grantor resource group. A DNS-style label (lowercase letters, digits and hyphens). Changing it replaces the grant.
 - `resource_group_id` (String) ID of the grantor resource group: the one sharing its resources.
 - `status` (String) Current provisioning status (`Complete` once the grant is applied in AWS).

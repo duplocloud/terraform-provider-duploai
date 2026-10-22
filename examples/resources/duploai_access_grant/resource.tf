@@ -21,8 +21,10 @@ resource "duploai_access_grant" "ecr_to_prod" {
   grantee_resource_group_id = "<prod-resource-group-id>" # in a different environment
   area                      = "Ecr"
 
-  # Changing the grantee or area replaces the grant; create the new one first
-  # so the grantee keeps access during the switch.
+  # Changing the grantee or area replaces the grant. Create the new one first so
+  # the grantee keeps access during the switch, and give it a new name, since the
+  # old grant holds this one until it is removed. With this set, renaming alone
+  # fails, since the old grant still covers the same grantee and area.
   lifecycle {
     create_before_destroy = true
   }
