@@ -46,6 +46,7 @@ provider "duploai" {
 <!-- resources-start -->
 | Resource | Description |
 |---|---|
+| [`duploai_access_grant`](docs/resources/access_grant.md) | Lets one resource group use another resource group's AWS resources. The grantor resource group (`resource_group_id`) shares every resource of one `area` it owns — all its S3 buckets, all its ECR repositories, or its KMS key — with the grantee resource group (`grantee_resource_group_id`). The grantee may be in a different environment of the same workspace |
 | [`duploai_admin_ai_agent`](docs/resources/admin_ai_agent.md) | Manages a DuploCloud AI Helpdesk AI Agent — an external AI service or model the help desk can invoke to perform automated tasks. Agents are assigned to personas, which determine where they are available |
 | [`duploai_admin_command_policy`](docs/resources/admin_command_policy.md) | Manages a DuploCloud AI Helpdesk command policy — reusable allow/block regular-expression lists that govern which agent-proposed commands are auto-approved or denied (deny-wins). A policy has no effect on its own; it takes effect once bound to a scope (System, Workspace, or Project) by a command policy mapping |
 | [`duploai_admin_command_policy_mapping`](docs/resources/admin_command_policy_mapping.md) | Manages a DuploCloud AI Helpdesk command policy mapping — binds a command policy to a scope (System, Workspace, or Project), putting the policy's allow/block command rules into effect for tickets in that scope. Only one active mapping may exist per System scope, and per Workspace/Project target |
@@ -111,6 +112,7 @@ provider "duploai" {
 <!-- data-sources-start -->
 | Data Source | Description |
 |---|---|
+| [`duploai_access_grant`](docs/data-sources/access_grant.md) | Lets one resource group use another resource group's AWS resources. The grantor resource group (`resource_group_id`) shares every resource of one `area` it owns — all its S3 buckets, all its ECR repositories, or its KMS key — with the grantee resource group (`grantee_resource_group_id`). The grantee may be in a different environment of the same workspace |
 | [`duploai_admin_ai_agent`](docs/data-sources/admin_ai_agent.md) | Manages a DuploCloud AI Helpdesk AI Agent — an external AI service or model the help desk can invoke to perform automated tasks. Agents are assigned to personas, which determine where they are available |
 | [`duploai_admin_command_policy`](docs/data-sources/admin_command_policy.md) | Manages a DuploCloud AI Helpdesk command policy — reusable allow/block regular-expression lists that govern which agent-proposed commands are auto-approved or denied (deny-wins). A policy has no effect on its own; it takes effect once bound to a scope (System, Workspace, or Project) by a command policy mapping |
 | [`duploai_admin_command_policy_mapping`](docs/data-sources/admin_command_policy_mapping.md) | Manages a DuploCloud AI Helpdesk command policy mapping — binds a command policy to a scope (System, Workspace, or Project), putting the policy's allow/block command rules into effect for tickets in that scope. Only one active mapping may exist per System scope, and per Workspace/Project target |
