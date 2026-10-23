@@ -423,6 +423,16 @@ type AttributeSpec struct {
 	// read missed the value, and the next apply should fill it in.
 	Stable bool `json:"stable,omitempty"`
 
+	// RecomputeWhenChanged, on an optional+computed string, names the top-level
+	// inputs whose change invalidates the value the API derived for it. When one
+	// of them changes and this attribute is unset in config, the plan marks it
+	// unknown instead of keeping the prior value, so the update leaves it out of
+	// the request and the backend derives it afresh. Without it, the prior value
+	// (UseStateForUnknown) is re-sent as if the user had set it: switching an SQS
+	// queue from SseKms to SseKmsRg kept the old "alias/aws/sqs" key instead of
+	// taking the resource group's key.
+	RecomputeWhenChanged []string `json:"recomputeWhenChanged,omitempty"`
+
 	// Default supplies a static default for Optional+Computed attributes.
 	// Interpreted according to Type.
 	Default *json.RawMessage `json:"default,omitempty"`
@@ -1032,6 +1042,19 @@ func (s *ResourceSpec) validate() error {
 	seen, err := validateAttributes(s.Attributes)
 	if err != nil {
 		return err
+	}
+	for _, a := range s.Attributes {
+		if len(a.RecomputeWhenChanged) == 0 {
+			continue
+		}
+		if a.Type != "string" || !a.Optional || !a.Computed {
+			return fmt.Errorf("attribute %q: recomputeWhenChanged is only valid on an optional+computed string", a.Name)
+		}
+		for _, in := range a.RecomputeWhenChanged {
+			if !seen[in] || in == a.Name {
+				return fmt.Errorf("attribute %q: recomputeWhenChanged references unknown attribute %q", a.Name, in)
+			}
+		}
 	}
 	if err := s.validateAssociation(seen); err != nil {
 		return err
