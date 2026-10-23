@@ -71,6 +71,33 @@ resource "duploai_network_baseline" "imported" {
   subnet_prefix = 24
 }
 
+# Import an existing VPC, choosing exactly which resources inside it are adopted.
+# Every aws_import_config field is optional: a field left unset is discovered by
+# the platform, except all_host_security_group_id, which is never discovered.
+# The two subnet lists must be set together, with the same number of entries.
+resource "duploai_network_baseline" "imported_selected" {
+  workspace_id  = "<workspace-id>"
+  name          = "imported-network-selected"
+  mode          = "Import"
+  scope_ids     = ["<scope-id>"]
+  region        = "us-east-1"
+  vpc_id        = "vpc-0a1b2c3d4e5f67890"
+  az_count      = 2
+  subnet_prefix = 24
+
+  aws_import_config = {
+    private_subnet_ids               = ["subnet-0a1b2c3d4e5f60001", "subnet-0a1b2c3d4e5f60002"]
+    public_subnet_ids                = ["subnet-0a1b2c3d4e5f60003", "subnet-0a1b2c3d4e5f60004"]
+    internet_gateway_id              = "igw-0a1b2c3d4e5f67890"
+    nat_gateway_ids                  = ["nat-0a1b2c3d4e5f67890"]
+    route_table_ids                  = ["rtb-0a1b2c3d4e5f60001", "rtb-0a1b2c3d4e5f60002"]
+    all_host_security_group_id       = "sg-0a1b2c3d4e5f67890"
+    private_rds_subnet_group         = "prod-private-db-subnets"
+    public_rds_subnet_group          = "prod-public-db-subnets"
+    private_elasticache_subnet_group = "prod-private-cache-subnets"
+  }
+}
+
 # Azure network baseline — provisions a virtual network, subnets, and a NAT
 # gateway. az_count and subnet_prefix are AWS-only and omitted for Azure;
 # per-subnet address prefixes are set explicitly. Delegations and NSG rules are
