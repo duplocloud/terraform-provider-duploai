@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -935,6 +936,25 @@ func hasPreserveOnEmptyResponse(a AttributeSpec) bool {
 // empty, keeps the prior value instead. This is what lets a write-only secret —
 // redacted by the backend on every read — stay in state instead of being
 // blanked. See AttributeSpec.PreserveOnEmptyResponse.
+// keepEquivalentValue returns prior instead of next when prior is a key of
+// a.EquivalentResponseValues and next is one of the response values listed for
+// it — the API reported the resolved form of the value the user configured.
+func keepEquivalentValue(a AttributeSpec, prior, next tftypes.Value) tftypes.Value {
+	if len(a.EquivalentResponseValues) == 0 ||
+		!prior.IsKnown() || prior.IsNull() || !prior.Type().Is(tftypes.String) ||
+		!next.IsKnown() || next.IsNull() || !next.Type().Is(tftypes.String) {
+		return next
+	}
+	var p, n string
+	if prior.As(&p) != nil || next.As(&n) != nil {
+		return next
+	}
+	if slices.Contains(a.EquivalentResponseValues[p], n) {
+		return prior
+	}
+	return next
+}
+
 func restorePreservedValues(a AttributeSpec, prior, next tftypes.Value) tftypes.Value {
 	if !hasPreserveOnEmptyResponse(a) {
 		return next

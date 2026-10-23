@@ -67,13 +67,13 @@ resource "duploai_ssm_parameter" "db_password" {
 
 ### Optional
 
-- `allowed_pattern` (String) Regular expression that AWS checks the value against on every write, e.g. `^\d+$` for digits only.
+- `allowed_pattern` (String) Regular expression that AWS checks the value against on every write, e.g. `^\d+$` for digits only. Removing it from the configuration keeps the current pattern.
 - `data_type` (String) Data type AWS validates the value as: text (default), aws:ec2:image (an AMI ID) or aws:ssm:integration.
 - `description` (String) Description stored on the parameter in AWS. Removing it from the configuration keeps the current description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `key_id` (String) SecureString only. KMS key that encrypts the value: a key ID, ARN or alias. Defaults to the AWS-managed key `alias/aws/ssm`. Updating the key of an existing parameter is not supported yet: a change after creation is ignored and the parameter keeps its original key. To use a different key, replace the parameter (e.g. `terraform apply -replace=<address>`).
 - `tags` (Attributes List) Tags applied to the parameter at creation. Platform ownership tags and the resource group's tags are added automatically. Set only at creation (SSM does not accept tags when a parameter is updated). (see [below for nested schema](#nestedatt--tags))
-- `tier` (String) Storage tier: Standard (values up to 4 KB, free), Advanced (up to 8 KB, charged) or Intelligent-Tiering (AWS picks Standard or Advanced from the value). Defaults to Standard. Changing Advanced back to Standard fails at apply because AWS does not allow it; replace the parameter instead (e.g. `terraform apply -replace=<address>`).
+- `tier` (String) Storage tier: Standard (values up to 4 KB, free), Advanced (up to 8 KB, charged) or Intelligent-Tiering (AWS picks Standard or Advanced on each write). Defaults to Standard. With Intelligent-Tiering, AWS reports the tier it resolved to; that is not shown as a change, so a tier changed outside Terraform is not detected while Intelligent-Tiering is configured. Changing Advanced back to Standard fails at apply because AWS does not allow it; replace the parameter instead (e.g. `terraform apply -replace=<address>`).
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only

@@ -38,7 +38,7 @@ output "version" {
 
 ### Read-Only
 
-- `allowed_pattern` (String) Regular expression that AWS checks the value against on every write, e.g. `^\d+$` for digits only.
+- `allowed_pattern` (String) Regular expression that AWS checks the value against on every write, e.g. `^\d+$` for digits only. Removing it from the configuration keeps the current pattern.
 - `arn` (String) ARN of the parameter in AWS.
 - `data_type` (String) Data type AWS validates the value as: text (default), aws:ec2:image (an AMI ID) or aws:ssm:integration.
 - `description` (String) Description stored on the parameter in AWS. Removing it from the configuration keeps the current description.
@@ -49,7 +49,7 @@ output "version" {
 - `resource_group_id` (String) ID of the resource group in which the parameter is created. Its AWS account and region are used.
 - `ssm_parameter_id` (String) ID of this parameter, for reference by dependent resources.
 - `status` (String) Current provisioning status.
-- `tier` (String) Storage tier: Standard (values up to 4 KB, free), Advanced (up to 8 KB, charged) or Intelligent-Tiering (AWS picks Standard or Advanced from the value). Defaults to Standard. Changing Advanced back to Standard fails at apply because AWS does not allow it; replace the parameter instead (e.g. `terraform apply -replace=<address>`).
+- `tier` (String) Storage tier: Standard (values up to 4 KB, free), Advanced (up to 8 KB, charged) or Intelligent-Tiering (AWS picks Standard or Advanced on each write). Defaults to Standard. With Intelligent-Tiering, AWS reports the tier it resolved to; that is not shown as a change, so a tier changed outside Terraform is not detected while Intelligent-Tiering is configured. Changing Advanced back to Standard fails at apply because AWS does not allow it; replace the parameter instead (e.g. `terraform apply -replace=<address>`).
 - `type` (String) Parameter type: String (plain text), StringList (comma-separated values, plain text) or SecureString (encrypted with AWS KMS). Changing the type of an existing parameter is not supported yet: a change after creation is not applied. To change it, replace the parameter (e.g. `terraform apply -replace=<address>`).
 - `value` (String, Sensitive) Parameter value. For StringList, a comma-separated list such as `a,b,c`. Refreshed from AWS (decrypted for SecureString), so a change made outside Terraform shows as drift; if AWS cannot be read, the value already in state is kept. The value is stored in Terraform state.
 - `version` (Number) Current parameter version. AWS increments it on every write.

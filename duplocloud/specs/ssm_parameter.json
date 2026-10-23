@@ -106,7 +106,13 @@
       "createPath": "spec.createRequest.tier",
       "updatePath": "spec.updateRequest.tier",
       "responsePath": "result.cloudDetails.tier",
-      "description": "Storage tier: Standard (values up to 4 KB, free), Advanced (up to 8 KB, charged) or Intelligent-Tiering (AWS picks Standard or Advanced from the value). Defaults to Standard. Changing Advanced back to Standard fails at apply because AWS does not allow it; replace the parameter instead (e.g. `terraform apply -replace=<address>`)."
+      "description": "Storage tier: Standard (values up to 4 KB, free), Advanced (up to 8 KB, charged) or Intelligent-Tiering (AWS picks Standard or Advanced on each write). Defaults to Standard. With Intelligent-Tiering, AWS reports the tier it resolved to; that is not shown as a change, so a tier changed outside Terraform is not detected while Intelligent-Tiering is configured. Changing Advanced back to Standard fails at apply because AWS does not allow it; replace the parameter instead (e.g. `terraform apply -replace=<address>`).",
+      "equivalentResponseValues": {
+        "Intelligent-Tiering": [
+          "Standard",
+          "Advanced"
+        ]
+      }
     },
     {
       "name": "allowed_pattern",
@@ -116,7 +122,7 @@
       "createPath": "spec.createRequest.allowedPattern",
       "updatePath": "spec.updateRequest.allowedPattern",
       "responsePath": "result.cloudDetails.allowedPattern",
-      "description": "Regular expression that AWS checks the value against on every write, e.g. `^\\d+$` for digits only."
+      "description": "Regular expression that AWS checks the value against on every write, e.g. `^\\d+$` for digits only. Removing it from the configuration keeps the current pattern."
     },
     {
       "name": "data_type",
