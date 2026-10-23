@@ -3,10 +3,13 @@ package duplocloud
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
@@ -106,5 +109,43 @@ func TestRecomputeWhenChangedValidation(t *testing.T) {
 				t.Fatalf("want %q, got %v", tc.wantErr, err)
 			}
 		})
+	}
+}
+
+// The modifier tests above drive recomputeWhenChangedModifier directly, so they
+// would stay green if sqs.json lost the flag or primitiveSchema registered the
+// modifier before UseStateForUnknown (which would then re-plan the prior key and
+// bring back TC15). Pin the built schema of the shipped attribute instead.
+func TestSqsKmsMasterKeyIDRecomputesAfterUseStateForUnknown(t *testing.T) {
+	specs := customerManagedSpecs(t)
+	s := specs["sqs"]
+	if s == nil {
+		t.Fatal("no embedded sqs spec")
+	}
+	a := s.attr("kms_master_key_id")
+	if a == nil {
+		t.Fatal("sqs has no kms_master_key_id attribute")
+	}
+	if !reflect.DeepEqual(a.RecomputeWhenChanged, []string{"encryption_mode"}) {
+		t.Fatalf("recomputeWhenChanged=%v, want [encryption_mode]", a.RecomputeWhenChanged)
+	}
+	mods := attrSchema(*a).(schema.StringAttribute).PlanModifiers
+	useState, recompute := -1, -1
+	for i, m := range mods {
+		switch mm := m.(type) {
+		case recomputeWhenChangedModifier:
+			recompute = i
+			if !reflect.DeepEqual(mm.inputs, []string{"encryption_mode"}) {
+				t.Errorf("modifier inputs=%v, want [encryption_mode]", mm.inputs)
+			}
+		default:
+			if reflect.TypeOf(m) == reflect.TypeOf(stringplanmodifier.UseStateForUnknown()) {
+				useState = i
+			}
+		}
+	}
+	if useState < 0 || recompute < 0 || useState > recompute {
+		t.Fatalf("plan modifiers %v: want UseStateForUnknown before recomputeWhenChangedModifier "+
+			"(it has to undo the prior value UseStateForUnknown keeps)", mods)
 	}
 }
