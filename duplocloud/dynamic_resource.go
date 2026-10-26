@@ -2093,6 +2093,9 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		if a.CaseInsensitive {
 			next[a.Name] = keepPriorCasing(current[a.Name], next[a.Name])
 		}
+		// A configured value the cloud reports only in resolved form (e.g. SSM
+		// tier Intelligent-Tiering → Standard) keeps the configured form.
+		next[a.Name] = keepEquivalentValue(a, current[a.Name], next[a.Name])
 	}
 
 	return tftypes.NewValue(objType, next)
