@@ -46,6 +46,7 @@ provider "duploai" {
 <!-- resources-start -->
 | Resource | Description |
 |---|---|
+| [`duploai_access_grant`](docs/resources/access_grant.md) | Lets one resource group use another resource group's AWS resources. The grantor resource group (`resource_group_id`) shares every resource of one `area` it owns — all its S3 buckets, all its ECR repositories, or its KMS key — with the grantee resource group (`grantee_resource_group_id`). The grantee may be in a different environment of the same workspace |
 | [`duploai_admin_ai_agent`](docs/resources/admin_ai_agent.md) | Manages a DuploCloud AI Helpdesk AI Agent — an external AI service or model the help desk can invoke to perform automated tasks. Agents are assigned to personas, which determine where they are available |
 | [`duploai_admin_command_policy`](docs/resources/admin_command_policy.md) | Manages a DuploCloud AI Helpdesk command policy — reusable allow/block regular-expression lists that govern which agent-proposed commands are auto-approved or denied (deny-wins). A policy has no effect on its own; it takes effect once bound to a scope (System, Workspace, or Project) by a command policy mapping |
 | [`duploai_admin_command_policy_mapping`](docs/resources/admin_command_policy_mapping.md) | Manages a DuploCloud AI Helpdesk command policy mapping — binds a command policy to a scope (System, Workspace, or Project), putting the policy's allow/block command rules into effect for tickets in that scope. Only one active mapping may exist per System scope, and per Workspace/Project target |
@@ -103,6 +104,7 @@ provider "duploai" {
 | [`duploai_s3_bucket`](docs/resources/s3_bucket.md) | Manages a DuploCloud AI Helpdesk AWS S3 bucket |
 | [`duploai_sns`](docs/resources/sns.md) | Manages a DuploCloud AI Helpdesk AWS SNS (Simple Notification Service) topic, provisioned within an environment and resource group |
 | [`duploai_sqs`](docs/resources/sqs.md) | Manages a DuploCloud AI Helpdesk AWS SQS (Simple Queue Service) queue, provisioned within an environment and resource group |
+| [`duploai_ssm_parameter`](docs/resources/ssm_parameter.md) | Manages a DuploCloud AI Helpdesk AWS Systems Manager (SSM) Parameter Store parameter, provisioned within an environment and resource group. Every in-place update rewrites the value, so it creates a new parameter version |
 | [`duploai_storage_account`](docs/resources/storage_account.md) | Manages a DuploCloud AI Helpdesk Azure Storage Account, provisioned within an environment and resource group |
 <!-- resources-end -->
 
@@ -111,6 +113,7 @@ provider "duploai" {
 <!-- data-sources-start -->
 | Data Source | Description |
 |---|---|
+| [`duploai_access_grant`](docs/data-sources/access_grant.md) | Lets one resource group use another resource group's AWS resources. The grantor resource group (`resource_group_id`) shares every resource of one `area` it owns — all its S3 buckets, all its ECR repositories, or its KMS key — with the grantee resource group (`grantee_resource_group_id`). The grantee may be in a different environment of the same workspace |
 | [`duploai_admin_ai_agent`](docs/data-sources/admin_ai_agent.md) | Manages a DuploCloud AI Helpdesk AI Agent — an external AI service or model the help desk can invoke to perform automated tasks. Agents are assigned to personas, which determine where they are available |
 | [`duploai_admin_command_policy`](docs/data-sources/admin_command_policy.md) | Manages a DuploCloud AI Helpdesk command policy — reusable allow/block regular-expression lists that govern which agent-proposed commands are auto-approved or denied (deny-wins). A policy has no effect on its own; it takes effect once bound to a scope (System, Workspace, or Project) by a command policy mapping |
 | [`duploai_admin_command_policy_mapping`](docs/data-sources/admin_command_policy_mapping.md) | Manages a DuploCloud AI Helpdesk command policy mapping — binds a command policy to a scope (System, Workspace, or Project), putting the policy's allow/block command rules into effect for tickets in that scope. Only one active mapping may exist per System scope, and per Workspace/Project target |
@@ -168,6 +171,7 @@ provider "duploai" {
 | [`duploai_s3_bucket`](docs/data-sources/s3_bucket.md) | Manages a DuploCloud AI Helpdesk AWS S3 bucket |
 | [`duploai_sns`](docs/data-sources/sns.md) | Manages a DuploCloud AI Helpdesk AWS SNS (Simple Notification Service) topic, provisioned within an environment and resource group |
 | [`duploai_sqs`](docs/data-sources/sqs.md) | Manages a DuploCloud AI Helpdesk AWS SQS (Simple Queue Service) queue, provisioned within an environment and resource group |
+| [`duploai_ssm_parameter`](docs/data-sources/ssm_parameter.md) | Manages a DuploCloud AI Helpdesk AWS Systems Manager (SSM) Parameter Store parameter, provisioned within an environment and resource group. Every in-place update rewrites the value, so it creates a new parameter version |
 | [`duploai_storage_account`](docs/data-sources/storage_account.md) | Manages a DuploCloud AI Helpdesk Azure Storage Account, provisioned within an environment and resource group |
 <!-- data-sources-end -->
 

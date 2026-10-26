@@ -5,7 +5,7 @@ resource "duploai_native_host" "linux" {
   environment_id    = "<environment-id>"
   resource_group_id = "<resource-group-id>"
 
-  subnet_id                 = "subnet-0a727a1199534ecf3"
+  subnet_id                 = "subnet-0a1b2c3d4e5f60001"
   os_platform               = 0 # 0 = Linux, 1 = Windows
   disk_size_gb              = 50
   enable_os_disk_encryption = true

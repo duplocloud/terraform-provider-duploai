@@ -477,6 +477,36 @@ Scope and limits:
 - On **import** there is no prior value, so the field lands empty — expected,
   since the secret is unrecoverable from the API.
 
+### Values reported in resolved form
+
+Some settings are stored by the cloud as the concrete value they resolve to and
+are only ever reported that way. SSM `tier = "Intelligent-Tiering"` is stored and
+read back as `"Standard"` or `"Advanced"`, so every plan would show the tier
+changing back and every apply would rewrite the parameter. Declare which
+response values stand for the configured one:
+
+```json
+{
+  "name": "tier",
+  "type": "string",
+  "optional": true,
+  "computed": true,
+  "oneOf": ["Standard", "Advanced", "Intelligent-Tiering"],
+  "equivalentResponseValues": { "Intelligent-Tiering": ["Standard", "Advanced"] }
+}
+```
+
+When the value already held (the plan on create/update, the prior state on
+refresh) is a key and the response carries one of its listed values, the held
+value is kept. Any other response value wins, so a real change is still picked up.
+
+- Top-level, user-settable `string` attributes only; keys must be in `oneOf` when
+  it is set. Spec load rejects anything else.
+- While the key is configured, a change between its listed values made outside
+  Terraform is not detected. Say so in the attribute's `description`.
+- On **import** there is no held value, so the resolved value lands in state and
+  the first apply adopts the configured one (one in-place update).
+
 ### Server-managed map keys
 
 Some backends inject their own entries into a map the user only partially
