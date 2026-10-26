@@ -930,12 +930,6 @@ func hasPreserveOnEmptyResponse(a AttributeSpec) bool {
 	return false
 }
 
-// restorePreservedValues walks a freshly built state value alongside the value
-// it replaces (the plan on create/update, the prior state on refresh) and, at
-// every leaf marked PreserveOnEmptyResponse that the API returned as null or
-// empty, keeps the prior value instead. This is what lets a write-only secret —
-// redacted by the backend on every read — stay in state instead of being
-// blanked. See AttributeSpec.PreserveOnEmptyResponse.
 // keepEquivalentValue returns prior instead of next when prior is a key of
 // a.EquivalentResponseValues and next is one of the response values listed for
 // it — the API reported the resolved form of the value the user configured.
@@ -955,6 +949,12 @@ func keepEquivalentValue(a AttributeSpec, prior, next tftypes.Value) tftypes.Val
 	return next
 }
 
+// restorePreservedValues walks a freshly built state value alongside the value
+// it replaces (the plan on create/update, the prior state on refresh) and, at
+// every leaf marked PreserveOnEmptyResponse that the API returned as null or
+// empty, keeps the prior value instead. This is what lets a write-only secret —
+// redacted by the backend on every read — stay in state instead of being
+// blanked. See AttributeSpec.PreserveOnEmptyResponse.
 func restorePreservedValues(a AttributeSpec, prior, next tftypes.Value) tftypes.Value {
 	if !hasPreserveOnEmptyResponse(a) {
 		return next
