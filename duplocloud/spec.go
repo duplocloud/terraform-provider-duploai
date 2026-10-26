@@ -486,7 +486,9 @@ type AttributeSpec struct {
 	// calls UpdateFileSystem whenever spec.updateRequest is present, and AWS
 	// rejects an unchanged throughput, so an unrelated (description/backup)
 	// update failed. Matches the AWS provider, which only calls UpdateFileSystem
-	// when the throughput settings changed.
+	// when the throughput settings changed. An unchanged value is still sent when
+	// a requiredIf rule requires it and one of that rule's condition attributes
+	// changed (switching EFS back to provisioned carries the throughput).
 	UpdateOnlyIfChanged bool `json:"updateOnlyIfChanged,omitempty"`
 
 	// CaseInsensitive marks a string whose value compares case-insensitively —

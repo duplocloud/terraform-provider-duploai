@@ -818,7 +818,11 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 // dropUnchangedUpdateFields removes each UpdateOnlyIfChanged attribute whose
 // value did not change from the update body, pruning parent objects it leaves
 // empty — so a backend that acts on any field present (EFS UpdateFileSystem)
-// is not asked to "change" a value to what it already is.
+// is not asked to "change" a value to what it already is. An unchanged field
+// is kept when a requiredIf rule requires it because of a field that did
+// change: switching an EFS back to provisioned must carry the throughput even
+// if state still holds the same number (the backend rejects the switch
+// without it, and the AWS provider sends it whenever the mode is provisioned).
 func (r *dynamicResource) dropUnchangedUpdateFields(ctx context.Context, req resource.UpdateRequest, body map[string]any, diags *diag.Diagnostics) {
 	for i := range r.spec.Attributes {
 		a := r.spec.Attributes[i]
@@ -834,10 +838,37 @@ func (r *dynamicResource) dropUnchangedUpdateFields(ctx context.Context, req res
 		if diags.HasError() {
 			return
 		}
-		if jsonEqual(planVal, stateVal) {
+		if jsonEqual(planVal, stateVal) && !r.requiredByChange(ctx, req, a.Name, diags) {
 			deletePathPruning(body, strings.Split(path, "."))
 		}
 	}
+}
+
+// requiredByChange reports whether a requiredIf rule for attribute name holds
+// in the plan and at least one attribute in its conditions changed from state.
+func (r *dynamicResource) requiredByChange(ctx context.Context, req resource.UpdateRequest, name string, diags *diag.Diagnostics) bool {
+	v := requiredIfValidator{spec: r.spec}
+	for _, rule := range r.spec.RequiredIf {
+		if rule.Attribute != name {
+			continue
+		}
+		conds := rule.conditions()
+		if !v.conditionsHold(ctx, req.Plan, conds) {
+			continue
+		}
+		for _, c := range conds {
+			ca := r.spec.attr(c.Attribute)
+			if ca == nil {
+				continue
+			}
+			pv, _ := readPlanGoValue(ctx, req.Plan, *ca, diags)
+			sv, _ := readPlanGoValue(ctx, req.State, *ca, diags)
+			if !jsonEqual(pv, sv) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // sendStoredCasing writes the prior state's value into the update body for a
