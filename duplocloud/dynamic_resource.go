@@ -672,7 +672,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	// only diffs that do are config-only (e.g. the timeouts block) — refresh
 	// computed values from the API and persist, without issuing an update call.
 	if !r.endpoint.HasUpdate() {
-		obj, clientErr := r.api(scope, r.specFailureRetries()).Get(objID)
+		obj, clientErr := r.api(scope, r.specFailureRetries()).GetWithRetry(ctx, objID, dsReadRetryWindow)
 		if clientErr != nil {
 			resp.Diagnostics.AddError("Error reading "+r.spec.Name, clientErr.Error())
 			return
@@ -700,11 +700,21 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 	log.Printf("[TRACE] dynamic %s Update(%s): start", r.spec.Name, id)
 
+	// A case-only change to a caseInsensitive id sends the stored casing, so it
+	// is not an API change — done before the skip below so that change stays
+	// state-only instead of issuing a PUT.
+	r.sendStoredCasing(ctx, req, body, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// If nothing the API cares about changed (e.g. only the timeouts block
 	// differs, as on the first apply after import), skip the API call and the
 	// waiter entirely — issuing a PUT would re-trigger provisioning for a
-	// metadata-only change. ModifyPlan has already carried prior computed values
-	// into the plan, so it is fully known and safe to persist directly.
+	// metadata-only change. ModifyPlan has usually carried prior computed values
+	// into the plan, so it is fully known and safe to persist directly; when it
+	// is not (a case-only id change, which ModifyPlan sees as a change), read the
+	// resource to fill the outputs it left unknown.
 	// Built the same way as the plan body (id included) so the injected id cannot
 	// make the two differ and defeat the skip.
 	stateBody := r.updateBodyFromRaw(req.State.Raw, objID, &resp.Diagnostics)
@@ -712,16 +722,21 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 	if apiBodyEqual(body, stateBody) {
-		resp.State.Raw = req.Plan.Raw
+		if req.Plan.Raw.IsFullyKnown() {
+			resp.State.Raw = req.Plan.Raw
+		} else {
+			cur, clientErr := r.api(scope, 0).GetWithRetry(ctx, objID, dsReadRetryWindow)
+			if clientErr != nil {
+				resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after update", clientErr.Error())
+				return
+			}
+			resp.State.Raw = r.stateFromResponse(ctx, req.Plan.Raw, *cur, scope, id, false, &resp.Diagnostics)
+		}
 		log.Printf("[TRACE] dynamic %s Update(%s): no API-relevant change, skipped", r.spec.Name, id)
 		return
 	}
 
 	r.dropUnchangedUpdateFields(ctx, req, body, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	r.sendStoredCasing(ctx, req, body, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -879,7 +894,7 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 	// plan as-is: the plan can still hold computed outputs as unknown (status,
 	// updated_at, ...), and Terraform rejects an apply that leaves any unknown.
 	if len(changes) == 0 {
-		cur, clientErr := r.api(scope, 0).Get(objID)
+		cur, clientErr := r.api(scope, 0).GetWithRetry(ctx, objID, dsReadRetryWindow)
 		if clientErr != nil {
 			resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after update", clientErr.Error())
 			return

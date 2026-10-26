@@ -444,10 +444,12 @@ type AttributeSpec struct {
 	// ImportAdoptsConfig, on a forceNew attribute the API never returns (so no
 	// read path can fill it), replaces the resource only when the prior value is
 	// set. After `terraform import` such a value is null; with this flag the
-	// first plan adopts the configured value as an in-place, state-only change
-	// instead of replacing the resource just imported. A change from a known
-	// value still replaces it. Only valid on forceNew string, int, bool or list
-	// attributes.
+	// configured value is adopted as an in-place, state-only change instead of
+	// replacing the resource just imported. The window lasts until the first
+	// apply that changes the resource (a plan with no changes runs no update, so
+	// the import mark stays). A change from a known value still replaces it. Only valid on forceNew string, int, bool, list or
+	// map(string) attributes; a map also adopts from an empty prior value, which
+	// is what a filterResponseKeys ["*"] map reads as after an import.
 	ImportAdoptsConfig bool `json:"importAdoptsConfig,omitempty"`
 
 	// StableUnlessChanged, on a computed-only string, list or set attribute,
@@ -1498,8 +1500,8 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			if !a.ForceNew {
 				return nil, fmt.Errorf("attribute %q: importAdoptsConfig only changes how a forceNew attribute replaces; add forceNew or drop it", a.Name)
 			}
-			if a.Type != "string" && a.Type != "int" && a.Type != "bool" && !strings.HasPrefix(a.Type, "list(") {
-				return nil, fmt.Errorf("attribute %q: importAdoptsConfig is only supported on string, int, bool and list attributes", a.Name)
+			if a.Type != "string" && a.Type != "int" && a.Type != "bool" && !strings.HasPrefix(a.Type, "list(") && a.Type != "map(string)" {
+				return nil, fmt.Errorf("attribute %q: importAdoptsConfig is only supported on string, int, bool, list and map(string) attributes", a.Name)
 			}
 		}
 		if a.ImmutableOnceTrue {
