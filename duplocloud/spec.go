@@ -166,6 +166,13 @@ type ResourceSpec struct {
 	// stale delta from the stored record would be re-sent.
 	MergeUpdateIntoCurrent bool `json:"mergeUpdateIntoCurrent,omitempty"`
 
+	// Ephemeral also registers the spec's data source as an ephemeral resource
+	// (`ephemeral "duploai_<name>"`, Terraform 1.10+) that reads the same values
+	// but is never stored in plan or state. For short-lived secrets such as
+	// k8s_credentials' token. Requires dataSource or dataSourceOnly; the data
+	// source stays, so existing configs are unaffected.
+	Ephemeral bool `json:"ephemeral,omitempty"`
+
 	// DataSource, when true, registers a read-only data source (data.duploai_<name>)
 	// from this spec in addition to the managed resource. The data source schema is
 	// derived automatically: path-parameter attributes stay Required, all other
@@ -1121,6 +1128,9 @@ func (s *ResourceSpec) validate() error {
 				return fmt.Errorf("attribute %q: stableUnlessChanged references unknown attribute %q", a.Name, in)
 			}
 		}
+	}
+	if s.Ephemeral && !s.DataSource && !s.DataSourceOnly {
+		return fmt.Errorf("ephemeral requires dataSource or dataSourceOnly")
 	}
 	for _, r := range s.RequiredIf {
 		if !seen[r.Attribute] {

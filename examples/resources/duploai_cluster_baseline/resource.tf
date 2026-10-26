@@ -362,3 +362,37 @@ resource "azapi_update_resource" "agic_appgw_buffers" {
     }
   }
 }
+
+# Account that forbids IAM creation — the customer supplies one existing role,
+# used as both the EKS service role and the node role. It must trust
+# eks.amazonaws.com (sts:AssumeRole and sts:TagSession) and ec2.amazonaws.com.
+# The baseline creates no IAM at all, so the cluster gets no -read-only scope and
+# no IAM OIDC provider: create the provider for the cluster's issuer yourself
+# before cluster attributes or namespace IRSA can work. Not allowed with
+# mode = "Import". Removing it from the configuration keeps it; setting a
+# different role replaces the cluster.
+resource "duploai_cluster_baseline" "customer_managed_iam" {
+  workspace_id = "<workspace-id>"
+  name         = "prod-cluster-no-iam"
+  network_id   = "<network-baseline-id>"
+  version      = "1.34"
+
+  existing_iam_role_arn = "arn:aws:iam::123456789012:role/platform-shared"
+}
+
+# Kubernetes secrets encrypted with a customer-managed KMS key (EKS envelope
+# encryption). Nothing else on the cluster uses the key. It must be an enabled
+# symmetric key in the cluster's region that the EKS service role can use; the
+# cloud scope that provisions the cluster needs kms:DescribeKey and
+# kms:CreateGrant on it. Combine with existing_iam_role_arn if IAM creation is
+# also forbidden. EKS can never remove or switch the key: adding it to an
+# existing cluster, or setting a different key, replaces the cluster; removing
+# it from the configuration keeps it.
+resource "duploai_cluster_baseline" "secrets_encryption" {
+  workspace_id = "<workspace-id>"
+  name         = "prod-cluster-encrypted"
+  network_id   = "<network-baseline-id>"
+  version      = "1.34"
+
+  existing_kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab"
+}
