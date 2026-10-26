@@ -1881,6 +1881,9 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		// read) keep whatever the base value already held rather than the empty
 		// value the response carries.
 		next[a.Name] = restorePreservedValues(a, current[a.Name], next[a.Name])
+		// A configured value the cloud reports only in resolved form (e.g. SSM
+		// tier Intelligent-Tiering → Standard) keeps the configured form.
+		next[a.Name] = keepEquivalentValue(a, current[a.Name], next[a.Name])
 	}
 
 	return tftypes.NewValue(objType, next)

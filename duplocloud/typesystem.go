@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -931,6 +932,25 @@ func hasPreserveOnEmptyResponse(a AttributeSpec) bool {
 		}
 	}
 	return false
+}
+
+// keepEquivalentValue returns prior instead of next when prior is a key of
+// a.EquivalentResponseValues and next is one of the response values listed for
+// it — the API reported the resolved form of the value the user configured.
+func keepEquivalentValue(a AttributeSpec, prior, next tftypes.Value) tftypes.Value {
+	if len(a.EquivalentResponseValues) == 0 ||
+		!prior.IsKnown() || prior.IsNull() || !prior.Type().Is(tftypes.String) ||
+		!next.IsKnown() || next.IsNull() || !next.Type().Is(tftypes.String) {
+		return next
+	}
+	var p, n string
+	if prior.As(&p) != nil || next.As(&n) != nil {
+		return next
+	}
+	if slices.Contains(a.EquivalentResponseValues[p], n) {
+		return prior
+	}
+	return next
 }
 
 // restorePreservedValues walks a freshly built state value alongside the value
