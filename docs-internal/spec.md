@@ -1131,7 +1131,7 @@ How the engine handles it:
 - **Refresh**: while the version is set, an attribute sharing the write-only
   one's create path that is null in state stays null, so an API that echoes the
   secret back (RDS and ElastiCache decrypt on read) cannot put it into state.
-- Setting `<secret>_wo` without `<secret>_wo_version` fails at plan time.
+- Setting `<secret>_wo` without `<secret>_wo_version` fails at plan time, and so does setting the version without the secret.
 - The data source never exposes either attribute (they have no response path).
 - **Switching** an existing resource from `<secret>` to `<secret>_wo` is one
   in-place update: the old value leaves state and the `_wo` value is sent once.

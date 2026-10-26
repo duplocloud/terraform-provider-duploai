@@ -134,7 +134,7 @@ func (r *dynamicResource) keepShadowedNull(prior, next tftypes.Value) tftypes.Va
 type writeOnlyValidator struct{ spec ResourceSpec }
 
 func (v writeOnlyValidator) Description(_ context.Context) string {
-	return "Requires the version attribute whenever a write-only attribute is set."
+	return "Requires a write-only attribute and its version attribute to be set together."
 }
 
 func (v writeOnlyValidator) MarkdownDescription(ctx context.Context) string {

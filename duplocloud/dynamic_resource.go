@@ -540,7 +540,19 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 }
 
 func (r *dynamicResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	defer func() { r.setIdentity(ctx, resp.State, resp.Identity, &resp.Diagnostics) }()
+	// A resource deleted outside Terraform is removed from state (RemoveResource
+	// nulls resp.State), but the framework still requires an identity after a
+	// successful read and errors on a fully null one. When the prior state held
+	// no identity (Terraform below 1.12, or state saved before identity support),
+	// that would fail the plan instead of planning a recreate — so set it from
+	// the prior state.
+	defer func() {
+		st := resp.State
+		if st.Raw.IsNull() {
+			st = req.State
+		}
+		r.setIdentity(ctx, st, resp.Identity, &resp.Diagnostics)
+	}()
 	scope, objID, id, err := r.parseID(ctx, req.State, &resp.Diagnostics)
 	if err != nil || resp.Diagnostics.HasError() {
 		return
@@ -1118,7 +1130,8 @@ func (r *dynamicResource) ImportState(ctx context.Context, req resource.ImportSt
 	// segments (which can never resolve) are added to what is rejected.
 	// Import by identity (Terraform 1.12+: `import { identity = {...} }`) builds
 	// the same composite ID an import by ID would carry, then follows the same
-	// path; the Read that follows fills in everything else.
+	// path — including the import mark below; the Read that follows fills in
+	// everything else.
 	if req.ID == "" && req.Identity != nil {
 		id, diags := r.idFromIdentity(ctx, req.Identity)
 		resp.Diagnostics.Append(diags...)
@@ -1130,16 +1143,19 @@ func (r *dynamicResource) ImportState(ctx context.Context, req resource.ImportSt
 			return
 		}
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), id)...)
+	} else {
+		if msg := r.importIDProblem(req.ID); msg != "" {
+			resp.Diagnostics.AddError("Invalid import ID", msg)
+			return
+		}
+		resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	}
+	if resp.Diagnostics.HasError() {
 		return
 	}
-	if msg := r.importIDProblem(req.ID); msg != "" {
-		resp.Diagnostics.AddError("Invalid import ID", msg)
-		return
-	}
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 	// Mark the resource as just imported, so an importAdoptsConfig attribute
 	// the API can't return adopts its configured value instead of replacing
-	// the resource. The first update clears the mark.
+	// the resource. The first successful update clears the mark.
 	if resp.Private != nil {
 		resp.Diagnostics.Append(resp.Private.SetKey(ctx, importedPrivateKey, []byte("true"))...)
 	}
