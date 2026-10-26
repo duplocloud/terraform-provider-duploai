@@ -574,7 +574,7 @@ func mapRequiresReplace(a AttributeSpec) planmodifier.Map {
 // replacement: always, unless the resource was just imported and the prior map
 // is null or empty.
 func mapReplacesOnImport(prior types.Map, imported bool) bool {
-	return !imported || !(prior.IsNull() || len(prior.Elements()) == 0)
+	return !imported || (!prior.IsNull() && len(prior.Elements()) > 0)
 }
 
 const importAdoptsConfigDescription = "Changing this value replaces the resource, except after an import: until the first apply that changes the resource, the configured value is adopted."
