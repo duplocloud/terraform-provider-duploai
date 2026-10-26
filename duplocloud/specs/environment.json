@@ -182,6 +182,7 @@
       "name": "created_at",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,
       "description": "Creation timestamp (RFC 3339, normalized to UTC at second precision)."

@@ -65,7 +65,7 @@ output "backend_repository_uri" {
 - `provisioner_type` (String) Provisioner type. Defaults to DirectApiCall for ECR.
 - `provisioner_version` (String) Optional provisioner version.
 - `scan_on_push` (Boolean) Scan images for vulnerabilities automatically when pushed. Can be changed in place.
-- `tags` (Attributes List) Tags applied to the repository at creation, as a list of key/value pairs. Platform ownership tags are added automatically. (see [below for nested schema](#nestedatt--tags))
+- `tags` (Attributes List) Tags applied to the repository at creation, as a list of key/value pairs. Platform ownership tags are added automatically. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing repository. (see [below for nested schema](#nestedatt--tags))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only

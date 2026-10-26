@@ -122,11 +122,10 @@
       "computed": true,
       "requestPath": "spec.k8sResource.metadata.labels",
       "responsePath": "result.k8sResource.metadata.labels",
-      "description": "Labels to apply to the Kubernetes Job object.",
+      "description": "Labels to apply to the Kubernetes Job object. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored.",
       "forceNew": true,
-      "filterResponseKeys": [
-        "duplocloud.ai/*"
-      ]
+      "filterResponseKeys": ["*"],
+      "importAdoptsConfig": true
     },
     {
       "name": "annotations",
@@ -3669,6 +3668,7 @@
     }
   ],
   "waiter": {
+    "deprovisionedState": "DeProvisioned",
     "failureRetries": 3
   }
 }

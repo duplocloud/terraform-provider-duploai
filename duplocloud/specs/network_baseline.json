@@ -3,6 +3,7 @@
   "description": "Manages a DuploCloud AI Helpdesk network baseline. On AWS this provisions a VPC, subnets, and NAT gateways; on Azure it provisions a virtual network, subnets, and NAT gateways via the nested `azure` block. The target cloud is selected with `cloud`.",
   "idPath": "id",
   "dataSource": true,
+  "mergeUpdateIntoCurrent": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/networks",
     "deprovision": {}
@@ -740,6 +741,7 @@
     {
       "name": "subnet_ids",
       "type": "list(string)",
+      "stableUnlessChanged": ["cidr", "additional_cidrs", "vpc_id"],
       "computed": true,
       "apiPath": "result.subnets[].subnetId",
       "description": "AWS only. Provisioned subnet IDs."
@@ -747,6 +749,7 @@
     {
       "name": "nat_gateway_ids",
       "type": "list(string)",
+      "stableUnlessChanged": ["nat_mode", "cidr", "additional_cidrs", "vpc_id"],
       "computed": true,
       "apiPath": "result.natGateways[].natGatewayId",
       "description": "AWS only. Provisioned NAT gateway IDs."
@@ -754,6 +757,7 @@
     {
       "name": "azure_vnet_id",
       "type": "string",
+      "stableUnlessChanged": ["azure"],
       "computed": true,
       "apiPath": "result.azure.vnet.vnetId",
       "description": "Azure only. Resource ID of the provisioned or adopted virtual network."
@@ -762,6 +766,7 @@
       "name": "azure_resource_group",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.azure.resourceGroup",
       "description": "Azure only. Resource group the virtual network was provisioned into."
     },
@@ -769,12 +774,14 @@
       "name": "azure_subscription_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.azure.subscriptionId",
       "description": "Azure only. Subscription the virtual network was provisioned into."
     },
     {
       "name": "azure_subnet_ids",
       "type": "list(string)",
+      "stableUnlessChanged": ["azure", "cidr", "additional_cidrs"],
       "computed": true,
       "apiPath": "result.azure.subnets[].subnetId",
       "description": "Azure only. Provisioned subnet resource IDs."
@@ -782,6 +789,7 @@
     {
       "name": "azure_nat_gateway_ids",
       "type": "list(string)",
+      "stableUnlessChanged": ["azure"],
       "computed": true,
       "apiPath": "result.azure.natGateways[].natGatewayId",
       "description": "Azure only. Provisioned NAT gateway resource IDs."

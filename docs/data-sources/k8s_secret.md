@@ -34,12 +34,12 @@ output "status" {
 
 ### Read-Only
 
-- `annotations` (Map of String) Kubernetes annotations applied to the secret.
+- `annotations` (Map of String) Kubernetes annotations applied to the secret. Only annotations set in configuration are tracked; annotations added outside Terraform are ignored.
 - `data` (Map of String, Sensitive) Secret entries with base64-encoded values, keyed by name. Populated by the server from string_data if not set directly.
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
 - `k8s_secret_id` (String) ID of this secret, for reference by dependent resources.
-- `labels` (Map of String) Kubernetes labels applied to the secret.
+- `labels` (Map of String) Kubernetes labels applied to the secret. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored.
 - `name` (String) Name of the secret resource.
 - `namespace_name` (String) Kubernetes namespace the secret is created in.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.

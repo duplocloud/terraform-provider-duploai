@@ -248,7 +248,7 @@ resource "duploai_k8s_cron_job" "any_host" {
 - `image_pull_secrets` (Attributes List) Image pull secrets referenced by the pods, for pulling container images from private registries. (see [below for nested schema](#nestedatt--image_pull_secrets))
 - `init_containers` (Attributes List) Init containers that run to completion, in order, before the main containers start. (see [below for nested schema](#nestedatt--init_containers))
 - `is_any_host_allowed` (Boolean) When true, the cron job pods may be scheduled on any available host.
-- `labels` (Map of String) Labels to apply to the Kubernetes CronJob object.
+- `labels` (Map of String) Labels to apply to the Kubernetes CronJob object. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored.
 - `manual_selector` (Boolean) Allow a manually-specified pod selector (advanced).
 - `max_failed_indexes` (Number) Max number of failed indexes before the job is failed (Indexed jobs only).
 - `namespace_name` (String) Kubernetes namespace to run the cron job in.

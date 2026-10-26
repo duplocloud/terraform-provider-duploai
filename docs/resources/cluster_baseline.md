@@ -519,7 +519,7 @@ Optional:
 
 Read-Only:
 
-- `node_subnet_ids` (List of String) Private subnet IDs the system node group is placed in. Populated server-side from the linked network's private subnets.
+- `node_subnet_ids` (List of String) Private subnet IDs the system node group is placed in. Populated server-side from the linked network's private subnets on create, and sent back unchanged on update (the platform rebuilds the system node group from the update request and requires them).
 
 
 <a id="nestedblock--timeouts"></a>

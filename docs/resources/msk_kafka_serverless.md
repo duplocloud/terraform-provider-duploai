@@ -43,7 +43,7 @@ output "kafka_bootstrap_brokers_sasl_iam" {
 - `provisioner_type` (String) Provisioner type. Defaults to DirectApiCall for MSK.
 - `provisioner_version` (String) Optional provisioner version.
 - `scope_ids` (Set of String) IDs of the scopes attached to this cluster.
-- `tags` (Map of String) Tags applied to the cluster at creation. Platform ownership tags are added automatically.
+- `tags` (Map of String) Tags applied to the cluster at creation. Platform ownership tags are added automatically. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing cluster.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only

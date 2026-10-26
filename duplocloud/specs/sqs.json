@@ -145,7 +145,7 @@
       "optional": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.tags",
-      "description": "Tags applied to the queue at creation, as key/value pairs. Platform ownership tags are added automatically. Set only at creation (SQS has no tag-update API)."
+      "description": "Tags applied to the queue at creation, as key/value pairs. Platform ownership tags are added automatically. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing queue."
     },
     {
       "name": "provisioner_type",
@@ -189,6 +189,7 @@
       "name": "queue_url",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.queueUrl",
       "description": "URL of the provisioned SQS queue (used for send/receive/delete operations)."
@@ -197,6 +198,7 @@
       "name": "queue_arn",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "spec.uniqueCloudResourceId",
       "description": "ARN of the provisioned SQS queue."
@@ -205,6 +207,7 @@
       "name": "created_at",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,
       "description": "Timestamp when the queue was created (RFC 3339, normalized to UTC at second precision)."

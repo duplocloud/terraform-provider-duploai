@@ -65,7 +65,7 @@ output "last_successful_time" {
 - `init_containers` (Attributes List) Init containers that run to completion, in order, before the main containers start. (see [below for nested schema](#nestedatt--init_containers))
 - `is_any_host_allowed` (Boolean) When true, the cron job pods may be scheduled on any available host.
 - `k8s_cron_job_id` (String) ID of this cron job, for reference by dependent resources.
-- `labels` (Map of String) Labels to apply to the Kubernetes CronJob object.
+- `labels` (Map of String) Labels to apply to the Kubernetes CronJob object. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored.
 - `last_schedule_time` (String) Time the cron job last scheduled a run (RFC 3339, normalized to UTC at second precision).
 - `last_successful_time` (String) Time a run of the cron job last completed successfully (RFC 3339, normalized to UTC at second precision).
 - `manual_selector` (Boolean) Allow a manually-specified pod selector (advanced).

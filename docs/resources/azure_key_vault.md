@@ -102,7 +102,7 @@ resource "duploai_azure_key_vault" "private" {
 - `id` (String) Composite resource identifier (workspace_id/id).
 - `key_vault_id` (String) ARM resource id of the Key Vault in Azure.
 - `provisioning_state` (String) Azure-reported provisioning state of the vault.
-- `scope_ids` (List of String) Scopes the vault is visible to. Inherited from the resource group.
+- `scope_ids` (List of String) Scopes the vault is visible to. Inherited from the resource group. Sent back unchanged on update: the platform rebuilds the vault record from the update request and would otherwise drop them.
 - `status` (String) Provisioning status reported by the platform.
 - `tenant_id` (String) Microsoft Entra tenant that backs the vault's authentication.
 - `updated_at` (String) Timestamp when the vault record was last updated (RFC 3339, normalized to UTC at second precision).

@@ -92,6 +92,7 @@
       "name": "created_at",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,
       "description": "Timestamp when the agent was created (RFC 3339, normalized to UTC at second precision)."

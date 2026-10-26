@@ -66,7 +66,7 @@ resource "duploai_aws_efs" "db_backups" {
 - `performance_mode` (String) Performance mode: generalPurpose (default) or maxIO. Immutable after creation. When importing a maxIO file system, set this to maxIO in the configuration — otherwise the generalPurpose default plans a replacement.
 - `provisioned_throughput_in_mibps` (Number) Provisioned throughput in MiB/s. Required when throughput_mode is provisioned; ignored otherwise.
 - `provisioner_version` (String) Optional provisioner version.
-- `tags` (Attributes List) Tags applied to the file system at creation. (see [below for nested schema](#nestedatt--tags))
+- `tags` (Attributes List) Tags applied to the file system at creation. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing file system. (see [below for nested schema](#nestedatt--tags))
 - `throughput_mode` (String) Throughput mode: bursting (default), provisioned, or elastic. Mutable.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 

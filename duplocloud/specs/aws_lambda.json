@@ -144,7 +144,7 @@
       ],
       "requestPath": "spec.createRequest.architectures",
       "responsePath": "result.cloudDetails.configuration.architectures",
-      "description": "Instruction set architectures for the function. Valid values: x86_64, arm64. Defaults to [x86_64]."
+      "description": "Instruction set architectures for the function. Valid values: x86_64, arm64. Defaults to [x86_64]. Set at creation only: the platform cannot change it on an existing function, so to change it replace the function (`terraform apply -replace=<address>`)."
     },
     {
       "name": "kms_key_arn",
@@ -162,7 +162,7 @@
       "optional": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.code.s3Bucket",
-      "description": "S3 bucket containing the deployment package. Use with s3_key."
+      "description": "S3 bucket containing the deployment package. Use with s3_key. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`)."
     },
     {
       "name": "s3_key",
@@ -170,7 +170,7 @@
       "optional": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.code.s3Key",
-      "description": "S3 object key of the deployment package."
+      "description": "S3 object key of the deployment package. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`)."
     },
     {
       "name": "s3_object_version",
@@ -178,7 +178,7 @@
       "optional": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.code.s3ObjectVersion",
-      "description": "S3 object version of the deployment package."
+      "description": "S3 object version of the deployment package. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`)."
     },
     {
       "name": "image_uri",
@@ -186,7 +186,7 @@
       "optional": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.code.imageUri",
-      "description": "URI of a container image in Amazon ECR. Use instead of s3_bucket/s3_key for container image deployments."
+      "description": "URI of a container image in Amazon ECR. Use instead of s3_bucket/s3_key for container image deployments. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`)."
     },
     {
       "name": "environment_variables",
@@ -234,7 +234,7 @@
       "optional": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.tags",
-      "description": "Tags to assign to the Lambda function."
+      "description": "Tags applied to the Lambda function at creation. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing function."
     },
     {
       "name": "status",
@@ -255,6 +255,7 @@
       "name": "function_arn",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.cloudDetails.configuration.functionArn",
       "description": "ARN of the deployed Lambda function."

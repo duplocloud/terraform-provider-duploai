@@ -61,7 +61,7 @@ output "status" {
 - `job_failed` (Number) Number of pods that have failed.
 - `job_succeeded` (Number) Number of pods that have successfully completed.
 - `k8s_job_id` (String) ID of this job, for reference by dependent resources.
-- `labels` (Map of String) Labels to apply to the Kubernetes Job object.
+- `labels` (Map of String) Labels to apply to the Kubernetes Job object. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored.
 - `manual_selector` (Boolean) Allow a manually-specified pod selector (advanced).
 - `max_failed_indexes` (Number) Max number of failed indexes before the job is failed (Indexed jobs only).
 - `name` (String) Name of the Kubernetes job resource.
