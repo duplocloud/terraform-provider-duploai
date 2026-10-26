@@ -145,3 +145,29 @@ resource "duploai_elasticache" "redis_from_snapshot" {
 
   snapshot_name = "redis-basic-2024-06-01"
 }
+
+# Terraform 1.11 and later: the write-only argument keeps the secret out of the
+# plan and state. Change the _wo_version number whenever the secret changes —
+# that is what sends the new value. On older Terraform, use the attribute above.
+resource "duploai_elasticache" "redis_auth_wo" {
+  workspace_id      = "<workspace-id>"
+  name              = "redis-auth-wo"
+  environment_id    = "<environment-id>"
+  resource_group_id = "<eks-resource-group-id>"
+
+  engine          = "Redis"
+  engine_version  = "7.1"
+  cache_node_type = "cache.t4g.micro"
+
+  cluster_mode       = "Disabled"
+  num_cache_clusters = 2
+
+  transit_encryption_enabled = true
+  auth_token_wo              = var.redis_auth_token
+  auth_token_wo_version      = 1
+}
+
+variable "redis_auth_token" {
+  type      = string
+  sensitive = true
+}

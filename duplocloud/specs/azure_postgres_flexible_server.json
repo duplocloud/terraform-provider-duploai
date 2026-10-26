@@ -18,8 +18,10 @@
     },
     {
       "attribute": "administrator_password",
-      "whenAttribute": "password_auth",
-      "whenEquals": "Enabled"
+      "when": [
+        { "attribute": "password_auth", "equals": "Enabled" },
+        { "attribute": "administrator_password_wo", "isEmpty": true }
+      ]
     },
     {
       "attribute": "delegated_subnet_resource_id",
@@ -28,7 +30,8 @@
     }
   ],
   "conflictsWith": [
-    ["firewall_rules", "delegated_subnet_resource_id"]
+    ["firewall_rules", "delegated_subnet_resource_id"],
+    ["administrator_password", "administrator_password_wo"]
   ],
   "attributes": [
     {
@@ -282,7 +285,24 @@
       "createPath": "spec.administratorLoginPassword",
       "updatePath": "spec.updateRequest.administratorLoginPassword",
       "responsePath": "spec.administratorLoginPassword",
-      "description": "Administrator password. Required at creation when password_auth is Enabled; on update the backend treats a blank value as \"keep the current password\". 8–128 characters using at least three of: uppercase, lowercase, numbers, symbols. Write-only — the API never returns it, so the configured value is kept in state and a change made outside Terraform cannot be detected."
+      "description": "Administrator password. Required at creation when password_auth is Enabled (unless administrator_password_wo is set); on update the backend treats a blank value as \"keep the current password\". 8–128 characters using at least three of: uppercase, lowercase, numbers, symbols. The API never returns it, so the configured value is kept in state and a change made outside Terraform cannot be detected."
+    },
+    {
+      "name": "administrator_password_wo",
+      "type": "string",
+      "optional": true,
+      "sensitive": true,
+      "writeOnly": true,
+      "versionAttribute": "administrator_password_wo_version",
+      "createPath": "spec.administratorLoginPassword",
+      "updatePath": "spec.updateRequest.administratorLoginPassword",
+      "description": "Write-only alternative to `administrator_password`, for Terraform 1.11 and later: the value is sent to the API but never stored in the plan or state. Set `administrator_password_wo_version` with it, and change `administrator_password_wo_version` whenever this value changes — that is the only signal that sends the new value. On Terraform earlier than 1.11, use `administrator_password` instead. Only one of the two may be set. Choose one field per configuration: a conditional on a variable that sets one or the other fails validation, because Terraform validates before variable values are known. Same rules as administrator_password."
+    },
+    {
+      "name": "administrator_password_wo_version",
+      "type": "int",
+      "optional": true,
+      "description": "Version of `administrator_password_wo`. Required when `administrator_password_wo` is set. The value itself is arbitrary (1, 2, 3, …): changing it sends the current `administrator_password_wo` on the next apply. Stored in state; the secret is not."
     },
     {
       "name": "password_auth",

@@ -26,6 +26,7 @@
       "message": "performance_insights_kms_key_id is only honoured when enable_performance_insights is true and performance_insights_encryption_mode is \"ResourceGroupKmsKey\". The platform clears the value otherwise, so it would come back empty on the next read and show as a change on every plan. Enable Performance Insights and set the mode, or remove the key."
     }
   ],
+  "conflictsWith": [["master_user_password", "master_user_password_wo"]],
   "attributes": [
     {
       "name": "workspace_id",
@@ -155,6 +156,23 @@
       "sensitive": true,
       "apiPath": "spec.masterUserPassword",
       "description": "Master user password."
+    },
+    {
+      "name": "master_user_password_wo",
+      "type": "string",
+      "optional": true,
+      "sensitive": true,
+      "writeOnly": true,
+      "versionAttribute": "master_user_password_wo_version",
+      "createPath": "spec.masterUserPassword",
+      "updatePath": "spec.masterUserPassword",
+      "description": "Write-only alternative to `master_user_password`, for Terraform 1.11 and later: the value is sent to the API but never stored in the plan or state. Set `master_user_password_wo_version` with it, and change `master_user_password_wo_version` whenever this value changes — that is the only signal that sends the new value. On Terraform earlier than 1.11, use `master_user_password` instead. Only one of the two may be set. Choose one field per configuration: a conditional on a variable that sets one or the other fails validation, because Terraform validates before variable values are known."
+    },
+    {
+      "name": "master_user_password_wo_version",
+      "type": "int",
+      "optional": true,
+      "description": "Version of `master_user_password_wo`. Required when `master_user_password_wo` is set. The value itself is arbitrary (1, 2, 3, …): changing it sends the current `master_user_password_wo` on the next apply. Stored in state; the secret is not."
     },
     {
       "name": "visibility",

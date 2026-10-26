@@ -154,7 +154,7 @@ func attrSchema(a AttributeSpec) schema.Attribute {
 func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 	switch elem {
 	case "string":
-		o := schema.StringAttribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, Description: a.Description, DeprecationMessage: a.Deprecated}
+		o := schema.StringAttribute{Required: a.Required, Optional: a.Optional, Computed: a.Computed, Sensitive: a.Sensitive, WriteOnly: a.WriteOnly, Description: a.Description, DeprecationMessage: a.Deprecated}
 		var def string
 		if a.Default != nil {
 			_ = json.Unmarshal(*a.Default, &def)

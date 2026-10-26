@@ -2,7 +2,7 @@ package duplocloud
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"strings"
 	"time"
 
@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
 )
@@ -123,7 +124,7 @@ func (d *dynamicDataSource) read(ctx context.Context, config tfsdk.Config, diags
 		return tftypes.Value{}, false
 	}
 	objID := idVal.ValueString()
-	log.Printf("[TRACE] dynamic datasource %s Read(%s): start", d.spec.Name, objID)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic datasource %s Read(%s): start", d.spec.Name, objID))
 
 	// A resource's Terraform ID is composite ("scope.../object's id", see composeID)
 	// so users can chain `id = duploai_x.y.id` directly; the API itself takes only
@@ -134,7 +135,7 @@ func (d *dynamicDataSource) read(ctx context.Context, config tfsdk.Config, diags
 		apiID = apiID[i+1:]
 	}
 
-	api := duplosdk.NewRESTResource[map[string]any](d.Client, d.endpoint, scope, nil)
+	api := duplosdk.NewRESTResource[map[string]any](d.Client, d.endpoint, scope, nil).WithContext(ctx)
 	var obj *map[string]any
 	var clientErr duplosdk.ClientError
 	if d.spec.Endpoint.ReadFromList {
@@ -174,6 +175,6 @@ func (d *dynamicDataSource) read(ctx context.Context, config tfsdk.Config, diags
 	if diags.HasError() {
 		return tftypes.Value{}, false
 	}
-	log.Printf("[TRACE] dynamic datasource %s Read(%s): end", d.spec.Name, objID)
+	tflog.Trace(ctx, fmt.Sprintf("dynamic datasource %s Read(%s): end", d.spec.Name, objID))
 	return state, true
 }

@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
@@ -165,6 +166,21 @@ type ResourceSpec struct {
 	// UI sends back. Don't combine with spec.updateRequest-style delta updates: a
 	// stale delta from the stored record would be re-sent.
 	MergeUpdateIntoCurrent bool `json:"mergeUpdateIntoCurrent,omitempty"`
+
+	// SchemaVersion is the resource schema's version (default 0). Bump it, and
+	// add a StateUpgrades step from the previous version, whenever a change
+	// alters how an attribute is STORED: a type change (string -> number), a
+	// rename, a removal. The Plugin Framework reads prior state strictly against
+	// the current schema, so without an upgrader such a change makes every
+	// existing state unreadable. Changes that keep the stored form (adding an
+	// attribute, list -> set) need no bump. Upgrades are one-way: an older
+	// provider cannot read state written at a newer version.
+	SchemaVersion int64 `json:"schemaVersion,omitempty"`
+
+	// StateUpgrades lists the steps that move stored state between versions,
+	// applied in order to every top-level attribute map from the state's own
+	// version up to SchemaVersion. See StateUpgradeStep.
+	StateUpgrades []StateUpgradeStep `json:"stateUpgrades,omitempty"`
 
 	// Ephemeral also registers the spec's data source as an ephemeral resource
 	// (`ephemeral "duploai_<name>"`, Terraform 1.10+) that reads the same values
@@ -604,6 +620,34 @@ type AttributeSpec struct {
 	// NoSend marks an attribute that maps from the response but is never sent in
 	// the request (computed-only fields like status, vpc_id).
 	NoSend bool `json:"noSend,omitempty"`
+
+	// WriteOnly makes a top-level string attribute a Terraform write-only
+	// argument (Terraform 1.11+): the value is read from config, sent in the
+	// request, and never stored in plan or state. It is declared next to the
+	// existing state-stored attribute it is an alternative to (same request
+	// path), which stays unchanged for older Terraform versions.
+	//
+	// A write-only value cannot be diffed, so the paired VersionAttribute
+	// decides when it is sent: always on create, and on update only when the
+	// version changes. Request paths only (createPath / updatePath /
+	// requestPath): with no response path, no read fills it and the data
+	// source never exposes it.
+	WriteOnly bool `json:"writeOnly,omitempty"`
+
+	// VersionAttribute names the optional int attribute that triggers sending a
+	// WriteOnly value on update. Required with WriteOnly; the named attribute
+	// has no paths of its own (it lives only in config and state). While it is
+	// set, an attribute sharing the write-only one's create path that is null
+	// in state stays null on refresh, so the alternative never reads the secret
+	// back into state.
+	VersionAttribute string `json:"versionAttribute,omitempty"`
+
+	// SendOnEveryUpdate, with WriteOnly, sends the value on every update, not
+	// only when the version changes — for a backend whose update cannot work
+	// without it (Key Vault secrets: a value-less update takes a metadata path
+	// that fails). Matches what the state-stored alternative already does,
+	// since that one is always in the plan and so in every update body.
+	SendOnEveryUpdate bool `json:"sendOnEveryUpdate,omitempty"`
 
 	// FilterResponseKeys, for a map(string) attribute (including one nested inside
 	// an object, e.g. azure.tags), drops matching keys from the response map before
@@ -1122,6 +1166,12 @@ func (s *ResourceSpec) validate() error {
 	}
 	if s.LookupDescription != "" && s.LookupAttribute == "" {
 		return fmt.Errorf("lookupDescription requires lookupAttribute")
+	}
+	if err := s.validateStateUpgrades(seen); err != nil {
+		return err
+	}
+	if err := s.validateWriteOnly(); err != nil {
+		return err
 	}
 	// A misspelled input name would silently disable the rule rather than fail.
 	for _, a := range s.Attributes {
@@ -1697,4 +1747,152 @@ func checkDuplicateKeys(data []byte) error {
 			}
 		}
 	}
+}
+
+// StateUpgradeStep moves stored state from FromVersion to FromVersion+1 with
+// declarative operations on top-level attributes, applied in this order:
+// Renames, ToNumber, ToString, Drop.
+type StateUpgradeStep struct {
+	FromVersion int64             `json:"fromVersion"`
+	Renames     map[string]string `json:"renames,omitempty"`  // old name -> new name
+	ToNumber    []string          `json:"toNumber,omitempty"` // string values parsed as numbers ("" -> null)
+	ToString    []string          `json:"toString,omitempty"` // numbers/bools formatted as strings
+	Drop        []string          `json:"drop,omitempty"`     // attributes removed from the schema
+}
+
+func (st StateUpgradeStep) apply(m map[string]any) error {
+	for oldName, newName := range st.Renames {
+		if v, ok := m[oldName]; ok {
+			if _, clash := m[newName]; !clash || m[newName] == nil {
+				m[newName] = v
+			}
+			delete(m, oldName)
+		}
+	}
+	for _, n := range st.ToNumber {
+		switch v := m[n].(type) {
+		case string:
+			if strings.TrimSpace(v) == "" {
+				m[n] = nil
+				continue
+			}
+			num := json.Number(strings.TrimSpace(v))
+			if _, err := num.Float64(); err != nil {
+				return fmt.Errorf("attribute %q: %q is not a number", n, v)
+			}
+			m[n] = num
+		case nil, json.Number:
+		default:
+			return fmt.Errorf("attribute %q: cannot convert %T to a number", n, v)
+		}
+	}
+	for _, n := range st.ToString {
+		switch v := m[n].(type) {
+		case json.Number:
+			m[n] = v.String()
+		case bool:
+			m[n] = strconv.FormatBool(v)
+		case nil, string:
+		default:
+			return fmt.Errorf("attribute %q: cannot convert %T to a string", n, v)
+		}
+	}
+	for _, n := range st.Drop {
+		delete(m, n)
+	}
+	return nil
+}
+
+// validateStateUpgrades checks SchemaVersion/StateUpgrades against the
+// attribute names (seen = top-level names).
+func (s *ResourceSpec) validateStateUpgrades(seen map[string]bool) error {
+	if s.SchemaVersion < 0 {
+		return fmt.Errorf("schemaVersion must not be negative")
+	}
+	from := map[int64]bool{}
+	for _, st := range s.StateUpgrades {
+		if st.FromVersion < 0 || st.FromVersion >= s.SchemaVersion {
+			return fmt.Errorf("stateUpgrades: fromVersion %d must be in [0, schemaVersion %d)", st.FromVersion, s.SchemaVersion)
+		}
+		if from[st.FromVersion] {
+			return fmt.Errorf("stateUpgrades: fromVersion %d listed twice", st.FromVersion)
+		}
+		from[st.FromVersion] = true
+		for _, n := range st.Renames {
+			if !seen[n] {
+				return fmt.Errorf("stateUpgrades %d: renames target %q is not an attribute", st.FromVersion, n)
+			}
+		}
+		for _, n := range append(append([]string{}, st.ToNumber...), st.ToString...) {
+			if !seen[n] {
+				return fmt.Errorf("stateUpgrades %d: %q is not an attribute", st.FromVersion, n)
+			}
+		}
+		for _, n := range st.Drop {
+			if seen[n] {
+				return fmt.Errorf("stateUpgrades %d: drop %q, but it is still an attribute", st.FromVersion, n)
+			}
+		}
+	}
+	if len(s.StateUpgrades) > 0 && s.SchemaVersion == 0 {
+		return fmt.Errorf("stateUpgrades needs schemaVersion > 0")
+	}
+	return nil
+}
+
+// validateWriteOnly checks each WriteOnly attribute and its VersionAttribute.
+// The constraints mirror what keeps the secret out of state: request paths
+// only, never computed or defaulted, top-level (the request is built from the
+// config's top-level values), and a resource whose updates send a full body.
+func (s *ResourceSpec) validateWriteOnly() error {
+	var nested func(attrs []AttributeSpec) error
+	nested = func(attrs []AttributeSpec) error {
+		for _, a := range attrs {
+			if a.WriteOnly || a.VersionAttribute != "" {
+				return fmt.Errorf("attribute %q: writeOnly is supported on top-level attributes only", a.Name)
+			}
+			if err := nested(a.Attributes); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, a := range s.Attributes {
+		if err := nested(a.Attributes); err != nil {
+			return err
+		}
+		if (a.VersionAttribute != "" || a.SendOnEveryUpdate) && !a.WriteOnly {
+			return fmt.Errorf("attribute %q: versionAttribute and sendOnEveryUpdate require writeOnly", a.Name)
+		}
+		if !a.WriteOnly {
+			continue
+		}
+		switch {
+		case a.Type != "string":
+			return fmt.Errorf("attribute %q: writeOnly requires type string", a.Name)
+		case !a.Optional || a.Required || a.Computed || a.Default != nil:
+			return fmt.Errorf("attribute %q: writeOnly must be optional, not required, computed or defaulted", a.Name)
+		case a.APIPath != "" || len(a.responsePathList()) > 0:
+			return fmt.Errorf("attribute %q: writeOnly takes request paths only (createPath/updatePath/requestPath), never apiPath or a response path", a.Name)
+		case a.effectiveCreatePath() == "":
+			return fmt.Errorf("attribute %q: writeOnly needs a createPath or requestPath", a.Name)
+		case a.NoSend || a.SendFromState || a.UpdateIntent != nil || a.PreserveUnmanagedInto != "":
+			return fmt.Errorf("attribute %q: writeOnly cannot be combined with noSend, sendFromState, updateIntent or preserveUnmanagedInto", a.Name)
+		case s.SingleIntentUpdate != nil:
+			return fmt.Errorf("attribute %q: writeOnly is not supported with singleIntentUpdate", a.Name)
+		case a.VersionAttribute == "":
+			return fmt.Errorf("attribute %q: writeOnly requires versionAttribute", a.Name)
+		}
+		v := findAttr(s.Attributes, a.VersionAttribute)
+		if v == nil {
+			return fmt.Errorf("attribute %q: versionAttribute %q is not an attribute", a.Name, a.VersionAttribute)
+		}
+		if v.Type != "int" || !v.Optional || v.Required || v.Computed || v.Default != nil || v.ForceNew {
+			return fmt.Errorf("attribute %q: versionAttribute %q must be an optional int, not computed, defaulted or forceNew", a.Name, v.Name)
+		}
+		if v.APIPath != "" || v.RequestPath != "" || v.CreatePath != "" || v.UpdatePath != "" || len(v.responsePathList()) > 0 {
+			return fmt.Errorf("attribute %q: versionAttribute %q must have no paths; it lives only in config and state", a.Name, v.Name)
+		}
+	}
+	return nil
 }
