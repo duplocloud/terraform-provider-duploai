@@ -86,6 +86,33 @@ resource "duploai_network_baseline" "imported" {
   subnet_prefix = 24
 }
 
+# Import an existing VPC, choosing exactly which resources inside it are adopted.
+# Every aws_import_config field is optional: a field left unset is discovered by
+# the platform, except all_host_security_group_id, which is never discovered.
+# The two subnet lists must be set together, with the same number of entries.
+resource "duploai_network_baseline" "imported_selected" {
+  workspace_id  = "<workspace-id>"
+  name          = "imported-network-selected"
+  mode          = "Import"
+  scope_ids     = ["<scope-id>"]
+  region        = "us-east-1"
+  vpc_id        = "vpc-0a1b2c3d4e5f67890"
+  az_count      = 2
+  subnet_prefix = 24
+
+  aws_import_config = {
+    private_subnet_ids               = ["subnet-0a1b2c3d4e5f60001", "subnet-0a1b2c3d4e5f60002"]
+    public_subnet_ids                = ["subnet-0a1b2c3d4e5f60003", "subnet-0a1b2c3d4e5f60004"]
+    internet_gateway_id              = "igw-0a1b2c3d4e5f67890"
+    nat_gateway_ids                  = ["nat-0a1b2c3d4e5f67890"]
+    route_table_ids                  = ["rtb-0a1b2c3d4e5f60001", "rtb-0a1b2c3d4e5f60002"]
+    all_host_security_group_id       = "sg-0a1b2c3d4e5f67890"
+    private_rds_subnet_group         = "prod-private-db-subnets"
+    public_rds_subnet_group          = "prod-public-db-subnets"
+    private_elasticache_subnet_group = "prod-private-cache-subnets"
+  }
+}
+
 # Azure network baseline — provisions a virtual network, subnets, and a NAT
 # gateway. az_count and subnet_prefix are AWS-only and omitted for Azure;
 # per-subnet address prefixes are set explicitly. Delegations and NSG rules are
@@ -323,6 +350,7 @@ resource "duploai_network_baseline" "customer_managed_iam" {
 ### Optional
 
 - `additional_cidrs` (List of String) Additional network address spaces beyond `cidr` (e.g. secondary Azure virtual network address spaces). Consumed on Azure.
+- `aws_import_config` (Attributes) AWS only, mode Import only. Resources inside `vpc_id` to import, chosen by ID instead of letting the platform discover them. Every field is optional: a field you set is imported exactly as given, and a field you leave unset is discovered as before, except `all_host_security_group_id`, which is never discovered. Requires `vpc_id`. Before saving, the platform checks that every ID exists in the network's account and region and belongs to `vpc_id`, so a wrong ID fails at apply time with a clear error. When the block is omitted, the stored value is kept as is (null for networks that never set it), so existing configurations plan no change. (see [below for nested schema](#nestedatt--aws_import_config))
 - `az_count` (Number) Number of availability zones (1-4). Required on AWS; ignored on Azure, which declares subnets explicitly via the `azure` block.
 - `azure` (Attributes) Azure-specific network configuration. Set only when cloud is Azure; ignored for other clouds. (see [below for nested schema](#nestedatt--azure))
 - `cidr` (String) Primary network CIDR block (e.g. 10.0.0.0/16) — the VPC CIDR on AWS or the primary virtual network address space on Azure. Required when the platform provisions a new network; leave unset when importing an existing one — it is read from the imported network.
@@ -337,13 +365,13 @@ resource "duploai_network_baseline" "customer_managed_iam" {
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `flow_logs_retention_days` (Number) Flow logs retention in days. AWS only. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default).
 - `helpdesk_vpc_peering_enabled` (Boolean) AWS only. Whether to peer this network's VPC with the helpdesk platform's own VPC, so the platform can reach an EKS cluster that has a private API server endpoint. When on, provisioning creates the peering connection, routes the helpdesk CIDR back through it, and opens inbound 443 from the helpdesk security group. Prefer leaving this unset: the platform default is on, and the value it settles on is then read back as computed state. Setting it to true explicitly risks a diff that never settles — on an install where the helpdesk VPC was only auto-detected from the machine hosting the backend, rather than configured via the vpc-peering-config setting, the platform downgrades the setting to false, so a config of true differs from the stored value on every plan and re-applying does not converge. Set it explicitly only to turn peering off (false), which the platform always honours.
-- `mode` (String) Provisioning mode: Create (the platform provisions a new network) or Import (adopt an existing network not provisioned by the platform — on AWS set vpc_id, on Azure set azure.import_vnet_id). Immutable after creation.
+- `mode` (String) Provisioning mode: Create (the platform provisions a new network) or Import (adopt an existing network not provisioned by the platform — on AWS set vpc_id, and optionally aws_import_config to choose specific resources; on Azure set azure.import_vnet_id). Immutable after creation.
 - `nat_mode` (String) NAT gateway mode: None, SingleAz, or MultiAz. AWS only; Azure NAT gateways are declared in azure.nat_gateways.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `subnet_prefix` (Number) Subnet prefix length (e.g. 24). Required on AWS; ignored on Azure, which sets per-subnet address prefixes via the `azure` block. Also ignored when `custom_public_subnet_cidrs`/`custom_private_subnet_cidrs` are set — those replace the automatic carve-up — but still required, since the platform derives its subnet host-bits parameter from it either way.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `vpc_id` (String) AWS only. ID of the VPC. Set this to import an existing VPC that was not provisioned by the platform (the baseline adopts the given VPC instead of creating one); leave unset to have the platform provision a new VPC. Computed to the provisioned or adopted VPC ID.
+- `vpc_id` (String) AWS only. ID of the VPC. Set this to import an existing VPC that was not provisioned by the platform (the baseline adopts the given VPC instead of creating one); leave unset to have the platform provision a new VPC. Computed to the provisioned or adopted VPC ID. When importing, use `aws_import_config` to choose exactly which resources inside the VPC are adopted.
 
 ### Read-Only
 
@@ -362,6 +390,22 @@ resource "duploai_network_baseline" "customer_managed_iam" {
 - `network_id` (String) ID of this network baseline, for reference by dependent resources (e.g. a cluster baseline).
 - `status` (String) Current provisioning status.
 - `subnet_ids` (List of String) AWS only. Provisioned subnet IDs.
+
+<a id="nestedatt--aws_import_config"></a>
+### Nested Schema for `aws_import_config`
+
+Optional:
+
+- `all_host_security_group_id` (String) Security group recorded as the network's all-host security group. Never discovered: when unset, the imported network has no all-host security group.
+- `internet_gateway_id` (String) Internet gateway attached to `vpc_id`. Discovered when unset.
+- `nat_gateway_ids` (List of String) NAT gateways to import. When unset but subnets are set, only the NAT gateways the chosen private subnets route through are imported.
+- `private_elasticache_subnet_group` (String) Name of the ElastiCache subnet group over the private subnets. Discovered when unset.
+- `private_rds_subnet_group` (String) Name of the RDS DB subnet group over the private subnets. Discovered when unset.
+- `private_subnet_ids` (List of String) Private subnets to import. Set together with `public_subnet_ids`, with the same number of entries; no subnet may appear in both lists. Only these subnets are imported, and each is treated as Private whatever its route table says.
+- `public_rds_subnet_group` (String) Name of the RDS DB subnet group over the public subnets. Discovered when unset.
+- `public_subnet_ids` (List of String) Public subnets to import. Set together with `private_subnet_ids`, with the same number of entries. Only these subnets are imported, and each is treated as Public whatever its route table says.
+- `route_table_ids` (List of String) Route tables to import. When unset but subnets are set, only the route tables associated with the chosen subnets (plus the VPC's main route table, if a chosen subnet uses it implicitly) are imported.
+
 
 <a id="nestedatt--azure"></a>
 ### Nested Schema for `azure`

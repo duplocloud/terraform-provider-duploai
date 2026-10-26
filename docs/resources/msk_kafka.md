@@ -26,7 +26,7 @@ resource "duploai_msk_kafka" "example" {
   kafka_version          = "3.6.0"
 
   # Optional: pin specific private subnets (one broker per AZ). Omit for all RG private subnets.
-  subnet_ids = ["subnet-0a727a1199534ecf3", "subnet-0fc56ead225db9bcc"]
+  subnet_ids = ["subnet-0a1b2c3d4e5f60001", "subnet-0a1b2c3d4e5f60002"]
 
   # ResourceGroupKmsKey + kms_key_id encrypts data at rest with a registered
   # customer-managed key.
