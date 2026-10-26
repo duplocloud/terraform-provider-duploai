@@ -107,6 +107,28 @@
       "description": "AWS resource name prefix for provisioned resources."
     },
     {
+      "name": "existing_iam_role_arn",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.existingIamRoleArn",
+      "description": "ARN of an existing, customer-managed IAM role for accounts that forbid IAM creation. Used as the resource group's role instead of creating one, together with its four managed policies and instance profile; the role's existing instance profile is looked up and used for EC2 hosts. The role needs the trust and permissions the baseline role would have (e.g. ec2.amazonaws.com, lambda.amazonaws.com, ecs-tasks.amazonaws.com and the platform's deployer principal). With it set, S3 and ECR access grants to this resource group are rejected, since they would edit the role, and namespace IRSA trust is only checked, not added. Leave unset to have the baseline create its own IAM as before. The role is customer-owned: the platform never edits or deletes it. Removing it from the configuration keeps the stored value; setting a different ARN replaces this resource. AWS only.",
+      "pattern": "^arn:aws(-[a-z]+)*:iam::[0-9]{12}:role/([A-Za-z0-9_+=,.@-]+/)*[A-Za-z0-9_+=,.@-]{1,64}$",
+      "patternDescription": "must be an IAM role ARN of the form arn:aws:iam::<12-digit-account>:role/<name>, e.g. arn:aws:iam::123456789012:role/platform-shared. A path is allowed (role/<path>/<name>); the name is 1-64 characters from letters, digits and + = , . @ _ -. Other AWS partitions (aws-us-gov, aws-cn, ...) are accepted; an IAM ARN never carries a region"
+    },
+    {
+      "name": "existing_kms_key_arn",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.existingKmsKeyArn",
+      "description": "ARN of an existing, customer-managed KMS key used as the resource group's key instead of creating one and its alias. Every resource that defaults to the resource group key (S3, RDS, ElastiCache, EFS, SNS, SQS, ECR, MSK, EC2 volumes, node groups) then encrypts with it. Must be an enabled symmetric ENCRYPT_DECRYPT key in this resource group's region, because AWS services only use a key in their own region; a multi-region key is supplied by its replica's ARN in this region. Its policy should let the resource group role and the autoscaling service-linked role use the key, and allow EC2 via kms:ViaService for encrypted EBS. Leave unset to have the baseline create its key as before. The key is customer-owned: the platform never edits its policy or schedules its deletion, and KMS access grants from this resource group are rejected. Removing it from the configuration keeps the stored value; setting a different key ARN replaces this resource. AWS only.",
+      "pattern": "^arn:aws(-[a-z]+)*:kms:[a-z]{2,4}(-[a-z]+)+-[0-9]+:[0-9]{12}:key/([0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}|mrk-[0-9a-f]{32})$",
+      "patternDescription": "must be a full KMS key ARN of the form arn:aws:kms:<region>:<12-digit-account>:key/<key-id>, e.g. arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab. The key id is a lowercase UUID or a multi-region mrk-<32 hex> id. An alias ARN (:alias/...) is not accepted, because an alias can later be re-pointed at another key"
+    },
+    {
       "name": "provisioner_type",
       "type": "string",
       "optional": true,
@@ -246,6 +268,36 @@
       "preserveOnEmptyResponse": true,
       "apiPath": "result.kmsKey.KmsKeyAlias",
       "description": "Provisioned KMS key alias."
+    }
+  ],
+  "invalidWhen": [
+    {
+      "attribute": "existing_iam_role_arn",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "existing_iam_role_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_iam_role_arn is AWS only: it replaces IAM the AWS baseline would create (the resource group role). Remove it, or set cloud = \"Aws\"."
+    },
+    {
+      "attribute": "existing_kms_key_arn",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "existing_kms_key_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_kms_key_arn is AWS only: it replaces the KMS key the AWS baseline would create. Remove it, or set cloud = \"Aws\"."
     }
   ],
   "waiter": {

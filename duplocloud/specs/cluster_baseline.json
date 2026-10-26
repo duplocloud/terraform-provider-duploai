@@ -271,6 +271,28 @@
       ]
     },
     {
+      "name": "existing_iam_role_arn",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.existingIamRoleArn",
+      "description": "ARN of an existing, customer-managed IAM role for accounts that forbid IAM creation. Used as the EKS service role and the node role (system node group or Auto Mode) instead of creating them, so it must trust eks.amazonaws.com (sts:AssumeRole and sts:TagSession) and, when the cluster has nodes, ec2.amazonaws.com. With it set the baseline also creates no read-only role (so the cluster gets no -read-only Kubernetes scope) and no IAM OIDC provider: create the provider for the cluster's issuer yourself before cluster attributes or namespace IRSA can work. The value is copied to this cluster's cluster attributes, whose IRSA service accounts then use this role. Leave unset to have the baseline create its own IAM as before. The role is customer-owned: the platform never edits or deletes it. Removing it from the configuration keeps the stored value; setting a different ARN replaces this resource. AWS only, and not allowed with mode = \"Import\".",
+      "pattern": "^arn:aws(-[a-z]+)*:iam::[0-9]{12}:role/([A-Za-z0-9_+=,.@-]+/)*[A-Za-z0-9_+=,.@-]{1,64}$",
+      "patternDescription": "must be an IAM role ARN of the form arn:aws:iam::<12-digit-account>:role/<name>, e.g. arn:aws:iam::123456789012:role/platform-shared. A path is allowed (role/<path>/<name>); the name is 1-64 characters from letters, digits and + = , . @ _ -. Other AWS partitions (aws-us-gov, aws-cn, ...) are accepted; an IAM ARN never carries a region"
+    },
+    {
+      "name": "existing_kms_key_arn",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.existingKmsKeyArn",
+      "description": "ARN of an existing, customer-managed KMS key that EKS uses to envelope-encrypt this cluster's Kubernetes secrets; nothing else on the cluster uses it. Must be an enabled symmetric ENCRYPT_DECRYPT key in this cluster's region (a multi-region key is supplied by its replica's ARN in this region). The cluster's service role needs kms:Encrypt, kms:Decrypt, kms:DescribeKey and kms:ListGrants on it: the baseline grants these to the role it creates, but with existing_iam_role_arn set that role must already allow them. The cloud scope that provisions the cluster needs kms:DescribeKey and kms:CreateGrant on the key. Leave unset for no secrets encryption config, as before. The key is customer-owned: the platform never edits or deletes it. EKS can never remove or switch a cluster's secrets-encryption key, so adding this to an existing cluster, or setting a different key ARN, replaces the cluster; removing it from the configuration keeps the stored value. AWS only, and not allowed with mode = \"Import\".",
+      "pattern": "^arn:aws(-[a-z]+)*:kms:[a-z]{2,4}(-[a-z]+)+-[0-9]+:[0-9]{12}:key/([0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}|mrk-[0-9a-f]{32})$",
+      "patternDescription": "must be a full KMS key ARN of the form arn:aws:kms:<region>:<12-digit-account>:key/<key-id>, e.g. arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab. The key id is a lowercase UUID or a multi-region mrk-<32 hex> id. An alias ARN (:alias/...) is not accepted, because an alias can later be re-pointed at another key"
+    },
+    {
       "name": "azure",
       "type": "object",
       "optional": true,
@@ -636,6 +658,64 @@
           "equals": "Import"
         }
       ]
+    }
+  ],
+  "invalidWhen": [
+    {
+      "attribute": "existing_iam_role_arn",
+      "when": [
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        },
+        {
+          "attribute": "existing_iam_role_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_iam_role_arn is not allowed with mode = \"Import\": an imported cluster creates no IAM, so there is nothing for the role to replace. Remove it."
+    },
+    {
+      "attribute": "existing_iam_role_arn",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "existing_iam_role_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_iam_role_arn is AWS only: it replaces IAM the AWS baseline would create (the EKS service and node roles). Remove it, or set cloud = \"Aws\"."
+    },
+    {
+      "attribute": "existing_kms_key_arn",
+      "when": [
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        },
+        {
+          "attribute": "existing_kms_key_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_kms_key_arn is not allowed with mode = \"Import\": an imported cluster's secrets encryption is already fixed. Remove it."
+    },
+    {
+      "attribute": "existing_kms_key_arn",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "existing_kms_key_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_kms_key_arn is AWS only: it is the KMS key EKS uses to encrypt Kubernetes secrets. Remove it, or set cloud = \"Aws\"."
     }
   ],
   "waiter": {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
@@ -17,7 +18,10 @@ import (
 	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
 )
 
-var _ provider.Provider = &duploaiProvider{}
+var (
+	_ provider.Provider                       = &duploaiProvider{}
+	_ provider.ProviderWithEphemeralResources = &duploaiProvider{}
+)
 
 type duploaiProvider struct {
 	// version is the provider release version, set at build time (main.version
@@ -165,6 +169,7 @@ func (p *duploaiProvider) Configure(ctx context.Context, req provider.ConfigureR
 	client.UserAgent = userAgent(p.version, req.TerraformVersion)
 
 	resp.DataSourceData = client
+	resp.EphemeralResourceData = client
 	resp.ResourceData = client
 }
 
@@ -244,4 +249,25 @@ func unknownProviderValueDetail(attr, env string) string {
 		"(for example another resource's output) that is only known after apply. Set it from a value known " +
 		"at plan time, such as a variable or the " + env + " env var, or apply the resource it depends on " +
 		"first (terraform apply -target=...)."
+}
+
+// EphemeralResources registers the ephemeral twin of every spec marked
+// `ephemeral: true`.
+func (p *duploaiProvider) EphemeralResources(_ context.Context) []func() ephemeral.EphemeralResource {
+	specs, err := loadResourceSpecs()
+	if err != nil {
+		panic(fmt.Sprintf("loading specs for ephemeral resources: %s", err))
+	}
+	var factories []func() ephemeral.EphemeralResource
+	for _, spec := range specs {
+		if !spec.Ephemeral {
+			continue
+		}
+		endpoint, buildErr := spec.BuildEndpoint()
+		if buildErr != nil {
+			panic(fmt.Sprintf("ephemeral resource %q: %s", spec.Name, buildErr))
+		}
+		factories = append(factories, newDynamicEphemeralResourceFactory(spec, endpoint))
+	}
+	return factories
 }

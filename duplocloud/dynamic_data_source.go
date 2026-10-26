@@ -8,8 +8,11 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/duplocloud/terraform-provider-duploai/duplosdk"
@@ -100,16 +103,25 @@ func (d *dynamicDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 }
 
 func (d *dynamicDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	if state, ok := d.read(ctx, req.Config, &resp.Diagnostics); ok {
+		resp.State.Raw = state
+	}
+}
+
+// read looks the object up from config and returns it as a value of the data
+// source schema. Shared by the data source and its ephemeral twin
+// (dynamicEphemeralResource.Open), so both return the same values.
+func (d *dynamicDataSource) read(ctx context.Context, config tfsdk.Config, diags *diag.Diagnostics) (tftypes.Value, bool) {
 	// readPathParamScope accepts attrReader; tfsdk.Config satisfies the interface.
-	scope, _ := readPathParamScope(ctx, d.endpoint, req.Config, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
+	scope, _ := readPathParamScope(ctx, d.endpoint, config, diags)
+	if diags.HasError() {
+		return tftypes.Value{}, false
 	}
 
 	var idVal types.String
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root(d.spec.lookupName()), &idVal)...)
-	if resp.Diagnostics.HasError() {
-		return
+	diags.Append(config.GetAttribute(ctx, path.Root(d.spec.lookupName()), &idVal)...)
+	if diags.HasError() {
+		return tftypes.Value{}, false
 	}
 	objID := idVal.ValueString()
 	tflog.Trace(ctx, fmt.Sprintf("dynamic datasource %s Read(%s): start", d.spec.Name, objID))
@@ -133,21 +145,21 @@ func (d *dynamicDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		// rather than waited for, since the collection read itself succeeded.
 		obj, clientErr = specCollectionElement(&d.spec, api, apiID)
 		if clientErr == nil && obj == nil {
-			resp.Diagnostics.AddError("Object not found",
+			diags.AddError("Object not found",
 				d.spec.Name+" with id "+objID+" does not exist.")
-			return
+			return tftypes.Value{}, false
 		}
 	} else {
 		obj, clientErr = api.GetWithRetry(ctx, apiID, dsReadRetryWindow)
 	}
 	if clientErr != nil {
 		if clientErr.IsNotFound() {
-			resp.Diagnostics.AddError("Object not found",
+			diags.AddError("Object not found",
 				d.spec.Name+" with id "+objID+" does not exist.")
-			return
+			return tftypes.Value{}, false
 		}
-		resp.Diagnostics.AddError("Error reading "+d.spec.Name, clientErr.Error())
-		return
+		diags.AddError("Error reading "+d.spec.Name, clientErr.Error())
+		return tftypes.Value{}, false
 	}
 
 	// refreshInputs=true: always populate all readable attributes from the response.
@@ -159,10 +171,10 @@ func (d *dynamicDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	// withoutResponseFilters: for the same reason there is no config for a map to
 	// drift against, so the data source reports what the API returned rather than
 	// hiding platform-stamped keys.
-	state := buildStateRaw(withoutResponseFilters(d.spec.Attributes), req.Config.Raw, *obj, scope, objID, true, false, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
+	state := buildStateRaw(withoutResponseFilters(d.spec.Attributes), config.Raw, *obj, scope, objID, true, false, diags)
+	if diags.HasError() {
+		return tftypes.Value{}, false
 	}
-	resp.State.Raw = state
 	tflog.Trace(ctx, fmt.Sprintf("dynamic datasource %s Read(%s): end", d.spec.Name, objID))
+	return state, true
 }
