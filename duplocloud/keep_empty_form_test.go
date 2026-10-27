@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -237,7 +238,7 @@ func TestImportAdoptsConfig(t *testing.T) {
 	if !run(plain, types.StringNull(), types.StringValue("ZWNobw==")) {
 		t.Error("plain forceNew: null prior still replaces (unchanged behavior)")
 	}
-	for _, typ := range []string{"list(string)", "int", "bool"} {
+	for _, typ := range []string{"list(string)", "int", "bool", "map(string)"} {
 		ok := AttributeSpec{Name: "x", Type: typ, Optional: true, ForceNew: true, ImportAdoptsConfig: true}
 		if _, err := validateAttributes([]AttributeSpec{ok}); err != nil {
 			t.Errorf("forceNew %s with importAdoptsConfig should validate, got %v", typ, err)
@@ -248,7 +249,7 @@ func TestImportAdoptsConfig(t *testing.T) {
 	for _, bad := range []AttributeSpec{
 		{Name: "x", Type: "string", Optional: true, ImportAdoptsConfig: true},
 		{Name: "x", Type: "number", Optional: true, ForceNew: true, ImportAdoptsConfig: true},
-		{Name: "x", Type: "map(string)", Optional: true, ForceNew: true, ImportAdoptsConfig: true},
+		{Name: "x", Type: "map(object)", Optional: true, ForceNew: true, ImportAdoptsConfig: true, Attributes: []AttributeSpec{{Name: "y", Type: "string", Optional: true, APIPath: "y"}}},
 	} {
 		if _, err := validateAttributes([]AttributeSpec{bad}); err == nil || !strings.Contains(err.Error(), "importAdoptsConfig") {
 			t.Errorf("validate(%+v) = %v, want an importAdoptsConfig error", bad, err)
@@ -290,6 +291,44 @@ func TestImportAdoptsConfigIntBool(t *testing.T) {
 	}
 	if !runBool(types.BoolValue(false), types.BoolValue(true)) {
 		t.Error("bool: a change from a known value must still replace")
+	}
+}
+
+// importAdoptsConfig on map(string) (k8s_job.labels): a map read through a
+// filterResponseKeys ["*"] filter has no tracked keys after an import and lands
+// as {}, so an empty prior adopts the config like a null one — but only right
+// after an import; a known non-empty prior always replaces.
+func TestImportAdoptsConfigMap(t *testing.T) {
+	empty := types.MapValueMust(types.StringType, map[string]attr.Value{})
+	set := types.MapValueMust(types.StringType, map[string]attr.Value{"team": types.StringValue("a")})
+	cases := []struct {
+		name     string
+		prior    types.Map
+		imported bool
+		want     bool
+	}{
+		{"imported, empty prior: adopt", empty, true, false},
+		{"imported, null prior: adopt", types.MapNull(types.StringType), true, false},
+		{"imported, known prior: replace", set, true, true},
+		{"not imported, empty prior: replace", empty, false, true},
+		{"not imported, known prior: replace", set, false, true},
+	}
+	for _, c := range cases {
+		if got := mapReplacesOnImport(c.prior, c.imported); got != c.want {
+			t.Errorf("%s: replaces = %v, want %v", c.name, got, c.want)
+		}
+	}
+
+	// Wired: without an import mark a changed map still replaces.
+	obj := tftypes.NewValue(tftypes.Object{}, map[string]tftypes.Value{})
+	a := AttributeSpec{Type: "map(string)", Optional: true, Computed: true, ForceNew: true, ImportAdoptsConfig: true}
+	req := planmodifier.MapRequest{State: tfsdk.State{Raw: obj}, Plan: tfsdk.Plan{Raw: obj}, StateValue: empty, PlanValue: set, ConfigValue: set}
+	resp := &planmodifier.MapResponse{PlanValue: set}
+	for _, m := range attrSchema(a).(schema.MapAttribute).PlanModifiers {
+		m.PlanModifyMap(context.Background(), req, resp)
+	}
+	if !resp.RequiresReplace {
+		t.Error("map: empty prior without an import mark must replace")
 	}
 }
 
@@ -513,6 +552,133 @@ func TestStableUnlessModifier(t *testing.T) {
 	}
 	if got := run(obj(s("10.0.0.0/16"), s("a"), tftypes.NewValue(tftypes.String, nil)), obj(s("10.0.0.0/16"), s("b"), unknown), types.StringNull()); !got.IsUnknown() {
 		t.Errorf("null prior: want unknown, got %v", got)
+	}
+}
+
+// An input null in state and unset in config that the plan carries as its ""
+// default (resource_group.provisioner_version after an import) is not a change:
+// an unrelated update keeps kms_key_arn known. A "" the user configured, or a
+// real prior value going to "", still counts as a change.
+func TestStableUnlessModifierEmptyDefaultInput(t *testing.T) {
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"provisioner_version": tftypes.String, "tags": tftypes.String, "kms_key_arn": tftypes.String,
+	}}
+	obj := func(pv, tags, arn tftypes.Value) tftypes.Value {
+		return tftypes.NewValue(objType, map[string]tftypes.Value{"provisioner_version": pv, "tags": tags, "kms_key_arn": arn})
+	}
+	s := func(v string) tftypes.Value { return tftypes.NewValue(tftypes.String, v) }
+	null := tftypes.NewValue(tftypes.String, nil)
+	unknown := tftypes.NewValue(tftypes.String, tftypes.UnknownValue)
+	m := stableUnlessModifier{inputs: []string{"provisioner_version"}}
+	run := func(state, plan, config tftypes.Value) types.String {
+		req := planmodifier.StringRequest{State: tfsdk.State{Raw: state}, Plan: tfsdk.Plan{Raw: plan}, Config: tfsdk.Config{Raw: config},
+			StateValue: types.StringValue("arn:aws:kms:k"), PlanValue: types.StringUnknown()}
+		resp := &planmodifier.StringResponse{PlanValue: types.StringUnknown()}
+		m.PlanModifyString(context.Background(), req, resp)
+		return resp.PlanValue
+	}
+	kept := types.StringValue("arn:aws:kms:k")
+
+	// Imported: provisioner_version null in state and config, "" in the plan.
+	state := obj(null, s("a"), s("arn:aws:kms:k"))
+	if got := run(state, obj(s(""), s("b"), unknown), obj(null, s("b"), null)); !got.Equal(kept) {
+		t.Errorf("empty default over a null prior: want the prior kept, got %v", got)
+	}
+	// The user set "" in config: a real change from null.
+	if got := run(state, obj(s(""), s("b"), unknown), obj(s(""), s("b"), null)); !got.IsUnknown() {
+		t.Errorf("configured \"\" over a null prior: want unknown, got %v", got)
+	}
+	// A real prior value going to the "" default: a change.
+	state2 := obj(s("v2"), s("a"), s("arn:aws:kms:k"))
+	if got := run(state2, obj(s(""), s("b"), unknown), obj(null, s("b"), null)); !got.IsUnknown() {
+		t.Errorf("prior value to \"\": want unknown, got %v", got)
+	}
+	// A non-empty planned value over a null prior: a change.
+	if got := run(state, obj(s("v3"), s("b"), unknown), obj(s("v3"), s("b"), null)); !got.IsUnknown() {
+		t.Errorf("null prior to a value: want unknown, got %v", got)
+	}
+}
+
+// An object input (app_service.service) whose unset computed children are
+// unknown in the proposed plan is compared leaf by leaf: an update that leaves
+// the block alone keeps service_name known; a changed configured leaf, a block
+// added where state has none, or a list element added still count as changes.
+func TestStableUnlessModifierObjectInput(t *testing.T) {
+	portType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{"port": tftypes.Number, "protocol": tftypes.String}}
+	svcType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"name": tftypes.String, "type": tftypes.String,
+		"labels": tftypes.Map{ElementType: tftypes.String}, "ports": tftypes.List{ElementType: portType},
+	}}
+	topType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"service": svcType, "replicas": tftypes.Number, "service_name": tftypes.String,
+	}}
+	s := func(v string) tftypes.Value { return tftypes.NewValue(tftypes.String, v) }
+	n := func(v int64) tftypes.Value { return tftypes.NewValue(tftypes.Number, v) }
+	nullS := tftypes.NewValue(tftypes.String, nil)
+	unkS := tftypes.NewValue(tftypes.String, tftypes.UnknownValue)
+	labelsT := tftypes.Map{ElementType: tftypes.String}
+	nullLabels := tftypes.NewValue(labelsT, nil)
+	unkLabels := tftypes.NewValue(labelsT, tftypes.UnknownValue)
+	someLabels := tftypes.NewValue(labelsT, map[string]tftypes.Value{"app": s("web")})
+	port := func(p int64, proto tftypes.Value) tftypes.Value {
+		return tftypes.NewValue(portType, map[string]tftypes.Value{"port": n(p), "protocol": proto})
+	}
+	ports := func(ps ...tftypes.Value) tftypes.Value {
+		return tftypes.NewValue(tftypes.List{ElementType: portType}, ps)
+	}
+	svc := func(name, typ, labels, ps tftypes.Value) tftypes.Value {
+		return tftypes.NewValue(svcType, map[string]tftypes.Value{"name": name, "type": typ, "labels": labels, "ports": ps})
+	}
+	top := func(service tftypes.Value, replicas int64, sn tftypes.Value) tftypes.Value {
+		return tftypes.NewValue(topType, map[string]tftypes.Value{"service": service, "replicas": n(replicas), "service_name": sn})
+	}
+	m := stableUnlessModifier{inputs: []string{"service"}}
+	run := func(state, plan, config tftypes.Value) types.String {
+		req := planmodifier.StringRequest{State: tfsdk.State{Raw: state}, Plan: tfsdk.Plan{Raw: plan}, Config: tfsdk.Config{Raw: config},
+			StateValue: types.StringValue("web-svc"), PlanValue: types.StringUnknown()}
+		resp := &planmodifier.StringResponse{PlanValue: types.StringUnknown()}
+		m.PlanModifyString(context.Background(), req, resp)
+		return resp.PlanValue
+	}
+	kept := types.StringValue("web-svc")
+
+	// State: service with server-filled type/labels and a server-filled protocol.
+	state := top(svc(s("web"), s("ClusterIP"), someLabels, ports(port(80, s("TCP")))), 1, s("web-svc"))
+	// Config leaves type, labels and protocol unset.
+	cfgSvc := svc(s("web"), nullS, nullLabels, ports(port(80, nullS)))
+
+	// Unrelated update (replicas 1 -> 2): unset children are unknown in the plan.
+	plan := top(svc(s("web"), unkS, unkLabels, ports(port(80, unkS))), 2, unkS)
+	if got := run(state, plan, top(cfgSvc, 2, nullS)); !got.Equal(kept) {
+		t.Errorf("block left alone: want service_name kept, got %v", got)
+	}
+	// A configured leaf changes (name web -> api).
+	plan2 := top(svc(s("api"), unkS, unkLabels, ports(port(80, unkS))), 1, unkS)
+	cfg2 := top(svc(s("api"), nullS, nullLabels, ports(port(80, nullS))), 1, nullS)
+	if got := run(state, plan2, cfg2); !got.IsUnknown() {
+		t.Errorf("configured leaf changed: want unknown, got %v", got)
+	}
+	// A list element added.
+	plan3 := top(svc(s("web"), unkS, unkLabels, ports(port(80, unkS), port(443, unkS))), 1, unkS)
+	cfg3 := top(svc(s("web"), nullS, nullLabels, ports(port(80, nullS), port(443, nullS))), 1, nullS)
+	if got := run(state, plan3, cfg3); !got.IsUnknown() {
+		t.Errorf("list element added: want unknown, got %v", got)
+	}
+	// The block added where state has none.
+	stateNoSvc := top(tftypes.NewValue(svcType, nil), 1, s("web-svc"))
+	if got := run(stateNoSvc, plan, top(cfgSvc, 2, nullS)); !got.IsUnknown() {
+		t.Errorf("block added: want unknown, got %v", got)
+	}
+	// The whole block set to an unknown value (a reference to another resource).
+	unkSvc := tftypes.NewValue(svcType, tftypes.UnknownValue)
+	if got := run(state, top(unkSvc, 1, unkS), top(unkSvc, 1, nullS)); !got.IsUnknown() {
+		t.Errorf("block unknown in config: want unknown, got %v", got)
+	}
+	// A configured leaf that is itself unknown (set from a reference).
+	plan4 := top(svc(unkS, unkS, unkLabels, ports(port(80, unkS))), 1, unkS)
+	cfg4 := top(svc(unkS, nullS, nullLabels, ports(port(80, nullS))), 1, nullS)
+	if got := run(state, plan4, cfg4); !got.IsUnknown() {
+		t.Errorf("configured leaf unknown: want unknown, got %v", got)
 	}
 }
 

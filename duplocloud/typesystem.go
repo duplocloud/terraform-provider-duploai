@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -170,6 +171,10 @@ func primitiveSchema(a AttributeSpec, elem string) schema.Attribute {
 		if a.Computed && a.Default != nil && def == "" {
 			// Must run before RequiresReplace: see nullStateMatchesEmptyDefault.
 			o.PlanModifiers = append(o.PlanModifiers, nullStateMatchesEmptyDefault{})
+		}
+		if len(a.RecomputeWhenChanged) > 0 {
+			// After UseStateForUnknown, so it can undo the kept prior value.
+			o.PlanModifiers = append(o.PlanModifiers, recomputeWhenChangedModifier{inputs: a.RecomputeWhenChanged})
 		}
 		if a.ForceNew {
 			o.PlanModifiers = append(o.PlanModifiers, stringRequiresReplace(a))
@@ -364,7 +369,7 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, mapplanmodifier.UseStateForUnknown(), mapplanmodifier.UseNonNullStateForUnknown()))
 		}
 		if a.ForceNew {
-			o.PlanModifiers = append(o.PlanModifiers, mapplanmodifier.RequiresReplace())
+			o.PlanModifiers = append(o.PlanModifiers, mapRequiresReplace(a))
 		}
 		return o
 	default: // list
@@ -558,7 +563,29 @@ func int64RequiresReplace(a AttributeSpec) planmodifier.Int64 {
 		importAdoptsConfigDescription, importAdoptsConfigDescription)
 }
 
-const importAdoptsConfigDescription = "Changing this value replaces the resource, except on the first plan after an import, where the configured value is adopted."
+// mapRequiresReplace adopts the config when the prior map is null or empty and
+// the resource was just imported: a map read through a keep-only-tracked-keys
+// filter (filterResponseKeys ["*"]) has no tracked keys after an import, so it
+// lands as {} rather than null.
+func mapRequiresReplace(a AttributeSpec) planmodifier.Map {
+	if !a.ImportAdoptsConfig {
+		return mapplanmodifier.RequiresReplace()
+	}
+	return mapplanmodifier.RequiresReplaceIf(
+		func(ctx context.Context, req planmodifier.MapRequest, resp *mapplanmodifier.RequiresReplaceIfFuncResponse) {
+			resp.RequiresReplace = mapReplacesOnImport(req.StateValue, justImported(ctx, req.Private))
+		},
+		importAdoptsConfigDescription, importAdoptsConfigDescription)
+}
+
+// mapReplacesOnImport reports whether a changed importAdoptsConfig map forces
+// replacement: always, unless the resource was just imported and the prior map
+// is null or empty.
+func mapReplacesOnImport(prior types.Map, imported bool) bool {
+	return !imported || (!prior.IsNull() && len(prior.Elements()) > 0)
+}
+
+const importAdoptsConfigDescription = "Changing this value replaces the resource, except after an import: until the first apply that changes the resource, the configured value is adopted."
 
 // importedPrivateKey is the private-state mark ImportState sets and the first
 // Update clears. A null prior value of an importAdoptsConfig attribute means
@@ -572,8 +599,6 @@ type privateGetter interface {
 	GetKey(ctx context.Context, key string) ([]byte, diag.Diagnostics)
 }
 
-// The framework's GetKey is nil-safe, so a request without private state
-// (a unit test, a create) simply reads as "not imported".
 // privateSetter is the part of the framework's private-state handle that
 // clears the import mark.
 type privateSetter interface {
@@ -588,6 +613,9 @@ func clearImportMarkOnSuccess(ctx context.Context, failed bool, p privateSetter)
 	return p.SetKey(ctx, importedPrivateKey, nil)
 }
 
+// justImported reports whether the import mark is set. The framework's GetKey is
+// nil-safe, so a request without private state (a unit test, a create) simply
+// reads as "not imported".
 func justImported(ctx context.Context, p privateGetter) bool {
 	if p == nil {
 		return false
@@ -1105,6 +1133,25 @@ func hasPreserveOnEmptyResponse(a AttributeSpec) bool {
 	return false
 }
 
+// keepEquivalentValue returns prior instead of next when prior is a key of
+// a.EquivalentResponseValues and next is one of the response values listed for
+// it — the API reported the resolved form of the value the user configured.
+func keepEquivalentValue(a AttributeSpec, prior, next tftypes.Value) tftypes.Value {
+	if len(a.EquivalentResponseValues) == 0 ||
+		!prior.IsKnown() || prior.IsNull() || !prior.Type().Is(tftypes.String) ||
+		!next.IsKnown() || next.IsNull() || !next.Type().Is(tftypes.String) {
+		return next
+	}
+	var p, n string
+	if prior.As(&p) != nil || next.As(&n) != nil {
+		return next
+	}
+	if slices.Contains(a.EquivalentResponseValues[p], n) {
+		return prior
+	}
+	return next
+}
+
 // restorePreservedValues walks a freshly built state value alongside the value
 // it replaces (the plan on create/update, the prior state on refresh) and, at
 // every leaf marked PreserveOnEmptyResponse that the API returned as null or
@@ -1520,7 +1567,10 @@ func (m stableUnlessModifier) MarkdownDescription(ctx context.Context) string {
 // is unknown in the plan but unset in config: plan modifiers all see the plan
 // as proposed, before any of them run, so an optional+computed input the user
 // left unset (vpc_id, additional_cidrs) still shows as unknown here even though
-// its own UseStateForUnknown will plan the prior value. An input that is set in
+// its own UseStateForUnknown will plan the prior value. Likewise an input whose
+// state and config are null but whose plan holds an empty-string default (e.g.
+// provisioner_version after an import — the API never echoes it): its own
+// nullStateMatchesEmptyDefault will plan the prior null. An input that is set in
 // config to a different or unknown value counts as changed.
 func (m stableUnlessModifier) keep(state tfsdk.State, plan tfsdk.Plan, config tfsdk.Config, prior, planned attr.Value) bool {
 	if state.Raw.IsNull() || plan.Raw.IsNull() || prior.IsNull() || prior.IsUnknown() || !planned.IsUnknown() {
@@ -1535,17 +1585,86 @@ func (m stableUnlessModifier) keep(state tfsdk.State, plan tfsdk.Plan, config tf
 		if !ok {
 			return false
 		}
-		if pv.IsFullyKnown() {
-			if !pv.Equal(s[in]) {
-				return false
+		if !pv.IsFullyKnown() {
+			if _, ok := c[in]; !ok {
+				return false // not in config at all
 			}
-			continue
 		}
-		if cv, ok := c[in]; !ok || !cv.IsNull() {
-			return false // set in config to an unknown value, or not in config at all
+		if !inputUnchanged(pv, s[in], c[in]) {
+			return false
 		}
 	}
 	return true
+}
+
+// inputUnchanged compares one stableUnlessChanged input's planned value with
+// state, given its config. A fully known value is unchanged when it equals
+// state (or is only an empty-string default over a null prior). A value with
+// unknown parts is unchanged when its config is null — the input's own
+// UseStateForUnknown will plan the prior value — and otherwise, for an object,
+// list or map, when every element is unchanged by the same rule: a configured
+// block whose unset computed children (an app_service service's labels or type)
+// are still unknown in the proposed plan is not a change. A configured value
+// that is unknown as a whole, or a block added where state has none, is.
+func inputUnchanged(planned, state, config tftypes.Value) bool {
+	if planned.IsFullyKnown() {
+		return planned.Equal(state) || emptyDefaultOverNull(planned, state, config)
+	}
+	if config.IsNull() {
+		return true
+	}
+	if !planned.IsKnown() || !config.IsKnown() || state.IsNull() || !state.IsKnown() {
+		return false
+	}
+	typ := planned.Type()
+	switch {
+	case typ.Is(tftypes.Object{}):
+		var p, s, c map[string]tftypes.Value
+		if planned.As(&p) != nil || state.As(&s) != nil || config.As(&c) != nil {
+			return false
+		}
+		for k, pv := range p {
+			if !inputUnchanged(pv, s[k], c[k]) {
+				return false
+			}
+		}
+		return true
+	case typ.Is(tftypes.List{}), typ.Is(tftypes.Tuple{}):
+		var p, s, c []tftypes.Value
+		if planned.As(&p) != nil || state.As(&s) != nil || config.As(&c) != nil || len(p) != len(s) || len(p) != len(c) {
+			return false
+		}
+		for i := range p {
+			if !inputUnchanged(p[i], s[i], c[i]) {
+				return false
+			}
+		}
+		return true
+	case typ.Is(tftypes.Map{}):
+		var p, s, c map[string]tftypes.Value
+		if planned.As(&p) != nil || state.As(&s) != nil || config.As(&c) != nil || len(p) != len(s) {
+			return false
+		}
+		for k, pv := range p {
+			sv, ok := s[k]
+			if !ok || !inputUnchanged(pv, sv, c[k]) {
+				return false
+			}
+		}
+		return true
+	}
+	return false // a set (no stable pairing) or a partly unknown primitive
+}
+
+// emptyDefaultOverNull reports the case nullStateMatchesEmptyDefault resolves:
+// a string input null in state and unset in config, planned as "" only because
+// of its empty-string default — not a change.
+func emptyDefaultOverNull(planned, state, config tftypes.Value) bool {
+	if !planned.Type().Is(tftypes.String) || !state.IsNull() || !config.IsNull() {
+		return false
+	}
+	var v string
+	return planned.As(&v) == nil && v == ""
 }
 
 func (m stableUnlessModifier) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {

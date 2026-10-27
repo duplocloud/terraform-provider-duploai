@@ -355,8 +355,8 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `mapDropWhenTrue` | string | Names a sibling **boolean** inside the wrapped entry `mapValuePath` unwraps; an entry whose flag is true is omitted from state entirely. Use for a backend that soft-deletes map entries — `resource_group.tags` keeps a removed tag with `"remove":true` until a reconciler has taken it off every resource, and without this the key reappears in state on the next read and diffs forever against a config that no longer lists it. Requires `mapValuePath`. |
 | `stable` | bool | For a **computed-only** attribute assigned once at creation and never changed afterwards (the record's own id, a cloud ARN or resource id, an endpoint, `created_at`), keep the prior state value in the plan instead of `(known after apply)`. Without it, every in-place update makes the value unknown, and any dependent resource that uses it in a force-new argument is **replaced** (an azurerm `storage_account_id` fed from `storage_account.azure_resource_id` did exactly this on a tags-only change). Only a non-null prior is kept (`UseNonNullStateForUnknown`): a null means the read missed the value, and the next apply should fill it in. Never put it on a value that can change: a planned value that differs from the apply result fails as "Provider produced inconsistent result". See [Keeping values known across updates](#keeping-values-known-across-updates). |
 | `stableUnlessChanged` | array | For a **computed-only** `string` or `list`/`set` of primitives: the top-level inputs that can change it. The prior value is kept in the plan unless one of them changes (or is unknown) in the same plan — a conditional `stable`. Use it for an output a dependent may wire into a force-new argument that some inputs can legitimately change: `network_baseline.subnet_ids` (unless `cidr`, `additional_cidrs`, `vpc_id`), MSK bootstrap brokers (unless `number_of_broker_nodes`). An unrelated update (tags, description) then can't replace dependents. List **every** input that can change the value: a missed one makes that update fail with "inconsistent result". Rejected at spec load on a settable attribute, together with `stable`, on another type, or when it names an unknown attribute. |
-| `importAdoptsConfig` | bool | For a **`forceNew`** `string`, `int`, `bool` or `list` attribute with no read path: on the first plan after `terraform import`, adopt the configured value as an in-place, state-only change instead of replacing the resource just imported (the API can't return the value, so it is null in the imported state). `ImportState` sets an `imported` mark in Terraform's private state and the first update clears it; outside that window the attribute behaves exactly like plain `forceNew`, including a value that was unset at creation and is set later (that still replaces). Prefer it over adding a read path to a `forceNew` attribute whose value can change outside Terraform: a read path would turn that out-of-band change into a replacement on the next plan, which breaks pipelines that never touched the field. Used by `native_host.instance_type` / `ebs_optimized` / `image_id` / `user_data` / `block_device_mappings` and `msk_kafka.subnet_ids` / `encryption_in_transit` / `configuration_arn` / `configuration_revision`. Rejected at spec load without `forceNew`, or on another type. |
-| `updateOnlyIfChanged` | bool | Leave the attribute out of the update (PUT) body unless its value changed, and drop any parent object that ends up empty. For backends that act on every field present in an update delta: AWS EFS calls `UpdateFileSystem` whenever `spec.updateRequest` is present, and AWS rejects an unchanged throughput, so an unrelated update (description, backup) failed. Used by `aws_efs.throughput_mode` / `provisioned_throughput_in_mibps`. |
+| `importAdoptsConfig` | bool | For a **`forceNew`** `string`, `int`, `bool`, `list` or `map(string)` attribute with no read path (or, for a `map(string)`, one read through `filterResponseKeys: ["*"]`, which keeps only keys prior state tracks and so reads as `{}` after an import — an empty prior map adopts like a null one): after `terraform import`, adopt the configured value as an in-place, state-only change instead of replacing the resource just imported — until the first apply that changes the resource (the API can't return the value, so it is null in the imported state). `ImportState` sets an `imported` mark in Terraform's private state and the first successful update clears it (a plan with no changes runs no update, so the mark survives it); outside that window the attribute behaves exactly like plain `forceNew`, including a value that was unset at creation and is set later (that still replaces). Prefer it over adding a read path to a `forceNew` attribute whose value can change outside Terraform: a read path would turn that out-of-band change into a replacement on the next plan, which breaks pipelines that never touched the field. Used by `native_host.instance_type` / `ebs_optimized` / `image_id` / `user_data` / `block_device_mappings`, `msk_kafka.subnet_ids` / `encryption_in_transit` / `configuration_arn` / `configuration_revision`, and `k8s_job.labels`. Rejected at spec load without `forceNew`, or on another type. |
+| `updateOnlyIfChanged` | bool | Leave the attribute out of the update (PUT) body unless its value changed, and drop any parent object that ends up empty. For backends that act on every field present in an update delta: AWS EFS calls `UpdateFileSystem` whenever `spec.updateRequest` is present, and AWS rejects an unchanged throughput, so an unrelated update (description, backup) failed. An unchanged value is still sent when a `requiredIf` rule requires it and one of that rule's condition attributes changed: switching an EFS back to `provisioned` carries `provisioned_throughput_in_mibps` even if state already holds that number, since the backend rejects the switch without it. Used by `aws_efs.throughput_mode` / `provisioned_throughput_in_mibps`. |
 | `caseInsensitive` | bool | For a **`string`** whose value compares case-insensitively, such as an Azure ARM id (`resourceGroups` and `resourcegroups` name the same resource, and the API may return either). A case-only difference never replaces the resource (a `forceNew` attribute plans an in-place, state-only change). A read that returns other casing keeps the stored value, and an update request carries the stored casing, so a backend's case-sensitive immutability check isn't tripped. Used on `azure_private_endpoint` and `azure_postgres_flexible_server` ARM-id inputs. Rejected at spec load on a non-string. |
 | `deprecated` | string | Marks the attribute deprecated: the message is wired to the framework's `DeprecationMessage` and shown as a warning whenever the attribute is set in config. Use when renaming an attribute — keep the old one with a deprecation message pointing at the replacement (pair with `conflictsWith` + `requiredIf`/`isEmpty` for a backwards-compatible rename). |
 | `attributes` | array | Nested `AttributeSpec` entries. Required when `type` is an object form. Recurses to any depth. |
@@ -490,6 +490,36 @@ Scope and limits:
   Say so in the attribute's `description`.
 - On **import** there is no prior value, so the field lands empty — expected,
   since the secret is unrecoverable from the API.
+
+### Values reported in resolved form
+
+Some settings are stored by the cloud as the concrete value they resolve to and
+are only ever reported that way. SSM `tier = "Intelligent-Tiering"` is stored and
+read back as `"Standard"` or `"Advanced"`, so every plan would show the tier
+changing back and every apply would rewrite the parameter. Declare which
+response values stand for the configured one:
+
+```json
+{
+  "name": "tier",
+  "type": "string",
+  "optional": true,
+  "computed": true,
+  "oneOf": ["Standard", "Advanced", "Intelligent-Tiering"],
+  "equivalentResponseValues": { "Intelligent-Tiering": ["Standard", "Advanced"] }
+}
+```
+
+When the value already held (the plan on create/update, the prior state on
+refresh) is a key and the response carries one of its listed values, the held
+value is kept. Any other response value wins, so a real change is still picked up.
+
+- Top-level, user-settable `string` attributes only; keys must be in `oneOf` when
+  it is set. Spec load rejects anything else.
+- While the key is configured, a change between its listed values made outside
+  Terraform is not detected. Say so in the attribute's `description`.
+- On **import** there is no held value, so the resolved value lands in state and
+  the first apply adopts the configured one (one in-place update).
 
 ### Server-managed map keys
 

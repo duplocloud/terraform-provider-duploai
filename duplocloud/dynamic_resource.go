@@ -699,7 +699,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	// only diffs that do are config-only (e.g. the timeouts block) — refresh
 	// computed values from the API and persist, without issuing an update call.
 	if !r.endpoint.HasUpdate() {
-		obj, clientErr := r.api(ctx, scope, r.specFailureRetries()).Get(objID)
+		obj, clientErr := r.api(ctx, scope, r.specFailureRetries()).GetWithRetry(ctx, objID, dsReadRetryWindow)
 		if clientErr != nil {
 			resp.Diagnostics.AddError("Error reading "+r.spec.Name, clientErr.Error())
 			return
@@ -727,11 +727,21 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 	tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): start", r.spec.Name, id))
 
+	// A case-only change to a caseInsensitive id sends the stored casing, so it
+	// is not an API change — done before the skip below so that change stays
+	// state-only instead of issuing a PUT.
+	r.sendStoredCasing(ctx, req, body, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// If nothing the API cares about changed (e.g. only the timeouts block
 	// differs, as on the first apply after import), skip the API call and the
 	// waiter entirely — issuing a PUT would re-trigger provisioning for a
-	// metadata-only change. ModifyPlan has already carried prior computed values
-	// into the plan, so it is fully known and safe to persist directly.
+	// metadata-only change. ModifyPlan has usually carried prior computed values
+	// into the plan, so it is fully known and safe to persist directly; when it
+	// is not (a case-only id change, which ModifyPlan sees as a change), read the
+	// resource to fill the outputs it left unknown.
 	// Built the same way as the plan body (id included) so the injected id cannot
 	// make the two differ and defeat the skip.
 	stateBody := r.updateBodyFromRaw(req.State.Raw, objID, &resp.Diagnostics)
@@ -742,16 +752,21 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	// never carries write-only values from the plan) looks unchanged.
 	woChanged := r.writeOnlyVersionChanged(req.Plan.Raw, req.State.Raw)
 	if apiBodyEqual(body, stateBody) && len(woChanged) == 0 {
-		resp.State.Raw = req.Plan.Raw
+		if req.Plan.Raw.IsFullyKnown() {
+			resp.State.Raw = req.Plan.Raw
+		} else {
+			cur, clientErr := r.api(ctx, scope, 0).GetWithRetry(ctx, objID, dsReadRetryWindow)
+			if clientErr != nil {
+				resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after update", clientErr.Error())
+				return
+			}
+			resp.State.Raw = r.stateFromResponse(ctx, req.Plan.Raw, *cur, scope, id, false, &resp.Diagnostics)
+		}
 		tflog.Trace(ctx, fmt.Sprintf("dynamic %s Update(%s): no API-relevant change, skipped", r.spec.Name, id))
 		return
 	}
 
 	r.dropUnchangedUpdateFields(ctx, req, body, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	r.sendStoredCasing(ctx, req, body, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -803,7 +818,11 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 // dropUnchangedUpdateFields removes each UpdateOnlyIfChanged attribute whose
 // value did not change from the update body, pruning parent objects it leaves
 // empty — so a backend that acts on any field present (EFS UpdateFileSystem)
-// is not asked to "change" a value to what it already is.
+// is not asked to "change" a value to what it already is. An unchanged field
+// is kept when a requiredIf rule requires it because of a field that did
+// change: switching an EFS back to provisioned must carry the throughput even
+// if state still holds the same number (the backend rejects the switch
+// without it, and the AWS provider sends it whenever the mode is provisioned).
 func (r *dynamicResource) dropUnchangedUpdateFields(ctx context.Context, req resource.UpdateRequest, body map[string]any, diags *diag.Diagnostics) {
 	for i := range r.spec.Attributes {
 		a := r.spec.Attributes[i]
@@ -819,10 +838,37 @@ func (r *dynamicResource) dropUnchangedUpdateFields(ctx context.Context, req res
 		if diags.HasError() {
 			return
 		}
-		if jsonEqual(planVal, stateVal) {
+		if jsonEqual(planVal, stateVal) && !r.requiredByChange(ctx, req, a.Name, diags) {
 			deletePathPruning(body, strings.Split(path, "."))
 		}
 	}
+}
+
+// requiredByChange reports whether a requiredIf rule for attribute name holds
+// in the plan and at least one attribute in its conditions changed from state.
+func (r *dynamicResource) requiredByChange(ctx context.Context, req resource.UpdateRequest, name string, diags *diag.Diagnostics) bool {
+	v := requiredIfValidator{spec: r.spec}
+	for _, rule := range r.spec.RequiredIf {
+		if rule.Attribute != name {
+			continue
+		}
+		conds := rule.conditions()
+		if !v.conditionsHold(ctx, req.Plan, conds) {
+			continue
+		}
+		for _, c := range conds {
+			ca := r.spec.attr(c.Attribute)
+			if ca == nil {
+				continue
+			}
+			pv, _ := readPlanGoValue(ctx, req.Plan, *ca, diags)
+			sv, _ := readPlanGoValue(ctx, req.State, *ca, diags)
+			if !jsonEqual(pv, sv) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // sendStoredCasing writes the prior state's value into the update body for a
@@ -910,7 +956,7 @@ func (r *dynamicResource) singleIntentUpdate(ctx context.Context, req resource.U
 	// plan as-is: the plan can still hold computed outputs as unknown (status,
 	// updated_at, ...), and Terraform rejects an apply that leaves any unknown.
 	if len(changes) == 0 {
-		cur, clientErr := r.api(ctx, scope, 0).Get(objID)
+		cur, clientErr := r.api(ctx, scope, 0).GetWithRetry(ctx, objID, dsReadRetryWindow)
 		if clientErr != nil {
 			resp.Diagnostics.AddError("Error reading "+r.spec.Name+" after update", clientErr.Error())
 			return
@@ -2078,6 +2124,9 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		if a.CaseInsensitive {
 			next[a.Name] = keepPriorCasing(current[a.Name], next[a.Name])
 		}
+		// A configured value the cloud reports only in resolved form (e.g. SSM
+		// tier Intelligent-Tiering → Standard) keeps the configured form.
+		next[a.Name] = keepEquivalentValue(a, current[a.Name], next[a.Name])
 	}
 
 	return tftypes.NewValue(objType, next)

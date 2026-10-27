@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -510,10 +511,13 @@ type AttributeSpec struct {
 	// ImportAdoptsConfig, on a forceNew attribute the API never returns (so no
 	// read path can fill it), replaces the resource only when the prior value is
 	// set. After `terraform import` such a value is null; with this flag the
-	// first plan adopts the configured value as an in-place, state-only change
-	// instead of replacing the resource just imported. A change from a known
-	// value still replaces it. Only valid on forceNew string, int, bool or list
-	// attributes.
+	// configured value is adopted as an in-place, state-only change instead of
+	// replacing the resource just imported. The window lasts until the first
+	// apply that changes the resource (a plan with no changes runs no update, so
+	// the import mark stays). A change from a known value still replaces it.
+	// Only valid on forceNew string, int, bool, list or
+	// map(string) attributes; a map also adopts from an empty prior value, which
+	// is what a filterResponseKeys ["*"] map reads as after an import.
 	ImportAdoptsConfig bool `json:"importAdoptsConfig,omitempty"`
 
 	// StableUnlessChanged, on a computed-only string, list or set attribute,
@@ -532,7 +536,9 @@ type AttributeSpec struct {
 	// calls UpdateFileSystem whenever spec.updateRequest is present, and AWS
 	// rejects an unchanged throughput, so an unrelated (description/backup)
 	// update failed. Matches the AWS provider, which only calls UpdateFileSystem
-	// when the throughput settings changed.
+	// when the throughput settings changed. An unchanged value is still sent when
+	// a requiredIf rule requires it and one of that rule's condition attributes
+	// changed (switching EFS back to provisioned carries the throughput).
 	UpdateOnlyIfChanged bool `json:"updateOnlyIfChanged,omitempty"`
 
 	// CaseInsensitive marks a string whose value compares case-insensitively —
@@ -543,6 +549,16 @@ type AttributeSpec struct {
 	// value, and an update request carries the stored casing so a backend's
 	// case-sensitive immutability check isn't tripped. Only valid on strings.
 	CaseInsensitive bool `json:"caseInsensitive,omitempty"`
+
+	// RecomputeWhenChanged, on an optional+computed string, names the top-level
+	// inputs whose change invalidates the value the API derived for it. When one
+	// of them changes and this attribute is unset in config, the plan marks it
+	// unknown instead of keeping the prior value, so the update leaves it out of
+	// the request and the backend derives it afresh. Without it, the prior value
+	// (UseStateForUnknown) is re-sent as if the user had set it: switching an SQS
+	// queue from SseKms to SseKmsRg kept the old "alias/aws/sqs" key instead of
+	// taking the resource group's key.
+	RecomputeWhenChanged []string `json:"recomputeWhenChanged,omitempty"`
 
 	// Default supplies a static default for Optional+Computed attributes.
 	// Interpreted according to Type.
@@ -829,6 +845,19 @@ type AttributeSpec struct {
 	// prior value is paired positionally (list by index, map by key). Inside
 	// set(object) element order is not stable, so nothing is preserved there.
 	PreserveOnEmptyResponse bool `json:"preserveOnEmptyResponse,omitempty"`
+
+	// EquivalentResponseValues, for a user-settable top-level string attribute,
+	// maps a configured value to the response values the API reports in its
+	// place. When the value already held (the plan on create/update, the prior
+	// state on refresh) is a key and the response carries one of its values, the
+	// held value is kept. Use for a setting the cloud resolves into a concrete
+	// value and reports only in resolved form: e.g. SSM tier "Intelligent-Tiering",
+	// which AWS stores and reports as "Standard" or "Advanced". Without it every
+	// plan shows the resolved value changing back to the configured one, and every
+	// apply rewrites the resource. Any response value not listed always wins, so a
+	// real change is still picked up; on import there is no held value, so the
+	// resolved one lands in state and the first apply adopts the configured value.
+	EquivalentResponseValues map[string][]string `json:"equivalentResponseValues,omitempty"`
 
 	// OrderByKey, for a list(object) attribute, names a nested string attribute
 	// whose value is used to sort the list into a canonical (lexical) order. The
@@ -1212,6 +1241,19 @@ func (s *ResourceSpec) validate() error {
 	seen, err := validateAttributes(s.Attributes)
 	if err != nil {
 		return err
+	}
+	for _, a := range s.Attributes {
+		if len(a.RecomputeWhenChanged) == 0 {
+			continue
+		}
+		if a.Type != "string" || !a.Optional || !a.Computed {
+			return fmt.Errorf("attribute %q: recomputeWhenChanged is only valid on an optional+computed string", a.Name)
+		}
+		for _, in := range a.RecomputeWhenChanged {
+			if !seen[in] || in == a.Name {
+				return fmt.Errorf("attribute %q: recomputeWhenChanged references unknown attribute %q", a.Name, in)
+			}
+		}
 	}
 	if err := s.validateAssociation(seen); err != nil {
 		return err
@@ -1618,8 +1660,8 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			if !a.ForceNew {
 				return nil, fmt.Errorf("attribute %q: importAdoptsConfig only changes how a forceNew attribute replaces; add forceNew or drop it", a.Name)
 			}
-			if a.Type != "string" && a.Type != "int" && a.Type != "bool" && !strings.HasPrefix(a.Type, "list(") {
-				return nil, fmt.Errorf("attribute %q: importAdoptsConfig is only supported on string, int, bool and list attributes", a.Name)
+			if a.Type != "string" && a.Type != "int" && a.Type != "bool" && !strings.HasPrefix(a.Type, "list(") && a.Type != "map(string)" {
+				return nil, fmt.Errorf("attribute %q: importAdoptsConfig is only supported on string, int, bool, list and map(string) attributes", a.Name)
 			}
 		}
 		if a.ImmutableOnceTrue {
@@ -1698,6 +1740,28 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 					"rewriting a user-set value would make state disagree with the plan", a.Name)
 			}
 		}
+		if len(a.EquivalentResponseValues) > 0 {
+			if a.Type != "string" {
+				return nil, fmt.Errorf("attribute %q: equivalentResponseValues requires a string type, got %q", a.Name, a.Type)
+			}
+			if !a.Required && !a.Optional {
+				return nil, fmt.Errorf("attribute %q: equivalentResponseValues is only valid on a user-settable attribute — "+
+					"a computed-only value has no configured form to keep", a.Name)
+			}
+			for k, vs := range a.EquivalentResponseValues {
+				if k == "" || len(vs) == 0 {
+					return nil, fmt.Errorf("attribute %q: equivalentResponseValues needs a non-empty key and at least one value", a.Name)
+				}
+				if len(a.OneOf) > 0 && !slices.Contains(a.OneOf, k) {
+					return nil, fmt.Errorf("attribute %q: equivalentResponseValues key %q is not one of its oneOf values", a.Name, k)
+				}
+				for _, v := range vs {
+					if v == "" || v == k {
+						return nil, fmt.Errorf("attribute %q: equivalentResponseValues[%q] must list non-empty values other than the key", a.Name, k)
+					}
+				}
+			}
+		}
 		if a.MapValuePath != "" && a.Type != "map(string)" {
 			return nil, fmt.Errorf("attribute %q: mapValuePath is only valid on map(string), got %q", a.Name, a.Type)
 		}
@@ -1726,6 +1790,11 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 		if info.elem == "object" {
 			if len(a.Attributes) == 0 {
 				return nil, fmt.Errorf("object attribute %q requires nested attributes", a.Name)
+			}
+			for _, na := range a.Attributes {
+				if len(na.EquivalentResponseValues) > 0 {
+					return nil, fmt.Errorf("attribute %q.%q: equivalentResponseValues is only supported on a top-level attribute", a.Name, na.Name)
+				}
 			}
 			if _, err := validateAttributes(a.Attributes); err != nil {
 				return nil, err
