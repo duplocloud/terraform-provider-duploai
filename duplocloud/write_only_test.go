@@ -248,6 +248,8 @@ func TestWriteOnlySpecValidation(t *testing.T) {
 		{"version is a string", `{"name":"p_wo","type":"string","optional":true,"writeOnly":true,"versionAttribute":"v","createPath":"spec.p"},{"name":"v","type":"string","optional":true}`, "optional int"},
 		{"version missing", `{"name":"p_wo","type":"string","optional":true,"writeOnly":true,"versionAttribute":"nope","createPath":"spec.p"}`, "is not an attribute"},
 		{"nested", `{"name":"o","type":"object","optional":true,"apiPath":"o","attributes":[{"name":"p","type":"string","optional":true,"writeOnly":true}]}`, "top-level attributes only"},
+		{"resendWhenOmitted without merge", `{"name":"p_wo","type":"string","optional":true,"writeOnly":true,"resendWhenOmitted":true,"versionAttribute":"v","createPath":"spec.p"},{"name":"v","type":"int","optional":true}`, "requires mergeUpdateIntoCurrent"},
+		{"resendWhenOmitted not writeOnly", `{"name":"p","type":"string","optional":true,"resendWhenOmitted":true,"apiPath":"spec.p"}`, "require writeOnly"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -363,5 +365,73 @@ func TestWriteOnly_MergeKeepsStoredSecret(t *testing.T) {
 	}
 	if !strings.Contains(put, `"password":"rotated"`) {
 		t.Fatalf("rotation must send the new value, got %s", put)
+	}
+}
+
+// resendWhenOmitted: a record that omits, empties or masks the write-only
+// secret gets the config value; a record that still returns it keeps it; an
+// attribute not in use (no version) or without the flag is never filled.
+func TestWriteOnly_ResendWhenOmitted(t *testing.T) {
+	h := newWOHarness(t)
+	a := &h.r.spec.Attributes[3]
+	a.ResendWhenOmitted = true
+	cfg := h.val(map[string]tftypes.Value{"password_wo": str("cfg"), "password_wo_version": num(1)})
+	inUse := map[string]bool{a.effectiveUpdatePath(): true}
+	segs := strings.Split(a.effectiveUpdatePath(), ".")
+	for _, tc := range []struct {
+		name   string
+		stored any
+		absent bool
+		inUse  map[string]bool
+		flag   bool
+		want   any
+	}{
+		{"absent", nil, true, inUse, true, "cfg"},
+		{"null", nil, false, inUse, true, "cfg"},
+		{"empty", "", false, inUse, true, "cfg"},
+		{"masked", redactedPrefix + "**", false, inUse, true, "cfg"},
+		{"returned", "stored", false, inUse, true, "stored"},
+		{"not in use", nil, true, map[string]bool{}, true, nil},
+		{"flag off", nil, true, inUse, false, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a.ResendWhenOmitted = tc.flag
+			merged := map[string]any{}
+			if !tc.absent {
+				setPath(merged, segs, tc.stored)
+			}
+			h.r.resendOmittedWriteOnly(merged, cfg, tc.inUse)
+			if got, _ := lookupPath(merged, segs); got != tc.want {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// Every shipped Sensitive attribute's body paths reach the endpoint, so the
+// client redacts them in logs whatever the API key is called.
+func TestSensitiveBodyPaths_ShippedSpecs(t *testing.T) {
+	specs, err := loadResourceSpecs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"azure_key_vault_secret": "value", "rds_instance": "spec.masterUserPassword",
+		"aws_secret": "spec.updateRequest.secretString", "azure_postgres_flexible_server": "spec.administratorLoginPassword"}
+	for _, s := range specs {
+		p, ok := want[s.Name]
+		if !ok {
+			continue
+		}
+		ep, err := s.BuildEndpoint()
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, x := range ep.SensitivePaths {
+			found = found || x == p
+		}
+		if !found {
+			t.Errorf("%s: SensitivePaths %v lacks %s", s.Name, ep.SensitivePaths, p)
+		}
 	}
 }

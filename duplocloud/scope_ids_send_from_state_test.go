@@ -2,6 +2,63 @@ package duplocloud
 
 import "testing"
 
+// scopeIDsFullReplaceSpecs are the mutable resources whose backend update replaces the stored
+// record with the request body and does NOT restore spec.scopeIds from the existing record, so
+// a body without scopeIds wipes them (F-14). Backend evidence, origin/dev: the generic path is
+// ResourcesController.Update -> ResourceServiceBase.UpdateAsync -> MongoRepository.UpdateAsync
+// (ReplaceOneAsync); ResourceGroupChildServiceBase stamps scopeIds from the resource group on
+// CREATE only (PopulateExpandedPropertiesAsync, called from the create path).
+//   - k8s_pvc, helm_repository, git_repository: K8sPassthroughServiceBase, no scopeIds restore.
+//     k8s_pvc failed live with "inconsistent result: .scope_ids ... now null"; helm/git
+//     repository had no UseStateForUnknown on scope_ids, so the same wipe passed silently
+//     (plan "known after apply", null after apply).
+//   - k8s_storage_class: ResourceGroupChildServiceBase, no OnBeforeUpdate; failed live as k8s_pvc.
+//   - storage_account: AzurePassThroughServiceBase.OnBeforeUpdateAsync restores only
+//     spec.uniqueCloudResourceId, not scopeIds.
+var scopeIDsFullReplaceSpecs = []string{
+	"resource_group", "k8s_namespace",
+	"k8s_pvc", "k8s_storage_class", "helm_repository", "git_repository", "storage_account",
+}
+
+// scopeIDsRestampedOnUpdate are mutable specs with a computed-only scope_ids that is NOT sent,
+// on purpose: their backend re-derives spec.scopeIds on every update, so a body without it
+// cannot wipe it. Evidence, origin/dev:
+//   - elasticache: AWSElastiCacheService.OnBeforeUpdateAsync re-runs
+//     PopulateExpandedPropertiesAsync, which stamps scopeIds from the resource group when empty.
+//   - cluster_attributes: ClusterAttributesService.OnBeforeUpdateAsync re-runs
+//     PopulateExpandedPropertiesAsync, which rebuilds scopeIds from the parent cluster.
+var scopeIDsRestampedOnUpdate = map[string]bool{
+	"elasticache":        true,
+	"cluster_attributes": true,
+}
+
+// TestScopeIDsComputedOnlySweep fails for any mutable spec with a computed-only scope_ids that
+// is neither sent from state, nor explicitly kept out of the body (noSend), nor known to be
+// re-derived by its backend on update. A new spec with that shape has to make the choice
+// knowingly instead of silently wiping scopeIds on its first update.
+func TestScopeIDsComputedOnlySweep(t *testing.T) {
+	specs, err := loadResourceSpecs()
+	if err != nil {
+		t.Fatalf("loadResourceSpecs: %v", err)
+	}
+	for i := range specs {
+		s := &specs[i]
+		a := s.attr("scope_ids")
+		if a == nil || s.Endpoint.Immutable || s.Association != nil {
+			continue
+		}
+		if a.Required || a.Optional || a.SendFromState || a.NoSend {
+			continue
+		}
+		if scopeIDsRestampedOnUpdate[s.Name] {
+			continue
+		}
+		t.Errorf("%s.scope_ids is computed-only on a mutable resource without sendFromState: "+
+			"if the backend update replaces the record, every update wipes spec.scopeIds. "+
+			"Add sendFromState, or record the backend evidence in scopeIDsRestampedOnUpdate", s.Name)
+	}
+}
+
 // Both of these resources update with a full-document write that REPLACES the stored spec —
 // resource_group over PUT, k8s_namespace over PATCH — so a spec field the request body omits
 // is dropped from the record rather than left alone. Confirmed against a live backend for
@@ -19,7 +76,8 @@ import "testing"
 // new, so the flag has to land with it.
 //
 // azure_managed_redis and azure_node_pool already carry sendFromState for the same reason.
-// This test pins the flag on both specs so it cannot be dropped again.
+// This test pins the flag on every spec listed in scopeIDsFullReplaceSpecs so it cannot be
+// dropped again.
 func TestScopeIDsSurviveFullDocumentUpdate(t *testing.T) {
 	specs, err := loadResourceSpecs()
 	if err != nil {
@@ -30,7 +88,7 @@ func TestScopeIDsSurviveFullDocumentUpdate(t *testing.T) {
 		byName[specs[i].Name] = &specs[i]
 	}
 
-	for _, name := range []string{"resource_group", "k8s_namespace"} {
+	for _, name := range scopeIDsFullReplaceSpecs {
 		t.Run(name, func(t *testing.T) {
 			s := byName[name]
 			if s == nil {

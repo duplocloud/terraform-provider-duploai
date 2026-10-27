@@ -8,6 +8,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -180,5 +182,31 @@ func TestCollectionOneOf_DataSourceSchema(t *testing.T) {
 	}
 	if len(ds.Validators) != 1 {
 		t.Errorf("data source list(string) with oneOf has %d validators, want 1", len(ds.Validators))
+	}
+}
+
+// reservedKeyPrefixes warns (never errors) about configured keys under a
+// reserved prefix, and stays silent otherwise.
+func TestReservedKeyPrefixValidator(t *testing.T) {
+	v := reservedKeyPrefixValidator{prefixes: []string{"duplocloud.ai/"}}
+	run := func(keys ...string) diag.Diagnostics {
+		el := map[string]attr.Value{}
+		for _, k := range keys {
+			el[k] = types.StringValue("x")
+		}
+		resp := &validator.MapResponse{}
+		v.ValidateMap(context.Background(), validator.MapRequest{Path: path.Root("labels"), ConfigValue: types.MapValueMust(types.StringType, el)}, resp)
+		return resp.Diagnostics
+	}
+	if d := run("app", "team"); d.WarningsCount() != 0 || d.HasError() {
+		t.Errorf("plain keys must not warn: %v", d)
+	}
+	if d := run("app", "duplocloud.ai/team"); d.WarningsCount() != 1 || d.HasError() {
+		t.Errorf("reserved key must warn, never error: %v", d)
+	}
+	var spec ResourceSpec
+	_ = json.Unmarshal([]byte(`{"name":"p","description":"p","idPath":"id","endpoint":{"uriBase":"/v3/x"},"attributes":[{"name":"l","type":"string","optional":true,"apiPath":"l","reservedKeyPrefixes":["a/"]}]}`), &spec)
+	if err := spec.validate(); err == nil || !strings.Contains(err.Error(), "only valid on a map(string)") {
+		t.Errorf("reservedKeyPrefixes on a string must fail spec load, got %v", err)
 	}
 }

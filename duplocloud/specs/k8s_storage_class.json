@@ -36,6 +36,7 @@
       "name": "scope_ids",
       "type": "list(string)",
       "computed": true,
+      "sendFromState": true,
       "forceNew": true,
       "apiPath": "spec.scopeIds",
       "description": "Scope IDs that link this storage class to a cloud provider account. Inherited from the resource group."
