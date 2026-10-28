@@ -49,7 +49,7 @@
         "discriminatorValue": "KafkaVersion",
         "valuePath": "spec.updateRequest.targetKafkaVersion"
       },
-      "description": "Apache Kafka version for the cluster (e.g. 3.6.0). Can be upgraded in place."
+      "description": "Apache Kafka version for the cluster (e.g. 3.8.x). AWS accepts only 3.8.x and later for standard broker instance types. Can be upgraded in place."
     },
     {
       "name": "instance_type",

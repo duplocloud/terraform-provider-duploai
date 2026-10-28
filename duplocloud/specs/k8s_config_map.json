@@ -84,6 +84,7 @@
     {
       "name": "labels",
       "type": "map(string)",
+      "reservedKeyPrefixes": ["duplocloud.ai/"],
       "filterResponseKeys": ["*"],
       "optional": true,
       "requestPath": "spec.k8sResource.metadata.labels",
@@ -93,6 +94,7 @@
     {
       "name": "annotations",
       "type": "map(string)",
+      "reservedKeyPrefixes": ["duplocloud.ai/"],
       "filterResponseKeys": ["*"],
       "optional": true,
       "requestPath": "spec.k8sResource.metadata.annotations",

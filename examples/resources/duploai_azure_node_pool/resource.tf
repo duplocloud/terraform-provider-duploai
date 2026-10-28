@@ -1,5 +1,7 @@
 # A minimal pool: three fixed-size Linux nodes.
 #
+# Always set os_sku: creating a pool without it currently fails on the platform.
+#
 # The pool joins the AKS cluster linked to the resource group, so that resource group
 # must already have a cluster attached and the cluster must have finished provisioning.
 resource "duploai_azure_node_pool" "workers" {
@@ -9,6 +11,7 @@ resource "duploai_azure_node_pool" "workers" {
 
   name       = "workers"
   vm_size    = "Standard_DS2_v2"
+  os_sku     = "Ubuntu"
   node_count = 3
 }
 
@@ -23,6 +26,7 @@ resource "duploai_azure_node_pool" "elastic" {
 
   name    = "elastic"
   vm_size = "Standard_D4s_v5"
+  os_sku  = "Ubuntu"
 
   enable_auto_scaling = true
   min_count           = 2
@@ -46,6 +50,7 @@ resource "duploai_azure_node_pool" "batch" {
 
   name               = "batch"
   vm_size            = "Standard_D8s_v5"
+  os_sku             = "Ubuntu"
   scale_set_priority = "Spot"
   node_count         = 2
 
@@ -77,6 +82,7 @@ resource "duploai_azure_node_pool" "winapp" {
   name    = "winapp"
   vm_size = "Standard_D4s_v5"
   os_type = "Windows"
+  os_sku  = "Windows2022"
 
   node_count        = 2
   max_pods_per_node = 60
@@ -91,6 +97,7 @@ resource "duploai_azure_node_pool" "surge" {
 
   name       = "surge"
   vm_size    = "Standard_DS2_v2"
+  os_sku     = "Ubuntu"
   node_count = 4
 
   upgrade_settings = {

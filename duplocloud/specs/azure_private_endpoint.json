@@ -5,7 +5,8 @@
   "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AzurePrivateEndpoints",
-    "immutable": true
+    "immutable": true,
+    "deprovision": {}
   },
   "createConstants": [
     {
@@ -14,6 +15,7 @@
     }
   ],
   "waiter": {
+    "deprovisionedState": "DeProvisioned",
     "pollIntervalSeconds": 15,
     "createTimeoutMinutes": 30,
     "deleteTimeoutMinutes": 20

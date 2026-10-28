@@ -356,6 +356,22 @@ type EndpointSpec struct {
 	// unwrapping to createFromList rather than re-diagnosing it: the knob is
 	// deliberately absent while nothing needs it.
 	CreateReturnsList bool `json:"createReturnsList,omitempty"`
+
+	// NotFoundResponses declares error responses, other than 404, that this API
+	// uses to say "the object does not exist". Refresh treats a match as gone
+	// (the resource leaves state) and delete/deprovision treat it as already
+	// deleted; create and update never reinterpret an error. Each rule needs a
+	// 4xx status other than 404 and a messagePattern (a Go regexp matched against
+	// the error body's message), so one backend quirk never turns a whole status
+	// class into "gone". Example: the Key Vault secret API answers 400
+	// "Secret '<n>' was not found in Key Vault '<v>'" for a deleted secret.
+	NotFoundResponses []NotFoundResponseSpec `json:"notFoundResponses,omitempty"`
+}
+
+// NotFoundResponseSpec is one EndpointSpec.NotFoundResponses rule.
+type NotFoundResponseSpec struct {
+	Status         int    `json:"status"`
+	MessagePattern string `json:"messagePattern"`
 }
 
 // BuildEndpoint converts this spec's EndpointSpec into a duplosdk.Endpoint
@@ -405,7 +421,42 @@ func (s *ResourceSpec) BuildEndpoint() (duplosdk.Endpoint, error) {
 		}
 		result.Deprovision = duplosdk.Operation{Verb: verb, Path: path}
 	}
+	result.SensitivePaths = s.sensitiveBodyPaths()
+	for i, rule := range ep.NotFoundResponses {
+		if rule.Status < 400 || rule.Status > 499 || rule.Status == 404 {
+			return duplosdk.Endpoint{}, fmt.Errorf("endpoint.notFoundResponses[%d]: status %d must be a 4xx other than 404 (404 is always not-found)", i, rule.Status)
+		}
+		if rule.MessagePattern == "" {
+			return duplosdk.Endpoint{}, fmt.Errorf("endpoint.notFoundResponses[%d]: messagePattern is required, so a whole status is never treated as not-found", i)
+		}
+		re, err := regexp.Compile(rule.MessagePattern)
+		if err != nil {
+			return duplosdk.Endpoint{}, fmt.Errorf("endpoint.notFoundResponses[%d]: invalid messagePattern: %w", i, err)
+		}
+		result.NotFoundResponses = append(result.NotFoundResponses, duplosdk.NotFoundResponse{Status: rule.Status, Message: re})
+	}
 	return result, nil
+}
+
+// sensitiveBodyPaths lists every request and response path of the top-level
+// Sensitive attributes, so the client redacts them from logged bodies even
+// when the API key name gives no hint (Key Vault's "value").
+func (s *ResourceSpec) sensitiveBodyPaths() []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, a := range s.Attributes {
+		if !a.Sensitive {
+			continue
+		}
+		paths := append([]string{a.effectiveCreatePath(), a.effectiveUpdatePath()}, a.responsePathList()...)
+		for _, p := range append(paths, a.DataSourceResponsePaths...) {
+			if p != "" && !seen[p] {
+				seen[p] = true
+				out = append(out, p)
+			}
+		}
+	}
+	return out
 }
 
 // AttributeSpec describes one schema attribute and how it maps to the API.
@@ -589,6 +640,17 @@ type AttributeSpec struct {
 	// that must also be SENT pairs it with an explicit RequestPath (or APIPath).
 	ResponsePaths []string `json:"responsePaths,omitempty"`
 
+	// DataSourceResponsePaths gives the generated data source (and its
+	// ephemeral twin) its own ordered read paths for a top-level attribute,
+	// taking precedence there over responsePaths/responsePath/apiPath. The
+	// resource ignores it entirely. Use it to report a value the resource
+	// deliberately does not read back: a create-only setting with no update,
+	// where reading an out-of-band change would plan a diff that can never be
+	// applied (native_host metadata_hop_limit), or a map the resource only
+	// sends (k8s metadata labels). An attribute with no read path at all is
+	// otherwise left out of the data source schema.
+	DataSourceResponsePaths []string `json:"dataSourceResponsePaths,omitempty"`
+
 	// CreatePath / UpdatePath override RequestPath (and APIPath) for the POST
 	// and PUT bodies respectively. Use when the API uses different DTOs for
 	// create vs update (e.g. spec.createRequest vs spec.updateRequest). Each
@@ -663,6 +725,19 @@ type AttributeSpec struct {
 	// since that one is always in the plan and so in every update body.
 	SendOnEveryUpdate bool `json:"sendOnEveryUpdate,omitempty"`
 
+	// ResendWhenOmitted, with WriteOnly on a MergeUpdateIntoCurrent resource,
+	// sends the config value in an update that is not rotating it whenever the
+	// current record has no value (absent, empty or masked) at its update path.
+	// For a backend that persists the secret but never returns it (RDS / RDS
+	// cluster / ElastiCache since backend #721): the merged record would
+	// otherwise drop the secret, the backend would see the spec as changed and
+	// flip a skill-provisioned resource to Processing before restoring the stored
+	// value, and no reconcile would ever bring it back to Complete. While the
+	// record still returns the secret, the stored value is kept as before. Only
+	// for a persisted field; never for a spec.updateRequest-style action, where
+	// sending the value performs a change (a new secret version).
+	ResendWhenOmitted bool `json:"resendWhenOmitted,omitempty"`
+
 	// FilterResponseKeys, for a map(string) attribute (including one nested inside
 	// an object, e.g. azure.tags), drops matching keys from the response map before
 	// it is stored in state. Each pattern is an exact key, or a prefix when it ends
@@ -682,6 +757,13 @@ type AttributeSpec struct {
 	// an attribute that carries nested attributes, and on an empty pattern. Not
 	// applied on the data source path, which reports the API response verbatim.
 	FilterResponseKeys []string `json:"filterResponseKeys,omitempty"`
+
+	// ReservedKeyPrefixes, for a top-level map(string) attribute, makes validate
+	// WARN (never fail, so existing configs keep planning) about each configured
+	// key starting with one of the prefixes: keys the backend strips from the
+	// object it stores (the platform-reserved duplocloud.ai/ Kubernetes labels
+	// and annotations), so they can never round-trip and every plan re-adds them.
+	ReservedKeyPrefixes []string `json:"reservedKeyPrefixes,omitempty"`
 
 	// MapValuePath, for a map(string) attribute, unwraps a response whose entries
 	// are objects rather than plain strings: each value is replaced by the named
@@ -1213,6 +1295,9 @@ func (s *ResourceSpec) validate() error {
 	if err := s.validateWriteOnly(); err != nil {
 		return err
 	}
+	if err := s.validateDataSourceResponsePaths(); err != nil {
+		return err
+	}
 	// A misspelled input name would silently disable the rule rather than fail.
 	for _, a := range s.Attributes {
 		for _, in := range a.StableUnlessChanged {
@@ -1623,6 +1708,9 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 				}
 			}
 		}
+		if len(a.ReservedKeyPrefixes) > 0 && a.Type != "map(string)" {
+			return nil, fmt.Errorf("attribute %q: reservedKeyPrefixes is only valid on a map(string), got %q", a.Name, a.Type)
+		}
 		if a.SendFromState {
 			if !a.Computed {
 				return nil, fmt.Errorf("attribute %q: sendFromState is only valid on a computed attribute", a.Name)
@@ -1911,6 +1999,45 @@ func (s *ResourceSpec) validateStateUpgrades(seen map[string]bool) error {
 // The constraints mirror what keeps the secret out of state: request paths
 // only, never computed or defaulted, top-level (the request is built from the
 // config's top-level values), and a resource whose updates send a full body.
+// validateDataSourceResponsePaths rejects a dataSourceResponsePaths that the
+// engine would silently ignore: on a spec without a data source, on a nested
+// attribute (only top-level attributes are overridden), on a write-only
+// attribute (never read back anywhere), or with an empty path.
+func (s *ResourceSpec) validateDataSourceResponsePaths() error {
+	var nested func(attrs []AttributeSpec) error
+	nested = func(attrs []AttributeSpec) error {
+		for _, a := range attrs {
+			if len(a.DataSourceResponsePaths) > 0 {
+				return fmt.Errorf("attribute %q: dataSourceResponsePaths is only supported on top-level attributes", a.Name)
+			}
+			if err := nested(a.Attributes); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, a := range s.Attributes {
+		if err := nested(a.Attributes); err != nil {
+			return err
+		}
+		if len(a.DataSourceResponsePaths) == 0 {
+			continue
+		}
+		if !s.DataSource && !s.DataSourceOnly {
+			return fmt.Errorf("attribute %q: dataSourceResponsePaths requires dataSource or dataSourceOnly", a.Name)
+		}
+		if a.WriteOnly {
+			return fmt.Errorf("attribute %q: dataSourceResponsePaths is not supported on a writeOnly attribute", a.Name)
+		}
+		for _, p := range a.DataSourceResponsePaths {
+			if p == "" {
+				return fmt.Errorf("attribute %q: dataSourceResponsePaths has an empty path", a.Name)
+			}
+		}
+	}
+	return nil
+}
+
 func (s *ResourceSpec) validateWriteOnly() error {
 	var nested func(attrs []AttributeSpec) error
 	nested = func(attrs []AttributeSpec) error {
@@ -1928,8 +2055,11 @@ func (s *ResourceSpec) validateWriteOnly() error {
 		if err := nested(a.Attributes); err != nil {
 			return err
 		}
-		if (a.VersionAttribute != "" || a.SendOnEveryUpdate) && !a.WriteOnly {
-			return fmt.Errorf("attribute %q: versionAttribute and sendOnEveryUpdate require writeOnly", a.Name)
+		if (a.VersionAttribute != "" || a.SendOnEveryUpdate || a.ResendWhenOmitted) && !a.WriteOnly {
+			return fmt.Errorf("attribute %q: versionAttribute, sendOnEveryUpdate and resendWhenOmitted require writeOnly", a.Name)
+		}
+		if a.ResendWhenOmitted && !s.MergeUpdateIntoCurrent {
+			return fmt.Errorf("attribute %q: resendWhenOmitted requires mergeUpdateIntoCurrent", a.Name)
 		}
 		if !a.WriteOnly {
 			continue

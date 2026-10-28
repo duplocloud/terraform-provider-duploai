@@ -64,6 +64,46 @@ func isSecretKeyName(k string) bool {
 var secretJSONKeyRe = regexp.MustCompile(
 	`(?i)"([^"]*(password|secret|token|apikey|api_key|credential|privatekey|private_key|passphrase|passcode|bearer|certificate|connectionstring|jwt|sessionid)[^"]*)"\s*:\s*"[^"]*"`)
 
+// sensitivePathsKey carries an endpoint's SensitivePaths on a request context.
+type sensitivePathsKey struct{}
+
+// withSensitivePaths returns ctx carrying paths (split into segments), or ctx
+// itself when there are none.
+func withSensitivePaths(ctx context.Context, paths []string) context.Context {
+	if len(paths) == 0 {
+		return ctx
+	}
+	segs := make([][]string, 0, len(paths))
+	for _, p := range paths {
+		if p != "" {
+			segs = append(segs, strings.Split(p, "."))
+		}
+	}
+	return context.WithValue(ctx, sensitivePathsKey{}, segs)
+}
+
+func sensitivePathsFrom(ctx context.Context) [][]string {
+	segs, _ := ctx.Value(sensitivePathsKey{}).([][]string)
+	return segs
+}
+
+// redactPath blanks the string value at path in doc, if there is one.
+func redactPath(doc any, path []string) {
+	for i, seg := range path {
+		m, ok := doc.(map[string]any)
+		if !ok {
+			return
+		}
+		if i == len(path)-1 {
+			if s, isStr := m[seg].(string); isStr && s != "" {
+				m[seg] = "REDACTED"
+			}
+			return
+		}
+		doc = m[seg]
+	}
+}
+
 // redactBody hides secret-looking values and truncates the result.
 //
 // It parses the body and walks it, rather than pattern-matching the raw text,
@@ -74,7 +114,10 @@ var secretJSONKeyRe = regexp.MustCompile(
 //
 // Best-effort: a debugging aid, not a guarantee. Do not enable body logging
 // against a host whose data you would not paste into a ticket.
-func redactBody(b []byte) string {
+//
+// paths are extra dot-path segments (an endpoint's SensitivePaths) blanked at
+// the body root and under a {"data": ...} response envelope.
+func redactBody(b []byte, paths ...[]string) string {
 	if len(b) == 0 {
 		return "(empty)"
 	}
@@ -82,6 +125,12 @@ func redactBody(b []byte) string {
 	var doc any
 	if err := json.Unmarshal(b, &doc); err == nil {
 		redactJSONValue(doc)
+		for _, p := range paths {
+			redactPath(doc, p)
+			if env, ok := doc.(map[string]any); ok {
+				redactPath(env["data"], p)
+			}
+		}
 		if reser, err := json.Marshal(doc); err == nil {
 			out = string(reser)
 		}
@@ -105,6 +154,13 @@ func redactJSONValue(v any) {
 		// says WHICH credential field was sent.
 		if k, ok := t["key"].(string); ok && isSecretKeyName(k) {
 			if _, isStr := t["value"].(string); isStr {
+				t["value"] = "REDACTED"
+			}
+		}
+		// Azure Key Vault secret shape ({"name", "value", "contentType", ...}):
+		// the secret itself sits under the neutral "value" key.
+		if _, ok := t["contentType"]; ok {
+			if v, isStr := t["value"].(string); isStr && v != "" {
 				t["value"] = "REDACTED"
 			}
 		}
@@ -196,7 +252,7 @@ func (c *Client) doRequestWithTimeout(ctx context.Context, timeout time.Duration
 			return nil, newClientError(0, fmt.Errorf("marshalling request: %w", err))
 		}
 		if bodyLoggingEnabled() {
-			tflog.Trace(ctx, fmt.Sprintf("duplo-request-body: %s %s: %s", method, url, redactBody(b)))
+			tflog.Trace(ctx, fmt.Sprintf("duplo-request-body: %s %s: %s", method, url, redactBody(b, sensitivePathsFrom(ctx)...)))
 		}
 		reqBody = strings.NewReader(string(b))
 	}
@@ -237,7 +293,7 @@ func (c *Client) doRequestWithTimeout(ctx context.Context, timeout time.Duration
 	tflog.Trace(ctx, fmt.Sprintf("duplo-response: %s %s: status=%d", method, url, resp.StatusCode))
 	if bodyLoggingEnabled() {
 		tflog.Trace(ctx, fmt.Sprintf("duplo-response-body: %s %s: status=%d: %s",
-			method, url, resp.StatusCode, redactBody(respBody)))
+			method, url, resp.StatusCode, redactBody(respBody, sensitivePathsFrom(ctx)...)))
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
@@ -255,8 +311,10 @@ func (c *Client) doRequestWithTimeout(ctx context.Context, timeout time.Duration
 				detail += " (WWW-Authenticate: " + wa + ")"
 			}
 		}
-		tflog.Trace(ctx, fmt.Sprintf("duplo-response: %s %s: error body: %q", method, url, string(respBody)))
-		return nil, newClientError(resp.StatusCode, fmt.Errorf("API error %d: %s", resp.StatusCode, detail))
+		// Redacted like a logged body: an error may echo the request (or a cloud
+		// SDK error relayed by the backend may quote a secret field).
+		tflog.Trace(ctx, fmt.Sprintf("duplo-response: %s %s: error body: %q", method, url, redactBody(respBody, sensitivePathsFrom(ctx)...)))
+		return nil, newResponseError(resp.StatusCode, fmt.Errorf("API error %d: %s", resp.StatusCode, detail), string(respBody))
 	}
 
 	return respBody, nil

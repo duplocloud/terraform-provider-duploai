@@ -43,12 +43,14 @@ func (r *RESTResource[T]) WithContext(ctx context.Context) *RESTResource[T] {
 	return &c
 }
 
-// context returns the resource's request context, or Background when none was set.
+// context returns the resource's request context, or Background when none was
+// set, carrying the endpoint's SensitivePaths for body/error log redaction.
 func (r *RESTResource[T]) context() context.Context {
-	if r.ctx == nil {
-		return context.Background()
+	ctx := r.ctx
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	return r.ctx
+	return withSensitivePaths(ctx, r.endpoint.SensitivePaths)
 }
 
 // WithCallTimeout returns a copy of the resource whose operation-initiating
@@ -112,8 +114,10 @@ func (r *RESTResource[T]) CreateNoContent() ClientError {
 }
 
 // Get fetches a single object by id.
+// An error matching the endpoint's NotFoundResponses is reported as a 404.
 func (r *RESTResource[T]) Get(id string) (*T, ClientError) {
-	return r.decode(r.endpoint.readVerb(), r.endpoint.readPath(r.scope, id), nil)
+	obj, err := r.decode(r.endpoint.readVerb(), r.endpoint.readPath(r.scope, id), nil)
+	return obj, r.endpoint.asNotFound(err)
 }
 
 // GetPath fetches and decodes an already-resolved absolute path. Use when the
@@ -224,9 +228,10 @@ func (r *RESTResource[T]) Update(id string, req *T) (*T, ClientError) {
 	return r.decodeWithTimeout(r.callTimeout, r.endpoint.updateVerb(), r.endpoint.updatePath(r.scope, id), req)
 }
 
-// Delete removes the object. A 404 is treated as success (already gone).
+// Delete removes the object. A 404 (or a declared NotFoundResponses match) is
+// treated as success (already gone).
 func (r *RESTResource[T]) Delete(id string) ClientError {
-	err := r.client.callAPIWithTimeout(r.context(), r.callTimeout, r.endpoint.deleteVerb(), r.endpoint.deletePath(r.scope, id), nil, nil)
+	err := r.endpoint.asNotFound(r.client.callAPIWithTimeout(r.context(), r.callTimeout, r.endpoint.deleteVerb(), r.endpoint.deletePath(r.scope, id), nil, nil))
 	if err != nil && err.IsNotFound() {
 		return nil
 	}
@@ -237,7 +242,7 @@ func (r *RESTResource[T]) Delete(id string) ClientError {
 // without removing the record itself. It is the pre-delete step for resources
 // the API will not delete while live. A 404 is treated as success (already gone).
 func (r *RESTResource[T]) Deprovision(id string) ClientError {
-	err := r.client.callAPIWithTimeout(r.context(), r.callTimeout, r.endpoint.deprovisionVerb(), r.endpoint.deprovisionPath(r.scope, id), map[string]any{}, nil)
+	err := r.endpoint.asNotFound(r.client.callAPIWithTimeout(r.context(), r.callTimeout, r.endpoint.deprovisionVerb(), r.endpoint.deprovisionPath(r.scope, id), map[string]any{}, nil))
 	if err != nil && err.IsNotFound() {
 		return nil
 	}

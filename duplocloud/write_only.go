@@ -92,6 +92,32 @@ func (r *dynamicResource) writeOnlyInUsePaths(plan map[string]tftypes.Value) map
 	return out
 }
 
+// resendOmittedWriteOnly writes the config value of each ResendWhenOmitted
+// write-only attribute in use (its update path in inUse) into merged when the
+// current record carries no real value there: absent, empty, or masked with
+// redactedPrefix. A record that still returns the secret keeps it untouched.
+func (r *dynamicResource) resendOmittedWriteOnly(merged map[string]any, config tftypes.Value, inUse map[string]bool) {
+	var top map[string]tftypes.Value
+	if config.As(&top) != nil {
+		return
+	}
+	for _, a := range r.writeOnlyAttrs() {
+		p := a.effectiveUpdatePath()
+		if !a.ResendWhenOmitted || p == "" || !inUse[p] {
+			continue
+		}
+		segs := strings.Split(p, ".")
+		if cur, ok := lookupPath(merged, segs); ok && cur != nil {
+			if s, isStr := cur.(string); !isStr || (s != "" && !strings.HasPrefix(s, redactedPrefix)) {
+				continue
+			}
+		}
+		if val, ok := attrToRequest(a, top[a.Name]); ok {
+			setPath(merged, segs, val)
+		}
+	}
+}
+
 // keepShadowedNull holds null, in a refreshed state, every attribute that shares
 // a WriteOnly attribute's create path while that write-only alternative is in use
 // (its version is set): such an attribute is null in the prior state because the

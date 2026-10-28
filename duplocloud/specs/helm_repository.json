@@ -36,6 +36,7 @@
       "name": "scope_ids",
       "type": "list(string)",
       "computed": true,
+      "sendFromState": true,
       "apiPath": "spec.scopeIds",
       "description": "Scope IDs that link this Helm repository to a cloud provider account. Derived by the server from the parent resource group."
     },

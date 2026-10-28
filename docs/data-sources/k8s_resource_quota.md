@@ -34,10 +34,12 @@ output "status" {
 
 ### Read-Only
 
+- `annotations` (Map of String) Kubernetes annotations applied to the resource quota. Send-only: the resource does not read this value back. The data source reports the live annotations.
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group.
 - `hard` (Map of String) Hard resource limits enforced by this quota. Keys are Kubernetes resource names (e.g. "cpu", "memory", "pods", "requests.cpu", "limits.memory") and values are Kubernetes quantity strings (e.g. "4", "8Gi", "100").
 - `k8s_resource_quota_id` (String) ID of this resource quota, for reference by dependent resources.
+- `labels` (Map of String) Kubernetes labels applied to the resource quota. Send-only: the server injects its own duplocloud.ai/* labels, so the resource does not read this value back, avoiding spurious drift. The data source reports the live labels, including server-added ones.
 - `name` (String) Name of the resource quota. Must be a DNS-1123 label (lowercase alphanumeric and '-', starting and ending with an alphanumeric).
 - `namespace_name` (String) Kubernetes namespace the resource quota is applied to.
 - `resource_group_id` (String) ID of the resource group (EKS cluster) this resource quota belongs to.
