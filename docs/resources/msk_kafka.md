@@ -23,7 +23,7 @@ resource "duploai_msk_kafka" "example" {
   instance_type          = "kafka.m5.large"
   number_of_broker_nodes = 3
   broker_volume_size_gb  = 100
-  kafka_version          = "3.6.0"
+  kafka_version          = "3.8.x"
 
   # Optional: pin specific private subnets (one broker per AZ). Omit for all RG private subnets.
   subnet_ids = ["subnet-0a1b2c3d4e5f60001", "subnet-0a1b2c3d4e5f60002"]
@@ -51,7 +51,7 @@ output "kafka_cluster_arn" {
 - `broker_volume_size_gb` (Number) EBS storage per broker, in GiB. Can be increased in place.
 - `environment_id` (String) ID of the environment in which the cluster is provisioned.
 - `instance_type` (String) Broker instance type (e.g. kafka.m5.large). Can be changed in place.
-- `kafka_version` (String) Apache Kafka version for the cluster (e.g. 3.6.0). Can be upgraded in place.
+- `kafka_version` (String) Apache Kafka version for the cluster (e.g. 3.8.x). AWS accepts only 3.8.x and later for standard broker instance types. Can be upgraded in place.
 - `name` (String) Cluster name. Letters, numbers, and hyphens. Cannot be changed after creation.
 - `resource_group_id` (String) ID of the resource group in which the cluster is provisioned.
 - `workspace_id` (String) ID of the workspace that owns this MSK cluster.
