@@ -78,14 +78,16 @@
       "type": "map(string)",
       "optional": true,
       "requestPath": "spec.k8sResource.metadata.labels",
-      "description": "Kubernetes labels applied to the resource quota. Send-only: the server injects its own duplocloud.ai/* labels, so this value is not read back to avoid spurious drift."
+      "dataSourceResponsePaths": ["result.k8sResource.metadata.labels"],
+      "description": "Kubernetes labels applied to the resource quota. Send-only: the server injects its own duplocloud.ai/* labels, so the resource does not read this value back, avoiding spurious drift. The data source reports the live labels, including server-added ones."
     },
     {
       "name": "annotations",
       "type": "map(string)",
       "optional": true,
       "requestPath": "spec.k8sResource.metadata.annotations",
-      "description": "Kubernetes annotations applied to the resource quota. Send-only (not read back)."
+      "dataSourceResponsePaths": ["result.k8sResource.metadata.annotations"],
+      "description": "Kubernetes annotations applied to the resource quota. Send-only: the resource does not read this value back. The data source reports the live annotations."
     },
     {
       "name": "status",

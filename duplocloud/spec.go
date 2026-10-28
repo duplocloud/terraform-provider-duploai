@@ -448,7 +448,8 @@ func (s *ResourceSpec) sensitiveBodyPaths() []string {
 		if !a.Sensitive {
 			continue
 		}
-		for _, p := range append([]string{a.effectiveCreatePath(), a.effectiveUpdatePath()}, a.responsePathList()...) {
+		paths := append([]string{a.effectiveCreatePath(), a.effectiveUpdatePath()}, a.responsePathList()...)
+		for _, p := range append(paths, a.DataSourceResponsePaths...) {
 			if p != "" && !seen[p] {
 				seen[p] = true
 				out = append(out, p)
@@ -638,6 +639,17 @@ type AttributeSpec struct {
 	// computed-only attribute needs nothing else; an optional+computed attribute
 	// that must also be SENT pairs it with an explicit RequestPath (or APIPath).
 	ResponsePaths []string `json:"responsePaths,omitempty"`
+
+	// DataSourceResponsePaths gives the generated data source (and its
+	// ephemeral twin) its own ordered read paths for a top-level attribute,
+	// taking precedence there over responsePaths/responsePath/apiPath. The
+	// resource ignores it entirely. Use it to report a value the resource
+	// deliberately does not read back: a create-only setting with no update,
+	// where reading an out-of-band change would plan a diff that can never be
+	// applied (native_host metadata_hop_limit), or a map the resource only
+	// sends (k8s metadata labels). An attribute with no read path at all is
+	// otherwise left out of the data source schema.
+	DataSourceResponsePaths []string `json:"dataSourceResponsePaths,omitempty"`
 
 	// CreatePath / UpdatePath override RequestPath (and APIPath) for the POST
 	// and PUT bodies respectively. Use when the API uses different DTOs for
@@ -1281,6 +1293,9 @@ func (s *ResourceSpec) validate() error {
 		return err
 	}
 	if err := s.validateWriteOnly(); err != nil {
+		return err
+	}
+	if err := s.validateDataSourceResponsePaths(); err != nil {
 		return err
 	}
 	// A misspelled input name would silently disable the rule rather than fail.
@@ -1984,6 +1999,45 @@ func (s *ResourceSpec) validateStateUpgrades(seen map[string]bool) error {
 // The constraints mirror what keeps the secret out of state: request paths
 // only, never computed or defaulted, top-level (the request is built from the
 // config's top-level values), and a resource whose updates send a full body.
+// validateDataSourceResponsePaths rejects a dataSourceResponsePaths that the
+// engine would silently ignore: on a spec without a data source, on a nested
+// attribute (only top-level attributes are overridden), on a write-only
+// attribute (never read back anywhere), or with an empty path.
+func (s *ResourceSpec) validateDataSourceResponsePaths() error {
+	var nested func(attrs []AttributeSpec) error
+	nested = func(attrs []AttributeSpec) error {
+		for _, a := range attrs {
+			if len(a.DataSourceResponsePaths) > 0 {
+				return fmt.Errorf("attribute %q: dataSourceResponsePaths is only supported on top-level attributes", a.Name)
+			}
+			if err := nested(a.Attributes); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, a := range s.Attributes {
+		if err := nested(a.Attributes); err != nil {
+			return err
+		}
+		if len(a.DataSourceResponsePaths) == 0 {
+			continue
+		}
+		if !s.DataSource && !s.DataSourceOnly {
+			return fmt.Errorf("attribute %q: dataSourceResponsePaths requires dataSource or dataSourceOnly", a.Name)
+		}
+		if a.WriteOnly {
+			return fmt.Errorf("attribute %q: dataSourceResponsePaths is not supported on a writeOnly attribute", a.Name)
+		}
+		for _, p := range a.DataSourceResponsePaths {
+			if p == "" {
+				return fmt.Errorf("attribute %q: dataSourceResponsePaths has an empty path", a.Name)
+			}
+		}
+	}
+	return nil
+}
+
 func (s *ResourceSpec) validateWriteOnly() error {
 	var nested func(attrs []AttributeSpec) error
 	nested = func(attrs []AttributeSpec) error {

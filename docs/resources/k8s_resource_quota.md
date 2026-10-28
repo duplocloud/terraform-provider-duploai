@@ -57,10 +57,10 @@ resource "duploai_k8s_resource_quota" "example" {
 
 ### Optional
 
-- `annotations` (Map of String) Kubernetes annotations applied to the resource quota. Send-only (not read back).
+- `annotations` (Map of String) Kubernetes annotations applied to the resource quota. Send-only: the resource does not read this value back. The data source reports the live annotations.
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
-- `labels` (Map of String) Kubernetes labels applied to the resource quota. Send-only: the server injects its own duplocloud.ai/* labels, so this value is not read back to avoid spurious drift.
+- `labels` (Map of String) Kubernetes labels applied to the resource quota. Send-only: the server injects its own duplocloud.ai/* labels, so the resource does not read this value back, avoiding spurious drift. The data source reports the live labels, including server-added ones.
 - `scopes` (List of String) Optional list of scopes that restrict which resources this quota applies to (e.g. "Terminating", "NotTerminating", "BestEffort", "NotBestEffort", "PriorityClass"). Immutable: changing this value forces replacement of the resource quota.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 

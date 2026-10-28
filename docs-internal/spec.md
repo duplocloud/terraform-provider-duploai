@@ -336,6 +336,7 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `apiPath` | string | Dot-path in the API body this attribute reads/writes (e.g. `"spec.region"`). See [Path mapping](#path-mapping). |
 | `requestPath` | string | Override `apiPath` for write direction only. |
 | `responsePath` | string | Override `apiPath` for read direction only. |
+| `dataSourceResponsePaths` | array | Top-level attributes only: ordered read paths used by the generated **data source** (and its ephemeral twin) alone, ahead of `responsePaths`/`responsePath`/`apiPath`; the resource ignores them. Use it to keep a value in the data source that the resource deliberately does not read back — a create-only setting with no update (`native_host.metadata_hop_limit`), or a map the resource only sends (`k8s_pvc` / `k8s_resource_quota` / `k8s_storage_class` `labels` and `annotations`). Rejected at spec load without `dataSource`/`dataSourceOnly`, on a nested or `writeOnly` attribute, or with an empty path. |
 | `createPath` | string | Override for POST (create) body. Falls back to `requestPath`, then `apiPath`. |
 | `updatePath` | string | Override for PUT (update) body. Falls back to `requestPath`, then `apiPath`. |
 | `createOnly` | bool | Send this field in POST (create) only; never in PUT (update). Useful for fields immutable after creation that do not trigger replacement. |
@@ -1200,7 +1201,7 @@ automatically:
 - **Path-parameter attributes** (those with no `apiPath`) → `Required`
 - **`id`** → `Required` (user supplies the object ID for lookup)
 - **All other readable attributes** → `Computed`
-- **Write-only attributes** (no `apiPath` and no `responsePath`) → excluded
+- **Write-only attributes** (no `apiPath`, `responsePath` or `dataSourceResponsePaths`) → excluded
 
 The data source performs a single `GET /{id}` and populates all computed
 attributes from the response.
