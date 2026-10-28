@@ -1177,8 +1177,10 @@ func (r *dynamicResource) ImportState(ctx context.Context, req resource.ImportSt
 	// Import by identity (Terraform 1.12+: `import { identity = {...} }`) builds
 	// the same composite ID an import by ID would carry, then follows the same
 	// path — including the import mark below; the Read that follows fills in
-	// everything else.
-	if req.ID == "" && req.Identity != nil {
+	// everything else. The framework passes a null identity on an import by
+	// ID, so only an identity that carries a value selects this branch; a
+	// blank ID with an empty identity is reported as an invalid import ID.
+	if req.ID == "" && r.identityHasValue(ctx, req.Identity) {
 		id, diags := r.idFromIdentity(ctx, req.Identity)
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
@@ -2735,6 +2737,22 @@ func (r *dynamicResource) setIdentity(ctx context.Context, state tfsdk.State, id
 	for i, n := range names {
 		diags.Append(identity.SetAttribute(ctx, path.Root(n), parts[i])...)
 	}
+}
+
+// identityHasValue reports whether an import identity sets at least one
+// identity attribute, i.e. the import came from an `identity = {...}` block
+// rather than an import ID (for which the framework supplies a null identity).
+func (r *dynamicResource) identityHasValue(ctx context.Context, identity *tfsdk.ResourceIdentity) bool {
+	if identity == nil || identity.Raw.IsNull() {
+		return false
+	}
+	for _, n := range r.identityAttrs() {
+		var v types.String
+		if diags := identity.GetAttribute(ctx, path.Root(n), &v); diags.HasError() || !v.IsNull() {
+			return true // let idFromIdentity report anything malformed
+		}
+	}
+	return false
 }
 
 // idFromIdentity composes the composite Terraform id from an import identity.
