@@ -59,6 +59,7 @@
     {
       "name": "labels",
       "type": "map(string)",
+      "reservedKeyPrefixes": ["duplocloud.ai/"],
       "filterResponseKeys": ["*"],
       "optional": true,
       "computed": true,

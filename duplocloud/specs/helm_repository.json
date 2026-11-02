@@ -159,6 +159,7 @@
     {
       "name": "labels",
       "type": "map(string)",
+      "reservedKeyPrefixes": ["duplocloud.ai/"],
       "optional": true,
       "computed": true,
       "apiPath": "spec.k8sResource.metadata.labels",
