@@ -121,6 +121,16 @@ func redactBody(b []byte, paths ...[]string) string {
 	if len(b) == 0 {
 		return "(empty)"
 	}
+	out := redactSecrets(b, paths...)
+	if len(out) > maxLoggedBody {
+		out = out[:maxLoggedBody] + fmt.Sprintf("... (truncated, %d bytes total)", len(b))
+	}
+	return out
+}
+
+// redactSecrets is redactBody without the log-size cap: the same secret
+// blanking, for text shown to the user in full (an API error message).
+func redactSecrets(b []byte, paths ...[]string) string {
 	out := string(b)
 	var doc any
 	if err := json.Unmarshal(b, &doc); err == nil {
@@ -138,9 +148,6 @@ func redactBody(b []byte, paths ...[]string) string {
 		// Not JSON (an HTML error page, a plain-text message): fall back to the
 		// field-name pattern, which is all that is possible without structure.
 		out = secretJSONKeyRe.ReplaceAllString(out, `"$1":"REDACTED"`)
-	}
-	if len(out) > maxLoggedBody {
-		out = out[:maxLoggedBody] + fmt.Sprintf("... (truncated, %d bytes total)", len(b))
 	}
 	return out
 }
@@ -304,7 +311,11 @@ func (c *Client) doRequestWithTimeout(ctx context.Context, timeout time.Duration
 		// (401/403) come back with an empty body and put the reason in the
 		// WWW-Authenticate header instead, so fall back to that + the HTTP
 		// status text rather than emitting a blank message.
-		detail := strings.TrimSpace(string(respBody))
+		// The message reaches the user's terminal and CI logs, so secrets an error
+		// body echoes are blanked here too. The raw body stays on the error for
+		// the endpoint's NotFound rules (asNotFound / errorBody).
+		paths := sensitivePathsFrom(ctx)
+		detail := strings.TrimSpace(redactSecrets(respBody, paths...))
 		if detail == "" {
 			detail = http.StatusText(resp.StatusCode)
 			if wa := strings.TrimSpace(resp.Header.Get("WWW-Authenticate")); wa != "" {
@@ -313,7 +324,7 @@ func (c *Client) doRequestWithTimeout(ctx context.Context, timeout time.Duration
 		}
 		// Redacted like a logged body: an error may echo the request (or a cloud
 		// SDK error relayed by the backend may quote a secret field).
-		tflog.Trace(ctx, fmt.Sprintf("duplo-response: %s %s: error body: %q", method, url, redactBody(respBody, sensitivePathsFrom(ctx)...)))
+		tflog.Trace(ctx, fmt.Sprintf("duplo-response: %s %s: error body: %q", method, url, redactBody(respBody, paths...)))
 		return nil, newResponseError(resp.StatusCode, fmt.Errorf("API error %d: %s", resp.StatusCode, detail), string(respBody))
 	}
 
