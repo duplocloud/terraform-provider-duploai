@@ -87,3 +87,23 @@ func TestErrorDetail_NotTruncated(t *testing.T) {
 		t.Errorf("long error detail was truncated: %v", cerr)
 	}
 }
+
+// Redaction re-encodes the JSON body; it must not HTML-escape the message, or an
+// API error like "name must be <= 63 chars" reads "\u003c= 63" in the apply output.
+func TestErrorDetail_NoHTMLEscaping(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":"name must be <= 63 chars & a > b"}`))
+	}))
+	defer srv.Close()
+	c, err := NewClient(srv.URL, "tok", false, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := NewRESTResource[map[string]any](c, Endpoint{UriBase: "/v1/things"}, nil, nil)
+	req := map[string]any{"name": "x"}
+	_, cerr := r.WithContext(context.Background()).Create(&req)
+	if cerr == nil || !strings.Contains(cerr.Error(), "name must be <= 63 chars & a > b") {
+		t.Errorf("error detail was HTML-escaped: %v", cerr)
+	}
+}

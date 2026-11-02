@@ -141,8 +141,13 @@ func redactSecrets(b []byte, paths ...[]string) string {
 				redactPath(env["data"], p)
 			}
 		}
-		if reser, err := json.Marshal(doc); err == nil {
-			out = string(reser)
+		// No HTML escaping: this text reaches the user, and json.Marshal would turn
+		// "name must be <= 63 chars" into "\u003c= 63".
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(doc); err == nil {
+			out = strings.TrimSuffix(buf.String(), "\n")
 		}
 	} else {
 		// Not JSON (an HTML error page, a plain-text message): fall back to the
