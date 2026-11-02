@@ -41,11 +41,11 @@ install_docker: build
 	mv ${BINARY} ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/${OS_ARCH_DOCKER}
 
 test:
-	go test -i $$(TEST) || exit 1
-	echo $$(TEST) | CGO_ENABLED=1 xargs -t -n4 go test -race $$(TESTARGS) -timeout=120s -parallel=4
+	go test -i $(TEST) || exit 1
+	echo $(TEST) | CGO_ENABLED=1 xargs -t -n4 go test -race $(TESTARGS) -timeout=120s -parallel=4
 
 testacc:
-	TF_ACC=1 go test $$(TEST) -v $$(TESTARGS) -timeout 120m
+	TF_ACC=1 go test $(TEST) -v $(TESTARGS) -timeout 120m
 
 vet:
 	go vet ./...

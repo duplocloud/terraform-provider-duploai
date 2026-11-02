@@ -342,6 +342,7 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `normalizeTimestamp` | bool | For a **computed-only** `string` field, rewrite an RFC 3339 response value to one canonical spelling — UTC, a `Z` offset, whole seconds — before storing it in state. Use for every server-assigned timestamp: the write response renders one from memory at .NET tick precision (`…53.1452297Z`) while the read response renders what storage kept (`…53.145Z`), so refresh reports "Objects have changed outside of Terraform" after every apply even though nothing moved. The fraction is dropped rather than kept at a fixed width because any digit that survives is a digit the two responses could still disagree about; these fields are only read at second resolution. Normalizing both sides also absorbs the two offset spellings the platform emits (a `DateTimeOffset` with a zero offset serializes as `+00:00`, a UTC `DateTime` as `Z`). Idempotent; unparseable values and the empty string pass through untouched. One consequence to be aware of: two updates inside the same second leave the value unchanged, so `updated_at` cannot be used to distinguish them. Rejected at spec load on a non-`string` type, or on a `required`/`optional` attribute — rewriting a value the user set makes state disagree with the plan, which Terraform fails as an inconsistent result after apply. |
 | `stringBool` | bool | For a **`bool`** attribute, carry the value over the wire as the string `"true"`/`"false"` instead of a JSON boolean, and parse it back on read. Use when the field lives in a string-valued container the API cannot hold a real boolean in — chiefly a `Dictionary<string,string>` metadata map, where a JSON bool fails to deserialize (e.g. `delete_protection` at `metaData.delete_protection` on `resource_group`/`k8s_namespace`). Keeps HCL idiomatic (`delete_protection = false`) rather than forcing a quoted boolean. On read only an explicit `"true"` (case-insensitive) is true; any other non-null value is false, and an absent key stays null so a value the server dropped still surfaces as drift. Rejected at spec load on a non-`bool` type, or combined with `updateBoolTrueValue` (both rewrite the same value's wire form). |
 | `preserveOnEmptyResponse` | bool | Keep the value already held for this attribute — the configured plan value on create/update, the prior state value on refresh — whenever the API returns null or empty for it. See [Write-only fields](#write-only-fields). |
+| `matchByKey` | string | On a `list(object)`, the name of a required nested `string` attribute. Response elements are paired with the plan (apply) or prior state (refresh) by this key instead of by index; elements whose key is not held there are dropped. See [Server-added list elements](#server-added-list-elements). Not combinable with `orderByKey`. |
 | `mapValuePath` | string | For a **`map(string)`** attribute whose response entries are objects rather than plain strings, take each value from the named field. Use when the backend keeps per-entry bookkeeping alongside the value but accepts the flat `{"key":"value"}` shape on write, so Terraform can expose an ordinary `map(string)` in both directions — e.g. `resource_group.tags`, returned as `{"cost-center":{"value":"fin-1024","remove":false}}`. Entries already carrying a plain string pass through, so a mixed payload is handled; an entry whose named field is missing or non-string is dropped. Read-side only. Rejected at spec load on any type other than `map(string)`. |
 | `mapDropWhenTrue` | string | Names a sibling **boolean** inside the wrapped entry `mapValuePath` unwraps; an entry whose flag is true is omitted from state entirely. Use for a backend that soft-deletes map entries — `resource_group.tags` keeps a removed tag with `"remove":true` until a reconciler has taken it off every resource, and without this the key reappears in state on the next read and diffs forever against a config that no longer lists it. Requires `mapValuePath`. |
 | `deprecated` | string | Marks the attribute deprecated: the message is wired to the framework's `DeprecationMessage` and shown as a warning whenever the attribute is set in config. Use when renaming an attribute — keep the old one with a deprecation message pointing at the replacement (pair with `conflictsWith` + `requiredIf`/`isEmpty` for a backwards-compatible rename). |
@@ -506,6 +507,36 @@ value is kept. Any other response value wins, so a real change is still picked u
   Terraform is not detected. Say so in the attribute's `description`.
 - On **import** there is no held value, so the resolved value lands in state and
   the first apply adopts the configured one (one in-place update).
+
+### Server-added list elements
+
+Some backends append elements to a `list(object)` that the user never
+configured. `admin_provider` is one: for an AWS role credential sent without an
+`externalId`, the server generates one and adds `{key: "externalId"}` to
+`dataEx`. Elements are paired by index by default, so the extra element makes
+apply fail with "inconsistent result after apply" and refresh show a diff that
+never converges.
+
+Set `matchByKey` to a required nested string attribute:
+
+```json
+{ "name": "credential_fields", "type": "list(object)", "optional": true, "computed": true,
+  "apiPath": "dataEx", "matchByKey": "key", "attributes": [ ... ] }
+```
+
+When the base value (the plan on create/update, prior state on refresh) is known,
+the engine puts response elements in the base's key order and drops response
+elements whose key is not in the base. A configured key the API no longer
+returns still shows as drift, and so do changed values. With no base (import, or
+the attribute unset) the full response is kept. On plan, elements that exist
+only in state (key absent from config, e.g. after import) are not a change: if
+the plan matches state apart from them (ignoring computed leaves unset in
+config), an optional+computed attribute is planned at its state value and the
+other computed outputs keep their state values, so the first plan after import
+is empty. Any edited value, added key or removed configured key still plans an
+update. Use it only when the backend
+keeps server-added elements that an update leaves out; otherwise dropping them
+from state would delete them on the next write.
 
 ### Server-managed map keys
 

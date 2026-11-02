@@ -695,6 +695,17 @@ type AttributeSpec struct {
 	// nested attribute must exist and be of type string.
 	OrderByKey string `json:"orderByKey,omitempty"`
 
+	// MatchByKey, for a list(object) attribute, names a nested string attribute
+	// used to pair response elements with the plan (apply) or prior state
+	// (refresh) instead of by index. Response elements are put in the base's key
+	// order and elements whose key is not in the base are dropped, so a backend
+	// that appends server-generated elements (admin_provider credential_fields:
+	// a generated AWS externalId) causes neither an inconsistent result nor a
+	// perpetual diff. With no base (import, unset) the full response is kept.
+	// The named nested attribute must exist, be a string, and be required.
+	// Mutually exclusive with orderByKey.
+	MatchByKey string `json:"matchByKey,omitempty"`
+
 	// UpdateIntent, when set (and the resource has SingleIntentUpdate), makes this
 	// attribute mutable via a single-intent update: a change issues a dedicated
 	// PUT carrying the discriminator + this attribute's new value. Requires the
@@ -1564,6 +1575,21 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			}
 			if keyAttr.Type != "string" {
 				return nil, fmt.Errorf("attribute %q: orderByKey nested attribute %q must be a string", a.Name, a.OrderByKey)
+			}
+		}
+		if a.MatchByKey != "" {
+			if a.Type != "list(object)" {
+				return nil, fmt.Errorf("attribute %q: matchByKey is only valid on list(object)", a.Name)
+			}
+			if a.OrderByKey != "" {
+				return nil, fmt.Errorf("attribute %q: matchByKey and orderByKey are mutually exclusive", a.Name)
+			}
+			keyAttr := findAttr(a.Attributes, a.MatchByKey)
+			if keyAttr == nil {
+				return nil, fmt.Errorf("attribute %q: matchByKey references unknown nested attribute %q", a.Name, a.MatchByKey)
+			}
+			if keyAttr.Type != "string" || !keyAttr.Required {
+				return nil, fmt.Errorf("attribute %q: matchByKey nested attribute %q must be a required string", a.Name, a.MatchByKey)
 			}
 		}
 		if info.elem == "object" {
