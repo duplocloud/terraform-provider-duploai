@@ -6,12 +6,12 @@ import (
 )
 
 // The backend strips duplocloud.ai/* keys from a Kubernetes passthrough
-// object's metadata.labels before applying it. A user who sets one sees it
+// object's metadata.labels and metadata.annotations before applying it. A user who sets one sees it
 // silently dropped: an update planned after every refresh, or — on a forceNew
 // map such as k8s_job.labels — a replacement. reservedKeyPrefixes turns that
-// into a plan-time warning. Every spec that writes the object's metadata labels
+// into a plan-time warning. Every spec that writes the object's metadata labels or annotations
 // must carry it, so a new Kubernetes resource cannot ship without it.
-func TestReservedLabelPrefix_OnEveryK8sMetadataLabelsMap(t *testing.T) {
+func TestReservedLabelPrefix_OnEveryK8sMetadataMap(t *testing.T) {
 	specs, err := loadResourceSpecs()
 	if err != nil {
 		t.Fatalf("loadResourceSpecs: %v", err)
@@ -26,7 +26,7 @@ func TestReservedLabelPrefix_OnEveryK8sMetadataLabelsMap(t *testing.T) {
 			if path == "" {
 				path = a.APIPath
 			}
-			if path != "spec.k8sResource.metadata.labels" {
+			if path != "spec.k8sResource.metadata.labels" && path != "spec.k8sResource.metadata.annotations" {
 				continue
 			}
 			checked = append(checked, spec.Name+"."+a.Name)
@@ -43,9 +43,9 @@ func TestReservedLabelPrefix_OnEveryK8sMetadataLabelsMap(t *testing.T) {
 	}
 	sort.Strings(missing)
 	if len(checked) == 0 {
-		t.Fatal("no spec writes spec.k8sResource.metadata.labels — the guard is matching nothing")
+		t.Fatal("no spec writes spec.k8sResource.metadata.labels/annotations — the guard is matching nothing")
 	}
 	for _, m := range missing {
-		t.Errorf("%s writes spec.k8sResource.metadata.labels without reservedKeyPrefixes [\"duplocloud.ai/\"]", m)
+		t.Errorf("%s writes spec.k8sResource.metadata labels/annotations without reservedKeyPrefixes [\"duplocloud.ai/\"]", m)
 	}
 }

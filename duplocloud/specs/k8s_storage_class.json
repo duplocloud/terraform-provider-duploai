@@ -139,6 +139,7 @@
     {
       "name": "annotations",
       "type": "map(string)",
+      "reservedKeyPrefixes": ["duplocloud.ai/"],
       "optional": true,
       "requestPath": "spec.k8sResource.metadata.annotations",
       "dataSourceResponsePaths": ["result.k8sResource.metadata.annotations"],
