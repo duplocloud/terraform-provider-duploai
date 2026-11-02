@@ -71,7 +71,7 @@ func (v reservedKeyPrefixValidator) ValidateMap(_ context.Context, req validator
 	}
 	sort.Strings(keys)
 	resp.Diagnostics.AddAttributeWarning(req.Path, "Reserved key is not applied",
-		fmt.Sprintf("%s: keys starting with %s are reserved by the platform, which removes them from the object, "+
-			"so they never reach state and every plan shows them as an update. Remove them from the configuration.",
+		fmt.Sprintf("%s: keys starting with %s are reserved by the platform, which removes them from the object. "+
+			"Remove them from the configuration.",
 			strings.Join(keys, ", "), strings.Join(v.prefixes, ", ")))
 }
