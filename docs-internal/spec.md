@@ -528,13 +528,11 @@ When the base value (the plan on create/update, prior state on refresh) is known
 the engine puts response elements in the base's key order and drops response
 elements whose key is not in the base. A configured key the API no longer
 returns still shows as drift, and so do changed values. With no base (import, or
-the attribute unset) the full response is kept. On plan, elements that exist
-only in state (key absent from config, e.g. after import) are not a change: if
-the plan matches state apart from them (ignoring computed leaves unset in
-config), an optional+computed attribute is planned at its state value and the
-other computed outputs keep their state values, so the first plan after import
-is empty. Any edited value, added key or removed configured key still plans an
-update. Use it only when the backend
+the attribute unset) the full response is kept, so the server-added elements
+land in state and the first plan after **import** shows one in-place update
+(the config lacks them). Applying it is safe: the backend keeps the stored
+`externalId` when the update leaves it out, and the next refresh aligns state to
+the config. Use it only when the backend
 keeps server-added elements that an update leaves out; otherwise dropping them
 from state would delete them on the next write.
 

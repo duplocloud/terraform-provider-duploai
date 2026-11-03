@@ -41,7 +41,6 @@ install_docker: build
 	mv ${BINARY} ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/${OS_ARCH_DOCKER}
 
 test:
-	go test -i $(TEST) || exit 1
 	echo $(TEST) | CGO_ENABLED=1 xargs -t -n4 go test -race $(TESTARGS) -timeout=120s -parallel=4
 
 testacc:

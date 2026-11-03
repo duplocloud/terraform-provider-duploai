@@ -11,9 +11,10 @@ import (
 
 // DUPLOAI-4739 follow-up: after `terraform import`, state holds the
 // server-generated externalId in credential_fields (there is no base to align
-// against), while config lists only iamRoleArn. ModifyPlan must treat that
-// state-only keyed element as "no change": plan credentials = state and keep
-// created_at/updated_at/version at their state values.
+// against), while config lists only iamRoleArn. The first plan is one in-place
+// update (the backend keeps the stored externalId); ModifyPlan must leave that
+// plan untouched, because pinning it to state would also hide a key the user
+// really removed (see TestAdminProviderImport_RemovedConfiguredKeyIsUpdate).
 
 var impTopType = tftypes.Object{AttributeTypes: map[string]tftypes.Type{
 	"id":          tftypes.String,
@@ -88,6 +89,29 @@ func impPlanFields(state []tftypes.Value, kv ...string) []tftypes.Value {
 	return out
 }
 
+// impPlanFieldsByKey is impPlanFields but copies unset leaves from the state
+// element with the same key, so a removal does not also flip type/is_sensitive
+// (which would make the bodies differ for an unrelated reason).
+func impPlanFieldsByKey(state []tftypes.Value, kv ...string) []tftypes.Value {
+	var out []tftypes.Value
+	for i := 0; i < len(kv); i += 2 {
+		f := extIDPlanField(kv[i], kv[i+1])
+		for _, se := range state {
+			var fm, sm map[string]tftypes.Value
+			_ = se.As(&sm)
+			var k string
+			if sm["key"].As(&k) != nil || k != kv[i] {
+				continue
+			}
+			_ = f.As(&fm)
+			fm["type"], fm["is_sensitive"] = sm["type"], sm["is_sensitive"]
+			f = tftypes.NewValue(extIDFieldType, fm)
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
 func impModifyPlan(t *testing.T, state, plan, config tftypes.Value) tftypes.Value {
 	t.Helper()
 	resp := &resource.ModifyPlanResponse{Plan: tfsdk.Plan{Raw: plan}}
@@ -116,31 +140,27 @@ func TestAdminProviderImport_StateOnlyKeyedElementPlansNoChange(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fields := impImportedFields(extFirst)
 			state := impTop(fields, true)
-			for pname, plan := range map[string]tftypes.Value{
-				"leaves from state by index": impTop(impPlanFields(fields, "iamRoleArn", extIDRoleArn), false),
-				"leaves unknown":             impTop([]tftypes.Value{extIDPlanField("iamRoleArn", extIDRoleArn)}, false),
+			for pname, mkPlan := range map[string]func() tftypes.Value{
+				"leaves from state by index": func() tftypes.Value { return impTop(impPlanFields(fields, "iamRoleArn", extIDRoleArn), false) },
+				"leaves unknown": func() tftypes.Value {
+					return impTop([]tftypes.Value{extIDPlanField("iamRoleArn", extIDRoleArn)}, false)
+				},
 			} {
 				t.Run(pname, func(t *testing.T) {
-					got := impModifyPlan(t, state, plan, impConfig("iamRoleArn", extIDRoleArn))
-					// Compare with a freshly built state: ModifyPlan must not mutate req.State.
-					impAssertNoDiff(t, impTop(impImportedFields(extFirst), true), got)
+					got := impModifyPlan(t, state, mkPlan(), impConfig("iamRoleArn", extIDRoleArn))
+					// One in-place update: the plan is exactly what Terraform built.
+					if got.Equal(state) {
+						t.Error("import plan pinned to state; want one in-place update")
+					}
+					if !got.Equal(mkPlan()) {
+						t.Error("import plan altered by ModifyPlan; want it untouched")
+					}
 					if !state.Equal(impTop(impImportedFields(extFirst), true)) {
 						t.Error("ModifyPlan mutated the prior state value")
 					}
 				})
 			}
 		})
-	}
-}
-
-func impAssertNoDiff(t *testing.T, state, got tftypes.Value) {
-	t.Helper()
-	if !got.Equal(state) {
-		keys, _ := extIDFieldKeys(t, got)
-		var top map[string]tftypes.Value
-		_ = got.As(&top)
-		t.Errorf("import plan differs from state: credential_fields keys=%v created_at known=%v updated_at known=%v version known=%v; want plan == state (no diff)",
-			keys, top["created_at"].IsKnown(), top["updated_at"].IsKnown(), top["version"].IsKnown())
 	}
 }
 
@@ -160,14 +180,45 @@ func TestAdminProviderImport_RealChangeStillDiffs(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var kv []string
 			for _, f := range fields {
-				k, _ := objectStringField(f, "key")
-				v, _ := objectStringField(f, "value")
+				var fm map[string]tftypes.Value
+				_ = f.As(&fm)
+				var k, v string
+				_ = fm["key"].As(&k)
+				_ = fm["value"].As(&v)
 				kv = append(kv, k, v)
 			}
-			plan := impTop(impPlanFields(impImportedFields(false), kv...), false)
+			plan := impTop(impPlanFieldsByKey(impImportedFields(false), kv...), false)
 			got := impModifyPlan(t, state, plan, impConfig(kv...))
-			if !got.Equal(plan) {
+			// Compare with a freshly built plan: ModifyPlan must not mutate req.Plan.
+			if !got.Equal(impTop(impPlanFieldsByKey(impImportedFields(false), kv...), false)) {
 				t.Errorf("real change: ModifyPlan altered the plan; want it untouched (computed stay unknown, credentials as configured)")
+			}
+		})
+	}
+}
+
+// Removing a configured key (region) after import is a real update: the plan
+// must stay as Terraform built it, not be pinned back to state ("No changes").
+func TestAdminProviderImport_RemovedConfiguredKeyIsUpdate(t *testing.T) {
+	fields := []tftypes.Value{
+		extIDStateField("iamRoleArn", extIDRoleArn, true),
+		extIDStateField("region", "us-west-2", false),
+		extIDStateField("externalId", extIDGenerated, false),
+	}
+	state := impTop(fields, true)
+	for pname, mkPlan := range map[string]func() tftypes.Value{
+		"leaves from state by index": func() tftypes.Value { return impTop(impPlanFields(fields, "iamRoleArn", extIDRoleArn), false) },
+		"leaves unknown": func() tftypes.Value {
+			return impTop([]tftypes.Value{extIDPlanField("iamRoleArn", extIDRoleArn)}, false)
+		},
+	} {
+		t.Run(pname, func(t *testing.T) {
+			got := impModifyPlan(t, state, mkPlan(), impConfig("iamRoleArn", extIDRoleArn))
+			if got.Equal(state) {
+				t.Fatal("removed key region: ModifyPlan pinned plan to state (No changes); want a real update")
+			}
+			if !got.Equal(mkPlan()) {
+				t.Error("removed key region: ModifyPlan altered the plan; want it untouched")
 			}
 		})
 	}

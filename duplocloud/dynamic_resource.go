@@ -344,21 +344,7 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 		return
 	}
 	if !apiBodyEqual(planBody, stateBody) {
-		// The only difference may be server-added elements of a matchByKey list
-		// that exist in state but not in config (e.g. admin_provider's generated
-		// externalId, which import puts in state with no base to align against).
-		// Those are not a change: compare again with them removed and, if equal,
-		// fall through so the computed pinning below keeps the state value
-		// (including those elements) for the optional+computed list.
-		planCmp, stateCmp, ok := r.withoutStateOnlyKeyed(req.State.Raw, req.Plan.Raw, req.Config.Raw)
-		if !ok {
-			return // a real update — let computed outputs recompute normally
-		}
-		pb := r.bodyFromRaw(planCmp, "update", &resp.Diagnostics)
-		sb := r.bodyFromRaw(stateCmp, "update", &resp.Diagnostics)
-		if resp.Diagnostics.HasError() || !apiBodyEqual(pb, sb) {
-			return
-		}
+		return // a real update — let computed outputs recompute normally
 	}
 
 	// Single-intent updates carry their change in createPath fields that are
@@ -385,6 +371,7 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if err := req.State.Raw.As(&stateTop); err != nil {
 		return
 	}
+	planTop = copyValueMap(planTop) // As may share req.Plan's backing map
 	for _, a := range r.spec.Attributes {
 		if !a.Computed {
 			continue
@@ -394,45 +381,6 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 		}
 	}
 	resp.Plan.Raw = tftypes.NewValue(req.Plan.Raw.Type(), planTop)
-}
-
-// withoutStateOnlyKeyed prepares plan and prior state for the ModifyPlan
-// comparison: state-only elements of every top-level matchByKey list are
-// removed from state (see pruneStateOnlyKeyed), and in that attribute on both
-// sides computed leaves left unset in config are masked (see
-// maskUnsetComputed). ok is false when nothing was removed, or when such
-// elements sit under an attribute that is not computed: only an
-// optional+computed attribute may be planned at its state value in place of
-// config, so that is the only case treated as no change.
-func (r *dynamicResource) withoutStateOnlyKeyed(state, plan, config tftypes.Value) (tftypes.Value, tftypes.Value, bool) {
-	var stateTop, planTop, cfgTop map[string]tftypes.Value
-	if state.As(&stateTop) != nil || plan.As(&planTop) != nil || config.As(&cfgTop) != nil {
-		return plan, state, false
-	}
-	stateTop, planTop = copyValueMap(stateTop), copyValueMap(planTop) // As may share backing maps
-	changed := false
-	for _, a := range r.spec.Attributes {
-		sv, ok1 := stateTop[a.Name]
-		pv, ok2 := planTop[a.Name]
-		cv, ok3 := cfgTop[a.Name]
-		if !ok1 || !ok2 || !ok3 {
-			continue
-		}
-		nv, c := pruneStateOnlyKeyed(a, sv, pv)
-		if !c {
-			continue
-		}
-		if !a.Computed {
-			return plan, state, false
-		}
-		stateTop[a.Name] = maskUnsetComputed(a, nv, cv)
-		planTop[a.Name] = maskUnsetComputed(a, pv, cv)
-		changed = true
-	}
-	if !changed {
-		return plan, state, false
-	}
-	return tftypes.NewValue(plan.Type(), planTop), tftypes.NewValue(state.Type(), stateTop), true
 }
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
