@@ -155,6 +155,7 @@ func NewClient(hostURL, token string, sslNoVerify bool, timeout time.Duration) (
 		timeout = defaultTimeout
 	}
 	transport := &http.Transport{
+		Proxy:           http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: sslNoVerify}, //nolint:gosec
 	}
 	return &Client{
