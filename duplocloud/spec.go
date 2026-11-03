@@ -762,7 +762,7 @@ type AttributeSpec struct {
 	// WARN (never fail, so existing configs keep planning) about each configured
 	// key starting with one of the prefixes: keys the backend strips from the
 	// object it stores (the platform-reserved duplocloud.ai/ Kubernetes labels
-	// and annotations), so they can never round-trip and every plan re-adds them.
+	// and annotations), so they can never round-trip.
 	ReservedKeyPrefixes []string `json:"reservedKeyPrefixes,omitempty"`
 
 	// MapValuePath, for a map(string) attribute, unwraps a response whose entries
