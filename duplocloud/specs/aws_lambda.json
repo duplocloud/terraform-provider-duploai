@@ -78,7 +78,7 @@
       "optional": true,
       "createPath": "spec.createRequest.runtime",
       "updatePath": "spec.updateRequest.runtime",
-      "description": "Lambda runtime identifier (e.g. python3.12, nodejs20.x, java21, provided.al2023). Not required for container image deployments."
+      "description": "Lambda runtime identifier (e.g. python3.12, nodejs20.x, java21, provided.al2023). The platform requires it when creating a function: it currently accepts only S3 deployment packages (see `image_uri`)."
     },
     {
       "name": "handler",
@@ -88,7 +88,7 @@
       "createPath": "spec.createRequest.handler",
       "updatePath": "spec.updateRequest.handler",
       "responsePath": "result.cloudDetails.configuration.handler",
-      "description": "Function entrypoint in the format file.method (e.g. index.handler). Not required for container image deployments."
+      "description": "Function entrypoint in the format file.method (e.g. index.handler). The platform requires it when creating a function: it currently accepts only S3 deployment packages (see `image_uri`)."
     },
     {
       "name": "role_arn",
@@ -162,7 +162,7 @@
       "optional": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.code.s3Bucket",
-      "description": "S3 bucket containing the deployment package. Use with s3_key. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`)."
+      "description": "S3 bucket containing the deployment package. Use with s3_key; the platform requires both when creating a function. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`)."
     },
     {
       "name": "s3_key",
@@ -186,7 +186,7 @@
       "optional": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.code.imageUri",
-      "description": "URI of a container image in Amazon ECR. Use instead of s3_bucket/s3_key for container image deployments. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`)."
+      "description": "URI of a container image in Amazon ECR. Not usable yet: the platform currently accepts only S3 deployment packages, so creating a function with `image_uri` (instead of `s3_bucket`/`s3_key` with `runtime` and `handler`) is rejected with an error such as `runtime is required`. Changing it later has no effect on the deployed function: the platform's update only changes configuration (AWS UpdateFunctionConfiguration), not code. To deploy new code, replace the function (`terraform apply -replace=<address>`)."
     },
     {
       "name": "environment_variables",

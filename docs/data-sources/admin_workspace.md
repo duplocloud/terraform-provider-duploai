@@ -47,13 +47,14 @@ output "scope_ids" {
 - `agent_ids` (List of String) IDs of the agents assigned to this workspace.
 - `analytics_id` (String) ID of an analytics record associated with this workspace.
 - `created_at` (String) Timestamp when the workspace was created (RFC 3339, normalized to UTC at second precision).
+- `delete_protection` (Boolean) Guards the workspace against deletion. The platform enables this on every new workspace unless the request says otherwise, and while it is enabled the API refuses to delete the workspace — so `terraform destroy` fails by design. To delete the workspace, set this to false and `terraform apply` first, then destroy. Leave it unset to inherit the platform default (enabled) on create and keep the current value on update. Stored as the `delete_protection` metadata key.
 - `description` (String) Human-readable description of the workspace.
 - `email` (String) Contact email address for the workspace. Must be a valid email address when set.
 - `guardrail_id` (String) ID of an optional guardrail that constrains this workspace's capabilities.
 - `incident_ids` (List of String) IDs of the incidents assigned to this workspace.
 - `is_active` (Boolean) Whether the workspace is active.
 - `knowledge_ids` (Set of String) IDs of the knowledge bases assigned to this workspace. Provide the complete set; on update the full list replaces the previous one.
-- `meta_data` (Map of String) Free-form key/value metadata associated with the workspace.
+- `meta_data` (Map of String) Free-form key/value metadata associated with the workspace. The `delete_protection` key is managed by the delete_protection attribute: it is hidden from this map unless you list it here, and when both are set the delete_protection attribute wins.
 - `name` (String) Unique name of the workspace. The server stores the name in lowercase, so supply a lowercase value to avoid configuration drift. Changing the name forces a new resource.
 - `persona_ids` (Set of String) IDs of the personas available in this workspace. Provide the complete set; on update the full list replaces the previous one. At least one is required — a workspace with no persona has no assistant to answer with.
 - `project_ids` (List of String) IDs of the projects assigned to this workspace.

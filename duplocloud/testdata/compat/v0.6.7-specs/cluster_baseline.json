@@ -1,0 +1,716 @@
+{
+  "name": "cluster_baseline",
+  "description": "Manages a DuploCloud AI Helpdesk Kubernetes cluster baseline (control plane, networking, and optional system node group), provisionable across any supported cloud. The target cloud is selected via the `cloud` attribute \u2014 AWS (EKS), Azure (AKS), GCP (GKE), or bare Kubernetes (K8S_ONLY) \u2014 and defaults to AWS.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Clusters",
+    "deprovision": {
+      "skipWhen": [
+        {
+          "attribute": "cloud",
+          "equals": "K8S_ONLY"
+        },
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        }
+      ]
+    }
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this cluster baseline."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the cluster baseline."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Cloud scope IDs for the cluster \u2014 the cloud-provider accounts it is provisioned into. For cloud clusters leave unset \u2014 inherited from the linked network (network_id). Set explicitly when importing an on-premise / K8S_ONLY cluster, which has no linked network to inherit from. Not used when cloud is K8S_ONLY and mode is Import \u2014 use scope_id instead.\n\nThese are cloud-category scopes, not Kubernetes ones: passing one to `duploai_k8s_credentials` fails with \"is not a Kubernetes provider\". Use scope_id for that."
+    },
+    {
+      "name": "scope_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "scopeId",
+      "description": "Kubernetes scope ID for the cluster, sent as a top-level request field.\n\nAs an input it is required (and only applicable) when cloud is K8S_ONLY and mode is Import \u2014 importing an existing installer-provisioned cluster by its scope. For all other cloud/mode combinations set scope_ids instead.\n\nAs an output it is populated for every provisioned cluster: the platform creates a Kubernetes provider and scope for the cluster and stamps the scope's ID here. This is the scope `duploai_k8s_credentials` expects \u2014 pass `scope_id`, not `scope_ids`, which holds the cloud scopes and is rejected with \"is not a Kubernetes provider\"."
+    },
+    {
+      "name": "network_id",
+      "type": "string",
+      "optional": true,
+      "forceNew": true,
+      "apiPath": "spec.networkId",
+      "description": "ID of the network baseline whose VPC and subnets this cluster will use. The cluster inherits its region, VPC, subnets, and scope from this network. Required unless cloud is K8S_ONLY (which provisions no cloud network)."
+    },
+    {
+      "name": "region",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.region",
+      "description": "Cloud region (e.g. us-east-1). For Create, inherited from the linked network (network_id) \u2014 leave unset. Required for Import (identifies where the existing cluster runs)."
+    },
+    {
+      "name": "vpc_id",
+      "type": "string",
+      "computed": true,
+      "sendFromState": true,
+      "forceNew": true,
+      "apiPath": "spec.vpcId",
+      "description": "VPC ID for the cluster (AWS only). Inherited from the linked network (network_id); computed, not user-settable. For Azure see azure.vnet_id."
+    },
+    {
+      "name": "subnet_ids",
+      "type": "list(string)",
+      "computed": true,
+      "sendFromState": true,
+      "forceNew": true,
+      "apiPath": "spec.subnetIds",
+      "description": "Subnet IDs for the cluster (AWS only). Inherited from the linked network (network_id); computed, not user-settable. For Azure see azure.node_subnet_id / azure.pod_subnet_id."
+    },
+    {
+      "name": "cluster_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Standard",
+      "forceNew": true,
+      "oneOf": [
+        "Standard",
+        "Auto"
+      ],
+      "apiPath": "spec.clusterType",
+      "description": "Cluster mode: Standard (self-managed/managed node groups) or Auto (cloud-managed node lifecycle, e.g. EKS Auto Mode). Auto is AWS (EKS) only; Azure (AKS) supports only Standard."
+    },
+    {
+      "name": "cloud",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Aws",
+      "forceNew": true,
+      "oneOf": [
+        "Aws",
+        "Azure",
+        "Gcp",
+        "K8S_ONLY"
+      ],
+      "apiPath": "spec.cloud",
+      "description": "Cloud provider the cluster targets. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws."
+    },
+    {
+      "name": "skip_attribute_auto_creation",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.skipAttributeAutoCreation",
+      "description": "Skip automatic creation of cluster attributes (add-ons/managed components) during provisioning. When unset, follows the server default; set true to fully self-manage cluster attributes."
+    },
+    {
+      "name": "mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Create",
+      "forceNew": true,
+      "oneOf": [
+        "Create",
+        "Import"
+      ],
+      "apiPath": "spec.mode",
+      "description": "Provisioning mode: Create (provision a new cluster) or Import (adopt an existing cluster, identified by name + region + cloud; version, VPC, and subnets are auto-discovered). Immutable after creation."
+    },
+    {
+      "name": "version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "requestPath": "spec.version",
+      "responsePaths": [
+        "result.version",
+        "spec.version"
+      ],
+      "normalizeVersion": true,
+      "description": "Kubernetes major.minor version for the cluster (e.g. \"1.34\"). Required when mode is Create; auto-discovered when mode is Import. Read back from the live cluster at major.minor precision where the platform reports it (e.g. EKS's resolved \"1.35.6\" is stored as \"1.35\"); on Azure, which does not report a live version, the configured value is retained, so a cluster upgraded outside Terraform will not show as drift. Immutable after creation."
+    },
+    {
+      "name": "api_server_visibility",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Public",
+      "oneOf": [
+        "Public",
+        "Private",
+        "PublicAndPrivate"
+      ],
+      "apiPath": "spec.apiServerVisibility",
+      "description": "Visibility of the Kubernetes API server endpoint."
+    },
+    {
+      "name": "control_plane_logging",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.controlPlaneLogging",
+      "description": "Control plane log types to enable (api, audit, authenticator, controllerManager, scheduler). AWS (EKS) only \u2014 not supported for Azure (AKS uses diagnostic settings). When unset, defaults to none (server-assigned; list attributes take no static default)."
+    },
+    {
+      "name": "cluster_ip_cidr",
+      "type": "string",
+      "optional": true,
+      "forceNew": true,
+      "apiPath": "spec.clusterIpCidr",
+      "description": "CIDR block for the Kubernetes service IP range (e.g. 172.20.0.0/16). Defaults to the cloud provider's default when unset."
+    },
+    {
+      "name": "domain_name_filter",
+      "type": "string",
+      "optional": true,
+      "apiPath": "spec.domainNameFilter",
+      "description": "Comma-joined list of Route53 hosted-zone names that external-dns should manage for this cluster."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Cli",
+      "forceNew": true,
+      "oneOf": [
+        "Cli",
+        "IacNativeTf",
+        "IacDuploTf",
+        "DirectApiCall"
+      ],
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+    {
+      "name": "system_node_group",
+      "type": "object",
+      "optional": true,
+      "apiPath": "spec.systemNodeGroup",
+      "description": "Optional default system managed node group provisioned alongside the cluster. AWS (EKS) only \u2014 for Azure (AKS) use azure.system_node_pool instead. Leave unset to provision a bare cluster with no node groups.",
+      "attributes": [
+        {
+          "name": "instance_type",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "default": "t3.medium",
+          "apiPath": "instanceType",
+          "description": "EC2 instance type for the system node group (e.g. t3.medium)."
+        },
+        {
+          "name": "min_size",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "default": 2,
+          "apiPath": "minSize",
+          "description": "Minimum node count (must be >= 1)."
+        },
+        {
+          "name": "max_size",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "default": 3,
+          "apiPath": "maxSize",
+          "description": "Maximum node count (must be >= min_size)."
+        },
+        {
+          "name": "node_subnet_ids",
+          "type": "list(string)",
+          "computed": true,
+          "stable": true,
+          "noSend": true,
+          "apiPath": "nodeSubnetIds",
+          "description": "Private subnet IDs the system node group is placed in. Populated server-side from the linked network's private subnets."
+        }
+      ]
+    },
+    {
+      "name": "existing_iam_role_arn",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.existingIamRoleArn",
+      "description": "ARN of an existing, customer-managed IAM role for accounts that forbid IAM creation. Used as the EKS service role and the node role (system node group or Auto Mode) instead of creating them, so it must trust eks.amazonaws.com (sts:AssumeRole and sts:TagSession) and, when the cluster has nodes, ec2.amazonaws.com. With it set the baseline also creates no read-only role (so the cluster gets no -read-only Kubernetes scope) and no IAM OIDC provider: create the provider for the cluster's issuer yourself before cluster attributes or namespace IRSA can work. The value is copied to this cluster's cluster attributes, whose IRSA service accounts then use this role. Leave unset to have the baseline create its own IAM as before. The role is customer-owned: the platform never edits or deletes it. Removing it from the configuration keeps the stored value; setting a different ARN replaces this resource. AWS only, and not allowed with mode = \"Import\".",
+      "pattern": "^arn:aws(-[a-z]+)*:iam::[0-9]{12}:role/([A-Za-z0-9_+=,.@-]+/)*[A-Za-z0-9_+=,.@-]{1,64}$",
+      "patternDescription": "must be an IAM role ARN of the form arn:aws:iam::<12-digit-account>:role/<name>, e.g. arn:aws:iam::123456789012:role/platform-shared. A path is allowed (role/<path>/<name>); the name is 1-64 characters from letters, digits and + = , . @ _ -. Other AWS partitions (aws-us-gov, aws-cn, ...) are accepted; an IAM ARN never carries a region"
+    },
+    {
+      "name": "existing_kms_key_arn",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.existingKmsKeyArn",
+      "description": "ARN of an existing, customer-managed KMS key that EKS uses to envelope-encrypt this cluster's Kubernetes secrets; nothing else on the cluster uses it. Must be an enabled symmetric ENCRYPT_DECRYPT key in this cluster's region (a multi-region key is supplied by its replica's ARN in this region). The cluster's service role needs kms:Encrypt, kms:Decrypt, kms:DescribeKey and kms:ListGrants on it: the baseline grants these to the role it creates, but with existing_iam_role_arn set that role must already allow them. The cloud scope that provisions the cluster needs kms:DescribeKey and kms:CreateGrant on the key. Leave unset for no secrets encryption config, as before. The key is customer-owned: the platform never edits or deletes it. EKS can never remove or switch a cluster's secrets-encryption key, so adding this to an existing cluster, or setting a different key ARN, replaces the cluster; removing it from the configuration keeps the stored value. AWS only, and not allowed with mode = \"Import\".",
+      "pattern": "^arn:aws(-[a-z]+)*:kms:[a-z]{2,4}(-[a-z]+)+-[0-9]+:[0-9]{12}:key/([0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}|mrk-[0-9a-f]{32})$",
+      "patternDescription": "must be a full KMS key ARN of the form arn:aws:kms:<region>:<12-digit-account>:key/<key-id>, e.g. arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab. The key id is a lowercase UUID or a multi-region mrk-<32 hex> id. An alias ARN (:alias/...) is not accepted, because an alias can later be re-pointed at another key"
+    },
+    {
+      "name": "azure",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.azure",
+      "description": "Azure-specific (AKS) cluster configuration. Set only when cloud is Azure; ignored for other clouds. The VNet, subnets, region, and scope are derived from the linked network (network_id).",
+      "attributes": [
+        {
+          "name": "network_mode",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "default": "AzureCniOverlay",
+          "oneOf": [
+            "AzureCniOverlay",
+            "AzureCniPodSubnet",
+            "Kubenet"
+          ],
+          "apiPath": "networkMode",
+          "description": "AKS networking mode. AzureCniPodSubnet requires an AksPods subnet on the linked network."
+        },
+        {
+          "name": "enable_agic",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": true,
+          "apiPath": "enableAgic",
+          "description": "Enable the Application Gateway Ingress Controller (AGIC) add-on the simple way: the add-on creates a Standard_v2 Application Gateway in the linked network's Application Gateway subnet. Defaults to true, so the advanced path (an ingressApplicationGateway entry in addon_profiles) requires setting this to false explicitly - the API rejects both together."
+        },
+        {
+          "name": "addon_profiles",
+          "type": "map(object)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "addonProfiles",
+          "description": "AKS add-on profiles, keyed by the ARM add-on name (e.g. azureKeyvaultSecretsProvider, omsagent, azurepolicy). Each entry is merged as-is into the managed cluster's addonProfiles. An ingressApplicationGateway entry is allowed only when enable_agic is false (the advanced AGIC path, where you own the whole entry); its config takes either subnetId (create a gateway in that subnet of the linked network) or applicationGatewayId (attach to an existing gateway), never both, plus optional applicationGatewayName, subnetCIDR and watchNamespace. Omit this attribute to keep the add-ons the platform reports (it composes the ingressApplicationGateway entry itself when enable_agic is true); set an explicit empty map to remove them.",
+          "attributes": [
+            {
+              "name": "enabled",
+              "type": "bool",
+              "optional": true,
+              "computed": true,
+              "apiPath": "enabled",
+              "description": "Whether the add-on is enabled. When unset, the value the platform returns is used."
+            },
+            {
+              "name": "config",
+              "type": "map(string)",
+              "optional": true,
+              "computed": true,
+              "apiPath": "config",
+              "description": "Add-on specific settings, passed straight through to the ARM add-on profile's config map (e.g. logAnalyticsWorkspaceResourceID for omsagent). Computed because the platform writes into it - for ingressApplicationGateway it stamps subnetId from the linked network at create. Omit this attribute to keep whatever the server set; an explicit empty map is sent as empty and clears those values."
+            }
+          ]
+        },
+        {
+          "name": "enable_workload_identity",
+          "type": "bool",
+          "optional": true,
+          "computed": true,
+          "default": false,
+          "apiPath": "enableWorkloadIdentity",
+          "description": "Enable Azure AD Workload Identity (and the AKS OIDC issuer) for the cluster, allowing pods to authenticate to Azure AD via federated credentials instead of static secrets. See azure_oidc_issuer_url for the resulting issuer URL."
+        },
+        {
+          "name": "system_node_pool",
+          "type": "object",
+          "optional": true,
+          "computed": true,
+          "apiPath": "systemNodePool",
+          "description": "The AKS system node pool.",
+          "attributes": [
+            {
+              "name": "vm_size",
+              "type": "string",
+              "optional": true,
+              "computed": true,
+              "default": "Standard_DS2_v2",
+              "apiPath": "vmSize",
+              "description": "Azure VM size for the node pool (e.g. Standard_DS2_v2)."
+            },
+            {
+              "name": "count",
+              "type": "int",
+              "optional": true,
+              "computed": true,
+              "default": 2,
+              "apiPath": "count",
+              "description": "Initial node count (must be >= 1)."
+            },
+            {
+              "name": "enable_auto_scaling",
+              "type": "bool",
+              "optional": true,
+              "computed": true,
+              "default": true,
+              "apiPath": "enableAutoScaling",
+              "description": "Enable the AKS cluster autoscaler for this node pool."
+            },
+            {
+              "name": "min_count",
+              "type": "int",
+              "optional": true,
+              "computed": true,
+              "default": 2,
+              "apiPath": "minCount",
+              "description": "Minimum node count when autoscaling (must be >= 1)."
+            },
+            {
+              "name": "max_count",
+              "type": "int",
+              "optional": true,
+              "computed": true,
+              "default": 5,
+              "apiPath": "maxCount",
+              "description": "Maximum node count when autoscaling (must be >= min_count)."
+            }
+          ]
+        },
+        {
+          "name": "tags",
+          "type": "map(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "tags",
+          "filterResponseKeys": [
+            "duplocloud-ai-*"
+          ],
+          "description": "Tags applied to the AKS cluster. The platform adds its own managed `duplocloud-ai-*` tags server-side; those are filtered out of state so only your tags are managed by Terraform."
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    },
+    {
+      "name": "cluster_baseline_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this cluster baseline, for reference by dependent resources."
+    },
+    {
+      "name": "cluster_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "responsePaths": [
+        "result.clusterArn",
+        "result.azure.clusterId"
+      ],
+      "description": "Cloud-native identifier of the provisioned cluster, regardless of cloud — the EKS cluster ARN on AWS or the AKS cluster resource ID on Azure."
+    },
+    {
+      "name": "cluster_arn",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.clusterArn",
+      "description": "ARN of the provisioned cluster (AWS only)."
+    },
+    {
+      "name": "helpdesk_vpc_peering",
+      "type": "object",
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig",
+      "description": "AWS only. Read-only copy of the linked network's helpdesk VPC peering settings. The platform copies this across from `network_id`'s network on every write \u2014 it is never accepted from the client \u2014 and uses it to open inbound 443 for the helpdesk CIDR on the EKS control-plane security group, which is created per-cluster and is separate from the network's own security group. Null when the linked network has no peering configured, or when the cluster was given a VPC directly instead of a network. Change the setting on the network baseline, not here.",
+      "attributes": [
+        {
+          "name": "enabled",
+          "type": "bool",
+          "computed": true,
+          "apiPath": "enabled",
+          "description": "Whether helpdesk VPC peering is active for the linked network."
+        },
+        {
+          "name": "helpdesk_vpc_id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "helpdeskVpcId",
+          "description": "ID of the helpdesk VPC the linked network peers with."
+        },
+        {
+          "name": "helpdesk_account_id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "helpdeskAccountId",
+          "description": "AWS account that owns the helpdesk VPC."
+        },
+        {
+          "name": "helpdesk_region",
+          "type": "string",
+          "computed": true,
+          "apiPath": "helpdeskRegion",
+          "description": "Region of the helpdesk VPC; only meaningful when the peering crosses regions."
+        },
+        {
+          "name": "helpdesk_vpc_cidr_blocks",
+          "type": "list(string)",
+          "computed": true,
+          "apiPath": "helpdeskVpcCidrBlocks",
+          "description": "Helpdesk VPC CIDR blocks allowed inbound on 443 on the EKS control-plane security group."
+        }
+      ]
+    },
+    {
+      "name": "cluster_endpoint",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.clusterEndpoint",
+      "description": "Kubernetes API server endpoint URL."
+    },
+    {
+      "name": "oidc_issuer_url",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.oidcIssuerUrl",
+      "description": "OIDC issuer URL for IRSA."
+    },
+    {
+      "name": "certificate_authority",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.certificateAuthority",
+      "description": "Base64-encoded cluster certificate authority data."
+    },
+    {
+      "name": "cluster_sg_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "result.clusterSgId",
+      "description": "Cluster security group ID (AWS only)."
+    },
+    {
+      "name": "cluster_all_host_sg_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "result.clusterAllHostSgId",
+      "description": "Security group ID applied to all cluster hosts."
+    },
+    {
+      "name": "stack_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "result.stackId",
+      "description": "Provisioned infrastructure stack ID."
+    },
+    {
+      "name": "azure_resource_group",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.azure.resourceGroup",
+      "description": "Azure only. Resource group the AKS cluster was provisioned into."
+    },
+    {
+      "name": "azure_node_resource_group",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.azure.nodeResourceGroup",
+      "description": "Azure only. AKS-managed node resource group (the 'MC_' group)."
+    },
+    {
+      "name": "azure_fqdn",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.azure.fqdn",
+      "description": "Azure only. FQDN of the AKS API server."
+    },
+    {
+      "name": "azure_oidc_issuer_url",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.azure.oidcIssuerUrl",
+      "description": "Azure only. OIDC issuer URL for workload identity."
+    },
+    {
+      "name": "azure_provisioning_state",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.azure.provisioningState",
+      "description": "Azure only. Provisioning state of the AKS cluster (e.g. Succeeded)."
+    }
+  ],
+  "conflictsWith": [
+    [
+      "azure",
+      "control_plane_logging"
+    ],
+    [
+      "azure",
+      "system_node_group"
+    ],
+    [
+      "scope_ids",
+      "scope_id"
+    ]
+  ],
+  "requiredIf": [
+    {
+      "attribute": "network_id",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "K8S_ONLY"
+        },
+        {
+          "attribute": "mode",
+          "equals": "Create"
+        }
+      ]
+    },
+    {
+      "attribute": "version",
+      "when": [
+        {
+          "attribute": "mode",
+          "equals": "Create"
+        }
+      ]
+    },
+    {
+      "attribute": "region",
+      "when": [
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        },
+        {
+          "attribute": "network_id",
+          "isEmpty": true
+        },
+        {
+          "attribute": "cloud",
+          "notEquals": "K8S_ONLY"
+        }
+      ]
+    },
+    {
+      "attribute": "scope_id",
+      "when": [
+        {
+          "attribute": "cloud",
+          "equals": "K8S_ONLY"
+        },
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        }
+      ]
+    }
+  ],
+  "invalidWhen": [
+    {
+      "attribute": "existing_iam_role_arn",
+      "when": [
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        },
+        {
+          "attribute": "existing_iam_role_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_iam_role_arn is not allowed with mode = \"Import\": an imported cluster creates no IAM, so there is nothing for the role to replace. Remove it."
+    },
+    {
+      "attribute": "existing_iam_role_arn",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "existing_iam_role_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_iam_role_arn is AWS only: it replaces IAM the AWS baseline would create (the EKS service and node roles). Remove it, or set cloud = \"Aws\"."
+    },
+    {
+      "attribute": "existing_kms_key_arn",
+      "when": [
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        },
+        {
+          "attribute": "existing_kms_key_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_kms_key_arn is not allowed with mode = \"Import\": an imported cluster's secrets encryption is already fixed. Remove it."
+    },
+    {
+      "attribute": "existing_kms_key_arn",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "existing_kms_key_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_kms_key_arn is AWS only: it is the KMS key EKS uses to encrypt Kubernetes secrets. Remove it, or set cloud = \"Aws\"."
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned"
+  }
+}

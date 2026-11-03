@@ -53,7 +53,7 @@ func (d *dynamicDataSource) Metadata(_ context.Context, req datasource.MetadataR
 // Schema derives the data source schema from the resource spec automatically:
 //   - Path-parameter attributes (e.g. workspace_id) → Required
 //   - All other readable attributes                  → Computed
-//   - Write-only attributes (no apiPath/responsePath) → excluded
+//   - Write-only attributes (no apiPath/responsePath/dataSourceResponsePaths) → excluded
 //
 // The engine-injected "id" attribute is Required: the user supplies the object
 // ID and the engine uses it to call GET /{id}.
@@ -70,7 +70,7 @@ func (d *dynamicDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 		},
 	}
 
-	for _, a := range d.spec.Attributes {
+	for _, a := range dataSourceAttributes(d.spec.Attributes) {
 		isPathParam := pathParamSet[a.Name]
 
 		// Exclude write-only attributes that the API never returns in responses.
@@ -168,13 +168,27 @@ func (d *dynamicDataSource) read(ctx context.Context, config tfsdk.Config, diags
 	// is safe to pass even though the schema exposes only a subset.
 	// applyPreserveSplit=false: a data source has no user-managed set to split
 	// against, so a PreserveUnmanagedInto attribute reads back the full list.
-	// withoutResponseFilters: for the same reason there is no config for a map to
+	// dataSourceAttributes: for the same reason there is no config for a map to
 	// drift against, so the data source reports what the API returned rather than
-	// hiding platform-stamped keys.
-	state := buildStateRaw(withoutResponseFilters(d.spec.Attributes), config.Raw, *obj, scope, objID, true, false, diags)
+	// hiding platform-stamped keys; it also applies dataSourceResponsePaths.
+	state := buildStateRaw(dataSourceAttributes(d.spec.Attributes), config.Raw, *obj, scope, objID, true, false, diags)
 	if diags.HasError() {
 		return tftypes.Value{}, false
 	}
 	tflog.Trace(ctx, fmt.Sprintf("dynamic datasource %s Read(%s): end", d.spec.Name, objID))
 	return state, true
+}
+
+// dataSourceAttributes returns the attributes as the data source reads them:
+// without response-key filters (see withoutResponseFilters), and with each
+// top-level dataSourceResponsePaths taking over the read paths. The resource
+// never sees the override, so its refresh and plan are unaffected.
+func dataSourceAttributes(attrs []AttributeSpec) []AttributeSpec {
+	out := withoutResponseFilters(attrs)
+	for i := range out {
+		if len(out[i].DataSourceResponsePaths) > 0 {
+			out[i].ResponsePaths = out[i].DataSourceResponsePaths
+		}
+	}
+	return out
 }

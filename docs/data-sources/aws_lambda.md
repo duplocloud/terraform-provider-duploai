@@ -50,7 +50,7 @@ output "code_sha256" {
 - `environment_variables` (Map of String) Environment variables available to the function at runtime.
 - `ephemeral_storage_size` (Number) Size (in MB) of the /tmp directory available to the function. Between 512 and 10240. Defaults to 512.
 - `function_arn` (String) ARN of the deployed Lambda function.
-- `handler` (String) Function entrypoint in the format file.method (e.g. index.handler). Not required for container image deployments.
+- `handler` (String) Function entrypoint in the format file.method (e.g. index.handler). The platform requires it when creating a function: it currently accepts only S3 deployment packages (see `image_uri`).
 - `kms_key_arn` (String) ARN of a KMS key used to encrypt the function's environment variables.
 - `layers` (List of String) List of Lambda layer ARNs to attach to the function (maximum 5).
 - `memory_size` (Number) Amount of memory (in MB) allocated to the function. Defaults to 128.

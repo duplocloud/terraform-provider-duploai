@@ -23,9 +23,11 @@ Manages a DuploCloud AI Helpdesk Kubernetes StorageClass. A StorageClass is a cl
 ### Read-Only
 
 - `allow_volume_expansion` (Boolean) Whether PersistentVolumeClaims using this class may be expanded. Immutable.
+- `annotations` (Map of String) Kubernetes annotations applied to the storage class, e.g. {"storageclass.kubernetes.io/is-default-class" = "true"}. Send-only: the resource does not read this value back. The data source reports the live annotations.
 - `description` (String) Optional description.
 - `environment_id` (String) ID of the environment that owns the resource group (EKS cluster) this storage class belongs to.
 - `k8s_storage_class_id` (String) ID of this storage class, for reference by dependent resources.
+- `labels` (Map of String) Kubernetes labels applied to the storage class. Send-only: the server injects its own duplocloud.ai/* labels, so the resource does not read this value back, avoiding spurious drift. The data source reports the live labels, including server-added ones.
 - `mount_options` (List of String) Mount options for PersistentVolumes created from this class. Immutable.
 - `name` (String) Name of the storage class. Must be a DNS-1123 subdomain (lowercase alphanumeric, '-' and '.', starting and ending with an alphanumeric).
 - `parameters` (Map of String) Provisioner-specific parameters, e.g. {"type" = "gp3", "encrypted" = "true"}. Immutable in Kubernetes: changing it replaces the storage class.

@@ -502,7 +502,7 @@ func (r *dynamicResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 		// The same body a state-stored secret would contribute.
 		r.addWriteOnlyValues(req.Config.Raw, "update", updBody, func(AttributeSpec) bool { return true })
-		if updBody = r.mergeIntoCurrent(ctx, api, objID, req.Plan.Raw, updBody, &resp.Diagnostics); resp.Diagnostics.HasError() {
+		if updBody = r.mergeIntoCurrent(ctx, api, objID, req.Plan.Raw, req.Config.Raw, updBody, &resp.Diagnostics); resp.Diagnostics.HasError() {
 			saveKnownState(*final)
 			return
 		}
@@ -782,7 +782,7 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 	r.addWriteOnlyValues(req.Config.Raw, "update", body, func(a AttributeSpec) bool { return woChanged[a.Name] || a.SendOnEveryUpdate })
-	if body = r.mergeIntoCurrent(ctx, api, objID, req.Plan.Raw, body, &resp.Diagnostics); resp.Diagnostics.HasError() {
+	if body = r.mergeIntoCurrent(ctx, api, objID, req.Plan.Raw, req.Config.Raw, body, &resp.Diagnostics); resp.Diagnostics.HasError() {
 		return
 	}
 	updated, clientErr := api.Update(objID, &body)
@@ -1177,8 +1177,10 @@ func (r *dynamicResource) ImportState(ctx context.Context, req resource.ImportSt
 	// Import by identity (Terraform 1.12+: `import { identity = {...} }`) builds
 	// the same composite ID an import by ID would carry, then follows the same
 	// path — including the import mark below; the Read that follows fills in
-	// everything else.
-	if req.ID == "" && req.Identity != nil {
+	// everything else. The framework passes a null identity on an import by
+	// ID, so only an identity that carries a value selects this branch; a
+	// blank ID with an empty identity is reported as an invalid import ID.
+	if req.ID == "" && r.identityHasValue(ctx, req.Identity) {
 		id, diags := r.idFromIdentity(ctx, req.Identity)
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
@@ -1194,7 +1196,7 @@ func (r *dynamicResource) ImportState(ctx context.Context, req resource.ImportSt
 			resp.Diagnostics.AddError("Invalid import ID", msg)
 			return
 		}
-		resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), r.canonicalImportID(req.ID))...)
 	}
 	if resp.Diagnostics.HasError() {
 		return
@@ -2454,8 +2456,10 @@ func (s *ResourceSpec) attr(name string) *AttributeSpec {
 // mergeIntoCurrent implements ResourceSpec.MergeUpdateIntoCurrent: it reads the
 // current record and returns it with body overlaid. A settable attribute the
 // plan sets to null is removed from the record first, so clearing a value in
-// config still clears it. Returns body unchanged when the flag is off.
-func (r *dynamicResource) mergeIntoCurrent(ctx context.Context, api *duplosdk.RESTResource[map[string]any], objID string, plan tftypes.Value, body map[string]any, diags *diag.Diagnostics) map[string]any {
+// config still clears it. A write-only secret in use keeps its stored value, or,
+// when the record omits it and the attribute is ResendWhenOmitted, gets the
+// config value. Returns body unchanged when the flag is off.
+func (r *dynamicResource) mergeIntoCurrent(ctx context.Context, api *duplosdk.RESTResource[map[string]any], objID string, plan, config tftypes.Value, body map[string]any, diags *diag.Diagnostics) map[string]any {
 	if !r.spec.MergeUpdateIntoCurrent || body == nil {
 		return body
 	}
@@ -2479,6 +2483,7 @@ func (r *dynamicResource) mergeIntoCurrent(ctx context.Context, api *duplosdk.RE
 				deletePath(merged, strings.Split(p, "."))
 			}
 		}
+		r.resendOmittedWriteOnly(merged, config, keep)
 	}
 	// A value Terraform sends replaces that attribute as a whole: a map with a
 	// key removed in config (tags, labels) or an object with a child removed
@@ -2588,6 +2593,22 @@ func (r *dynamicResource) importIDProblem(id string) string {
 		}
 	}
 	return ""
+}
+
+// canonicalImportID returns id cut to the segments the resource has. parseID
+// already ignores anything after them, so an import ID with extra segments
+// ("ws1/obj1/junk") imports the same object as before; cutting them here keeps
+// the junk out of the state id, which otherwise never matched the identity.
+// Import only, so ids already in state are untouched.
+func (r *dynamicResource) canonicalImportID(id string) string {
+	want := len(r.endpoint.PathParams())
+	if r.spec.Association == nil {
+		want++
+	}
+	if parts, err := splitID(id, want); err == nil {
+		return strings.Join(parts, "/")
+	}
+	return id
 }
 
 // warnIgnoredChanges adds a plan warning for each configured change the
@@ -2718,6 +2739,22 @@ func (r *dynamicResource) setIdentity(ctx context.Context, state tfsdk.State, id
 	}
 }
 
+// identityHasValue reports whether an import identity sets at least one
+// identity attribute, i.e. the import came from an `identity = {...}` block
+// rather than an import ID (for which the framework supplies a null identity).
+func (r *dynamicResource) identityHasValue(ctx context.Context, identity *tfsdk.ResourceIdentity) bool {
+	if identity == nil || identity.Raw.IsNull() {
+		return false
+	}
+	for _, n := range r.identityAttrs() {
+		var v types.String
+		if diags := identity.GetAttribute(ctx, path.Root(n), &v); diags.HasError() || !v.IsNull() {
+			return true // let idFromIdentity report anything malformed
+		}
+	}
+	return false
+}
+
 // idFromIdentity composes the composite Terraform id from an import identity.
 func (r *dynamicResource) idFromIdentity(ctx context.Context, identity *tfsdk.ResourceIdentity) (string, diag.Diagnostics) {
 	var diags diag.Diagnostics
@@ -2726,6 +2763,12 @@ func (r *dynamicResource) idFromIdentity(ctx context.Context, identity *tfsdk.Re
 	for _, n := range names {
 		var v types.String
 		diags.Append(identity.GetAttribute(ctx, path.Root(n), &v)...)
+		// Values are joined with "/", so a "/" inside one would shift every
+		// later segment and could address a different object.
+		if strings.Contains(v.ValueString(), "/") {
+			diags.AddAttributeError(path.Root(n), "Invalid import identity",
+				fmt.Sprintf("%s must not contain '/', got %q.", n, v.ValueString()))
+		}
 		parts = append(parts, v.ValueString())
 	}
 	return strings.Join(parts, "/"), diags

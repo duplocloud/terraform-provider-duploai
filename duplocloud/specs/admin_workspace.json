@@ -94,7 +94,19 @@
       "optional": true,
       "computed": true,
       "apiPath": "metaData",
-      "description": "Free-form key/value metadata associated with the workspace."
+      "filterResponseKeys": [
+        "delete_protection"
+      ],
+      "description": "Free-form key/value metadata associated with the workspace. The `delete_protection` key is managed by the delete_protection attribute: it is hidden from this map unless you list it here, and when both are set the delete_protection attribute wins."
+    },
+    {
+      "name": "delete_protection",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "stringBool": true,
+      "apiPath": "metaData.delete_protection",
+      "description": "Guards the workspace against deletion. The platform enables this on every new workspace unless the request says otherwise, and while it is enabled the API refuses to delete the workspace — so `terraform destroy` fails by design. To delete the workspace, set this to false and `terraform apply` first, then destroy. Leave it unset to inherit the platform default (enabled) on create and keep the current value on update. Stored as the `delete_protection` metadata key."
     },
     {
       "name": "persona_ids",

@@ -48,6 +48,7 @@ output "status" {
 - `environment_id` (String) ID of the environment this host is provisioned in.
 - `instance_id` (String) AWS EC2 instance ID of the provisioned host.
 - `live_state` (String) Current live state of the EC2 instance (e.g. running, stopped).
+- `metadata_hop_limit` (Number) Maximum number of network hops for instance metadata service requests. Set at creation only: the platform has no update for it, so changing it later is recorded in state but not applied to the instance. To change it, replace the host (`terraform apply -replace=<address>`). The resource does not read it back; the data source reports the value recorded on the platform.
 - `metadata_service_option` (String) Instance metadata service mode. V2Only requires IMDSv2 and disables IMDSv1 (recommended). Can be changed in place.
 - `name` (String) Name of the host. Letters, numbers, and hyphens; must start with a letter or number. Cannot be changed after creation.
 - `native_host_id` (String) ID of this native host, for reference by dependent resources.

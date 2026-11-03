@@ -58,10 +58,10 @@ resource "duploai_k8s_pvc" "data" {
 
 ### Optional
 
-- `annotations` (Map of String) Kubernetes annotations applied to the persistent volume claim. Send-only (not read back).
+- `annotations` (Map of String) Kubernetes annotations applied to the persistent volume claim. Send-only: the resource does not read this value back. The data source reports the live annotations.
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
-- `labels` (Map of String) Kubernetes labels applied to the persistent volume claim. Send-only: the server injects its own duplocloud.ai/* labels, so this value is not read back to avoid spurious drift.
+- `labels` (Map of String) Kubernetes labels applied to the persistent volume claim. Send-only: the server injects its own duplocloud.ai/* labels, so the resource does not read this value back, avoiding spurious drift. The data source reports the live labels, including server-added ones.
 - `storage_class_name` (String) Name of the StorageClass to provision from. Must be a storage class available in the cluster; when omitted the cluster's default StorageClass is used.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `volume_mode` (String) How the volume is consumed: Filesystem (default) or Block.

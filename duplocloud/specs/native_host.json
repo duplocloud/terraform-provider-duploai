@@ -128,7 +128,8 @@
       "computed": true,
       "default": 1,
       "requestPath": "spec.metadataHopLimit",
-      "description": "Maximum number of network hops for instance metadata service requests. Set at creation only: the platform has no update for it, so changing it later is recorded in state but not applied to the instance. To change it, replace the host (`terraform apply -replace=<address>`)."
+      "dataSourceResponsePaths": ["spec.metadataHopLimit"],
+      "description": "Maximum number of network hops for instance metadata service requests. Set at creation only: the platform has no update for it, so changing it later is recorded in state but not applied to the instance. To change it, replace the host (`terraform apply -replace=<address>`). The resource does not read it back; the data source reports the value recorded on the platform."
     },
     {
       "name": "subnet_type",

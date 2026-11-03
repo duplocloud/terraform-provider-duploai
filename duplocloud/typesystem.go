@@ -362,6 +362,9 @@ func primitiveCollectionSchema(a AttributeSpec, info typeInfo) schema.Attribute 
 		if len(elemValidators) > 0 {
 			o.Validators = append(o.Validators, mapvalidator.ValueStringsAre(elemValidators...))
 		}
+		if len(a.ReservedKeyPrefixes) > 0 {
+			o.Validators = append(o.Validators, reservedKeyPrefixValidator{prefixes: a.ReservedKeyPrefixes})
+		}
 		if useStateForUnknown(a) {
 			o.PlanModifiers = append(o.PlanModifiers, preserveModifier(a, mapplanmodifier.UseStateForUnknown(), mapplanmodifier.UseNonNullStateForUnknown()))
 		}
