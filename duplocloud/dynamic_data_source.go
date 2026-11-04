@@ -61,6 +61,20 @@ func (d *dynamicDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 	for _, p := range d.endpoint.PathParams() {
 		pathParamSet[p] = true
 	}
+	// Placeholders of alternateReadEndpoints routes (and their whenSet
+	// selectors) are optional inputs: unset selects another route.
+	optionalInput := make(map[string]bool)
+	for _, alt := range d.spec.AlternateReadEndpoints {
+		optionalInput[alt.WhenSet] = true
+		for _, p := range placeholders(alt.UriBase) {
+			optionalInput[p] = true
+		}
+		if alt.Read != nil {
+			for _, p := range placeholders(alt.Read.Path) {
+				optionalInput[p] = true
+			}
+		}
+	}
 
 	attrs := map[string]dsschema.Attribute{
 		d.spec.lookupName(): dsschema.StringAttribute{
@@ -71,11 +85,12 @@ func (d *dynamicDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 
 	for _, a := range d.spec.Attributes {
 		isPathParam := pathParamSet[a.Name]
+		isOptionalInput := !isPathParam && optionalInput[a.Name]
 
 		// Exclude write-only attributes that the API never returns in responses.
 		// These have no apiPath and no responsePath (only createPath/updatePath).
 		// responsePathList() also covers ResponsePaths (cloud-agnostic fallbacks).
-		if !isPathParam && len(a.responsePathList()) == 0 {
+		if !isPathParam && !isOptionalInput && len(a.responsePathList()) == 0 {
 			continue
 		}
 
@@ -86,6 +101,10 @@ func (d *dynamicDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 		if isPathParam {
 			adj.Required = true
 			adj.Optional = false
+			adj.Computed = false
+		} else if isOptionalInput {
+			adj.Required = false
+			adj.Optional = true
 			adj.Computed = false
 		} else {
 			adj.Required = false
@@ -111,8 +130,7 @@ func (d *dynamicDataSource) Read(ctx context.Context, req datasource.ReadRequest
 // source schema. Shared by the data source and its ephemeral twin
 // (dynamicEphemeralResource.Open), so both return the same values.
 func (d *dynamicDataSource) read(ctx context.Context, config tfsdk.Config, diags *diag.Diagnostics) (tftypes.Value, bool) {
-	// readPathParamScope accepts attrReader; tfsdk.Config satisfies the interface.
-	scope, _ := readPathParamScope(ctx, d.endpoint, config, diags)
+	endpoint, scope := d.selectReadEndpoint(ctx, config, diags)
 	if diags.HasError() {
 		return tftypes.Value{}, false
 	}
@@ -134,7 +152,7 @@ func (d *dynamicDataSource) read(ctx context.Context, config tfsdk.Config, diags
 		apiID = apiID[i+1:]
 	}
 
-	api := duplosdk.NewRESTResource[map[string]any](d.Client, d.endpoint, scope, nil)
+	api := duplosdk.NewRESTResource[map[string]any](d.Client, endpoint, scope, nil)
 	var obj *map[string]any
 	var clientErr duplosdk.ClientError
 	if d.spec.Endpoint.ReadFromList {
@@ -176,4 +194,38 @@ func (d *dynamicDataSource) read(ctx context.Context, config tfsdk.Config, diags
 	}
 	log.Printf("[TRACE] dynamic datasource %s Read(%s): end", d.spec.Name, objID)
 	return state, true
+}
+
+// selectReadEndpoint picks the first alternateReadEndpoints entry whose
+// whenSet attribute is known and non-null in config, else the primary
+// endpoint, and returns it with its path-parameter scope read from config.
+func (d *dynamicDataSource) selectReadEndpoint(ctx context.Context, config tfsdk.Config, diags *diag.Diagnostics) (duplosdk.Endpoint, map[string]string) {
+	for _, alt := range d.spec.buildAlternateReadEndpoints(d.endpoint) {
+		var sel types.String
+		diags.Append(config.GetAttribute(ctx, path.Root(alt.whenSet), &sel)...)
+		if diags.HasError() {
+			return duplosdk.Endpoint{}, nil
+		}
+		if sel.IsUnknown() {
+			// Falling back to the primary route here would silently call a
+			// different (e.g. admin-only) API than the one the config selects.
+			diags.AddAttributeError(path.Root(alt.whenSet), "Value not yet known",
+				alt.whenSet+" is not known yet; it selects the API route for this read. "+
+					"Make sure its value is known at plan time (for example, apply the resource it comes from first).")
+			return duplosdk.Endpoint{}, nil
+		}
+		if sel.IsNull() {
+			continue
+		}
+		scope := make(map[string]string, len(alt.params))
+		for _, p := range alt.params {
+			var v types.String
+			diags.Append(config.GetAttribute(ctx, path.Root(p), &v)...)
+			scope[p] = v.ValueString()
+		}
+		return alt.endpoint, scope
+	}
+	// readPathParamScope accepts attrReader; tfsdk.Config satisfies the interface.
+	scope, _ := readPathParamScope(ctx, d.endpoint, config, diags)
+	return d.endpoint, scope
 }

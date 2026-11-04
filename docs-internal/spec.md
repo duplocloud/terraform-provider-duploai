@@ -67,6 +67,7 @@ Saving this file, running `go generate ./...` (to regenerate docs), and running
 | `dataSourceOnly` | bool | no | When `true`, registers **only** a read-only `data.duploai_<name>` data source — no managed resource is registered. Use this for purely read-only APIs (e.g. look-up endpoints with no create/update/delete). Implies data source semantics; `dataSource` need not also be set. |
 | `ephemeral` | bool | no | Also register the data source as an **ephemeral resource** (`ephemeral "duploai_<name>"`, Terraform 1.10+) that reads the same values but is never stored in plan or state. Use for short-lived secrets (`k8s_credentials` token). Requires `dataSource` or `dataSourceOnly`; the data source stays registered, so existing configs are unaffected. Add an example at `examples/ephemeral-resources/duploai_<name>/ephemeral-resource.tf`. |
 | `lookupAttribute` | string | no | Renames the data source's engine-injected lookup key from the default `id`. Use when the value the API looks the object up by is not the object's own id, so that `id` would mislead. Requires `dataSource`/`dataSourceOnly`, and must not collide with a declared attribute. See [Renaming the lookup key](#renaming-the-lookup-key). |
+| `alternateReadEndpoints` | array | no | Data sources only: alternate read routes selected when an optional input is set (e.g. a least-privilege user route). See [Alternate read routes](#alternate-read-routes). |
 | `lookupDescription` | string | no | Overrides the lookup attribute's description (default: *"ID of the object to look up."*). Requires `lookupAttribute`. |
 | `waiter` | object | no | Async polling config. Required for resources that provision asynchronously. See [Waiter](#waiter). |
 | `association` | object | no | Makes this a link between two existing objects rather than an object of its own. See [Association resources](#association-resources). |
@@ -1126,6 +1127,44 @@ Scope and limits:
   lookup key, so a same-named spec attribute would be overwritten unnoticed.
 - `lookupDescription` without `lookupAttribute` is an error: the default text is
   only wrong when the key is not really an id.
+
+### Alternate read routes
+
+`alternateReadEndpoints` lets the data source (and its ephemeral twin) read
+from a different route when an optional input is set. `k8s_credentials` uses
+the workspace-scoped user route when `workspace_id` is set, so a non-admin
+token works, and keeps the admin route otherwise:
+
+```json
+"alternateReadEndpoints": [
+  {
+    "whenSet": "workspace_id",
+    "uriBase": "/v1/aiservicedesk/user/data/Workspaces/{workspace_id}/scopes",
+    "read": { "verb": "POST", "path": "/{id}/k8s/jitAccess" }
+  }
+],
+"attributes": [
+  { "name": "workspace_id", "type": "string", "optional": true, "description": "..." }
+]
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `whenSet` | yes | Declared string attribute; the entry applies when it is known and non-null in config. |
+| `uriBase` | yes | Replaces `endpoint.uriBase` for the read. |
+| `read` | yes | `verb` + `path` replacing `endpoint.read`. |
+
+- Entries are checked in order; the first match wins. With none matching the
+  primary `endpoint` is used unchanged, byte for byte.
+- Only `uriBase` and `read` are replaced; `notFoundResponses` and the rest of
+  `endpoint` still apply.
+- Every placeholder in `uriBase` and `read.path` must be `{id}` (the lookup
+  key) or a declared string attribute. Declare those attributes without
+  `apiPath`: on the data source they are **Optional** inputs (not Required)
+  and are echoed into state as configured (null when unset).
+- Spec-load errors: no `dataSource`/`dataSourceOnly`, unknown or non-string
+  `whenSet`, empty `uriBase`, missing `read`/`read.path`, or a placeholder with
+  no matching attribute.
 
 
 ## Waiter
