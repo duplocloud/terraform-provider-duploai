@@ -135,7 +135,7 @@ func impImportedFields(externalIDFirst bool) []tftypes.Value {
 
 func impImportedState() tftypes.Value { return impTop(impImportedFields(false), true) }
 
-func TestAdminProviderImport_StateOnlyKeyedElementPlansNoChange(t *testing.T) {
+func TestAdminProviderImport_StateOnlyKeyedElementPlansInPlaceUpdate(t *testing.T) {
 	for name, extFirst := range map[string]bool{"externalId last": false, "externalId first": true} {
 		t.Run(name, func(t *testing.T) {
 			fields := impImportedFields(extFirst)
