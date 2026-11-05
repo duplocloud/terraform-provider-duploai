@@ -221,6 +221,18 @@ func (d *dynamicDataSource) selectReadEndpoint(ctx context.Context, config tfsdk
 		for _, p := range alt.params {
 			var v types.String
 			diags.Append(config.GetAttribute(ctx, path.Root(p), &v)...)
+			if diags.HasError() {
+				return duplosdk.Endpoint{}, nil
+			}
+			// An empty value (typically a variable defaulting to "") would put an
+			// empty segment in the URL, and the API's error would not name the
+			// attribute. Reject it here, the same way as an unknown value.
+			if strings.TrimSpace(v.ValueString()) == "" {
+				diags.AddAttributeError(path.Root(p), "Empty value",
+					p+" is set but empty; it selects the API route for this read. "+
+						"Set it to a valid ID, or remove it (null) to use the default route.")
+				return duplosdk.Endpoint{}, nil
+			}
 			scope[p] = v.ValueString()
 		}
 		return alt.endpoint, scope

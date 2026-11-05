@@ -40,8 +40,10 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
 	ephschema "github.com/hashicorp/terraform-plugin-framework/ephemeral/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
@@ -532,5 +534,56 @@ func TestK8sCredentialsUserRoute_UnknownWorkspaceNeverHitsAdmin(t *testing.T) {
 		if c.path == k8sCredAdminPath {
 			t.Errorf("unknown workspace_id fell back to the admin route %s; want an error (or no call)", c.path)
 		}
+	}
+}
+
+// Review feedback: workspace_id = "" (a variable defaulting to empty)
+// passed the null check and called the user route with an empty workspace
+// segment, and the backend's error never mentioned workspace_id. An empty or
+// blank value must be a plan-readable error on workspace_id with no request.
+func TestK8sCredentialsUserRoute_EmptyWorkspaceIsAnError(t *testing.T) {
+	ctx := context.Background()
+	for _, v := range []string{"", "   "} {
+		t.Run("data_source/"+strings.ReplaceAll(v, " ", "_"), func(t *testing.T) {
+			client, calls := k8sCredServer(t)
+			d := k8sCredDataSource(t, client)
+			var sr datasource.SchemaResponse
+			d.Schema(ctx, datasource.SchemaRequest{}, &sr)
+			typ := sr.Schema.Type().TerraformType(ctx).(tftypes.Object)
+			ws := v
+			cfg := tfsdk.Config{Schema: sr.Schema, Raw: k8sCredConfig(t, typ, &ws)}
+			resp := &datasource.ReadResponse{State: tfsdk.State{Schema: sr.Schema, Raw: tftypes.NewValue(typ, nil)}}
+			d.Read(ctx, datasource.ReadRequest{Config: cfg}, resp)
+			k8sCredExpectEmptyWorkspaceError(t, resp.Diagnostics.Errors(), *calls)
+		})
+		t.Run("ephemeral/"+strings.ReplaceAll(v, " ", "_"), func(t *testing.T) {
+			client, calls := k8sCredServer(t)
+			e := k8sCredEphemeral(t, client)
+			var sr ephemeral.SchemaResponse
+			e.Schema(ctx, ephemeral.SchemaRequest{}, &sr)
+			typ := sr.Schema.Type().TerraformType(ctx).(tftypes.Object)
+			ws := v
+			cfg := tfsdk.Config{Schema: sr.Schema, Raw: k8sCredConfig(t, typ, &ws)}
+			resp := &ephemeral.OpenResponse{Result: tfsdk.EphemeralResultData{Schema: sr.Schema, Raw: tftypes.NewValue(typ, nil)}}
+			e.Open(ctx, ephemeral.OpenRequest{Config: cfg}, resp)
+			k8sCredExpectEmptyWorkspaceError(t, resp.Diagnostics.Errors(), *calls)
+		})
+	}
+}
+
+func k8sCredExpectEmptyWorkspaceError(t *testing.T, errs diag.Diagnostics, calls []k8sCredCall) {
+	t.Helper()
+	if len(calls) != 0 {
+		t.Errorf("empty workspace_id sent %d request(s) %+v; want none", len(calls), calls)
+	}
+	found := false
+	for _, e := range errs {
+		if wp, ok := e.(diag.DiagnosticWithPath); ok && wp.Path().Equal(path.Root("workspace_id")) &&
+			strings.Contains(e.Summary()+e.Detail(), "workspace_id") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("want an error on attribute workspace_id that names it, got %v", errs)
 	}
 }
