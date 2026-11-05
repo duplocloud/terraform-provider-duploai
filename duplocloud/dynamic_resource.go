@@ -371,6 +371,7 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if err := req.State.Raw.As(&stateTop); err != nil {
 		return
 	}
+	planTop = copyValueMap(planTop) // As may share req.Plan's backing map
 	for _, a := range r.spec.Attributes {
 		if !a.Computed {
 			continue
@@ -1869,6 +1870,9 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 			goVal = filterMapKeys(goVal, a.FilterResponseKeys, rawMapKeys(current[a.Name]))
 			a.FilterResponseKeys = nil
 		}
+		// matchByKey lists pair response elements with the base by key and drop
+		// server-added elements the base does not hold (see match_by_key.go).
+		goVal = alignResponseByKey(a, current[a.Name], goVal)
 		if !computedOnly && !refreshInputs {
 			// Preserve the user's configured (known) leaves and fill only the
 			// still-unknown ones from the response, so we never replace a
