@@ -28,8 +28,13 @@ The token is minted per read and expires within minutes. The data source re-fetc
 # Just-in-time Kubernetes credentials that never reach the plan or state file
 # (Terraform 1.10+). Prefer this over the data source of the same name: the
 # data source stores the token in state.
+#
+# workspace_id (the workspace the scope belongs to, e.g.
+# duploai_cluster_baseline.<name>.workspace_id) selects the least-privilege
+# user route and is required for non-admin tokens; omit it to use the admin route.
 ephemeral "duploai_k8s_credentials" "cluster" {
-  scope_id = "<kubernetes-scope-id>"
+  workspace_id = "<workspace-id>"
+  scope_id     = "<kubernetes-scope-id>"
 }
 
 # Provider configuration is an ephemeral context, so the token can be passed
@@ -47,6 +52,10 @@ provider "kubernetes" {
 ### Required
 
 - `scope_id` (String) ID of the cluster's Kubernetes scope — `duploai_cluster_baseline.<name>.scope_id`. Not the cluster id, and not one of `scope_ids` (those are the cloud scopes, and passing one fails with "is not a Kubernetes provider").
+
+### Optional
+
+- `workspace_id` (String) ID of the workspace the cluster's Kubernetes scope belongs to — e.g. `duploai_cluster_baseline.<name>.workspace_id`. Required for non-admin tokens: when set, the credentials are fetched through the workspace-scoped user route, which needs only Kubernetes JIT access in that workspace. When unset, the admin route is used, which requires an administrator token.
 
 ### Read-Only
 

@@ -67,6 +67,7 @@ Saving this file, running `go generate ./...` (to regenerate docs), and running
 | `dataSourceOnly` | bool | no | When `true`, registers **only** a read-only `data.duploai_<name>` data source — no managed resource is registered. Use this for purely read-only APIs (e.g. look-up endpoints with no create/update/delete). Implies data source semantics; `dataSource` need not also be set. |
 | `ephemeral` | bool | no | Also register the data source as an **ephemeral resource** (`ephemeral "duploai_<name>"`, Terraform 1.10+) that reads the same values but is never stored in plan or state. Use for short-lived secrets (`k8s_credentials` token). Requires `dataSource` or `dataSourceOnly`; the data source stays registered, so existing configs are unaffected. Add an example at `examples/ephemeral-resources/duploai_<name>/ephemeral-resource.tf`. |
 | `lookupAttribute` | string | no | Renames the data source's engine-injected lookup key from the default `id`. Use when the value the API looks the object up by is not the object's own id, so that `id` would mislead. Requires `dataSource`/`dataSourceOnly`, and must not collide with a declared attribute. See [Renaming the lookup key](#renaming-the-lookup-key). |
+| `alternateReadEndpoints` | array | no | Data sources only: alternate read routes selected when an optional input is set (e.g. a least-privilege user route). See [Alternate read routes](#alternate-read-routes). |
 | `lookupDescription` | string | no | Overrides the lookup attribute's description (default: *"ID of the object to look up."*). Requires `lookupAttribute`. |
 | `waiter` | object | no | Async polling config. Required for resources that provision asynchronously. See [Waiter](#waiter). |
 | `association` | object | no | Makes this a link between two existing objects rather than an object of its own. See [Association resources](#association-resources). |
@@ -342,6 +343,7 @@ to the API's JSON body. Each entry is an `AttributeSpec` object.
 | `normalizeTimestamp` | bool | For a **computed-only** `string` field, rewrite an RFC 3339 response value to one canonical spelling — UTC, a `Z` offset, whole seconds — before storing it in state. Use for every server-assigned timestamp: the write response renders one from memory at .NET tick precision (`…53.1452297Z`) while the read response renders what storage kept (`…53.145Z`), so refresh reports "Objects have changed outside of Terraform" after every apply even though nothing moved. The fraction is dropped rather than kept at a fixed width because any digit that survives is a digit the two responses could still disagree about; these fields are only read at second resolution. Normalizing both sides also absorbs the two offset spellings the platform emits (a `DateTimeOffset` with a zero offset serializes as `+00:00`, a UTC `DateTime` as `Z`). Idempotent; unparseable values and the empty string pass through untouched. One consequence to be aware of: two updates inside the same second leave the value unchanged, so `updated_at` cannot be used to distinguish them. Rejected at spec load on a non-`string` type, or on a `required`/`optional` attribute — rewriting a value the user set makes state disagree with the plan, which Terraform fails as an inconsistent result after apply. |
 | `stringBool` | bool | For a **`bool`** attribute, carry the value over the wire as the string `"true"`/`"false"` instead of a JSON boolean, and parse it back on read. Use when the field lives in a string-valued container the API cannot hold a real boolean in — chiefly a `Dictionary<string,string>` metadata map, where a JSON bool fails to deserialize (e.g. `delete_protection` at `metaData.delete_protection` on `resource_group`/`k8s_namespace`). Keeps HCL idiomatic (`delete_protection = false`) rather than forcing a quoted boolean. On read only an explicit `"true"` (case-insensitive) is true; any other non-null value is false, and an absent key stays null so a value the server dropped still surfaces as drift. Rejected at spec load on a non-`bool` type, or combined with `updateBoolTrueValue` (both rewrite the same value's wire form). |
 | `preserveOnEmptyResponse` | bool | Keep the value already held for this attribute — the configured plan value on create/update, the prior state value on refresh — whenever the API returns null or empty for it. See [Write-only fields](#write-only-fields). |
+| `matchByKey` | string | On a `list(object)`, the name of a required nested `string` attribute. Response elements are paired with the plan (apply) or prior state (refresh) by this key instead of by index; elements whose key is not held there are dropped. See [Server-added list elements](#server-added-list-elements). Not combinable with `orderByKey`. |
 | `mapValuePath` | string | For a **`map(string)`** attribute whose response entries are objects rather than plain strings, take each value from the named field. Use when the backend keeps per-entry bookkeeping alongside the value but accepts the flat `{"key":"value"}` shape on write, so Terraform can expose an ordinary `map(string)` in both directions — e.g. `resource_group.tags`, returned as `{"cost-center":{"value":"fin-1024","remove":false}}`. Entries already carrying a plain string pass through, so a mixed payload is handled; an entry whose named field is missing or non-string is dropped. Read-side only. Rejected at spec load on any type other than `map(string)`. |
 | `mapDropWhenTrue` | string | Names a sibling **boolean** inside the wrapped entry `mapValuePath` unwraps; an entry whose flag is true is omitted from state entirely. Use for a backend that soft-deletes map entries — `resource_group.tags` keeps a removed tag with `"remove":true` until a reconciler has taken it off every resource, and without this the key reappears in state on the next read and diffs forever against a config that no longer lists it. Requires `mapValuePath`. |
 | `deprecated` | string | Marks the attribute deprecated: the message is wired to the framework's `DeprecationMessage` and shown as a warning whenever the attribute is set in config. Use when renaming an attribute — keep the old one with a deprecation message pointing at the replacement (pair with `conflictsWith` + `requiredIf`/`isEmpty` for a backwards-compatible rename). |
@@ -506,6 +508,34 @@ value is kept. Any other response value wins, so a real change is still picked u
   Terraform is not detected. Say so in the attribute's `description`.
 - On **import** there is no held value, so the resolved value lands in state and
   the first apply adopts the configured one (one in-place update).
+
+### Server-added list elements
+
+Some backends append elements to a `list(object)` that the user never
+configured. `admin_provider` is one: for an AWS role credential sent without an
+`externalId`, the server generates one and adds `{key: "externalId"}` to
+`dataEx`. Elements are paired by index by default, so the extra element makes
+apply fail with "inconsistent result after apply" and refresh show a diff that
+never converges.
+
+Set `matchByKey` to a required nested string attribute:
+
+```json
+{ "name": "credential_fields", "type": "list(object)", "optional": true, "computed": true,
+  "apiPath": "dataEx", "matchByKey": "key", "attributes": [ ... ] }
+```
+
+When the base value (the plan on create/update, prior state on refresh) is known,
+the engine puts response elements in the base's key order and drops response
+elements whose key is not in the base. A configured key the API no longer
+returns still shows as drift, and so do changed values. With no base (import, or
+the attribute unset) the full response is kept, so the server-added elements
+land in state and the first plan after **import** shows one in-place update
+(the config lacks them). Applying it is safe: the backend keeps the stored
+`externalId` when the update leaves it out, and the next refresh aligns state to
+the config. Use it only when the backend
+keeps server-added elements that an update leaves out; otherwise dropping them
+from state would delete them on the next write.
 
 ### Server-managed map keys
 
@@ -1126,6 +1156,44 @@ Scope and limits:
   lookup key, so a same-named spec attribute would be overwritten unnoticed.
 - `lookupDescription` without `lookupAttribute` is an error: the default text is
   only wrong when the key is not really an id.
+
+### Alternate read routes
+
+`alternateReadEndpoints` lets the data source (and its ephemeral twin) read
+from a different route when an optional input is set. `k8s_credentials` uses
+the workspace-scoped user route when `workspace_id` is set, so a non-admin
+token works, and keeps the admin route otherwise:
+
+```json
+"alternateReadEndpoints": [
+  {
+    "whenSet": "workspace_id",
+    "uriBase": "/v1/aiservicedesk/user/data/Workspaces/{workspace_id}/scopes",
+    "read": { "verb": "POST", "path": "/{id}/k8s/jitAccess" }
+  }
+],
+"attributes": [
+  { "name": "workspace_id", "type": "string", "optional": true, "description": "..." }
+]
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `whenSet` | yes | Declared string attribute; the entry applies when it is known and non-null in config. |
+| `uriBase` | yes | Replaces `endpoint.uriBase` for the read. |
+| `read` | yes | `verb` + `path` replacing `endpoint.read`. |
+
+- Entries are checked in order; the first match wins. With none matching the
+  primary `endpoint` is used unchanged, byte for byte.
+- Only `uriBase` and `read` are replaced; `notFoundResponses` and the rest of
+  `endpoint` still apply.
+- Every placeholder in `uriBase` and `read.path` must be `{id}` (the lookup
+  key) or a declared string attribute. Declare those attributes without
+  `apiPath`: on the data source they are **Optional** inputs (not Required)
+  and are echoed into state as configured (null when unset).
+- Spec-load errors: no `dataSource`/`dataSourceOnly`, unknown or non-string
+  `whenSet`, empty `uriBase`, missing `read`/`read.path`, or a placeholder with
+  no matching attribute.
 
 
 ## Waiter

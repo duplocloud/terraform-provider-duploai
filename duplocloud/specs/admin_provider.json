@@ -86,6 +86,7 @@
           "optional": true,
           "computed": true,
           "apiPath": "dataEx",
+          "matchByKey": "key",
           "description": "Key/value credential fields (e.g. accessKeyId, password, iamRoleArn).",
           "attributes": [
             {
@@ -153,6 +154,7 @@
           "optional": true,
           "computed": true,
           "apiPath": "dataEx",
+          "matchByKey": "key",
           "description": "Key/value credential fields.",
           "attributes": [
             {
@@ -203,6 +205,7 @@
       "name": "created_at",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,
       "description": "Timestamp when the provider was created (RFC 3339, normalized to UTC at second precision)."

@@ -183,6 +183,17 @@ type ResourceSpec struct {
 	// operations. Implies DataSource semantics; DataSource need not also be set.
 	DataSourceOnly bool `json:"dataSourceOnly,omitempty"`
 
+	// AlternateReadEndpoints lets a data source (and its ephemeral twin) read
+	// from a different route when a given input is set. Entries are checked in
+	// order; the first whose whenSet attribute is known and non-null in config
+	// replaces endpoint.uriBase and endpoint.read for that read. When none
+	// matches the primary endpoint is used unchanged. Placeholders other than
+	// {id} must name declared string attributes; on the data source they are
+	// Optional inputs echoed into state as configured. Requires dataSource or
+	// dataSourceOnly. E.g. k8s_credentials uses the user-scoped jitAccess route
+	// when workspace_id is set and the admin route otherwise.
+	AlternateReadEndpoints []AlternateReadEndpointSpec `json:"alternateReadEndpoints,omitempty"`
+
 	// SingleIntentUpdate configures the "one update intent per call" flow used by
 	// APIs (e.g. AWS MSK) that accept a single discrete update at a time —
 	// identified by a discriminator field plus one target value — and require the
@@ -322,6 +333,81 @@ type EndpointSpec struct {
 	// unwrapping to createFromList rather than re-diagnosing it: the knob is
 	// deliberately absent while nothing needs it.
 	CreateReturnsList bool `json:"createReturnsList,omitempty"`
+}
+
+// AlternateReadEndpointSpec is one ResourceSpec.AlternateReadEndpoints entry.
+type AlternateReadEndpointSpec struct {
+	WhenSet string         `json:"whenSet"`
+	UriBase string         `json:"uriBase"`
+	Read    *OperationSpec `json:"read,omitempty"`
+}
+
+// alternateReadEndpoint is a built AlternateReadEndpointSpec.
+type alternateReadEndpoint struct {
+	whenSet  string
+	endpoint duplosdk.Endpoint
+	params   []string // placeholders in uriBase + read.path, excluding {id}
+}
+
+var specPathParamRe = regexp.MustCompile(`\{(\w+)\}`)
+
+// placeholders returns the {name} tokens of tmpl other than {id}, in order.
+func placeholders(tmpl string) []string {
+	var out []string
+	for _, m := range specPathParamRe.FindAllStringSubmatch(tmpl, -1) {
+		if m[1] != "id" {
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
+
+// buildAlternateReadEndpoints derives each alternate read endpoint from the
+// primary one, replacing only uriBase and read so every other setting
+// (not-found rules, sensitive paths) carries over.
+func (s *ResourceSpec) buildAlternateReadEndpoints(primary duplosdk.Endpoint) []alternateReadEndpoint {
+	out := make([]alternateReadEndpoint, 0, len(s.AlternateReadEndpoints))
+	for _, a := range s.AlternateReadEndpoints {
+		ep := primary
+		ep.UriBase = a.UriBase
+		ep.Read = duplosdk.Operation{}
+		if a.Read != nil {
+			ep.Read = duplosdk.Operation{Verb: a.Read.Verb, Path: a.Read.Path}
+		}
+		out = append(out, alternateReadEndpoint{
+			whenSet:  a.WhenSet,
+			endpoint: ep,
+			params:   placeholders(a.UriBase + ep.Read.Path),
+		})
+	}
+	return out
+}
+
+func (s *ResourceSpec) validateAlternateReadEndpoints() error {
+	if len(s.AlternateReadEndpoints) == 0 {
+		return nil
+	}
+	if !s.DataSource && !s.DataSourceOnly {
+		return fmt.Errorf("alternateReadEndpoints requires dataSource or dataSourceOnly")
+	}
+	for i, a := range s.AlternateReadEndpoints {
+		if a.WhenSet == "" || s.attr(a.WhenSet) == nil {
+			return fmt.Errorf("alternateReadEndpoints[%d]: whenSet references unknown attribute %q", i, a.WhenSet)
+		}
+		if s.attr(a.WhenSet).Type != "string" {
+			return fmt.Errorf("alternateReadEndpoints[%d]: whenSet attribute %q must be a string", i, a.WhenSet)
+		}
+		if a.UriBase == "" {
+			return fmt.Errorf("alternateReadEndpoints[%d]: uriBase is required", i)
+		}
+		if a.Read == nil || a.Read.Path == "" {
+			return fmt.Errorf("alternateReadEndpoints[%d]: read with a path is required", i)
+		}
+		if err := s.checkPathParams(placeholders(a.UriBase + a.Read.Path)); err != nil {
+			return fmt.Errorf("alternateReadEndpoints[%d]: %w", i, err)
+		}
+	}
+	return nil
 }
 
 // BuildEndpoint converts this spec's EndpointSpec into a duplosdk.Endpoint
@@ -694,6 +780,17 @@ type AttributeSpec struct {
 	// Azure network subnets/NAT gateways/NSG rules keyed by name). The named
 	// nested attribute must exist and be of type string.
 	OrderByKey string `json:"orderByKey,omitempty"`
+
+	// MatchByKey, for a list(object) attribute, names a nested string attribute
+	// used to pair response elements with the plan (apply) or prior state
+	// (refresh) instead of by index. Response elements are put in the base's key
+	// order and elements whose key is not in the base are dropped, so a backend
+	// that appends server-generated elements (admin_provider credential_fields:
+	// a generated AWS externalId) causes neither an inconsistent result nor a
+	// perpetual diff. With no base (import, unset) the full response is kept.
+	// The named nested attribute must exist, be a string, and be required.
+	// Mutually exclusive with orderByKey.
+	MatchByKey string `json:"matchByKey,omitempty"`
 
 	// UpdateIntent, when set (and the resource has SingleIntentUpdate), makes this
 	// attribute mutable via a single-intent update: a change issues a dedicated
@@ -1094,6 +1191,9 @@ func (s *ResourceSpec) validate() error {
 	}
 	if s.Ephemeral && !s.DataSource && !s.DataSourceOnly {
 		return fmt.Errorf("ephemeral requires dataSource or dataSourceOnly")
+	}
+	if err := s.validateAlternateReadEndpoints(); err != nil {
+		return err
 	}
 	for _, r := range s.RequiredIf {
 		if !seen[r.Attribute] {
@@ -1564,6 +1664,21 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			}
 			if keyAttr.Type != "string" {
 				return nil, fmt.Errorf("attribute %q: orderByKey nested attribute %q must be a string", a.Name, a.OrderByKey)
+			}
+		}
+		if a.MatchByKey != "" {
+			if a.Type != "list(object)" {
+				return nil, fmt.Errorf("attribute %q: matchByKey is only valid on list(object)", a.Name)
+			}
+			if a.OrderByKey != "" {
+				return nil, fmt.Errorf("attribute %q: matchByKey and orderByKey are mutually exclusive", a.Name)
+			}
+			keyAttr := findAttr(a.Attributes, a.MatchByKey)
+			if keyAttr == nil {
+				return nil, fmt.Errorf("attribute %q: matchByKey references unknown nested attribute %q", a.Name, a.MatchByKey)
+			}
+			if keyAttr.Type != "string" || !keyAttr.Required {
+				return nil, fmt.Errorf("attribute %q: matchByKey nested attribute %q must be a required string", a.Name, a.MatchByKey)
 			}
 		}
 		if info.elem == "object" {
