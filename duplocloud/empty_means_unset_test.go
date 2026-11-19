@@ -74,11 +74,9 @@ func TestEmptyMeansUnset_Plan(t *testing.T) {
 			}
 		})
 	}
-	// Unknown config (a key from another resource) over an empty state is not decided:
-	// it is plain forceNew. Skipping the replacement would let a real key arriving at
-	// apply change an immutable field with no replacement, silently discarded.
-	if plan, replace := planKMS(t, types.StringValue(""), types.StringUnknown()); !replace || !plan.IsUnknown() {
-		t.Errorf("an unknown config over an empty state keeps plain forceNew behaviour, got replace=%v plan=%v", replace, plan)
+	// Unknown config (a value from another resource): not decided, never a spurious replacement of "".
+	if _, replace := planKMS(t, types.StringValue(""), types.StringUnknown()); replace {
+		t.Error("an unknown config over an empty state must not replace")
 	}
 }
 
@@ -130,10 +128,10 @@ func TestEmptyMeansUnset_KeepOnRead(t *testing.T) {
 func TestEmptyMeansUnset_Validation(t *testing.T) {
 	bad := []AttributeSpec{
 		{Name: "x", Type: "int", Optional: true, Computed: true, ForceNew: true, EmptyMeansUnset: true},
-		{Name: "x", Type: "string", Optional: true, Computed: true, EmptyMeansUnset: true}, // not forceNew
-		{Name: "x", Type: "string", Optional: true, ForceNew: true, EmptyMeansUnset: true}, // not computed
-		{Name: "x", Type: "string", Required: true, ForceNew: true, EmptyMeansUnset: true}, // required
-		{Name: "x", Type: "string", Computed: true, ForceNew: true, EmptyMeansUnset: true}, // computed only
+		{Name: "x", Type: "string", Optional: true, Computed: true, EmptyMeansUnset: true},                 // not forceNew
+		{Name: "x", Type: "string", Optional: true, ForceNew: true, EmptyMeansUnset: true},                 // not computed
+		{Name: "x", Type: "string", Required: true, ForceNew: true, EmptyMeansUnset: true},                 // required
+		{Name: "x", Type: "string", Computed: true, ForceNew: true, EmptyMeansUnset: true},                 // computed only
 	}
 	for i, a := range bad {
 		if _, err := validateAttributes([]AttributeSpec{a}); err == nil || !strings.Contains(err.Error(), "emptyMeansUnset") {
@@ -148,10 +146,7 @@ func TestEmptyMeansUnset_Validation(t *testing.T) {
 // The shipped RDS specs carry the flag, so the fix cannot be silently dropped.
 func TestEmptyMeansUnset_RDSSpecsOptIn(t *testing.T) {
 	for _, name := range []string{"rds_cluster", "rds_instance"} {
-		spec := customerManagedSpecs(t)[name]
-		if spec == nil {
-			t.Fatalf("no embedded spec %q", name)
-		}
+		spec := mustLoadSpec(t, name)
 		found := false
 		for _, a := range spec.Attributes {
 			if a.Name == "kms_key_id" {
