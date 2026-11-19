@@ -511,7 +511,16 @@ TF_CLI_CONFIG_FILE=../.terraformrc terraform plan  # should show no changes
 TF_ACC=1 go test ./... -v -timeout 120m
 ```
 
-These run against a real backend. Not run automatically on PRs — add the `run-acceptance` label to trigger them in CI.
+They run against a real backend and **only locally**: the repo is public and DuploAI tokens expire with
+the session, so CI cannot hold one. Run them before a release with your current session:
+
+```bash
+DUPLO_HOST=<host> DUPLO_TOKEN=<token> make testacc
+```
+
+The k8s tests also need `DUPLO_TEST_WORKSPACE_ID`, `DUPLO_TEST_ENVIRONMENT_ID`,
+`DUPLO_TEST_K8S_RESOURCE_GROUP_ID` and `DUPLO_TEST_K8S_NAMESPACE` (they skip when unset). To test an older
+Terraform, point `TF_ACC_TERRAFORM_PATH` at that binary (e.g. 1.9, which ignores resource identity).
 
 ---
 

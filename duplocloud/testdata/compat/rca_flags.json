@@ -1,0 +1,718 @@
+{
+  "note": "RCA flags pinned by rca_guard_test.go; regenerate with UPDATE_RCA_FLAGS=1 go test ./duplocloud -run TestRCAFlags_Generate",
+  "attributes": {
+    "admin_ai_agent.created_at": [
+      "stable"
+    ],
+    "admin_command_policy.created_at": [
+      "stable"
+    ],
+    "admin_command_policy_mapping.created_at": [
+      "stable"
+    ],
+    "admin_permission_set.created_at": [
+      "stable"
+    ],
+    "admin_persona.created_at": [
+      "stable"
+    ],
+    "admin_provider.created_at": [
+      "stable"
+    ],
+    "admin_provider.credentials.credential_fields.value": [
+      "preserveOnEmptyResponse"
+    ],
+    "admin_provider.system_credential.credential_fields.value": [
+      "preserveOnEmptyResponse"
+    ],
+    "admin_quota_definition.created_at": [
+      "stable"
+    ],
+    "admin_quota_mapping.created_at": [
+      "stable"
+    ],
+    "admin_scope.created_at": [
+      "stable"
+    ],
+    "admin_skill.created_at": [
+      "stable"
+    ],
+    "admin_user.created_at": [
+      "stable"
+    ],
+    "admin_workspace.created_at": [
+      "stable"
+    ],
+    "app_service.app_service_id": [
+      "stable"
+    ],
+    "app_service.hpa_name": [
+      "stableUnlessChanged:hpa"
+    ],
+    "app_service.ingress_name": [
+      "stableUnlessChanged:ingress"
+    ],
+    "app_service.service_name": [
+      "stableUnlessChanged:service"
+    ],
+    "aws_efs.aws_efs_id": [
+      "stable"
+    ],
+    "aws_efs.backup": [
+      "importAdoptsConfig"
+    ],
+    "aws_efs.file_system_arn": [
+      "stable"
+    ],
+    "aws_efs.file_system_id": [
+      "stable"
+    ],
+    "aws_efs.provisioner_type": [
+      "stable"
+    ],
+    "aws_lambda.aws_lambda_id": [
+      "stable"
+    ],
+    "aws_lambda.function_arn": [
+      "stable"
+    ],
+    "aws_secret.arn": [
+      "stable"
+    ],
+    "aws_secret.aws_secret_id": [
+      "stable"
+    ],
+    "azure_key_vault.created_at": [
+      "stable"
+    ],
+    "azure_key_vault.key_vault_id": [
+      "stable"
+    ],
+    "azure_key_vault.purge_on_deprovision": [
+      "preserveOnEmptyResponse"
+    ],
+    "azure_key_vault.scope_ids": [
+      "sendFromState"
+    ],
+    "azure_key_vault.tenant_id": [
+      "stable"
+    ],
+    "azure_key_vault.vault_record_id": [
+      "stable"
+    ],
+    "azure_key_vault.vault_uri": [
+      "stable"
+    ],
+    "azure_key_vault_secret.value": [
+      "preserveOnEmptyResponse"
+    ],
+    "azure_managed_redis.azure_resource_group_name": [
+      "sendFromState"
+    ],
+    "azure_managed_redis.cluster_id": [
+      "stable"
+    ],
+    "azure_managed_redis.created_at": [
+      "stable"
+    ],
+    "azure_managed_redis.database_id": [
+      "stable"
+    ],
+    "azure_managed_redis.host_name": [
+      "stable"
+    ],
+    "azure_managed_redis.port": [
+      "stable"
+    ],
+    "azure_managed_redis.redis_id": [
+      "stable"
+    ],
+    "azure_managed_redis.reported_modules": [
+      "sendFromState"
+    ],
+    "azure_managed_redis.scope_ids": [
+      "sendFromState"
+    ],
+    "azure_managed_redis.unique_cloud_resource_id": [
+      "sendFromState"
+    ],
+    "azure_node_pool.arm_resource_id": [
+      "stable"
+    ],
+    "azure_node_pool.azure_cluster_name": [
+      "sendFromState"
+    ],
+    "azure_node_pool.azure_cluster_resource_group_name": [
+      "sendFromState"
+    ],
+    "azure_node_pool.cluster_id": [
+      "sendFromState"
+    ],
+    "azure_node_pool.created_at": [
+      "stable"
+    ],
+    "azure_node_pool.node_pool_id": [
+      "stable"
+    ],
+    "azure_node_pool.scope_ids": [
+      "sendFromState"
+    ],
+    "azure_node_pool.unique_cloud_resource_id": [
+      "sendFromState"
+    ],
+    "azure_postgres_flexible_server.administrator_password": [
+      "preserveOnEmptyResponse"
+    ],
+    "azure_postgres_flexible_server.created_at": [
+      "stable"
+    ],
+    "azure_postgres_flexible_server.delegated_subnet_resource_id": [
+      "caseInsensitive"
+    ],
+    "azure_postgres_flexible_server.fully_qualified_domain_name": [
+      "stable"
+    ],
+    "azure_postgres_flexible_server.postgres_server_id": [
+      "preserveOnEmptyResponse",
+      "stable"
+    ],
+    "azure_postgres_flexible_server.private_dns_zone_arm_resource_id": [
+      "caseInsensitive"
+    ],
+    "azure_postgres_flexible_server.scope_ids": [
+      "sendFromState"
+    ],
+    "azure_postgres_flexible_server.server_id": [
+      "stable"
+    ],
+    "azure_private_endpoint.created_at": [
+      "stable"
+    ],
+    "azure_private_endpoint.private_endpoint_arm_id": [
+      "stable"
+    ],
+    "azure_private_endpoint.private_endpoint_id": [
+      "stable"
+    ],
+    "azure_private_endpoint.scope_ids": [
+      "stable"
+    ],
+    "azure_private_endpoint.subnet_id": [
+      "caseInsensitive"
+    ],
+    "azure_private_endpoint.target_resource_arm_id": [
+      "caseInsensitive"
+    ],
+    "azure_private_endpoint.unique_cloud_resource_id": [
+      "stable"
+    ],
+    "cluster_attributes.cf_stack_name": [
+      "stable"
+    ],
+    "cluster_attributes.cluster_attributes_id": [
+      "stable"
+    ],
+    "cluster_baseline.azure_fqdn": [
+      "stable"
+    ],
+    "cluster_baseline.azure_node_resource_group": [
+      "stable"
+    ],
+    "cluster_baseline.azure_oidc_issuer_url": [
+      "stable"
+    ],
+    "cluster_baseline.azure_resource_group": [
+      "stable"
+    ],
+    "cluster_baseline.certificate_authority": [
+      "stable"
+    ],
+    "cluster_baseline.cluster_all_host_sg_id": [
+      "stable"
+    ],
+    "cluster_baseline.cluster_arn": [
+      "stable"
+    ],
+    "cluster_baseline.cluster_baseline_id": [
+      "stable"
+    ],
+    "cluster_baseline.cluster_endpoint": [
+      "stable"
+    ],
+    "cluster_baseline.cluster_id": [
+      "stable"
+    ],
+    "cluster_baseline.cluster_sg_id": [
+      "stable"
+    ],
+    "cluster_baseline.oidc_issuer_url": [
+      "stable"
+    ],
+    "cluster_baseline.stack_id": [
+      "stable"
+    ],
+    "cluster_baseline.subnet_ids": [
+      "sendFromState"
+    ],
+    "cluster_baseline.system_node_group.node_subnet_ids": [
+      "stable"
+    ],
+    "cluster_baseline.vpc_id": [
+      "sendFromState"
+    ],
+    "ecr.created_at": [
+      "stable"
+    ],
+    "ecr.ecr_id": [
+      "stable"
+    ],
+    "ecr.registry_id": [
+      "stable"
+    ],
+    "ecr.repository_arn": [
+      "stable"
+    ],
+    "ecr.repository_uri": [
+      "stable"
+    ],
+    "elasticache.auth_token": [
+      "preserveOnEmptyResponse"
+    ],
+    "elasticache.auth_token_secret_arn": [
+      "stableUnlessChanged:auth_token",
+      "stableUnlessChanged:auth_token_wo_version",
+      "stableUnlessChanged:transit_encryption_enabled"
+    ],
+    "elasticache.auth_token_wo": [
+      "resendWhenOmitted"
+    ],
+    "elasticache.configuration_endpoint": [
+      "preserveOnEmptyResponse",
+      "stable"
+    ],
+    "elasticache.elasticache_id": [
+      "stable"
+    ],
+    "elasticache.primary_endpoint": [
+      "preserveOnEmptyResponse",
+      "stable"
+    ],
+    "elasticache.reader_endpoint": [
+      "preserveOnEmptyResponse",
+      "stable"
+    ],
+    "elasticache.stack_id": [
+      "preserveOnEmptyResponse",
+      "stable"
+    ],
+    "environment.created_at": [
+      "stable"
+    ],
+    "environment.environment_id": [
+      "stable"
+    ],
+    "environment.ever_completed": [
+      "sendFromState"
+    ],
+    "environment.owner_workspace_id": [
+      "stable"
+    ],
+    "environment.status": [
+      "sendFromState"
+    ],
+    "git_repository.scope_ids": [
+      "sendFromState"
+    ],
+    "helm_release.helm_release_id": [
+      "stable"
+    ],
+    "helm_release.provisioner_version": [
+      "importAdoptsConfig"
+    ],
+    "helm_repository.helm_repository_id": [
+      "stable"
+    ],
+    "helm_repository.scope_ids": [
+      "sendFromState"
+    ],
+    "k8s_config_map.k8s_config_map_id": [
+      "stable"
+    ],
+    "k8s_config_map.provisioner_version": [
+      "importAdoptsConfig"
+    ],
+    "k8s_cron_job.k8s_cron_job_id": [
+      "stable"
+    ],
+    "k8s_ingress.k8s_ingress_id": [
+      "stable"
+    ],
+    "k8s_job.k8s_job_id": [
+      "stable"
+    ],
+    "k8s_job.labels": [
+      "importAdoptsConfig"
+    ],
+    "k8s_namespace.k8s_namespace_id": [
+      "stable"
+    ],
+    "k8s_namespace.scope_ids": [
+      "sendFromState"
+    ],
+    "k8s_pvc.k8s_pvc_id": [
+      "stable"
+    ],
+    "k8s_pvc.scope_ids": [
+      "sendFromState"
+    ],
+    "k8s_resource_quota.k8s_resource_quota_id": [
+      "stable"
+    ],
+    "k8s_secret.k8s_secret_id": [
+      "stable"
+    ],
+    "k8s_storage_class.k8s_storage_class_id": [
+      "stable"
+    ],
+    "k8s_storage_class.scope_ids": [
+      "sendFromState"
+    ],
+    "mcp_server.created_at": [
+      "stable"
+    ],
+    "msk_kafka.bootstrap_brokers": [
+      "stableUnlessChanged:number_of_broker_nodes"
+    ],
+    "msk_kafka.bootstrap_brokers_sasl_iam": [
+      "stableUnlessChanged:number_of_broker_nodes"
+    ],
+    "msk_kafka.bootstrap_brokers_sasl_scram": [
+      "stableUnlessChanged:number_of_broker_nodes"
+    ],
+    "msk_kafka.bootstrap_brokers_tls": [
+      "stableUnlessChanged:number_of_broker_nodes"
+    ],
+    "msk_kafka.cluster_arn": [
+      "stable"
+    ],
+    "msk_kafka.configuration_arn": [
+      "importAdoptsConfig"
+    ],
+    "msk_kafka.configuration_revision": [
+      "importAdoptsConfig"
+    ],
+    "msk_kafka.created_at": [
+      "stable"
+    ],
+    "msk_kafka.encryption_in_transit": [
+      "importAdoptsConfig"
+    ],
+    "msk_kafka.msk_kafka_id": [
+      "stable"
+    ],
+    "msk_kafka.security_group_ids": [
+      "stable"
+    ],
+    "msk_kafka.subnet_ids": [
+      "importAdoptsConfig"
+    ],
+    "msk_kafka_serverless.bootstrap_brokers_sasl_iam": [
+      "stable"
+    ],
+    "msk_kafka_serverless.bootstrap_brokers_tls": [
+      "stable"
+    ],
+    "msk_kafka_serverless.cluster_arn": [
+      "stable"
+    ],
+    "msk_kafka_serverless.created_at": [
+      "stable"
+    ],
+    "msk_kafka_serverless.msk_kafka_serverless_id": [
+      "stable"
+    ],
+    "msk_kafka_serverless.security_group_ids": [
+      "stable"
+    ],
+    "native_host.block_device_mappings": [
+      "importAdoptsConfig"
+    ],
+    "native_host.created_at": [
+      "stable"
+    ],
+    "native_host.ebs_optimized": [
+      "importAdoptsConfig"
+    ],
+    "native_host.image_id": [
+      "importAdoptsConfig"
+    ],
+    "native_host.instance_id": [
+      "stable"
+    ],
+    "native_host.instance_type": [
+      "importAdoptsConfig"
+    ],
+    "native_host.native_host_id": [
+      "stable"
+    ],
+    "native_host.private_ip_address": [
+      "stable"
+    ],
+    "native_host.user_data": [
+      "importAdoptsConfig"
+    ],
+    "network_baseline.azure.nat_gateways.sku": [
+      "stable"
+    ],
+    "network_baseline.azure.subnets.private_endpoint_network_policies": [
+      "stable"
+    ],
+    "network_baseline.azure_nat_gateway_ids": [
+      "stableUnlessChanged:azure"
+    ],
+    "network_baseline.azure_resource_group": [
+      "stable"
+    ],
+    "network_baseline.azure_subnet_ids": [
+      "stableUnlessChanged:additional_cidrs",
+      "stableUnlessChanged:azure",
+      "stableUnlessChanged:cidr"
+    ],
+    "network_baseline.azure_subscription_id": [
+      "stable"
+    ],
+    "network_baseline.azure_vnet_id": [
+      "stableUnlessChanged:azure"
+    ],
+    "network_baseline.nat_gateway_ids": [
+      "stableUnlessChanged:additional_cidrs",
+      "stableUnlessChanged:cidr",
+      "stableUnlessChanged:nat_mode",
+      "stableUnlessChanged:vpc_id"
+    ],
+    "network_baseline.network_id": [
+      "stable"
+    ],
+    "network_baseline.subnet_ids": [
+      "stableUnlessChanged:additional_cidrs",
+      "stableUnlessChanged:cidr",
+      "stableUnlessChanged:vpc_id"
+    ],
+    "network_baseline_security_group_rule.group_id": [
+      "stable"
+    ],
+    "network_baseline_security_group_rule.referenced_group_id": [
+      "stableUnlessChanged:source_resource_group_id"
+    ],
+    "network_baseline_security_group_rule.security_group_rule_arn": [
+      "stable"
+    ],
+    "network_baseline_security_group_rule.security_group_rule_id": [
+      "stable"
+    ],
+    "node_group.asg_name": [
+      "stable"
+    ],
+    "node_group.node_group_arn": [
+      "stable"
+    ],
+    "node_group.node_group_id": [
+      "stable"
+    ],
+    "node_group.node_group_name": [
+      "stable"
+    ],
+    "node_group.stack_id": [
+      "stable"
+    ],
+    "node_group.subnet_ids": [
+      "stable"
+    ],
+    "oci_repository.oci_repository_id": [
+      "stable"
+    ],
+    "plan.plan_id": [
+      "stable"
+    ],
+    "plan_kms_key.key_entry_id": [
+      "stable"
+    ],
+    "rds_cluster.cluster_endpoint": [
+      "stable"
+    ],
+    "rds_cluster.master_user_password": [
+      "preserveOnEmptyResponse"
+    ],
+    "rds_cluster.master_user_password_wo": [
+      "resendWhenOmitted"
+    ],
+    "rds_cluster.master_user_secret_arn": [
+      "stableUnlessChanged:manage_master_user_password",
+      "stableUnlessChanged:master_user_password",
+      "stableUnlessChanged:master_user_password_wo_version"
+    ],
+    "rds_cluster.port": [
+      "stable"
+    ],
+    "rds_cluster.rds_cluster_id": [
+      "stable"
+    ],
+    "rds_cluster.reader_endpoint": [
+      "stable"
+    ],
+    "rds_cluster.stack_id": [
+      "stable"
+    ],
+    "rds_instance.endpoint": [
+      "preserveOnEmptyResponse",
+      "stable"
+    ],
+    "rds_instance.master_user_password": [
+      "preserveOnEmptyResponse"
+    ],
+    "rds_instance.master_user_password_wo": [
+      "resendWhenOmitted"
+    ],
+    "rds_instance.port": [
+      "preserveOnEmptyResponse",
+      "stable"
+    ],
+    "rds_instance.rds_instance_id": [
+      "stable"
+    ],
+    "rds_instance.stack_id": [
+      "preserveOnEmptyResponse",
+      "stable"
+    ],
+    "resource_group.alb_security_group_id": [
+      "preserveOnEmptyResponse",
+      "stable"
+    ],
+    "resource_group.iam_role_arn": [
+      "preserveOnEmptyResponse",
+      "stable"
+    ],
+    "resource_group.iam_role_name": [
+      "preserveOnEmptyResponse",
+      "stable"
+    ],
+    "resource_group.kms_key_alias": [
+      "preserveOnEmptyResponse",
+      "stableUnlessChanged:aws_resource_name",
+      "stableUnlessChanged:provisioner_version"
+    ],
+    "resource_group.kms_key_arn": [
+      "preserveOnEmptyResponse",
+      "stableUnlessChanged:aws_resource_name",
+      "stableUnlessChanged:provisioner_version"
+    ],
+    "resource_group.resource_group_id": [
+      "stable"
+    ],
+    "resource_group.scope_ids": [
+      "sendFromState"
+    ],
+    "resource_group.security_group_id": [
+      "preserveOnEmptyResponse",
+      "stable"
+    ],
+    "resource_group.security_group_name": [
+      "preserveOnEmptyResponse",
+      "stable"
+    ],
+    "resource_group.status": [
+      "sendFromState"
+    ],
+    "resource_group_kms_key.key_entry_id": [
+      "stable"
+    ],
+    "resource_group_security_group_rule.group_id": [
+      "stable"
+    ],
+    "resource_group_security_group_rule.referenced_group_id": [
+      "stableUnlessChanged:source_resource_group_id"
+    ],
+    "resource_group_security_group_rule.security_group_rule_arn": [
+      "stable"
+    ],
+    "resource_group_security_group_rule.security_group_rule_id": [
+      "stable"
+    ],
+    "s3_bucket.bucket_arn": [
+      "stable"
+    ],
+    "s3_bucket.bucket_domain_name": [
+      "stable"
+    ],
+    "s3_bucket.s3_bucket_id": [
+      "stable"
+    ],
+    "sns.created_at": [
+      "stable"
+    ],
+    "sns.sns_id": [
+      "stable"
+    ],
+    "sns.topic_arn": [
+      "stable"
+    ],
+    "sqs.created_at": [
+      "stable"
+    ],
+    "sqs.queue_arn": [
+      "stable"
+    ],
+    "sqs.queue_url": [
+      "stable"
+    ],
+    "sqs.sqs_id": [
+      "stable"
+    ],
+    "ssm_parameter.arn": [
+      "stable"
+    ],
+    "ssm_parameter.ssm_parameter_id": [
+      "stable"
+    ],
+    "ssm_parameter.value": [
+      "preserveOnEmptyResponse"
+    ],
+    "storage_account.azure_resource_id": [
+      "stable"
+    ],
+    "storage_account.created_at": [
+      "stable"
+    ],
+    "storage_account.primary_blob_endpoint": [
+      "stable"
+    ],
+    "storage_account.primary_file_endpoint": [
+      "stable"
+    ],
+    "storage_account.primary_queue_endpoint": [
+      "stable"
+    ],
+    "storage_account.primary_table_endpoint": [
+      "stable"
+    ],
+    "storage_account.scope_ids": [
+      "sendFromState"
+    ],
+    "storage_account.storage_account_id": [
+      "stable"
+    ]
+  },
+  "mergeUpdateIntoCurrent": [
+    "aws_secret",
+    "cluster_attributes",
+    "cluster_baseline",
+    "elasticache",
+    "k8s_namespace",
+    "network_baseline",
+    "node_group",
+    "plan",
+    "rds_cluster",
+    "rds_instance",
+    "resource_group"
+  ]
+}

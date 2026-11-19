@@ -23,7 +23,7 @@ resource "duploai_msk_kafka" "example" {
   instance_type          = "kafka.m5.large"
   number_of_broker_nodes = 3
   broker_volume_size_gb  = 100
-  kafka_version          = "3.6.0"
+  kafka_version          = "3.8.x"
 
   # Optional: pin specific private subnets (one broker per AZ). Omit for all RG private subnets.
   subnet_ids = ["subnet-0a1b2c3d4e5f60001", "subnet-0a1b2c3d4e5f60002"]
@@ -51,25 +51,25 @@ output "kafka_cluster_arn" {
 - `broker_volume_size_gb` (Number) EBS storage per broker, in GiB. Can be increased in place.
 - `environment_id` (String) ID of the environment in which the cluster is provisioned.
 - `instance_type` (String) Broker instance type (e.g. kafka.m5.large). Can be changed in place.
-- `kafka_version` (String) Apache Kafka version for the cluster (e.g. 3.6.0). Can be upgraded in place.
+- `kafka_version` (String) Apache Kafka version for the cluster (e.g. 3.8.x). AWS accepts only 3.8.x and later for standard broker instance types. Can be upgraded in place.
 - `name` (String) Cluster name. Letters, numbers, and hyphens. Cannot be changed after creation.
 - `resource_group_id` (String) ID of the resource group in which the cluster is provisioned.
 - `workspace_id` (String) ID of the workspace that owns this MSK cluster.
 
 ### Optional
 
-- `configuration_arn` (String) ARN of a saved MSK (Kafka broker) configuration to apply. Leave unset for the AWS default.
-- `configuration_revision` (Number) Revision of the MSK configuration referenced by configuration_arn.
+- `configuration_arn` (String) ARN of a saved MSK (Kafka broker) configuration to apply. Leave unset for the AWS default. Changing it replaces the cluster. Not read back, so a change made outside Terraform never replaces the cluster; after `terraform import` the configured value is recorded without replacing it.
+- `configuration_revision` (Number) Revision of the MSK configuration referenced by configuration_arn. Changing it replaces the cluster. Not read back, so a change made outside Terraform never replaces the cluster; after `terraform import` the configured value is recorded without replacing it.
 - `encryption` (String) Encryption at rest. AwsManagedKey uses the AWS-managed MSK key; ResourceGroupKmsKey uses the resource group's KMS key; NoEncryption disables it. Immutable after creation.
-- `encryption_in_transit` (String) How clients connect: TLS (encrypted), TLS_PLAINTEXT (both), or PLAINTEXT (unencrypted).
+- `encryption_in_transit` (String) How clients connect: TLS (encrypted), TLS_PLAINTEXT (both), or PLAINTEXT (unencrypted). Changing it replaces the cluster. Not read back, so a change made outside Terraform never replaces the cluster; after `terraform import` the configured value is recorded without replacing it.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `kms_key_id` (String) KMS key to encrypt with, as a key id or ARN, honoured only when encryption is set to ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key) — the platform resolves it against those registries and rejects an unregistered key. Leave it unset to use the resource group's own default key. Immutable after creation.
 - `number_of_broker_nodes` (Number) Number of broker nodes. Must be a multiple of the number of broker subnets (Availability Zones); rounded up server-side. Can be increased in place.
 - `provisioner_type` (String) Provisioner type. Defaults to DirectApiCall for MSK.
 - `provisioner_version` (String) Optional provisioner version.
 - `scope_ids` (Set of String) IDs of the scopes attached to this cluster.
-- `subnet_ids` (List of String) Private subnets (2-4, each in a distinct Availability Zone) to place brokers in. Leave unset to use all of the resource group's private subnets. Write-only at creation.
-- `tags` (Map of String) Tags applied to the cluster at creation. Platform ownership tags are added automatically.
+- `subnet_ids` (List of String) Private subnets (2-4, each in a distinct Availability Zone) to place brokers in. Leave unset to use all of the resource group's private subnets. Changing it replaces the cluster. Not read back, so a change made outside Terraform never replaces the cluster; after `terraform import` the configured value is recorded without replacing it.
+- `tags` (Map of String) Tags applied to the cluster at creation. Platform ownership tags are added automatically. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing cluster.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only

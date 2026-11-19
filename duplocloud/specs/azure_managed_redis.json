@@ -403,7 +403,6 @@
       "type": "string",
       "computed": true,
       "stable": true,
-      "stable": true,
       "apiPath": "id",
       "description": "ID of this Redis instance, for reference by dependent resources."
     },

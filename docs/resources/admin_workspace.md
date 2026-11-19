@@ -45,6 +45,12 @@ resource "duploai_admin_workspace" "full" {
     tier   = "gold"
     region = "us-east-1"
   }
+
+  # The platform enables delete protection on every new workspace, and while it
+  # is on the API refuses to delete the workspace, so `terraform destroy` fails.
+  # Leave this unset to keep the platform default (protected); set it to false and
+  # apply before destroying. Do not also put delete_protection in meta_data.
+  delete_protection = false
 }
 
 # Workspace with prompt suggestions and prompt templates. These are stored as
@@ -99,11 +105,12 @@ resource "duploai_admin_workspace" "with_prompts" {
 ### Optional
 
 - `analytics_id` (String) ID of an analytics record associated with this workspace.
+- `delete_protection` (Boolean) Guards the workspace against deletion. The platform enables this on every new workspace unless the request says otherwise, and while it is enabled the API refuses to delete the workspace — so `terraform destroy` fails by design. To delete the workspace, set this to false and `terraform apply` first, then destroy. Leave it unset to inherit the platform default (enabled) on create and keep the current value on update. Stored as the `delete_protection` metadata key.
 - `description` (String) Human-readable description of the workspace.
 - `email` (String) Contact email address for the workspace. Must be a valid email address when set.
 - `guardrail_id` (String) ID of an optional guardrail that constrains this workspace's capabilities.
 - `knowledge_ids` (Set of String) IDs of the knowledge bases assigned to this workspace. Provide the complete set; on update the full list replaces the previous one.
-- `meta_data` (Map of String) Free-form key/value metadata associated with the workspace.
+- `meta_data` (Map of String) Free-form key/value metadata associated with the workspace. The `delete_protection` key is managed by the delete_protection attribute: it is hidden from this map unless you list it here, and when both are set the delete_protection attribute wins.
 - `prompt_md` (String) Markdown system prompt applied to interactions within this workspace.
 - `quota_id` (String) ID of the quota definition that limits this workspace's usage.
 - `role` (String) Role label associated with the workspace.

@@ -38,3 +38,17 @@ variable "next_api_key" {
   type      = string
   sensitive = true
 }
+
+# Terraform 1.11 and later: the write-only argument keeps the secret out of the
+# plan and state. Change the _wo_version number whenever the secret changes —
+# that is what sends the new value. On older Terraform, use the attribute above.
+# As with `value`, the value is sent on every update, so every update creates a new
+# secret version in Key Vault.
+resource "duploai_azure_key_vault_secret" "write_only" {
+  workspace_id = "<workspace-id>"
+  key_vault_id = duploai_azure_key_vault.example.vault_record_id
+
+  name             = "db-password-wo"
+  value_wo         = var.db_password
+  value_wo_version = 1
+}

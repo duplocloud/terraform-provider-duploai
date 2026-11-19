@@ -18,8 +18,6 @@ func tierAttr() AttributeSpec {
 	}
 }
 
-func str(s string) tftypes.Value { return tftypes.NewValue(tftypes.String, s) }
-
 func TestKeepEquivalentValue(t *testing.T) {
 	a := tierAttr()
 	cases := []struct {

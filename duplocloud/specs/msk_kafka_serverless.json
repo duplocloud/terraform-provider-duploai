@@ -74,7 +74,7 @@
       "optional": true,
       "createOnly": true,
       "requestPath": "spec.createRequest.tags",
-      "description": "Tags applied to the cluster at creation. Platform ownership tags are added automatically."
+      "description": "Tags applied to the cluster at creation. Platform ownership tags are added automatically. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing cluster."
     },
     {
       "name": "status",
@@ -94,6 +94,7 @@
     {
       "name": "security_group_ids",
       "type": "list(string)",
+      "stable": true,
       "computed": true,
       "noSend": true,
       "apiPath": "spec.securityGroupIds",
@@ -103,6 +104,7 @@
       "name": "cluster_arn",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.cloudDetails.clusterArn",
       "description": "ARN of the provisioned MSK cluster."
@@ -110,6 +112,7 @@
     {
       "name": "bootstrap_brokers_tls",
       "type": "string",
+      "stable": true,
       "computed": true,
       "noSend": true,
       "normalizeCsvOrder": true,
@@ -119,6 +122,7 @@
     {
       "name": "bootstrap_brokers_sasl_iam",
       "type": "string",
+      "stable": true,
       "computed": true,
       "noSend": true,
       "normalizeCsvOrder": true,
@@ -129,6 +133,7 @@
       "name": "created_at",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,
       "description": "Timestamp when the cluster was created (RFC 3339, normalized to UTC at second precision)."

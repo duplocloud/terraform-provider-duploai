@@ -61,10 +61,10 @@ resource "duploai_k8s_storage_class" "gp3" {
 ### Optional
 
 - `allow_volume_expansion` (Boolean) Whether PersistentVolumeClaims using this class may be expanded. Immutable.
-- `annotations` (Map of String) Kubernetes annotations applied to the storage class, e.g. {"storageclass.kubernetes.io/is-default-class" = "true"}. Send-only (not read back).
+- `annotations` (Map of String) Kubernetes annotations applied to the storage class, e.g. {"storageclass.kubernetes.io/is-default-class" = "true"}. Send-only: the resource does not read this value back. The data source reports the live annotations.
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
-- `labels` (Map of String) Kubernetes labels applied to the storage class. Send-only: the server injects its own duplocloud.ai/* labels, so this value is not read back to avoid spurious drift.
+- `labels` (Map of String) Kubernetes labels applied to the storage class. Send-only: the server injects its own duplocloud.ai/* labels, so the resource does not read this value back, avoiding spurious drift. The data source reports the live labels, including server-added ones.
 - `mount_options` (List of String) Mount options for PersistentVolumes created from this class. Immutable.
 - `parameters` (Map of String) Provisioner-specific parameters, e.g. {"type" = "gp3", "encrypted" = "true"}. Immutable in Kubernetes: changing it replaces the storage class.
 - `reclaim_policy` (String) Reclaim policy for PersistentVolumes created from this class: Delete (default) or Retain. Immutable.

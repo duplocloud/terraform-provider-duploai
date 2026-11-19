@@ -50,8 +50,9 @@
       "type": "list(string)",
       "computed": true,
       "forceNew": true,
+      "sendFromState": true,
       "apiPath": "spec.scopeIds",
-      "description": "Scopes the vault is visible to. Inherited from the resource group."
+      "description": "Scopes the vault is visible to. Inherited from the resource group. Sent back unchanged on update: the platform rebuilds the vault record from the update request and would otherwise drop them."
     },
     {
       "name": "sku_name",
@@ -291,6 +292,7 @@
       "name": "vault_record_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "id",
       "description": "Backend identifier of the vault record."
     },
@@ -298,6 +300,7 @@
       "name": "key_vault_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "description": "ARM resource id of the Key Vault in Azure.",
       "responsePaths": ["spec.uniqueCloudResourceId", "result.cloudDetails.id", "result.keyVaultId"]
@@ -306,6 +309,7 @@
       "name": "vault_uri",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.vaultUri",
       "description": "Data-plane URI clients use to read secrets, e.g. https://my-app-vault.vault.azure.net/."
@@ -322,6 +326,7 @@
       "name": "tenant_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.tenantId",
       "description": "Microsoft Entra tenant that backs the vault's authentication."
@@ -330,6 +335,7 @@
       "name": "created_at",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,
       "description": "Timestamp when the vault record was created (RFC 3339, normalized to UTC at second precision)."

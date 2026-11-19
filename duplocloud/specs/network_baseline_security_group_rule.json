@@ -210,6 +210,7 @@
       "name": "security_group_rule_arn",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "securityGroupRuleArn",
       "description": "ARN of this security group rule."
@@ -218,6 +219,7 @@
       "name": "group_id",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "groupId",
       "description": "ID of the security group the rule belongs to — the resource group's primary security group."
@@ -225,6 +227,7 @@
     {
       "name": "referenced_group_id",
       "type": "string",
+      "stableUnlessChanged": ["source_resource_group_id"],
       "computed": true,
       "noSend": true,
       "apiPath": "referencedGroupInfo.groupId",

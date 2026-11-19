@@ -1,0 +1,110 @@
+{
+  "name": "admin_user",
+  "description": "Manages a DuploCloud AI user account, including identity, roles, and metadata.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/admin/data/Users"
+  },
+  "attributes": [
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "apiPath": "displayName",
+      "description": "Name of the user, as shown in the console."
+    },
+    {
+      "name": "email",
+      "type": "string",
+      "required": true,
+      "apiPath": "email",
+      "description": "Email address of the user (required by the backend)."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "description",
+      "description": "Optional description of the user."
+    },
+    {
+      "name": "external_provider",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "externalProvider",
+      "description": "External OAuth/SSO provider name (e.g. 'Google', 'GitHub')."
+    },
+    {
+      "name": "external_subject",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "externalSubject",
+      "description": "Subject identifier from the external OAuth/SSO provider."
+    },
+    {
+      "name": "roles",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "roles",
+      "oneOf": ["Administrator", "User"],
+      "maxItems": 1,
+      "description": "The user's role: a single entry, either `Administrator` (full platform access, bypassing permission sets) or `User` (access governed by permission sets). Values are case-sensitive. When unset, the platform assigns `User`."
+    },
+    {
+      "name": "is_active",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "isActive",
+      "description": "Whether the user account is active. Defaults to true when omitted."
+    },
+    {
+      "name": "metadata",
+      "type": "map(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "metaData",
+      "description": "Free-form key/value metadata."
+    },
+    {
+      "name": "last_login_at_utc",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "lastLoginAtUtc",
+      "normalizeTimestamp": true,
+      "description": "Timestamp of the user's last login (RFC 3339, normalized to UTC at second precision)."
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "createdAt",
+      "normalizeTimestamp": true,
+      "description": "Timestamp when the user was created (RFC 3339, normalized to UTC at second precision)."
+    },
+    {
+      "name": "updated_at",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "updatedAt",
+      "normalizeTimestamp": true,
+      "description": "Timestamp when the user was last updated (RFC 3339, normalized to UTC at second precision)."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "version",
+      "description": "Version counter, incremented on each update."
+    }
+  ]
+}

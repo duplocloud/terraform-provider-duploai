@@ -13,10 +13,28 @@ type ClientError interface {
 type clientError struct {
 	status int
 	cause  error
+	// body is the raw error response body, kept (never logged from here) so an
+	// endpoint's NotFoundResponses can recognise an API-specific "gone" answer.
+	body string
 }
 
 func newClientError(status int, cause error) ClientError {
 	return &clientError{status: status, cause: cause}
+}
+
+// newResponseError is newClientError for a non-2xx HTTP response, keeping the
+// response body for Endpoint.asNotFound.
+func newResponseError(status int, cause error, body string) ClientError {
+	return &clientError{status: status, cause: cause, body: body}
+}
+
+// errorBody returns the raw response body behind err, or "" when err did not
+// come from an HTTP error response.
+func errorBody(err ClientError) string {
+	if ce, ok := err.(*clientError); ok {
+		return ce.body
+	}
+	return ""
 }
 
 func (e *clientError) Error() string    { return fmt.Sprintf("status %d: %v", e.status, e.cause) }

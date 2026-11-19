@@ -3,6 +3,7 @@
   "description": "Manages a DuploCloud AI Helpdesk Kubernetes cluster baseline (control plane, networking, and optional system node group), provisionable across any supported cloud. The target cloud is selected via the `cloud` attribute \u2014 AWS (EKS), Azure (AKS), GCP (GKE), or bare Kubernetes (K8S_ONLY) \u2014 and defaults to AWS.",
   "idPath": "id",
   "dataSource": true,
+  "mergeUpdateIntoCurrent": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Clusters",
     "deprovision": {
@@ -264,9 +265,8 @@
           "type": "list(string)",
           "computed": true,
           "stable": true,
-          "noSend": true,
           "apiPath": "nodeSubnetIds",
-          "description": "Private subnet IDs the system node group is placed in. Populated server-side from the linked network's private subnets."
+          "description": "Private subnet IDs the system node group is placed in. Populated server-side from the linked network's private subnets on create, and sent back unchanged on update (the platform rebuilds the system node group from the update request and requires them)."
         }
       ]
     },
@@ -456,6 +456,7 @@
       "name": "cluster_arn",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.clusterArn",
       "description": "ARN of the provisioned cluster (AWS only)."
     },
@@ -507,6 +508,7 @@
       "name": "cluster_endpoint",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.clusterEndpoint",
       "description": "Kubernetes API server endpoint URL."
     },
@@ -514,6 +516,7 @@
       "name": "oidc_issuer_url",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.oidcIssuerUrl",
       "description": "OIDC issuer URL for IRSA."
     },
@@ -521,6 +524,7 @@
       "name": "certificate_authority",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.certificateAuthority",
       "description": "Base64-encoded cluster certificate authority data."
     },
@@ -552,6 +556,7 @@
       "name": "azure_resource_group",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.azure.resourceGroup",
       "description": "Azure only. Resource group the AKS cluster was provisioned into."
     },
@@ -559,6 +564,7 @@
       "name": "azure_node_resource_group",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.azure.nodeResourceGroup",
       "description": "Azure only. AKS-managed node resource group (the 'MC_' group)."
     },
@@ -566,6 +572,7 @@
       "name": "azure_fqdn",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.azure.fqdn",
       "description": "Azure only. FQDN of the AKS API server."
     },
@@ -573,6 +580,7 @@
       "name": "azure_oidc_issuer_url",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "result.azure.oidcIssuerUrl",
       "description": "Azure only. OIDC issuer URL for workload identity."
     },

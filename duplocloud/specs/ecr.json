@@ -134,7 +134,7 @@
           "description": "Tag value."
         }
       ],
-      "description": "Tags applied to the repository at creation, as a list of key/value pairs. Platform ownership tags are added automatically."
+      "description": "Tags applied to the repository at creation, as a list of key/value pairs. Platform ownership tags are added automatically. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing repository."
     },
     {
       "name": "provisioner_type",
@@ -180,6 +180,7 @@
       "name": "repository_arn",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.cloudDetails.repositoryArn",
       "description": "ARN of the provisioned ECR repository."
@@ -188,6 +189,7 @@
       "name": "repository_uri",
       "type": "string",
       "computed": true,
+      "stable": true,
       "noSend": true,
       "apiPath": "result.cloudDetails.repositoryUri",
       "description": "URI of the repository (used as the image push/pull target)."
@@ -205,6 +207,7 @@
       "name": "created_at",
       "type": "string",
       "computed": true,
+      "stable": true,
       "apiPath": "createdAt",
       "normalizeTimestamp": true,
       "description": "Timestamp when the repository was created (RFC 3339, normalized to UTC at second precision)."

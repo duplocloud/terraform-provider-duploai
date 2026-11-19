@@ -62,7 +62,7 @@ resource "duploai_sns" "fifo" {
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `kms_master_key_id` (String) KMS key ID or ARN used when encryption_mode is SseKms. Required when encryption_mode is SseKms. Can be changed in place.
 - `scope_ids` (List of String) Scope IDs that link this topic to a cloud provider account.
-- `tags` (Attributes List) Tags applied to the topic at creation, as a list of key/value pairs. Platform ownership tags are added automatically. (see [below for nested schema](#nestedatt--tags))
+- `tags` (Attributes List) Tags applied to the topic at creation, as a list of key/value pairs. Platform ownership tags are added automatically. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing topic. (see [below for nested schema](#nestedatt--tags))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `topic_type` (String) Topic type: Standard (best-effort ordering, at-least-once delivery) or Fifo (strict ordering, exactly-once). Immutable after creation.
 

@@ -30,6 +30,12 @@ resource "duploai_admin_workspace" "full" {
     tier   = "gold"
     region = "us-east-1"
   }
+
+  # The platform enables delete protection on every new workspace, and while it
+  # is on the API refuses to delete the workspace, so `terraform destroy` fails.
+  # Leave this unset to keep the platform default (protected); set it to false and
+  # apply before destroying. Do not also put delete_protection in meta_data.
+  delete_protection = false
 }
 
 # Workspace with prompt suggestions and prompt templates. These are stored as

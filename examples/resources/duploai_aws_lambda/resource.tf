@@ -1,4 +1,8 @@
-# Basic Lambda function deployed from an S3 package
+# Basic Lambda function deployed from an S3 package.
+#
+# The platform currently accepts only S3 deployment packages: runtime, handler,
+# s3_bucket and s3_key are all needed to create a function, and container-image
+# functions (image_uri) are rejected.
 resource "duploai_aws_lambda" "basic" {
   workspace_id      = "<workspace-id>"
   name              = "my-function"
@@ -57,24 +61,5 @@ resource "duploai_aws_lambda" "full" {
     create = "30m"
     update = "30m"
     delete = "15m"
-  }
-}
-
-# Container image Lambda (no runtime or handler required)
-resource "duploai_aws_lambda" "container" {
-  workspace_id      = "<workspace-id>"
-  name              = "ml-inference"
-  environment_id    = "<environment-id>"
-  resource_group_id = "<resource-group-id>"
-  description       = "ML inference function using a custom container image"
-
-  role_arn  = "<iam-role-arn>"
-  image_uri = "<account-id>.dkr.ecr.<region>.amazonaws.com/<repo>:<tag>"
-
-  memory_size = 3008
-  timeout     = 60
-
-  environment_variables = {
-    MODEL_PATH = "/opt/ml/model"
   }
 }

@@ -4,6 +4,7 @@
   "idPath": "id",
   "dataSource": true,
   "readAfterWrite": true,
+  "mergeUpdateIntoCurrent": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/Plans"
   },

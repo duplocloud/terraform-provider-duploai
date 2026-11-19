@@ -192,7 +192,7 @@ resource "duploai_helm_release" "app" {
 - `interval` (String) Interval at which the release is reconciled (Go duration, e.g. 5m, 1h).
 - `kube_config_secret_ref_key` (String) Key within the kubeconfig Secret.
 - `kube_config_secret_ref_name` (String) Name of a Secret holding a kubeconfig, so the release targets a remote cluster.
-- `labels` (Map of String) Kubernetes labels applied to the HelmRelease.
+- `labels` (Map of String) Kubernetes labels applied to the HelmRelease. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored.
 - `max_history` (Number) Number of Helm release revisions to keep in storage. Flux defaults to 5 when omitted.
 - `persistent_client` (Boolean) Re-use one Helm client across reconciles. Flux defaults to true.
 - `post_render_strategy` (String) How post-renderers interact with Helm hooks: nohooks, combined, or separate. Flux defaults to combined.

@@ -239,7 +239,7 @@ func TestNetworkAwsImportConfigStoredValueSurvivesUnrelatedUpdate(t *testing.T) 
 			if len(plan.RequiresReplace) > 0 {
 				t.Fatalf("plan requires replacement: %v", plan.RequiresReplace)
 			}
-			planned := attrOf(t, plan.PlannedState, resType, "aws_import_config")
+			planned := dynamicAttrOf(t, plan.PlannedState, resType, "aws_import_config")
 			if !planned.Equal(storedImport) {
 				t.Fatalf("planned aws_import_config = %v, want the stored %v", planned, storedImport)
 			}
@@ -307,7 +307,7 @@ func protoDynamic(t *testing.T, typ tftypes.Type, v tftypes.Value) tfprotov6.Dyn
 	return dv
 }
 
-func attrOf(t *testing.T, dv *tfprotov6.DynamicValue, typ tftypes.Object, name string) tftypes.Value {
+func dynamicAttrOf(t *testing.T, dv *tfprotov6.DynamicValue, typ tftypes.Object, name string) tftypes.Value {
 	t.Helper()
 	v, err := dv.Unmarshal(typ)
 	if err != nil {

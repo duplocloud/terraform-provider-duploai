@@ -80,7 +80,7 @@ resource "duploai_k8s_ingress" "example" {
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
 - `ingress_class_name` (String) Name of the IngressClass cluster resource (e.g. nginx, alb).
-- `labels` (Map of String) Kubernetes labels applied to the Ingress.
+- `labels` (Map of String) Kubernetes labels applied to the Ingress. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored.
 - `rules` (Attributes List) List of host rules that define how traffic is routed to backend services. (see [below for nested schema](#nestedatt--rules))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `tls` (Attributes List) TLS configuration blocks, each pairing a list of hosts with a certificate secret. (see [below for nested schema](#nestedatt--tls))
@@ -144,7 +144,7 @@ Optional:
 
 - `backend` (Attributes) Backend to route matched traffic to. (see [below for nested schema](#nestedatt--rules--http--paths--backend))
 - `path` (String) URL path to match (e.g. /api).
-- `path_type` (String) Path matching semantics: Exact, Prefix, or ImplementationSpecific.
+- `path_type` (String) Path matching semantics: Exact, Prefix, or ImplementationSpecific. Set it on every path: Kubernetes requires a pathType and rejects a path without one.
 
 <a id="nestedatt--rules--http--paths--backend"></a>
 ### Nested Schema for `rules.http.paths.backend`

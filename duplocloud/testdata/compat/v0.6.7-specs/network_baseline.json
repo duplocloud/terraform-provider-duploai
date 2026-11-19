@@ -1,0 +1,1044 @@
+{
+  "name": "network_baseline",
+  "description": "Manages a DuploCloud AI Helpdesk network baseline. On AWS this provisions a VPC, subnets, and NAT gateways; on Azure it provisions a virtual network, subnets, and NAT gateways via the nested `azure` block. The target cloud is selected with `cloud`.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/networks",
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this network baseline."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "description": "Name of the network baseline. On Azure this also seeds the virtual network name and the default resource group name."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "",
+      "apiPath": "description",
+      "description": "Optional description."
+    },
+    {
+      "name": "mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Create",
+      "forceNew": true,
+      "oneOf": [
+        "Create",
+        "Import"
+      ],
+      "apiPath": "spec.mode",
+      "description": "Provisioning mode: Create (the platform provisions a new network) or Import (adopt an existing network not provisioned by the platform \u2014 on AWS set vpc_id, and optionally aws_import_config to choose specific resources; on Azure set azure.import_vnet_id). Immutable after creation."
+    },
+    {
+      "name": "region",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.region",
+      "description": "Cloud region (e.g. us-east-1 on AWS, eastus on Azure)."
+    },
+    {
+      "name": "cloud",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Aws",
+      "forceNew": true,
+      "oneOf": [
+        "Aws",
+        "Azure",
+        "Gcp",
+        "K8S_ONLY"
+      ],
+      "apiPath": "spec.cloud",
+      "description": "Cloud provider the network is provisioned in. Valid values: Aws, Azure, Gcp, K8S_ONLY. Immutable after creation. Defaults to Aws. When set to Azure, configure the nested `azure` block."
+    },
+    {
+      "name": "cidr",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.cidr",
+      "description": "Primary network CIDR block (e.g. 10.0.0.0/16) \u2014 the VPC CIDR on AWS or the primary virtual network address space on Azure. Required when the platform provisions a new network; leave unset when importing an existing one \u2014 it is read from the imported network."
+    },
+    {
+      "name": "additional_cidrs",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.additionalCidrs",
+      "description": "Additional network address spaces beyond `cidr` (e.g. secondary Azure virtual network address spaces). Consumed on Azure."
+    },
+    {
+      "name": "az_count",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.azCount",
+      "description": "Number of availability zones (1-4). Required on AWS; ignored on Azure, which declares subnets explicitly via the `azure` block."
+    },
+    {
+      "name": "subnet_prefix",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.subnetPrefix",
+      "description": "Subnet prefix length (e.g. 24). Required on AWS; ignored on Azure, which sets per-subnet address prefixes via the `azure` block. Also ignored when `custom_public_subnet_cidrs`/`custom_private_subnet_cidrs` are set — those replace the automatic carve-up — but still required, since the platform derives its subnet host-bits parameter from it either way."
+    },
+    {
+      "name": "custom_public_subnet_cidrs",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.customPublicSubnetCidrs",
+      "description": "AWS only, mode Create only. Public subnet CIDRs chosen explicitly instead of letting the platform carve the VPC automatically — one entry per availability zone, in AZ order, so entry `i` becomes the public subnet in AZ `i`. Must be set together with `custom_private_subnet_cidrs`; when both are set they override the `subnet_prefix` carve-up entirely. Each list must contain exactly `az_count` entries. Every CIDR must be a canonical network address with a prefix of /28 or shorter (e.g. 10.0.0.0/24, not 10.0.0.5/24), fall inside `cidr`, and not overlap any other entry in either list. Immutable after creation."
+    },
+    {
+      "name": "custom_private_subnet_cidrs",
+      "type": "list(string)",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.customPrivateSubnetCidrs",
+      "description": "AWS only, mode Create only. Private subnet CIDRs chosen explicitly, one per availability zone in AZ order. Must be set together with `custom_public_subnet_cidrs`; see that attribute for the full rules. Immutable after creation."
+    },
+    {
+      "name": "nat_mode",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "None",
+      "oneOf": [
+        "None",
+        "SingleAz",
+        "MultiAz"
+      ],
+      "apiPath": "spec.natMode",
+      "description": "NAT gateway mode: None, SingleAz, or MultiAz. AWS only; Azure NAT gateways are declared in azure.nat_gateways."
+    },
+    {
+      "name": "enable_dns",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.enableDns",
+      "description": "Enable DNS support in the VPC. AWS only; Azure custom DNS is configured via azure.dns_servers."
+    },
+    {
+      "name": "enable_flow_logs",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "default": false,
+      "apiPath": "spec.enableFlowLogs",
+      "description": "Enable VPC flow logs. AWS only."
+    },
+    {
+      "name": "flow_logs_retention_days",
+      "type": "int",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.flowLogsRetentionDays",
+      "description": "Flow logs retention in days. AWS only. Required when enable_flow_logs is true; when unset the server assigns the value (computed, no static default)."
+    },
+    {
+      "name": "existing_iam_role_arn",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.existingIamRoleArn",
+      "description": "ARN of an existing, customer-managed IAM role for accounts that forbid IAM creation. Used as the VPC flow-logs delivery role instead of creating one, so it must trust vpc-flow-logs.amazonaws.com and allow logs:CreateLogStream, logs:PutLogEvents, logs:DescribeLogGroups and logs:DescribeLogStreams on /aws/vpc/flowlogs/*. Requires enable_flow_logs = true, since the role is used for nothing else. Leave unset to have the baseline create its own IAM as before. The role is customer-owned: the platform never edits or deletes it. Removing it from the configuration keeps the stored value; setting a different ARN replaces this resource. AWS only, and not allowed with mode = \"Import\".",
+      "pattern": "^arn:aws(-[a-z]+)*:iam::[0-9]{12}:role/([A-Za-z0-9_+=,.@-]+/)*[A-Za-z0-9_+=,.@-]{1,64}$",
+      "patternDescription": "must be an IAM role ARN of the form arn:aws:iam::<12-digit-account>:role/<name>, e.g. arn:aws:iam::123456789012:role/platform-shared. A path is allowed (role/<path>/<name>); the name is 1-64 characters from letters, digits and + = , . @ _ -. Other AWS partitions (aws-us-gov, aws-cn, ...) are accepted; an IAM ARN never carries a region"
+    },
+    {
+      "name": "env_tag",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.envTag",
+      "description": "Environment tag applied to provisioned resources. AWS only; Azure virtual network tags are set via azure.tags."
+    },
+    {
+      "name": "scope_ids",
+      "type": "list(string)",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.scopeIds",
+      "description": "Scope IDs that link this network to a cloud provider account. On Azure this resolves the subscription and provider credentials."
+    },
+    {
+      "name": "provisioner_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "default": "Cli",
+      "forceNew": true,
+      "apiPath": "spec.provisioner.type",
+      "description": "Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall."
+    },
+    {
+      "name": "provisioner_version",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "forceNew": true,
+      "apiPath": "spec.provisioner.version",
+      "description": "Optional provisioner version."
+    },
+    {
+      "name": "azure",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.azure",
+      "description": "Azure-specific network configuration. Set only when cloud is Azure; ignored for other clouds.",
+      "attributes": [
+        {
+          "name": "resource_group_name",
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "forceNew": true,
+          "apiPath": "resourceGroupName",
+          "description": "Resource group for the virtual network. When unset, the platform derives and creates one from the network name. Immutable once set."
+        },
+        {
+          "name": "dns_servers",
+          "type": "list(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "dnsServers",
+          "description": "Custom DNS servers for the virtual network. Leave empty to use Azure-provided DNS."
+        },
+        {
+          "name": "tags",
+          "type": "map(string)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "tags",
+          "filterResponseKeys": [
+            "duplocloud-ai-*"
+          ],
+          "description": "Tags applied to the virtual network. The platform adds its own managed `duplocloud-ai-*` tags server-side; those are filtered out of state so only your tags are managed by Terraform."
+        },
+        {
+          "name": "preferred_subnet_mask",
+          "type": "int",
+          "optional": true,
+          "computed": true,
+          "default": 24,
+          "apiPath": "preferredSubnetMask",
+          "description": "Preferred subnet mask used to propose subnet CIDRs. Convenience only; per-subnet address_prefix is authoritative."
+        },
+        {
+          "name": "import_vnet_id",
+          "type": "string",
+          "optional": true,
+          "apiPath": "importVnetId",
+          "description": "Existing virtual network resource ID to adopt when mode is Import."
+        },
+        {
+          "name": "subnets",
+          "type": "list(object)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "subnets",
+          "description": "Subnets to provision in the virtual network. When omitted on a new subnet, the platform seeds type-appropriate defaults.",
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "apiPath": "name",
+              "description": "Subnet name. Unique within the network."
+            },
+            {
+              "name": "subnet_type",
+              "type": "string",
+              "optional": true,
+              "computed": true,
+              "oneOf": [
+                "GeneralPurpose",
+                "ApplicationGateway",
+                "AzureBastion",
+                "PostgresFlexibleServer",
+                "MySqlFlexibleServer",
+                "Databricks",
+                "AksPods"
+              ],
+              "apiPath": "subnetType",
+              "description": "Subnet type. Defaults to GeneralPurpose. Drives default delegations and security rules."
+            },
+            {
+              "name": "address_prefix",
+              "type": "string",
+              "required": true,
+              "apiPath": "addressPrefix",
+              "description": "Subnet CIDR. Must fit within the network address space and not overlap other subnets."
+            },
+            {
+              "name": "default_outbound_access",
+              "type": "bool",
+              "optional": true,
+              "computed": true,
+              "apiPath": "defaultOutboundAccess",
+              "description": "Whether default outbound internet access is enabled. When unset, derived from subnet_type. false makes the subnet private."
+            },
+            {
+              "name": "attach_nat",
+              "type": "bool",
+              "optional": true,
+              "computed": true,
+              "apiPath": "attachNat",
+              "description": "Whether to attach a NAT gateway for outbound egress. When unset, derived from subnet_type."
+            },
+            {
+              "name": "nat_gateway_name",
+              "type": "string",
+              "optional": true,
+              "computed": true,
+              "apiPath": "natGatewayName",
+              "description": "Name of a NAT gateway (from azure.nat_gateways) to attach. When attach_nat is true and this is empty, the platform assigns a default."
+            },
+            {
+              "name": "nsg_name",
+              "type": "string",
+              "optional": true,
+              "computed": true,
+              "apiPath": "nsgName",
+              "description": "Network security group name. When unset, the platform assigns '<subnet name>-nsg'."
+            },
+            {
+              "name": "private_endpoint_network_policies",
+              "type": "string",
+              "computed": true,
+              "stable": true,
+              "apiPath": "privateEndpointNetworkPolicies",
+              "description": "Private endpoint network policies for the subnet. Managed by the platform (always Enabled)."
+            },
+            {
+              "name": "delegations",
+              "type": "list(object)",
+              "optional": true,
+              "computed": true,
+              "apiPath": "delegations",
+              "description": "Service delegations for the subnet. When omitted on a new subnet, the platform seeds defaults based on subnet_type.",
+              "attributes": [
+                {
+                  "name": "name",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "name",
+                  "description": "Delegation name."
+                },
+                {
+                  "name": "service_name",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "serviceName",
+                  "description": "Azure service name to delegate to (e.g. Microsoft.DBforPostgreSQL/flexibleServers)."
+                }
+              ],
+              "orderByKey": "name"
+            },
+            {
+              "name": "security_rules",
+              "type": "list(object)",
+              "optional": true,
+              "computed": true,
+              "apiPath": "securityRules",
+              "description": "Network security group rules for the subnet. When omitted on a new subnet, the platform seeds type-preset rules.",
+              "attributes": [
+                {
+                  "name": "name",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "name",
+                  "description": "Rule name."
+                },
+                {
+                  "name": "description",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "description",
+                  "description": "Optional rule description."
+                },
+                {
+                  "name": "priority",
+                  "type": "int",
+                  "required": true,
+                  "apiPath": "priority",
+                  "description": "Rule priority (100-4096). Lower numbers take precedence."
+                },
+                {
+                  "name": "direction",
+                  "type": "string",
+                  "required": true,
+                  "oneOf": [
+                    "Inbound",
+                    "Outbound"
+                  ],
+                  "apiPath": "direction",
+                  "description": "Traffic direction: Inbound or Outbound."
+                },
+                {
+                  "name": "access",
+                  "type": "string",
+                  "required": true,
+                  "oneOf": [
+                    "Allow",
+                    "Deny"
+                  ],
+                  "apiPath": "access",
+                  "description": "Whether traffic is allowed or denied."
+                },
+                {
+                  "name": "protocol",
+                  "type": "string",
+                  "required": true,
+                  "oneOf": [
+                    "Tcp",
+                    "Udp",
+                    "Icmp",
+                    "Esp",
+                    "Ah",
+                    "*"
+                  ],
+                  "apiPath": "protocol",
+                  "description": "Protocol: Tcp, Udp, Icmp, Esp, Ah, or * for any."
+                },
+                {
+                  "name": "source_address_prefix",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "sourceAddressPrefix",
+                  "description": "Source address prefix (CIDR, tag, or *). Use this or source_address_prefixes."
+                },
+                {
+                  "name": "source_address_prefixes",
+                  "type": "list(string)",
+                  "optional": true,
+                  "apiPath": "sourceAddressPrefixes",
+                  "description": "List of source address prefixes. Use this or source_address_prefix."
+                },
+                {
+                  "name": "source_port_range",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "sourcePortRange",
+                  "description": "Source port or range (e.g. '*', '443', '1000-2000')."
+                },
+                {
+                  "name": "destination_address_prefix",
+                  "type": "string",
+                  "optional": true,
+                  "apiPath": "destinationAddressPrefix",
+                  "description": "Destination address prefix (CIDR, tag, or *). Use this or destination_address_prefixes."
+                },
+                {
+                  "name": "destination_address_prefixes",
+                  "type": "list(string)",
+                  "optional": true,
+                  "apiPath": "destinationAddressPrefixes",
+                  "description": "List of destination address prefixes. Use this or destination_address_prefix."
+                },
+                {
+                  "name": "destination_port_ranges",
+                  "type": "list(string)",
+                  "optional": true,
+                  "apiPath": "destinationPortRanges",
+                  "description": "Destination ports or ranges."
+                }
+              ],
+              "orderByKey": "name"
+            }
+          ],
+          "orderByKey": "name"
+        },
+        {
+          "name": "nat_gateways",
+          "type": "list(object)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "natGateways",
+          "description": "NAT gateways to provision. Subnets attach to one by name via nat_gateway_name.",
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "apiPath": "name",
+              "description": "NAT gateway name, referenced by subnet nat_gateway_name."
+            },
+            {
+              "name": "public_ip_count",
+              "type": "int",
+              "optional": true,
+              "computed": true,
+              "apiPath": "publicIpCount",
+              "description": "Number of public IPs to allocate. Defaults to 1."
+            },
+            {
+              "name": "sku",
+              "type": "string",
+              "computed": true,
+              "stable": true,
+              "apiPath": "sku",
+              "description": "NAT gateway SKU. Managed by the platform."
+            }
+          ],
+          "orderByKey": "name"
+        }
+      ]
+    },
+    {
+      "name": "helpdesk_vpc_peering_enabled",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.enabled",
+      "description": "AWS only. Whether to peer this network's VPC with the helpdesk platform's own VPC, so the platform can reach an EKS cluster that has a private API server endpoint. When on, provisioning creates the peering connection, routes the helpdesk CIDR back through it, and opens inbound 443 from the helpdesk security group. Prefer leaving this unset: the platform default is on, and the value it settles on is then read back as computed state. Setting it to true explicitly risks a diff that never settles \u2014 on an install where the helpdesk VPC was only auto-detected from the machine hosting the backend, rather than configured via the vpc-peering-config setting, the platform downgrades the setting to false, so a config of true differs from the stored value on every plan and re-applying does not converge. Set it explicitly only to turn peering off (false), which the platform always honours."
+    },
+    {
+      "name": "helpdesk_vpc_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskVpcId",
+      "description": "AWS only. ID of the helpdesk VPC this network peers with. Resolved and stamped by the platform; never accepted from the client."
+    },
+    {
+      "name": "helpdesk_account_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskAccountId",
+      "description": "AWS only. AWS account that owns the helpdesk VPC. Stamped by the platform."
+    },
+    {
+      "name": "helpdesk_region",
+      "type": "string",
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskRegion",
+      "description": "AWS only. Region of the helpdesk VPC. Stamped by the platform; only meaningful when the peering crosses regions."
+    },
+    {
+      "name": "helpdesk_vpc_cidr_blocks",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "spec.helpdeskVpcPeeringConfig.helpdeskVpcCidrBlocks",
+      "description": "AWS only. CIDR blocks of the helpdesk VPC \u2014 the ranges routed back through the peering connection and allowed inbound on 443. Stamped by the platform."
+    },
+    {
+      "name": "helpdesk_vpc_peering",
+      "type": "object",
+      "computed": true,
+      "responsePath": "result.helpdeskVpcPeering",
+      "description": "AWS only. Live state of the peering connection with the helpdesk VPC. Populated once provisioning creates the connection and the platform's peering worker accepts it; null when peering is off, unresolved, or the network is not on AWS. Written by two independent processes \u2014 provisioning owns the requester side, the worker owns acceptance and the helpdesk side \u2014 so fields appear at different times.",
+      "attributes": [
+        {
+          "name": "peering_connection_id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "peeringConnectionId",
+          "description": "The pcx-* VPC peering connection ID."
+        },
+        {
+          "name": "state",
+          "type": "string",
+          "computed": true,
+          "apiPath": "state",
+          "description": "AWS peering connection state, verbatim (e.g. pending-acceptance, active, rejected, failed). Reaches active once the platform's worker has accepted the request."
+        },
+        {
+          "name": "state_message",
+          "type": "string",
+          "computed": true,
+          "apiPath": "stateMessage",
+          "description": "AWS's explanation for the current state. Worth reading when state is not active."
+        },
+        {
+          "name": "requester_vpc_id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "requesterVpcId",
+          "description": "This network's own VPC \u2014 the requester side of the connection."
+        },
+        {
+          "name": "requester_cidr_blocks",
+          "type": "list(string)",
+          "computed": true,
+          "apiPath": "requesterCidrBlocks",
+          "description": "This network's CIDR blocks, which the platform allows on the helpdesk side."
+        },
+        {
+          "name": "accepter_vpc_id",
+          "type": "string",
+          "computed": true,
+          "apiPath": "accepterVpcId",
+          "description": "The helpdesk VPC \u2014 the accepter side of the connection."
+        },
+        {
+          "name": "accepter_cidr_blocks",
+          "type": "list(string)",
+          "computed": true,
+          "apiPath": "accepterCidrBlocks",
+          "description": "CIDR blocks of the helpdesk VPC, as resolved when the connection was created."
+        },
+        {
+          "name": "helpdesk_route_stack_status",
+          "type": "string",
+          "computed": true,
+          "apiPath": "helpdeskRouteStackStatus",
+          "description": "How far the platform got adding return routes on its own side: ACTIVE (all present), PARTIAL (at least one route collided with an unrelated existing route and was left alone), or SKIPPED (nothing resolved yet). PARTIAL is the one to investigate \u2014 traffic may work in only one direction."
+        },
+        {
+          "name": "last_error",
+          "type": "string",
+          "computed": true,
+          "apiPath": "lastError",
+          "description": "Most recent error from the platform's peering worker, if it is stuck. Empty when healthy."
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    },
+    {
+      "name": "network_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this network baseline, for reference by dependent resources (e.g. a cluster baseline)."
+    },
+    {
+      "name": "vpc_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "requestPath": "spec.importVpcId",
+      "responsePath": "result.id",
+      "description": "AWS only. ID of the VPC. Set this to import an existing VPC that was not provisioned by the platform (the baseline adopts the given VPC instead of creating one); leave unset to have the platform provision a new VPC. Computed to the provisioned or adopted VPC ID. When importing, use `aws_import_config` to choose exactly which resources inside the VPC are adopted."
+    },
+    {
+      "name": "aws_import_config",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.awsImportConfig",
+      "description": "AWS only, mode Import only. Resources inside `vpc_id` to import, chosen by ID instead of letting the platform discover them. Every field is optional: a field you set is imported exactly as given, and a field you leave unset is discovered as before, except `all_host_security_group_id`, which is never discovered. Requires `vpc_id`. Before saving, the platform checks that every ID exists in the network's account and region and belongs to `vpc_id`, so a wrong ID fails at apply time with a clear error. When the block is omitted, the stored value is kept as is (null for networks that never set it), so existing configurations plan no change.",
+      "attributes": [
+        {
+          "name": "private_subnet_ids",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "privateSubnetIds",
+          "pattern": "^subnet-[0-9a-f]{8,17}$",
+          "patternDescription": "must be a subnet ID of the form subnet-xxxxxxxx (8-17 lowercase hex characters)",
+          "description": "Private subnets to import. Set together with `public_subnet_ids`, with the same number of entries; no subnet may appear in both lists. Only these subnets are imported, and each is treated as Private whatever its route table says."
+        },
+        {
+          "name": "public_subnet_ids",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "publicSubnetIds",
+          "pattern": "^subnet-[0-9a-f]{8,17}$",
+          "patternDescription": "must be a subnet ID of the form subnet-xxxxxxxx (8-17 lowercase hex characters)",
+          "description": "Public subnets to import. Set together with `private_subnet_ids`, with the same number of entries. Only these subnets are imported, and each is treated as Public whatever its route table says."
+        },
+        {
+          "name": "internet_gateway_id",
+          "type": "string",
+          "optional": true,
+          "apiPath": "internetGatewayId",
+          "pattern": "^igw-[0-9a-f]{8,17}$",
+          "patternDescription": "must be an internet gateway ID of the form igw-xxxxxxxx (8-17 lowercase hex characters)",
+          "description": "Internet gateway attached to `vpc_id`. Discovered when unset."
+        },
+        {
+          "name": "nat_gateway_ids",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "natGatewayIds",
+          "pattern": "^nat-[0-9a-f]{8,17}$",
+          "patternDescription": "must be a NAT gateway ID of the form nat-xxxxxxxx (8-17 lowercase hex characters)",
+          "description": "NAT gateways to import. When unset but subnets are set, only the NAT gateways the chosen private subnets route through are imported."
+        },
+        {
+          "name": "route_table_ids",
+          "type": "list(string)",
+          "optional": true,
+          "apiPath": "routeTableIds",
+          "pattern": "^rtb-[0-9a-f]{8,17}$",
+          "patternDescription": "must be a route table ID of the form rtb-xxxxxxxx (8-17 lowercase hex characters)",
+          "description": "Route tables to import. When unset but subnets are set, only the route tables associated with the chosen subnets (plus the VPC's main route table, if a chosen subnet uses it implicitly) are imported."
+        },
+        {
+          "name": "all_host_security_group_id",
+          "type": "string",
+          "optional": true,
+          "apiPath": "allHostSecurityGroupId",
+          "pattern": "^sg-[0-9a-f]{8,17}$",
+          "patternDescription": "must be a security group ID of the form sg-xxxxxxxx (8-17 lowercase hex characters)",
+          "description": "Security group recorded as the network's all-host security group. Never discovered: when unset, the imported network has no all-host security group."
+        },
+        {
+          "name": "private_rds_subnet_group",
+          "type": "string",
+          "optional": true,
+          "apiPath": "privateRdsSubnetGroup",
+          "pattern": "^[A-Za-z0-9._ -]{1,255}$",
+          "patternDescription": "must be an RDS DB subnet group name: 1-255 letters, digits, periods, underscores, spaces or hyphens",
+          "description": "Name of the RDS DB subnet group over the private subnets. Discovered when unset."
+        },
+        {
+          "name": "public_rds_subnet_group",
+          "type": "string",
+          "optional": true,
+          "apiPath": "publicRdsSubnetGroup",
+          "pattern": "^[A-Za-z0-9._ -]{1,255}$",
+          "patternDescription": "must be an RDS DB subnet group name: 1-255 letters, digits, periods, underscores, spaces or hyphens",
+          "description": "Name of the RDS DB subnet group over the public subnets. Discovered when unset."
+        },
+        {
+          "name": "private_elasticache_subnet_group",
+          "type": "string",
+          "optional": true,
+          "apiPath": "privateElastiCacheSubnetGroup",
+          "pattern": "^[A-Za-z0-9-]{1,255}$",
+          "patternDescription": "must be an ElastiCache subnet group name: 1-255 letters, digits or hyphens",
+          "description": "Name of the ElastiCache subnet group over the private subnets. Discovered when unset."
+        }
+      ]
+    },
+    {
+      "name": "subnet_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "result.subnets[].subnetId",
+      "description": "AWS only. Provisioned subnet IDs."
+    },
+    {
+      "name": "nat_gateway_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "result.natGateways[].natGatewayId",
+      "description": "AWS only. Provisioned NAT gateway IDs."
+    },
+    {
+      "name": "azure_vnet_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.azure.vnet.vnetId",
+      "description": "Azure only. Resource ID of the provisioned or adopted virtual network."
+    },
+    {
+      "name": "azure_resource_group",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.azure.resourceGroup",
+      "description": "Azure only. Resource group the virtual network was provisioned into."
+    },
+    {
+      "name": "azure_subscription_id",
+      "type": "string",
+      "computed": true,
+      "apiPath": "result.azure.subscriptionId",
+      "description": "Azure only. Subscription the virtual network was provisioned into."
+    },
+    {
+      "name": "azure_subnet_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "result.azure.subnets[].subnetId",
+      "description": "Azure only. Provisioned subnet resource IDs."
+    },
+    {
+      "name": "azure_nat_gateway_ids",
+      "type": "list(string)",
+      "computed": true,
+      "apiPath": "result.azure.natGateways[].natGatewayId",
+      "description": "Azure only. Provisioned NAT gateway resource IDs."
+    }
+  ],
+  "requiredIf": [
+    {
+      "attribute": "flow_logs_retention_days",
+      "whenAttribute": "enable_flow_logs",
+      "whenEquals": "true"
+    },
+    {
+      "attribute": "az_count",
+      "whenAttribute": "cloud",
+      "whenEquals": "Aws"
+    },
+    {
+      "attribute": "subnet_prefix",
+      "whenAttribute": "cloud",
+      "whenEquals": "Aws"
+    },
+    {
+      "attribute": "cidr",
+      "whenAttribute": "mode",
+      "whenEquals": "Create"
+    },
+    {
+      "attribute": "vpc_id",
+      "when": [
+        {
+          "attribute": "aws_import_config",
+          "isNotEmpty": true
+        }
+      ]
+    },
+    {
+      "attribute": "custom_private_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "custom_public_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ]
+    },
+    {
+      "attribute": "custom_public_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "custom_private_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ]
+    }
+  ],
+  "invalidWhen": [
+    {
+      "attribute": "existing_iam_role_arn",
+      "when": [
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        },
+        {
+          "attribute": "existing_iam_role_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_iam_role_arn is not allowed with mode = \"Import\": an imported network creates no IAM, so there is nothing for the role to replace. Remove it."
+    },
+    {
+      "attribute": "existing_iam_role_arn",
+      "when": [
+        {
+          "attribute": "enable_flow_logs",
+          "equals": "false"
+        },
+        {
+          "attribute": "existing_iam_role_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_iam_role_arn is only used as the VPC flow-logs delivery role. Set enable_flow_logs = true, or remove it."
+    },
+    {
+      "attribute": "existing_iam_role_arn",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "existing_iam_role_arn",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "existing_iam_role_arn is AWS only: it replaces IAM the AWS baseline would create (the flow-logs role). Remove it, or set cloud = \"Aws\"."
+    },
+    {
+      "attribute": "custom_public_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "custom_public_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "custom_public_subnet_cidrs is AWS only. On Azure declare each subnet's range with azure.subnets[].address_prefix instead; set cloud = \"Aws\" to use custom subnet CIDRs."
+    },
+    {
+      "attribute": "custom_private_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "custom_private_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "custom_private_subnet_cidrs is AWS only. On Azure declare each subnet's range with azure.subnets[].address_prefix instead; set cloud = \"Aws\" to use custom subnet CIDRs."
+    },
+    {
+      "attribute": "custom_public_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        },
+        {
+          "attribute": "custom_public_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "custom_public_subnet_cidrs cannot be combined with mode = \"Import\": custom subnet CIDRs only apply when the platform provisions a new VPC. An imported VPC keeps the subnets it already has."
+    },
+    {
+      "attribute": "custom_private_subnet_cidrs",
+      "when": [
+        {
+          "attribute": "mode",
+          "equals": "Import"
+        },
+        {
+          "attribute": "custom_private_subnet_cidrs",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "custom_private_subnet_cidrs cannot be combined with mode = \"Import\": custom subnet CIDRs only apply when the platform provisions a new VPC. An imported VPC keeps the subnets it already has."
+    },
+    {
+      "attribute": "aws_import_config",
+      "when": [
+        {
+          "attribute": "mode",
+          "notEquals": "Import"
+        },
+        {
+          "attribute": "aws_import_config",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "aws_import_config only applies with mode = \"Import\": it chooses which resources of an existing VPC to adopt. Remove it, or set mode = \"Import\"."
+    },
+    {
+      "attribute": "aws_import_config",
+      "when": [
+        {
+          "attribute": "cloud",
+          "notEquals": "Aws"
+        },
+        {
+          "attribute": "aws_import_config",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "aws_import_config is AWS only. On Azure import an existing virtual network with azure.import_vnet_id; set cloud = \"Aws\" to use aws_import_config."
+    },
+    {
+      "attribute": "aws_import_config",
+      "when": [
+        {
+          "attribute": "aws_import_config.private_subnet_ids",
+          "isNotEmpty": true
+        },
+        {
+          "attribute": "aws_import_config.public_subnet_ids",
+          "isEmpty": true
+        }
+      ],
+      "message": "aws_import_config.private_subnet_ids and aws_import_config.public_subnet_ids must be set together, with the same number of subnets. Add public_subnet_ids, or remove private_subnet_ids."
+    },
+    {
+      "attribute": "aws_import_config",
+      "when": [
+        {
+          "attribute": "aws_import_config.public_subnet_ids",
+          "isNotEmpty": true
+        },
+        {
+          "attribute": "aws_import_config.private_subnet_ids",
+          "isEmpty": true
+        }
+      ],
+      "message": "aws_import_config.public_subnet_ids and aws_import_config.private_subnet_ids must be set together, with the same number of subnets. Add private_subnet_ids, or remove public_subnet_ids."
+    }
+  ],
+  "conflictsWith": [
+    [
+      "azure",
+      "nat_mode"
+    ],
+    [
+      "azure",
+      "enable_dns"
+    ],
+    [
+      "azure",
+      "enable_flow_logs"
+    ],
+    [
+      "azure",
+      "flow_logs_retention_days"
+    ],
+    [
+      "azure",
+      "env_tag"
+    ],
+    [
+      "azure",
+      "vpc_id"
+    ],
+    [
+      "azure",
+      "az_count"
+    ],
+    [
+      "azure",
+      "subnet_prefix"
+    ],
+    [
+      "azure",
+      "custom_public_subnet_cidrs"
+    ],
+    [
+      "azure",
+      "custom_private_subnet_cidrs"
+    ],
+    [
+      "azure",
+      "aws_import_config"
+    ]
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned"
+  }
+}

@@ -35,7 +35,7 @@ data "duploai_k8s_ingress" "example" {
 - `environment_id` (String) ID of the environment in which the Ingress is created.
 - `ingress_class_name` (String) Name of the IngressClass cluster resource (e.g. nginx, alb).
 - `k8s_ingress_id` (String) ID of this ingress, for reference by dependent resources.
-- `labels` (Map of String) Kubernetes labels applied to the Ingress.
+- `labels` (Map of String) Kubernetes labels applied to the Ingress. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored.
 - `load_balancer` (Attributes) Load balancer status assigned by the cloud ingress controller after provisioning. The address is populated asynchronously — set wait_for_load_balancer = true to have create/update wait until it is available. (see [below for nested schema](#nestedatt--load_balancer))
 - `name` (String) Name of the Kubernetes Ingress resource.
 - `namespace_name` (String) Kubernetes namespace the Ingress is created in.
@@ -120,7 +120,7 @@ Read-Only:
 
 - `backend` (Attributes) Backend to route matched traffic to. (see [below for nested schema](#nestedatt--rules--http--paths--backend))
 - `path` (String) URL path to match (e.g. /api).
-- `path_type` (String) Path matching semantics: Exact, Prefix, or ImplementationSpecific.
+- `path_type` (String) Path matching semantics: Exact, Prefix, or ImplementationSpecific. Set it on every path: Kubernetes requires a pathType and rejects a path without one.
 
 <a id="nestedatt--rules--http--paths--backend"></a>
 ### Nested Schema for `rules.http.paths.backend`

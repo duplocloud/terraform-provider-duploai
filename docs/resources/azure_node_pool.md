@@ -6,6 +6,7 @@ description: |-
   Manages a node pool (AKS agent pool) on an Azure Kubernetes Service cluster, provisioned within an environment and resource group.
   The pool is created on the AKS cluster linked to the resource group, so that resource group must already have a cluster attached and the cluster must have finished provisioning — the API rejects the create otherwise. Every pool is created as a User pool backed by a virtual machine scale set; the cluster's own system pool is not managed here.
   The platform stores the pool's configuration and sends the whole of it to Azure on every change, so Terraform sends every field back on update, not just the ones that changed. Nothing in this resource surfaces live Azure state such as the current node count or Kubernetes version: the API deliberately withholds the raw cloud snapshot from its responses, so only arm_resource_id and the platform's own status are available. The record's version counter and last-updated timestamp are not exposed either — the API refreshes its cloud snapshot on every read and saves the record as it does, so both change on every GET and would report drift on every plan while meaning nothing.
+  Create and update wait until Azure itself reports the pool's provisioning as Succeeded, not only until the platform marks the record complete (which happens while Azure is still creating the pool), so a follow-up change does not collide with an operation still in progress. An Azure state of Failed or Canceled ends the wait with an error.
 ---
 
 # duploai_azure_node_pool (Resource)
@@ -16,10 +17,14 @@ The pool is created on the AKS cluster linked to the resource group, so that res
 
 The platform stores the pool's configuration and sends the whole of it to Azure on every change, so Terraform sends every field back on update, not just the ones that changed. Nothing in this resource surfaces live Azure state such as the current node count or Kubernetes version: the API deliberately withholds the raw cloud snapshot from its responses, so only `arm_resource_id` and the platform's own status are available. The record's version counter and last-updated timestamp are not exposed either — the API refreshes its cloud snapshot on every read and saves the record as it does, so both change on every GET and would report drift on every plan while meaning nothing.
 
+Create and update wait until Azure itself reports the pool's provisioning as `Succeeded`, not only until the platform marks the record complete (which happens while Azure is still creating the pool), so a follow-up change does not collide with an operation still in progress. An Azure state of `Failed` or `Canceled` ends the wait with an error.
+
 ## Example Usage
 
 ```terraform
 # A minimal pool: three fixed-size Linux nodes.
+#
+# Always set os_sku: creating a pool without it currently fails on the platform.
 #
 # The pool joins the AKS cluster linked to the resource group, so that resource group
 # must already have a cluster attached and the cluster must have finished provisioning.
@@ -30,6 +35,7 @@ resource "duploai_azure_node_pool" "workers" {
 
   name       = "workers"
   vm_size    = "Standard_DS2_v2"
+  os_sku     = "Ubuntu"
   node_count = 3
 }
 
@@ -44,6 +50,7 @@ resource "duploai_azure_node_pool" "elastic" {
 
   name    = "elastic"
   vm_size = "Standard_D4s_v5"
+  os_sku  = "Ubuntu"
 
   enable_auto_scaling = true
   min_count           = 2
@@ -67,6 +74,7 @@ resource "duploai_azure_node_pool" "batch" {
 
   name               = "batch"
   vm_size            = "Standard_D8s_v5"
+  os_sku             = "Ubuntu"
   scale_set_priority = "Spot"
   node_count         = 2
 
@@ -98,6 +106,7 @@ resource "duploai_azure_node_pool" "winapp" {
   name    = "winapp"
   vm_size = "Standard_D4s_v5"
   os_type = "Windows"
+  os_sku  = "Windows2022"
 
   node_count        = 2
   max_pods_per_node = 60
@@ -112,6 +121,7 @@ resource "duploai_azure_node_pool" "surge" {
 
   name       = "surge"
   vm_size    = "Standard_DS2_v2"
+  os_sku     = "Ubuntu"
   node_count = 4
 
   upgrade_settings = {
@@ -157,7 +167,7 @@ output "cluster" {
 Named `node_count` rather than `count` because `count` is a reserved Terraform meta-argument.
 - `node_labels` (Map of String) Kubernetes labels applied to every node in the pool. The platform adds its own `resourcegroup`, `environment`, `workspace` and `allocationtags` labels so that pods can target these nodes; those are filtered out of state and always win over a value set here, so use `allocation_tag` rather than writing the `allocationtags` label directly.
 - `node_taints` (Attributes List) Kubernetes taints applied to every node in the pool, so only pods with a matching toleration are scheduled there. (see [below for nested schema](#nestedatt--node_taints))
-- `os_sku` (String) Specific OS image for the pool's nodes. Left unset, Azure picks the default for `os_type` — currently Ubuntu for Linux and Windows2022 for Windows. Must match `os_type`: the Windows SKUs are only valid on a Windows pool, `Ubuntu` and `AzureLinux` only on a Linux one. Immutable after creation.
+- `os_sku` (String) Specific OS image for the pool's nodes. Set it explicitly: creating a pool without `os_sku` currently fails on the platform (a known platform defect), so use `Ubuntu` or `AzureLinux` for a Linux pool and `Windows2022` for a Windows one. Must match `os_type`: the Windows SKUs are only valid on a Windows pool, `Ubuntu` and `AzureLinux` only on a Linux one. Immutable after creation.
 - `os_type` (String) Operating system for the pool's nodes. Immutable after creation. A `Windows` pool additionally caps `name` at 6 characters.
 - `provisioner_type` (String) Provisioner type. Assigned by the platform when unset.
 - `provisioner_version` (String) Optional provisioner version. Left unset the API omits it, so this reads back empty rather than as an empty string.

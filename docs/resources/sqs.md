@@ -97,7 +97,7 @@ output "orders_queue_url" {
 - `provisioner_version` (String) Optional provisioner version.
 - `receive_message_wait_seconds` (Number) Long-poll wait time (seconds, 0-20) for ReceiveMessage. Defaults to 0 (short polling) when unset. Can be changed in place.
 - `scope_ids` (List of String) Scope IDs that link this queue to a cloud provider account.
-- `tags` (Map of String) Tags applied to the queue at creation, as key/value pairs. Platform ownership tags are added automatically. Set only at creation (SQS has no tag-update API).
+- `tags` (Map of String) Tags applied to the queue at creation, as key/value pairs. Platform ownership tags are added automatically. Set only at creation: changing it later has no effect, because the platform does not update tags on an existing queue.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `visibility_timeout_seconds` (Number) Time (seconds, 0-43200) a message is hidden after a consumer receives it. Defaults to 30 when unset. Can be changed in place.
 

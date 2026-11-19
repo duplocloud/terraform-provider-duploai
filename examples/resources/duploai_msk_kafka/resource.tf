@@ -8,7 +8,7 @@ resource "duploai_msk_kafka" "example" {
   instance_type          = "kafka.m5.large"
   number_of_broker_nodes = 3
   broker_volume_size_gb  = 100
-  kafka_version          = "3.6.0"
+  kafka_version          = "3.8.x"
 
   # Optional: pin specific private subnets (one broker per AZ). Omit for all RG private subnets.
   subnet_ids = ["subnet-0a1b2c3d4e5f60001", "subnet-0a1b2c3d4e5f60002"]

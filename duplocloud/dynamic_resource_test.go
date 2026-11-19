@@ -99,6 +99,55 @@ func TestAttrSchema_StableUsesNonNullStateForUnknown(t *testing.T) {
 	}
 }
 
+// A child of a nested attribute must keep only a non-null prior value, as
+// HashiCorp recommends: UseStateForUnknown would plan an unset child of a newly
+// added list element as null instead of the value the server fills in. A
+// forceNew child keeps UseStateForUnknown — null going unknown would force
+// replacement.
+func TestAttrSchema_NestedChildUsesNonNullStateForUnknown(t *testing.T) {
+	nonNull := reflect.TypeOf(stringplanmodifier.UseNonNullStateForUnknown())
+	keep := reflect.TypeOf(stringplanmodifier.UseStateForUnknown())
+	parent := AttributeSpec{Name: "rules", Type: "list(object)", Optional: true, Attributes: []AttributeSpec{
+		{Name: "path_type", Type: "string", Optional: true, Computed: true, APIPath: "pathType"},
+		{Name: "zone", Type: "string", Optional: true, Computed: true, ForceNew: true, APIPath: "zone"},
+	}}
+	nested := attrSchema(parent).(schema.ListNestedAttribute).NestedObject.Attributes
+	cases := map[string]reflect.Type{"path_type": nonNull, "zone": keep}
+	for name, want := range cases {
+		mods := nested[name].(schema.StringAttribute).PlanModifiers
+		if len(mods) == 0 {
+			t.Fatalf("%s: expected a preserve plan modifier", name)
+		}
+		if got := reflect.TypeOf(mods[0]); got != want {
+			t.Errorf("%s: first plan modifier = %v, want %v", name, got, want)
+		}
+	}
+
+	// The same attribute at the top level keeps UseStateForUnknown.
+	top := attrSchema(AttributeSpec{Type: "string", Optional: true, Computed: true}).(schema.StringAttribute)
+	if got := reflect.TypeOf(top.PlanModifiers[0]); got != keep {
+		t.Errorf("top-level optional+computed: plan modifier = %v, want %v", got, keep)
+	}
+
+	// Under a forceNew parent (k8s_job containers), at any depth, children keep
+	// UseStateForUnknown: an unknown child would make the parent differ from
+	// state and replace the resource on every unrelated update.
+	fnParent := AttributeSpec{Name: "containers", Type: "list(object)", Optional: true, ForceNew: true, Attributes: []AttributeSpec{
+		{Name: "image_pull_policy", Type: "string", Optional: true, Computed: true, APIPath: "imagePullPolicy"},
+		{Name: "probe", Type: "object", Optional: true, Computed: true, APIPath: "probe", Attributes: []AttributeSpec{
+			{Name: "path", Type: "string", Optional: true, Computed: true, APIPath: "path"},
+		}},
+	}}
+	fn := attrSchema(fnParent).(schema.ListNestedAttribute).NestedObject.Attributes
+	if got := reflect.TypeOf(fn["image_pull_policy"].(schema.StringAttribute).PlanModifiers[0]); got != keep {
+		t.Errorf("child of a forceNew parent: plan modifier = %v, want %v", got, keep)
+	}
+	deep := fn["probe"].(schema.SingleNestedAttribute).Attributes["path"].(schema.StringAttribute)
+	if got := reflect.TypeOf(deep.PlanModifiers[0]); got != keep {
+		t.Errorf("grandchild of a forceNew parent: plan modifier = %v, want %v", got, keep)
+	}
+}
+
 func TestLoadResourceSpecs(t *testing.T) {
 	// The framework branch ships no resource specs; the loader must succeed and
 	// return an empty set (and must validate every spec that is present).

@@ -7,7 +7,7 @@ resource "duploai_rds_instance" "basic" {
   environment_id    = "<environment-id>"
 
   engine               = "postgres"
-  engine_version       = "16.4"
+  engine_version       = "16.15"
   db_instance_class    = "db.t3.medium"
   allocated_storage    = 50
   db_name              = "appdb"
@@ -54,4 +54,29 @@ resource "duploai_rds_instance" "mysql" {
     update = "60m"
     delete = "30m"
   }
+}
+
+# Terraform 1.11 and later: the write-only argument keeps the secret out of the
+# plan and state. Change the _wo_version number whenever the secret changes —
+# that is what sends the new value. On older Terraform, use the attribute above.
+resource "duploai_rds_instance" "write_only" {
+  workspace_id      = "<workspace-id>"
+  name              = "prod-pg-wo"
+  scope_ids         = ["<scope-id>"]
+  resource_group_id = "<resource-group-id>"
+  environment_id    = "<environment-id>"
+
+  engine                          = "postgres"
+  engine_version                  = "16.15"
+  db_instance_class               = "db.t3.medium"
+  allocated_storage               = 50
+  db_name                         = "appdb"
+  master_username                 = "dbadmin"
+  master_user_password_wo         = var.master_password
+  master_user_password_wo_version = 1
+}
+
+variable "master_password" {
+  type      = string
+  sensitive = true
 }

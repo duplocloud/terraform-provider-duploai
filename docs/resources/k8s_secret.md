@@ -53,11 +53,11 @@ resource "duploai_k8s_secret" "app" {
 
 ### Optional
 
-- `annotations` (Map of String) Kubernetes annotations applied to the secret.
+- `annotations` (Map of String) Kubernetes annotations applied to the secret. Only annotations set in configuration are tracked; annotations added outside Terraform are ignored.
 - `data` (Map of String, Sensitive) Secret entries with base64-encoded values, keyed by name. Populated by the server from string_data if not set directly.
 - `description` (String) Optional description.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
-- `labels` (Map of String) Kubernetes labels applied to the secret.
+- `labels` (Map of String) Kubernetes labels applied to the secret. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
 - `scope_ids` (List of String) Scope IDs that link this secret to a cloud provider account. Not echoed back by the API, so it is never read from the response.

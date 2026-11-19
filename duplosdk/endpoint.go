@@ -1,8 +1,11 @@
 package duplosdk
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 )
 
 // pathParamRe matches {placeholder} tokens in a path template.
@@ -45,6 +48,72 @@ type Endpoint struct {
 	// default path: a Deprovision step runs only when Path is set explicitly,
 	// e.g. Operation{Verb: http.MethodPost, Path: "/{id}/deprovision"}.
 	Deprovision Operation
+
+	// SensitivePaths are dot paths, from the body root, whose values are always
+	// redacted from logged request, response and error bodies — on top of the
+	// field-name rule, which cannot recognise a secret stored under a neutral
+	// key (an Azure Key Vault secret's "value"). A response wrapped in the
+	// {"data": ...} envelope is matched under it as well.
+	SensitivePaths []string
+
+	// NotFoundResponses declares non-404 error responses that mean "this object
+	// does not exist" for this API alone. Read, delete and deprovision treat a
+	// matching response exactly like a 404; create and update never do, so a
+	// write is not silently taken as a no-op. Leave empty (the default) to keep
+	// the plain contract where only 404 is not-found. Each rule must name both
+	// a status and a message pattern, so a resource never treats a whole status
+	// class (every 400) as gone.
+	NotFoundResponses []NotFoundResponse
+}
+
+// NotFoundResponse is one API-specific "object is gone" error shape: the HTTP
+// status and a pattern its error message must match. The pattern is tried
+// against each top-level string field of a JSON error body (where the
+// message arrives with its escapes decoded) and against the raw body.
+type NotFoundResponse struct {
+	Status  int
+	Message *regexp.Regexp
+}
+
+// asNotFound returns err rewritten as a 404 when it matches one of the
+// endpoint's NotFoundResponses, and err unchanged otherwise.
+func (e Endpoint) asNotFound(err ClientError) ClientError {
+	if err == nil || err.IsNotFound() || len(e.NotFoundResponses) == 0 {
+		return err
+	}
+	body := errorBody(err)
+	if body == "" {
+		return err
+	}
+	msgs := errorMessages(body)
+	for _, rule := range e.NotFoundResponses {
+		if rule.Message == nil || rule.Status != err.Status() {
+			continue
+		}
+		for _, m := range msgs {
+			if rule.Message.MatchString(m) {
+				return newClientError(http.StatusNotFound,
+					fmt.Errorf("not found (API answered %d: %s)", err.Status(), strings.TrimSpace(m)))
+			}
+		}
+	}
+	return err
+}
+
+// errorMessages lists the strings a NotFoundResponse pattern is matched
+// against: every top-level string field of a JSON object body, then the raw
+// body itself.
+func errorMessages(body string) []string {
+	var out []string
+	var obj map[string]any
+	if json.Unmarshal([]byte(body), &obj) == nil {
+		for _, v := range obj {
+			if s, ok := v.(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+	}
+	return append(out, body)
 }
 
 // Operation is one CRUD action's HTTP verb and the path appended to the

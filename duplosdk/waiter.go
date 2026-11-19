@@ -3,8 +3,9 @@ package duplosdk
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // Waiter polls a resource until a terminal state is reached.
@@ -83,7 +84,7 @@ func (w *Waiter[T]) failureMsg(status, reason string, obj *T) string {
 // Wait polls fetchFn until the resource reaches SuccessState, a FailureState,
 // timeout elapses, or ctx is cancelled. name is used only for log messages.
 func (w *Waiter[T]) Wait(ctx context.Context, name string, timeout time.Duration, fetchFn func() (*T, ClientError)) (*T, ClientError) {
-	log.Printf("[TRACE] waiter(%s): start (timeout=%s)", name, timeout)
+	tflog.Trace(ctx, fmt.Sprintf("waiter(%s): start (timeout=%s)", name, timeout))
 	deadline := time.Now().Add(timeout)
 	failCount := 0
 	fetchFailCount := 0
@@ -96,7 +97,7 @@ func (w *Waiter[T]) Wait(ctx context.Context, name string, timeout time.Duration
 			if fetchFailCount > w.FetchRetries || time.Now().After(deadline) {
 				return nil, err
 			}
-			log.Printf("[TRACE] waiter(%s): fetch failed (%s), retry %d/%d", name, err, fetchFailCount, w.FetchRetries)
+			tflog.Trace(ctx, fmt.Sprintf("waiter(%s): fetch failed (%s), retry %d/%d", name, err, fetchFailCount, w.FetchRetries))
 			select {
 			case <-ctx.Done():
 				return nil, newClientError(0, fmt.Errorf("waiting for %s cancelled: %w", name, ctx.Err()))
@@ -106,13 +107,13 @@ func (w *Waiter[T]) Wait(ctx context.Context, name string, timeout time.Duration
 		}
 		fetchFailCount = 0
 		status := w.StatusFn(obj)
-		log.Printf("[TRACE] waiter(%s): status=%s", name, status)
+		tflog.Trace(ctx, fmt.Sprintf("waiter(%s): status=%s", name, status))
 
 		if status == w.SuccessState {
 			if w.ready(obj) {
 				return obj, nil
 			}
-			log.Printf("[TRACE] waiter(%s): status reached %q but readiness gate not met (want %q), still polling", name, status, w.ReadyState)
+			tflog.Trace(ctx, fmt.Sprintf("waiter(%s): status reached %q but readiness gate not met (want %q), still polling", name, status, w.ReadyState))
 		}
 		reason, bad := w.FailureStates[status]
 		failedValue := status
@@ -128,7 +129,7 @@ func (w *Waiter[T]) Wait(ctx context.Context, name string, timeout time.Duration
 			if failCount > w.FailureRetries {
 				return nil, newClientError(0, fmt.Errorf("%s", w.failureMsg(failedValue, reason, obj)))
 			}
-			log.Printf("[TRACE] waiter(%s): failure state %q, retry %d/%d before treating as terminal", name, failedValue, failCount, w.FailureRetries)
+			tflog.Trace(ctx, fmt.Sprintf("waiter(%s): failure state %q, retry %d/%d before treating as terminal", name, failedValue, failCount, w.FailureRetries))
 		} else {
 			failCount = 0
 		}
@@ -153,7 +154,7 @@ func (w *Waiter[T]) Wait(ctx context.Context, name string, timeout time.Duration
 // or ctx is cancelled. Use it after issuing an asynchronous delete to confirm
 // deprovisioning actually completed.
 func (w *Waiter[T]) WaitGone(ctx context.Context, name string, timeout time.Duration, fetchFn func() (*T, ClientError)) ClientError {
-	log.Printf("[TRACE] waiter(%s): waiting for deletion (timeout=%s)", name, timeout)
+	tflog.Trace(ctx, fmt.Sprintf("waiter(%s): waiting for deletion (timeout=%s)", name, timeout))
 	deadline := time.Now().Add(timeout)
 	failCount := 0
 	for {
@@ -165,14 +166,14 @@ func (w *Waiter[T]) WaitGone(ctx context.Context, name string, timeout time.Dura
 			return err
 		}
 		status := w.StatusFn(obj)
-		log.Printf("[TRACE] waiter(%s): still present, status=%s", name, status)
+		tflog.Trace(ctx, fmt.Sprintf("waiter(%s): still present, status=%s", name, status))
 
 		if reason, bad := w.FailureStates[status]; bad {
 			failCount++
 			if failCount > w.FailureRetries {
 				return newClientError(0, fmt.Errorf("%s", w.failureMsg(status, reason, obj)))
 			}
-			log.Printf("[TRACE] waiter(%s): failure state %q, retry %d/%d before treating as terminal", name, status, failCount, w.FailureRetries)
+			tflog.Trace(ctx, fmt.Sprintf("waiter(%s): failure state %q, retry %d/%d before treating as terminal", name, status, failCount, w.FailureRetries))
 		} else {
 			failCount = 0
 		}
@@ -197,7 +198,7 @@ func (w *Waiter[T]) WaitGone(ctx context.Context, name string, timeout time.Dura
 // FailureState (e.g. DeprovisionFailed), timeout, or ctx cancellation. Use it
 // between a deprovision call and the final delete.
 func (w *Waiter[T]) WaitDeprovisioned(ctx context.Context, name, successState string, timeout time.Duration, fetchFn func() (*T, ClientError)) ClientError {
-	log.Printf("[TRACE] waiter(%s): waiting for deprovision to %q (timeout=%s)", name, successState, timeout)
+	tflog.Trace(ctx, fmt.Sprintf("waiter(%s): waiting for deprovision to %q (timeout=%s)", name, successState, timeout))
 	deadline := time.Now().Add(timeout)
 	failCount := 0
 	for {
@@ -209,7 +210,7 @@ func (w *Waiter[T]) WaitDeprovisioned(ctx context.Context, name, successState st
 			return err
 		}
 		status := w.StatusFn(obj)
-		log.Printf("[TRACE] waiter(%s): deprovision status=%s", name, status)
+		tflog.Trace(ctx, fmt.Sprintf("waiter(%s): deprovision status=%s", name, status))
 
 		if status == successState {
 			return nil
@@ -219,7 +220,7 @@ func (w *Waiter[T]) WaitDeprovisioned(ctx context.Context, name, successState st
 			if failCount > w.FailureRetries {
 				return newClientError(0, fmt.Errorf("%s", w.failureMsg(status, reason, obj)))
 			}
-			log.Printf("[TRACE] waiter(%s): failure state %q, retry %d/%d before treating as terminal", name, status, failCount, w.FailureRetries)
+			tflog.Trace(ctx, fmt.Sprintf("waiter(%s): failure state %q, retry %d/%d before treating as terminal", name, status, failCount, w.FailureRetries))
 		} else {
 			failCount = 0
 		}

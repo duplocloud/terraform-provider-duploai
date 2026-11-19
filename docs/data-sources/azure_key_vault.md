@@ -63,7 +63,7 @@ output "provisioning_state" {
 - `provisioning_state` (String) Azure-reported provisioning state of the vault.
 - `purge_on_deprovision` (Boolean, Deprecated) Deprecated and ignored. Azure keeps a deleted vault soft-deleted for soft_delete_retention_days, and its globally-unique name stays reserved for that period. To create a new vault with the same name, purge the soft-deleted one in Azure first (az keyvault purge --name <name>) - which is only possible when enable_purge_protection is false.
 - `resource_group_id` (String) Resource group the vault is provisioned into. Its managed identity is what gets Key Vault Administrator on the vault.
-- `scope_ids` (List of String) Scopes the vault is visible to. Inherited from the resource group.
+- `scope_ids` (List of String) Scopes the vault is visible to. Inherited from the resource group. Sent back unchanged on update: the platform rebuilds the vault record from the update request and would otherwise drop them.
 - `sku_name` (String) Pricing tier. Standard is sufficient for secrets and certificates; Premium adds HSM-backed keys.
 - `soft_delete_retention_days` (Number) How long a deleted vault or secret stays recoverable before Azure permanently removes it. Soft delete itself cannot be disabled.
 - `status` (String) Provisioning status reported by the platform.

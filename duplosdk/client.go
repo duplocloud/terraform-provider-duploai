@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 const defaultTimeout = 60 * time.Second
@@ -63,6 +64,46 @@ func isSecretKeyName(k string) bool {
 var secretJSONKeyRe = regexp.MustCompile(
 	`(?i)"([^"]*(password|secret|token|apikey|api_key|credential|privatekey|private_key|passphrase|passcode|bearer|certificate|connectionstring|jwt|sessionid)[^"]*)"\s*:\s*"[^"]*"`)
 
+// sensitivePathsKey carries an endpoint's SensitivePaths on a request context.
+type sensitivePathsKey struct{}
+
+// withSensitivePaths returns ctx carrying paths (split into segments), or ctx
+// itself when there are none.
+func withSensitivePaths(ctx context.Context, paths []string) context.Context {
+	if len(paths) == 0 {
+		return ctx
+	}
+	segs := make([][]string, 0, len(paths))
+	for _, p := range paths {
+		if p != "" {
+			segs = append(segs, strings.Split(p, "."))
+		}
+	}
+	return context.WithValue(ctx, sensitivePathsKey{}, segs)
+}
+
+func sensitivePathsFrom(ctx context.Context) [][]string {
+	segs, _ := ctx.Value(sensitivePathsKey{}).([][]string)
+	return segs
+}
+
+// redactPath blanks the string value at path in doc, if there is one.
+func redactPath(doc any, path []string) {
+	for i, seg := range path {
+		m, ok := doc.(map[string]any)
+		if !ok {
+			return
+		}
+		if i == len(path)-1 {
+			if s, isStr := m[seg].(string); isStr && s != "" {
+				m[seg] = "REDACTED"
+			}
+			return
+		}
+		doc = m[seg]
+	}
+}
+
 // redactBody hides secret-looking values and truncates the result.
 //
 // It parses the body and walks it, rather than pattern-matching the raw text,
@@ -73,24 +114,45 @@ var secretJSONKeyRe = regexp.MustCompile(
 //
 // Best-effort: a debugging aid, not a guarantee. Do not enable body logging
 // against a host whose data you would not paste into a ticket.
-func redactBody(b []byte) string {
+//
+// paths are extra dot-path segments (an endpoint's SensitivePaths) blanked at
+// the body root and under a {"data": ...} response envelope.
+func redactBody(b []byte, paths ...[]string) string {
 	if len(b) == 0 {
 		return "(empty)"
 	}
+	out := redactSecrets(b, paths...)
+	if len(out) > maxLoggedBody {
+		out = out[:maxLoggedBody] + fmt.Sprintf("... (truncated, %d bytes total)", len(b))
+	}
+	return out
+}
+
+// redactSecrets is redactBody without the log-size cap: the same secret
+// blanking, for text shown to the user in full (an API error message).
+func redactSecrets(b []byte, paths ...[]string) string {
 	out := string(b)
 	var doc any
 	if err := json.Unmarshal(b, &doc); err == nil {
 		redactJSONValue(doc)
-		if reser, err := json.Marshal(doc); err == nil {
-			out = string(reser)
+		for _, p := range paths {
+			redactPath(doc, p)
+			if env, ok := doc.(map[string]any); ok {
+				redactPath(env["data"], p)
+			}
+		}
+		// No HTML escaping: this text reaches the user, and json.Marshal would turn
+		// "name must be <= 63 chars" into "\u003c= 63".
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(doc); err == nil {
+			out = strings.TrimSuffix(buf.String(), "\n")
 		}
 	} else {
 		// Not JSON (an HTML error page, a plain-text message): fall back to the
 		// field-name pattern, which is all that is possible without structure.
 		out = secretJSONKeyRe.ReplaceAllString(out, `"$1":"REDACTED"`)
-	}
-	if len(out) > maxLoggedBody {
-		out = out[:maxLoggedBody] + fmt.Sprintf("... (truncated, %d bytes total)", len(b))
 	}
 	return out
 }
@@ -104,6 +166,13 @@ func redactJSONValue(v any) {
 		// says WHICH credential field was sent.
 		if k, ok := t["key"].(string); ok && isSecretKeyName(k) {
 			if _, isStr := t["value"].(string); isStr {
+				t["value"] = "REDACTED"
+			}
+		}
+		// Azure Key Vault secret shape ({"name", "value", "contentType", ...}):
+		// the secret itself sits under the neutral "value" key.
+		if _, ok := t["contentType"]; ok {
+			if v, isStr := t["value"].(string); isStr && v != "" {
 				t["value"] = "REDACTED"
 			}
 		}
@@ -135,6 +204,9 @@ type Client struct {
 	// http.Client.Timeout is a hard ceiling that would clamp a longer per-request
 	// context. See callAPIWithTimeout.
 	timeout time.Duration
+
+	// UserAgent, when set, is sent as the User-Agent header on every request.
+	UserAgent string
 }
 
 // NewClient constructs a new Client. sslNoVerify disables certificate checking
@@ -151,6 +223,7 @@ func NewClient(hostURL, token string, sslNoVerify bool, timeout time.Duration) (
 		timeout = defaultTimeout
 	}
 	transport := &http.Transport{
+		Proxy:           http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: sslNoVerify}, //nolint:gosec
 	}
 	return &Client{
@@ -171,7 +244,7 @@ func NewClient(hostURL, token string, sslNoVerify bool, timeout time.Duration) (
 // non-positive or shorter-than-default timeout falls back to the client
 // default, so a caller can only ever ask for MORE room, never less — pass 0 for
 // the default.
-func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string, body interface{}) ([]byte, ClientError) {
+func (c *Client) doRequestWithTimeout(ctx context.Context, timeout time.Duration, method, path string, body interface{}) ([]byte, ClientError) {
 	// A Client built literally (rather than via NewClient) has a zero timeout,
 	// which would make every context deadline already expired — a confusing
 	// "context deadline exceeded" on the first call. Floor it.
@@ -183,7 +256,7 @@ func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string
 		timeout = base
 	}
 	url := c.HostURL + path
-	log.Printf("[TRACE] duplo-request: %s %s (deadline=%s)", method, url, timeout)
+	tflog.Trace(ctx, fmt.Sprintf("duplo-request: %s %s (deadline=%s)", method, url, timeout))
 
 	var reqBody io.Reader
 	if body != nil {
@@ -192,27 +265,35 @@ func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string
 			return nil, newClientError(0, fmt.Errorf("marshalling request: %w", err))
 		}
 		if bodyLoggingEnabled() {
-			log.Printf("[TRACE] duplo-request-body: %s %s: %s", method, url, redactBody(b))
+			tflog.Trace(ctx, fmt.Sprintf("duplo-request-body: %s %s: %s", method, url, redactBody(b, sensitivePathsFrom(ctx)...)))
 		}
 		reqBody = strings.NewReader(string(b))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	// The request runs under its own per-call deadline and deliberately NOT
+	// under the Terraform request's cancellation (WithoutCancel keeps only its
+	// values, for logging). Cancelling an in-flight create on Ctrl-C could cut
+	// a request the backend already acted on, leaving an object Terraform never
+	// records; so backend calls behave exactly as before.
+	reqCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
+	req, err := http.NewRequestWithContext(reqCtx, method, url, reqBody)
 	if err != nil {
-		log.Printf("[TRACE] duplo-request: %s %s: cannot build request: %s", method, url, err)
+		tflog.Trace(ctx, fmt.Sprintf("duplo-request: %s %s: cannot build request: %s", method, url, err))
 		return nil, newClientError(0, fmt.Errorf("creating request: %w", err))
 	}
 	req.Header.Set("Authorization", "Bearer "+c.Token)
+	if c.UserAgent != "" {
+		req.Header.Set("User-Agent", c.UserAgent)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		log.Printf("[TRACE] duplo-request: %s %s: failed: %s", method, url, err)
+		tflog.Trace(ctx, fmt.Sprintf("duplo-request: %s %s: failed: %s", method, url, err))
 		return nil, newClientError(0, fmt.Errorf("executing request: %w", err))
 	}
 	defer resp.Body.Close() //nolint:errcheck
@@ -222,10 +303,10 @@ func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string
 		return nil, newClientError(resp.StatusCode, fmt.Errorf("reading response: %w", err))
 	}
 
-	log.Printf("[TRACE] duplo-response: %s %s: status=%d", method, url, resp.StatusCode)
+	tflog.Trace(ctx, fmt.Sprintf("duplo-response: %s %s: status=%d", method, url, resp.StatusCode))
 	if bodyLoggingEnabled() {
-		log.Printf("[TRACE] duplo-response-body: %s %s: status=%d: %s",
-			method, url, resp.StatusCode, redactBody(respBody))
+		tflog.Trace(ctx, fmt.Sprintf("duplo-response-body: %s %s: status=%d: %s",
+			method, url, resp.StatusCode, redactBody(respBody, sensitivePathsFrom(ctx)...)))
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
@@ -236,15 +317,21 @@ func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string
 		// (401/403) come back with an empty body and put the reason in the
 		// WWW-Authenticate header instead, so fall back to that + the HTTP
 		// status text rather than emitting a blank message.
-		detail := strings.TrimSpace(string(respBody))
+		// The message reaches the user's terminal and CI logs, so secrets an error
+		// body echoes are blanked here too. The raw body stays on the error for
+		// the endpoint's NotFound rules (asNotFound / errorBody).
+		paths := sensitivePathsFrom(ctx)
+		detail := strings.TrimSpace(redactSecrets(respBody, paths...))
 		if detail == "" {
 			detail = http.StatusText(resp.StatusCode)
 			if wa := strings.TrimSpace(resp.Header.Get("WWW-Authenticate")); wa != "" {
 				detail += " (WWW-Authenticate: " + wa + ")"
 			}
 		}
-		log.Printf("[TRACE] duplo-response: %s %s: error body: %q", method, url, string(respBody))
-		return nil, newClientError(resp.StatusCode, fmt.Errorf("API error %d: %s", resp.StatusCode, detail))
+		// Redacted like a logged body: an error may echo the request (or a cloud
+		// SDK error relayed by the backend may quote a secret field).
+		tflog.Trace(ctx, fmt.Sprintf("duplo-response: %s %s: error body: %q", method, url, redactBody(respBody, paths...)))
+		return nil, newResponseError(resp.StatusCode, fmt.Errorf("API error %d: %s", resp.StatusCode, detail), string(respBody))
 	}
 
 	return respBody, nil
@@ -259,8 +346,8 @@ func (c *Client) doRequestWithTimeout(timeout time.Duration, method, path string
 // longer one to operations the backend performs synchronously and slowly — a
 // cloud teardown can run for minutes, and disconnecting mid-flight does not
 // merely lose the reply, it cancels the server's work.
-func (c *Client) callAPIWithTimeout(timeout time.Duration, method, path string, req, out interface{}) ClientError {
-	body, err := c.doRequestWithTimeout(timeout, method, path, req)
+func (c *Client) callAPIWithTimeout(ctx context.Context, timeout time.Duration, method, path string, req, out interface{}) ClientError {
+	body, err := c.doRequestWithTimeout(ctx, timeout, method, path, req)
 	if err != nil {
 		return err
 	}

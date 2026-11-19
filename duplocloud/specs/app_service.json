@@ -1903,6 +1903,7 @@
     {
       "name": "service_name",
       "type": "string",
+      "stableUnlessChanged": ["service"],
       "computed": true,
       "apiPath": "result.serviceName",
       "description": "Name of the provisioned Service (if any)."
@@ -1910,6 +1911,7 @@
     {
       "name": "ingress_name",
       "type": "string",
+      "stableUnlessChanged": ["ingress"],
       "computed": true,
       "apiPath": "result.ingressName",
       "description": "Name of the provisioned Ingress (if any)."
@@ -1917,6 +1919,7 @@
     {
       "name": "hpa_name",
       "type": "string",
+      "stableUnlessChanged": ["hpa"],
       "computed": true,
       "apiPath": "result.hpaName",
       "description": "Name of the provisioned HorizontalPodAutoscaler (set when replication_type is Hpa)."

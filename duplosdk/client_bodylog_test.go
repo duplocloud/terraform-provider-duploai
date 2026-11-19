@@ -91,3 +91,23 @@ func TestRedactBody_NonJSONFallsBackToPatternMatch(t *testing.T) {
 		t.Errorf("non-JSON body should still be readable:\n%s", got)
 	}
 }
+
+// An endpoint's SensitivePaths blank a secret under a neutral key (a Key Vault
+// secret "value" sent without contentType), at the root and under the
+// {"data": ...} envelope, and also in a non-2xx error body; other fields stay.
+func TestRedactBody_SensitivePaths(t *testing.T) {
+	paths := [][]string{{"value"}, {"spec", "pw"}}
+	got := redactBody([]byte(`{"name":"s1","value":"PLACEHOLDER-a","spec":{"pw":"PLACEHOLDER-b","n":"keep"}}`), paths...)
+	got += redactBody([]byte(`{"data":{"value":"PLACEHOLDER-c"}}`), paths...)
+	for _, s := range []string{"PLACEHOLDER-a", "PLACEHOLDER-b", "PLACEHOLDER-c"} {
+		if strings.Contains(got, s) {
+			t.Errorf("sensitive path not redacted: %s\n%s", s, got)
+		}
+	}
+	if !strings.Contains(got, `"name":"s1"`) || !strings.Contains(got, `"n":"keep"`) {
+		t.Errorf("non-sensitive fields must survive:\n%s", got)
+	}
+	if got := redactBody([]byte(`{"value":"plain"}`)); !strings.Contains(got, "plain") {
+		t.Errorf("a neutral key with no sensitive path or contentType sibling must stay readable: %s", got)
+	}
+}

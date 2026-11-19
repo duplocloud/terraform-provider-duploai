@@ -51,12 +51,12 @@ resource "duploai_k8s_config_map" "app" {
 
 ### Optional
 
-- `annotations` (Map of String) Kubernetes annotations applied to the config map.
+- `annotations` (Map of String) Kubernetes annotations applied to the config map. Only annotations set in configuration are tracked; annotations added outside Terraform are ignored.
 - `binary_data` (Map of String) Binary configuration entries, base64-encoded values keyed by name.
 - `data` (Map of String) Configuration key/value pairs (UTF-8 string data).
 - `description` (String) Optional description. Not echoed back by the API, so it is never read from the response.
 - `failure_retries` (Number) Number of extra polls to tolerate a transient failure status during provisioning before treating it as terminal. Overrides the resource's default; leave unset to use it.
-- `labels` (Map of String) Kubernetes labels applied to the config map.
+- `labels` (Map of String) Kubernetes labels applied to the config map. Only labels set in configuration are tracked: the platform adds its own `duplocloud.ai/*` labels and the resource group's tags to the object, and those are ignored.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version. Not echoed back by the API, so it is never read from the response.
 - `scope_ids` (List of String) Scope IDs that link this config map to a cloud provider account. Not echoed back by the API, so it is never read from the response.

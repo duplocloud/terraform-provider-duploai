@@ -1,0 +1,228 @@
+{
+  "name": "ssm_parameter",
+  "description": "Manages a DuploCloud AI Helpdesk AWS Systems Manager (SSM) Parameter Store parameter, provisioned within an environment and resource group. Every in-place update rewrites the value, so it creates a new parameter version.",
+  "idPath": "id",
+  "dataSource": true,
+  "endpoint": {
+    "uriBase": "/v1/aiservicedesk/user/data/workspaces/{workspace_id}/environment/AwsSsmParameters",
+    "deprovision": {}
+  },
+  "attributes": [
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "description": "ID of the workspace that owns this parameter."
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "name",
+      "maxLength": 2048,
+      "pattern": "^(/[a-z0-9._-]+)+$|^[a-z0-9._-]+$",
+      "patternDescription": "must be a simple name (e.g. db-host) or a hierarchical path starting with / (e.g. /myapp/dev/db-host), using lowercase letters, digits, periods, underscores and hyphens, with no empty or trailing path segments",
+      "description": "Parameter name: a simple name such as `db-host`, or a hierarchical path that starts with `/`, such as `/myapp/dev/db-host`. Lowercase only, because the platform stores names in lowercase. Cannot be changed after creation."
+    },
+    {
+      "name": "environment_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.environmentId",
+      "description": "ID of the environment in which the parameter is created."
+    },
+    {
+      "name": "resource_group_id",
+      "type": "string",
+      "required": true,
+      "forceNew": true,
+      "apiPath": "spec.resourceGroupId",
+      "description": "ID of the resource group in which the parameter is created. Its AWS account and region are used."
+    },
+    {
+      "name": "type",
+      "type": "string",
+      "required": true,
+      "oneOf": [
+        "String",
+        "StringList",
+        "SecureString"
+      ],
+      "description": "Parameter type: String (plain text), StringList (comma-separated values, plain text) or SecureString (encrypted with AWS KMS). Changing the type of an existing parameter is not supported yet: a change after creation is not applied. To change it, replace the parameter (e.g. `terraform apply -replace=<address>`).",
+      "createPath": "spec.parameterType",
+      "createOnly": true,
+      "responsePaths": [
+        "result.cloudDetails.type",
+        "spec.parameterType"
+      ]
+    },
+    {
+      "name": "value",
+      "type": "string",
+      "required": true,
+      "sensitive": true,
+      "createPath": "spec.createRequest.value",
+      "updatePath": "spec.updateRequest.value",
+      "responsePaths": [
+        "result.parameterValue",
+        "result.sensitiveParameterValue"
+      ],
+      "preserveOnEmptyResponse": true,
+      "description": "Parameter value. For StringList, a comma-separated list such as `a,b,c`. Refreshed from AWS (decrypted for SecureString), so a change made outside Terraform shows as drift; if AWS cannot be read, the value already in state is kept. The value is stored in Terraform state."
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "createPath": "spec.createRequest.description",
+      "updatePath": "spec.updateRequest.description",
+      "responsePath": "result.cloudDetails.description",
+      "description": "Description stored on the parameter in AWS. Removing it from the configuration keeps the current description."
+    },
+    {
+      "name": "key_id",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "createPath": "spec.createRequest.keyId",
+      "responsePath": "result.cloudDetails.keyId",
+      "description": "SecureString only. KMS key that encrypts the value: a key ID, ARN or alias. Defaults to the AWS-managed key `alias/aws/ssm`. Updating the key of an existing parameter is not supported yet: a change after creation is ignored and the parameter keeps its original key. To use a different key, replace the parameter (e.g. `terraform apply -replace=<address>`).",
+      "createOnly": true
+    },
+    {
+      "name": "tier",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "oneOf": [
+        "Standard",
+        "Advanced",
+        "Intelligent-Tiering"
+      ],
+      "createPath": "spec.createRequest.tier",
+      "updatePath": "spec.updateRequest.tier",
+      "responsePath": "result.cloudDetails.tier",
+      "description": "Storage tier: Standard (values up to 4 KB, free), Advanced (up to 8 KB, charged) or Intelligent-Tiering (AWS picks Standard or Advanced on each write). Defaults to Standard. With Intelligent-Tiering, AWS reports the tier it resolved to; that is not shown as a change, so a tier changed outside Terraform is not detected while Intelligent-Tiering is configured. Changing Advanced back to Standard fails at apply because AWS does not allow it; replace the parameter instead (e.g. `terraform apply -replace=<address>`).",
+      "equivalentResponseValues": {
+        "Intelligent-Tiering": [
+          "Standard",
+          "Advanced"
+        ]
+      }
+    },
+    {
+      "name": "allowed_pattern",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "createPath": "spec.createRequest.allowedPattern",
+      "updatePath": "spec.updateRequest.allowedPattern",
+      "responsePath": "result.cloudDetails.allowedPattern",
+      "description": "Regular expression that AWS checks the value against on every write, e.g. `^\\d+$` for digits only. Removing it from the configuration keeps the current pattern."
+    },
+    {
+      "name": "data_type",
+      "type": "string",
+      "optional": true,
+      "computed": true,
+      "oneOf": [
+        "text",
+        "aws:ec2:image",
+        "aws:ssm:integration"
+      ],
+      "createPath": "spec.createRequest.dataType",
+      "updatePath": "spec.updateRequest.dataType",
+      "responsePath": "result.cloudDetails.dataType",
+      "description": "Data type AWS validates the value as: text (default), aws:ec2:image (an AMI ID) or aws:ssm:integration.",
+      "forceNew": true
+    },
+    {
+      "name": "tags",
+      "type": "list(object)",
+      "optional": true,
+      "createOnly": true,
+      "requestPath": "spec.createRequest.tags",
+      "description": "Tags applied to the parameter at creation. Platform ownership tags and the resource group's tags are added automatically. Set only at creation (SSM does not accept tags when a parameter is updated).",
+      "attributes": [
+        {
+          "name": "key",
+          "type": "string",
+          "required": true,
+          "apiPath": "key",
+          "description": "Tag key."
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "required": true,
+          "apiPath": "value",
+          "description": "Tag value."
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "computed": true,
+      "apiPath": "status",
+      "description": "Current provisioning status."
+    },
+    {
+      "name": "ssm_parameter_id",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "apiPath": "id",
+      "description": "ID of this parameter, for reference by dependent resources."
+    },
+    {
+      "name": "arn",
+      "type": "string",
+      "computed": true,
+      "stable": true,
+      "noSend": true,
+      "apiPath": "result.cloudDetails.arn",
+      "description": "ARN of the parameter in AWS."
+    },
+    {
+      "name": "version",
+      "type": "int",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.cloudDetails.version",
+      "description": "Current parameter version. AWS increments it on every write."
+    },
+    {
+      "name": "last_modified_date",
+      "type": "string",
+      "computed": true,
+      "noSend": true,
+      "apiPath": "result.cloudDetails.lastModifiedDate",
+      "normalizeTimestamp": true,
+      "description": "When the parameter was last written (RFC 3339, UTC, second precision)."
+    }
+  ],
+  "invalidWhen": [
+    {
+      "attribute": "key_id",
+      "when": [
+        {
+          "attribute": "type",
+          "notEquals": "SecureString"
+        },
+        {
+          "attribute": "key_id",
+          "isNotEmpty": true
+        }
+      ],
+      "message": "key_id only applies to type = \"SecureString\": String and StringList parameters are not encrypted. Remove key_id, or set type = \"SecureString\"."
+    }
+  ],
+  "waiter": {
+    "deprovisionedState": "DeProvisioned"
+  }
+}

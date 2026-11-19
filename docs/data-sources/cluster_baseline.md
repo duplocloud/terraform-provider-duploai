@@ -148,4 +148,4 @@ Read-Only:
 - `instance_type` (String) EC2 instance type for the system node group (e.g. t3.medium).
 - `max_size` (Number) Maximum node count (must be >= min_size).
 - `min_size` (Number) Minimum node count (must be >= 1).
-- `node_subnet_ids` (List of String) Private subnet IDs the system node group is placed in. Populated server-side from the linked network's private subnets.
+- `node_subnet_ids` (List of String) Private subnet IDs the system node group is placed in. Populated server-side from the linked network's private subnets on create, and sent back unchanged on update (the platform rebuilds the system node group from the update request and requires them).

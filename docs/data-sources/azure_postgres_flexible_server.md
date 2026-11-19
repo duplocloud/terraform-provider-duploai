@@ -49,7 +49,7 @@ output "postgres_server_id" {
 - `aad_administrators` (Attributes List) Microsoft Entra administrators granted access to the server. Only meaningful when active_directory_auth is Enabled. Applied on a best-effort basis after the server is created: Azure keeps the administrators sub-resource unavailable for a while after the server itself reports Ready, so an administrator may not land on the first apply. This is the requested set — `effective_aad_administrators` reports what Azure actually has, and the two converge once a later update reconciles them. Removals only take effect through that update path. (see [below for nested schema](#nestedatt--aad_administrators))
 - `active_directory_auth` (String) Whether Microsoft Entra authentication is accepted. At least one of password_auth and active_directory_auth must be Enabled.
 - `administrator_login` (String) Administrator login name. Required when password_auth is Enabled; leave unset in Microsoft Entra-only mode. Letters, numbers and underscores only, cannot start with 'pg_', and Azure reserves several names. Immutable after creation.
-- `administrator_password` (String, Sensitive) Administrator password. Required at creation when password_auth is Enabled; on update the backend treats a blank value as "keep the current password". 8–128 characters using at least three of: uppercase, lowercase, numbers, symbols. Write-only — the API never returns it, so the configured value is kept in state and a change made outside Terraform cannot be detected.
+- `administrator_password` (String, Sensitive) Administrator password. Required at creation when password_auth is Enabled (unless administrator_password_wo is set); on update the backend treats a blank value as "keep the current password". 8–128 characters using at least three of: uppercase, lowercase, numbers, symbols. The API never returns it, so the configured value is kept in state and a change made outside Terraform cannot be detected.
 - `availability_zone` (String) Availability zone to place the server in ("1", "2" or "3"). Leave unset for no preference. Immutable after creation.
 - `azure_resource_group_name` (String) Name of the Azure resource group the server lives in.
 - `backup_retention_days` (Number) Number of days to retain automated backups.
@@ -73,7 +73,7 @@ output "postgres_server_id" {
 - `provisioning_state` (String) Azure-reported provisioning state of the server.
 - `public_network_access` (String) Enabled exposes the server publicly, gated by firewall_rules. Disabled selects private access (VNet integration) and requires delegated_subnet_resource_id. Immutable after creation — Azure does not allow changing the connectivity method, VNet, or private DNS zone afterwards.
 - `resource_group_id` (String) Resource group the server is provisioned into.
-- `scope_ids` (List of String) Scopes the server is visible to. Inherited from the resource group.
+- `scope_ids` (List of String) Scopes the server is visible to. Inherited from the resource group. Sent back unchanged on update: the platform rebuilds the server record from the update request and would otherwise drop them.
 - `server_id` (String) Backend identifier of the server record.
 - `sku_name` (String) Compute size, e.g. Standard_B1ms (1 vCore, 2 GiB) or Standard_B2s (2 vCore, 4 GiB) for Burstable. Must be a size Azure offers for the chosen sku_tier.
 - `sku_tier` (String) Compute tier. Burstable is cost-effective for low or variable workloads; GeneralPurpose balances compute and memory; MemoryOptimized suits demanding workloads.
