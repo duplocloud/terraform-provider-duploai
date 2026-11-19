@@ -216,8 +216,9 @@
       "optional": true,
       "computed": true,
       "forceNew": true,
+      "emptyMeansUnset": true,
       "apiPath": "spec.storageKmsKeyId",
-      "description": "KMS key that encrypts storage, as a key id or ARN, honoured only when storage_encrypted is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key); an unregistered key is rejected. Leave it unset to use the resource group's own default key. Independent of performance_insights_kms_key_id: storage and Performance Insights are keyed separately. Immutable after creation."
+      "description": "KMS key that encrypts storage, as a key id or ARN, honoured only when storage_encrypted is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key); an unregistered key is rejected. Leave it unset (or set it to an empty string) to use the resource group's own default key. Independent of performance_insights_kms_key_id: storage and Performance Insights are keyed separately. Immutable after creation."
     },
     {
       "name": "backup_retention_period",
