@@ -33,14 +33,21 @@ The token is minted per read and expires within minutes. The data source re-fetc
 #
 # The scope must exist before this configuration is planned, so provision the
 # cluster in a separate root module or a prior apply.
+#
+# Set workspace_id (the workspace the scope belongs to) so the credentials are
+# fetched through the workspace-scoped user route: required for non-admin
+# tokens, and the recommended least-privilege form. Without it the admin route
+# is used, which needs an administrator token.
 data "duploai_k8s_credentials" "example" {
-  scope_id = "<kubernetes-scope-id>"
+  workspace_id = "<workspace-id>"
+  scope_id     = "<kubernetes-scope-id>"
 }
 
 # In practice, reference the owning cluster rather than hardcoding the id:
 #
 #   data "duploai_k8s_credentials" "example" {
-#     scope_id = data.duploai_cluster_baseline.example.scope_id
+#     workspace_id = data.duploai_cluster_baseline.example.workspace_id
+#     scope_id     = data.duploai_cluster_baseline.example.scope_id
 #   }
 #
 # Use scope_id (singular), not scope_ids. A cluster carries both: scope_ids are
@@ -78,6 +85,10 @@ output "token" {
 ### Required
 
 - `scope_id` (String) ID of the cluster's Kubernetes scope — `duploai_cluster_baseline.<name>.scope_id`. Not the cluster id, and not one of `scope_ids` (those are the cloud scopes, and passing one fails with "is not a Kubernetes provider").
+
+### Optional
+
+- `workspace_id` (String) ID of the workspace the cluster's Kubernetes scope belongs to — e.g. `duploai_cluster_baseline.<name>.workspace_id`. Required for non-admin tokens: when set, the credentials are fetched through the workspace-scoped user route, which needs only Kubernetes JIT access in that workspace. When unset, the admin route is used, which requires an administrator token.
 
 ### Read-Only
 

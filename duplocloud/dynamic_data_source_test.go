@@ -464,10 +464,23 @@ func TestK8sCredentialsReadsJitAccessPath(t *testing.T) {
 		if got := endpoint.UriBase; got != "/v1/aiservicedesk/admin/data/Scopes" {
 			t.Errorf("uriBase = %q, want the Scopes collection", got)
 		}
-		// The scope id is the only lookup key — no workspace path parameter.
-		for _, a := range spec.Attributes {
-			if a.Name == "workspace_id" {
-				t.Error("k8s_credentials is looked up by scope id alone; workspace_id must not be an input")
+		// scope_id stays the only lookup key. workspace_id is an optional input
+		// (no apiPath) that only selects the least-privilege user route; it is
+		// never a path parameter of the primary (admin) endpoint.
+		var ws *AttributeSpec
+		for i := range spec.Attributes {
+			if spec.Attributes[i].Name == "workspace_id" {
+				ws = &spec.Attributes[i]
+			}
+		}
+		if ws == nil {
+			t.Error("workspace_id must be declared as an optional input selecting the user jitAccess route")
+		} else if !ws.Optional || ws.Required || ws.Computed || ws.APIPath != "" {
+			t.Errorf("workspace_id must be optional, not required/computed, with no apiPath; got %+v", *ws)
+		}
+		for _, p := range endpoint.PathParams() {
+			if p == "workspace_id" {
+				t.Error("workspace_id must not be a path parameter of the primary admin endpoint")
 			}
 		}
 		// The lookup key is surfaced as "scope_id", not the generic "id": the value

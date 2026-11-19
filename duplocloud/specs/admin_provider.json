@@ -86,6 +86,7 @@
           "optional": true,
           "computed": true,
           "apiPath": "dataEx",
+          "matchByKey": "key",
           "description": "Key/value credential fields (e.g. accessKeyId, password, iamRoleArn).",
           "attributes": [
             {
@@ -153,6 +154,7 @@
           "optional": true,
           "computed": true,
           "apiPath": "dataEx",
+          "matchByKey": "key",
           "description": "Key/value credential fields.",
           "attributes": [
             {
