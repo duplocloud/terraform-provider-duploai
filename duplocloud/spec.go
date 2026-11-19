@@ -607,18 +607,6 @@ type AttributeSpec struct {
 	// is what a filterResponseKeys ["*"] map reads as after an import.
 	ImportAdoptsConfig bool `json:"importAdoptsConfig,omitempty"`
 
-	// EmptyMeansUnset, for a top-level string attribute that is optional,
-	// computed and forceNew, makes an explicit "" mean "not specified" instead
-	// of a value to enforce. Without it a configured "" differs from the stored
-	// value (null, or the key the platform chose) and, because the attribute is
-	// forceNew, plans a replacement of the resource. With it: "" never forces a
-	// replacement (a different non-empty value still does), "" is not sent in
-	// the request body, and a "" held in the plan or prior state is kept when
-	// the API reports the value it resolved, so there is no drift. The planned
-	// value is never unknown, so nothing that references the attribute is
-	// replaced either. Used for kms_key_id on the RDS resources.
-	EmptyMeansUnset bool `json:"emptyMeansUnset,omitempty"`
-
 	// StableUnlessChanged, on a computed-only string, list or set attribute,
 	// names the top-level inputs that can change it. The prior value is kept in
 	// the plan unless one of them changes (or is unknown) in the same plan — a
@@ -1865,11 +1853,6 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 			if a.Required || a.Optional {
 				return nil, fmt.Errorf("attribute %q: normalizeTimestamp is only valid on a computed-only attribute — "+
 					"rewriting a user-set value would make state disagree with the plan", a.Name)
-			}
-		}
-		if a.EmptyMeansUnset {
-			if a.Type != "string" || !a.Optional || !a.Computed || !a.ForceNew {
-				return nil, fmt.Errorf("attribute %q: emptyMeansUnset requires a string attribute that is optional, computed and forceNew", a.Name)
 			}
 		}
 		if len(a.EquivalentResponseValues) > 0 {

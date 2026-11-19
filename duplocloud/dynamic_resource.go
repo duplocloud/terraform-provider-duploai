@@ -1603,9 +1603,6 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *dia
 		if !ok {
 			continue
 		}
-		if sv, isStr := val.(string); a.EmptyMeansUnset && isStr && sv == "" {
-			continue // "" means not specified: leave it out so the platform uses its default
-		}
 		// The create shape keeps the untransformed value: UpdateBoolTrueValue rewrites
 		// what the UPDATE path carries, not what the create path expects.
 		createVal := val
@@ -2136,7 +2133,6 @@ func buildStateRaw(attrs []AttributeSpec, baseRaw tftypes.Value, resp map[string
 		// A configured value the cloud reports only in resolved form (e.g. SSM
 		// tier Intelligent-Tiering → Standard) keeps the configured form.
 		next[a.Name] = keepEquivalentValue(a, current[a.Name], next[a.Name])
-		next[a.Name] = keepEmptyUnset(a, current[a.Name], next[a.Name])
 	}
 
 	return tftypes.NewValue(objType, next)

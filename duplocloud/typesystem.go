@@ -495,13 +495,10 @@ func objectSchema(a AttributeSpec, info typeInfo) schema.Attribute {
 // that replaces only when the prior value is set, so a value the API never
 // returns (null after import) adopts the config instead of replacing.
 func stringRequiresReplace(a AttributeSpec) planmodifier.String {
-	if !a.ImportAdoptsConfig && !a.CaseInsensitive && !a.EmptyMeansUnset {
+	if !a.ImportAdoptsConfig && !a.CaseInsensitive {
 		return stringplanmodifier.RequiresReplace()
 	}
 	desc := importAdoptsConfigDescription
-	if a.EmptyMeansUnset {
-		desc = "Changing this value replaces the resource. An empty string means not specified and does not."
-	}
 	if a.CaseInsensitive {
 		desc = "Changing this value replaces the resource, except for a change in letter case only."
 	}
@@ -509,9 +506,6 @@ func stringRequiresReplace(a AttributeSpec) planmodifier.String {
 		func(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
 			if a.ImportAdoptsConfig && req.StateValue.IsNull() && justImported(ctx, req.Private) {
 				return // imported: adopt the config
-			}
-			if a.EmptyMeansUnset && !req.PlanValue.IsNull() && !req.PlanValue.IsUnknown() && req.PlanValue.ValueString() == "" {
-				return // "" means not specified: never a reason to replace
 			}
 			if a.CaseInsensitive && !req.StateValue.IsNull() && !req.PlanValue.IsNull() && !req.PlanValue.IsUnknown() &&
 				strings.EqualFold(req.StateValue.ValueString(), req.PlanValue.ValueString()) {
@@ -1137,21 +1131,6 @@ func hasPreserveOnEmptyResponse(a AttributeSpec) bool {
 		}
 	}
 	return false
-}
-
-// keepEmptyUnset keeps a held "" (the plan on create/update, the prior state on
-// refresh) on an EmptyMeansUnset attribute, whatever the API resolved it to, so
-// the value the user configured stays stable instead of flipping to the key the
-// platform chose and planning a change on every run.
-func keepEmptyUnset(a AttributeSpec, prior, next tftypes.Value) tftypes.Value {
-	if !a.EmptyMeansUnset || !prior.IsKnown() || prior.IsNull() || !prior.Type().Is(tftypes.String) {
-		return next
-	}
-	var p string
-	if prior.As(&p) != nil || p != "" {
-		return next
-	}
-	return prior
 }
 
 // keepEquivalentValue returns prior instead of next when prior is a key of
