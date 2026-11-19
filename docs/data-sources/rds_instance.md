@@ -55,7 +55,7 @@ output "stack_id" {
 - `engine` (String) Database engine (e.g. postgres, mysql, mariadb, oracle-se2, sqlserver-ex).
 - `engine_version` (String) Engine version. Changing this in place triggers an engine upgrade.
 - `environment_id` (String) ID of the environment that owns the resource group.
-- `kms_key_id` (String) KMS key that encrypts storage, as a key id or ARN, honoured only when storage_encrypted is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key); an unregistered key is rejected. Leave it unset to use the resource group's own default key. Independent of performance_insights_kms_key_id: storage and Performance Insights are keyed separately. Immutable after creation.
+- `kms_key_id` (String) KMS key that encrypts storage, as a key id or ARN, honoured only when storage_encrypted is ResourceGroupKmsKey. The key must already be registered on the resource group (duploai_resource_group_kms_key) or on a plan attached to its environment (duploai_plan_kms_key); an unregistered key is rejected. Leave it unset (or set it to an empty string) to use the resource group's own default key. Independent of performance_insights_kms_key_id: storage and Performance Insights are keyed separately. Immutable after creation.
 - `master_user_password` (String, Sensitive) Master user password.
 - `master_username` (String) Master (admin) username. Required when creating a new instance (not restoring from a snapshot).
 - `multi_az` (Boolean) Deploy the instance across multiple availability zones.
