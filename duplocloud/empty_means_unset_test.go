@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -165,4 +166,65 @@ func TestEmptyMeansUnset_RDSSpecsOptIn(t *testing.T) {
 			t.Errorf("%s has no kms_key_id attribute", name)
 		}
 	}
+}
+
+// ModifyPlan end to end: omitting "" from the plan body makes the plan body equal
+// the state body, and ModifyPlan then pins every computed attribute to its prior
+// value. A configured "" must survive that (a plan different from a non-null
+// config is rejected by Terraform), and a stored key against "" must be a no-op,
+// not an update that omits the key.
+func TestEmptyMeansUnset_ModifyPlanEndToEnd(t *testing.T) {
+	objType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{"name": tftypes.String, "kms_key_id": tftypes.String}}
+	name := AttributeSpec{Name: "name", Type: "string", Optional: true, APIPath: "spec.name"}
+	r := &dynamicResource{spec: ResourceSpec{Attributes: []AttributeSpec{name, kmsAttr()}}}
+	null := tftypes.NewValue(tftypes.String, nil)
+	obj := func(kms tftypes.Value) tftypes.Value {
+		return tftypes.NewValue(objType, map[string]tftypes.Value{"name": str("db"), "kms_key_id": kms})
+	}
+	plan := func(state, planned tftypes.Value) tftypes.Value {
+		resp := &resource.ModifyPlanResponse{Plan: tfsdk.Plan{Raw: planned}}
+		r.ModifyPlan(context.Background(), resource.ModifyPlanRequest{
+			State: tfsdk.State{Raw: state}, Plan: tfsdk.Plan{Raw: planned}, Config: tfsdk.Config{Raw: planned},
+		}, resp)
+		if resp.Diagnostics.HasError() {
+			t.Fatalf("diags: %v", resp.Diagnostics)
+		}
+		return resp.Plan.Raw
+	}
+	kmsOf := func(v tftypes.Value) tftypes.Value {
+		var m map[string]tftypes.Value
+		_ = v.As(&m)
+		return m["kms_key_id"]
+	}
+	key := str("arn:aws:kms:us-west-2:111:key/abc")
+
+	for name, state := range map[string]tftypes.Value{"null state (import / created unset)": obj(null), "stored key": obj(key), "empty state": obj(str(""))} {
+		t.Run("config empty over "+name, func(t *testing.T) {
+			if got := kmsOf(plan(state, obj(str("")))); !got.Equal(str("")) {
+				t.Errorf("a configured \"\" must plan as \"\", got %v", got)
+			}
+			// No PUT: the comparison Update makes must see equal bodies.
+			var d diag.Diagnostics
+			body := r.bodyFromRaw(obj(str("")), "update", &d)
+			sb := r.bodyFromRaw(state, "update", &d)
+			r.omitEmptyUnsetFromState(obj(str("")), sb)
+			if !apiBodyEqual(body, sb) {
+				t.Errorf("\"\" must be a no-op against %s, plan body %v vs state body %v", name, body, sb)
+			}
+		})
+	}
+	t.Run("a different key is still a real update", func(t *testing.T) {
+		var d diag.Diagnostics
+		body := r.bodyFromRaw(obj(str("arn:other")), "update", &d)
+		sb := r.bodyFromRaw(obj(key), "update", &d)
+		r.omitEmptyUnsetFromState(obj(str("arn:other")), sb)
+		if apiBodyEqual(body, sb) {
+			t.Error("a changed non-empty key must not be treated as a no-op")
+		}
+	})
+	t.Run("unset config keeps pinning the stored key", func(t *testing.T) {
+		if got := kmsOf(plan(obj(key), obj(key))); !got.Equal(key) {
+			t.Errorf("got %v", got)
+		}
+	})
 }

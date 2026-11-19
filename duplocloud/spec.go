@@ -1942,6 +1942,9 @@ func validateAttributes(attrs []AttributeSpec) (map[string]bool, error) {
 				if len(na.EquivalentResponseValues) > 0 {
 					return nil, fmt.Errorf("attribute %q.%q: equivalentResponseValues is only supported on a top-level attribute", a.Name, na.Name)
 				}
+				if na.EmptyMeansUnset {
+					return nil, fmt.Errorf("attribute %q.%q: emptyMeansUnset is only supported on a top-level attribute", a.Name, na.Name)
+				}
 			}
 			if _, err := validateAttributes(a.Attributes); err != nil {
 				return nil, err
