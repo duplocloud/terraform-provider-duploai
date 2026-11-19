@@ -352,7 +352,6 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	r.omitEmptyUnsetFromState(req.Plan.Raw, stateBody)
 	if !apiBodyEqual(planBody, stateBody) || len(r.writeOnlyVersionChanged(req.Plan.Raw, req.State.Raw)) > 0 {
 		return // a real update — let computed outputs recompute normally
 	}
@@ -385,9 +384,6 @@ func (r *dynamicResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	for _, a := range r.spec.Attributes {
 		if !a.Computed {
 			continue
-		}
-		if pv := planTop[a.Name]; a.EmptyMeansUnset && pv.IsKnown() && !pv.IsNull() {
-			continue // a configured "" must plan as "": pinning it to the prior value would be an invalid plan
 		}
 		if sv, ok := stateTop[a.Name]; ok {
 			planTop[a.Name] = sv // hold the prior value instead of (known after apply)
@@ -756,7 +752,6 @@ func (r *dynamicResource) Update(ctx context.Context, req resource.UpdateRequest
 	// A changed write-only version is a real update even though the body (which
 	// never carries write-only values from the plan) looks unchanged.
 	woChanged := r.writeOnlyVersionChanged(req.Plan.Raw, req.State.Raw)
-	r.omitEmptyUnsetFromState(req.Plan.Raw, stateBody)
 	if apiBodyEqual(body, stateBody) && len(woChanged) == 0 {
 		if req.Plan.Raw.IsFullyKnown() {
 			resp.State.Raw = req.Plan.Raw
@@ -1630,29 +1625,6 @@ func (r *dynamicResource) bodyFromRaw(raw tftypes.Value, verb string, diags *dia
 		applyConstants(body, r.spec.CreateConstants, diags)
 	}
 	return body
-}
-
-// omitEmptyUnsetFromState drops, from the body built from prior state, every
-// EmptyMeansUnset attribute the plan holds as "": bodyFromRaw leaves a planned ""
-// out of the plan body, so the state side must leave the attribute out too, or a
-// stored key against a configured "" would look like a change and send an update
-// that omits the key. With both sides omitting it the change is a no-op: no PUT.
-func (r *dynamicResource) omitEmptyUnsetFromState(plan tftypes.Value, stateBody map[string]any) {
-	var top map[string]tftypes.Value
-	if stateBody == nil || plan.As(&top) != nil {
-		return
-	}
-	for _, a := range r.spec.Attributes {
-		path := a.effectiveUpdatePath()
-		if !a.EmptyMeansUnset || path == "" {
-			continue
-		}
-		if v, ok := attrToRequest(a, top[a.Name]); ok {
-			if sv, isStr := v.(string); isStr && sv == "" {
-				deletePathPruning(stateBody, strings.Split(path, "."))
-			}
-		}
-	}
 }
 
 // updateBodyFromRaw builds the PUT body and, when the spec sets idRequestPath,
