@@ -64,7 +64,7 @@ output "ssh_enabled" {
 - `network_id` (String) ID of the network baseline this resource group is linked to. At least one of network_id or vpc_id is required.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
-- `region` (String) Cloud region (e.g. us-east-1).
+- `region` (String) Cloud region (e.g. us-east-1). Leave unset to use the region the platform assigns, which is derived from the linked network; the assigned value is then reported here.
 - `resource_group_id` (String) ID of this resource group, for reference by dependent resources.
 - `scope_ids` (List of String) Scope IDs linking this resource group to a cloud provider account. Inherited from the linked network; computed, not user-settable.
 - `security_group_id` (String) Provisioned main security group ID.

@@ -45,9 +45,10 @@
       "name": "region",
       "type": "string",
       "optional": true,
+      "computed": true,
       "forceNew": true,
       "apiPath": "spec.region",
-      "description": "Cloud region (e.g. us-east-1)."
+      "description": "Cloud region (e.g. us-east-1). Leave unset to use the region the platform assigns, which is derived from the linked network; the assigned value is then reported here."
     },
     {
       "name": "cloud",
