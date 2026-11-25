@@ -29,7 +29,6 @@ type rgFake struct {
 	posts      []map[string]any
 	puts       []map[string]any
 	sshDefault any // what the backend stamps when a create omits spec.sshEnabled; nil = leave absent
-	forceSsh   *any
 }
 
 func (f *rgFake) handler(t *testing.T) http.HandlerFunc {
