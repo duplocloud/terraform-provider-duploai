@@ -95,3 +95,16 @@ resource "duploai_resource_group" "customer_managed_iam" {
   existing_iam_role_arn = "arn:aws:iam::123456789012:role/platform-shared"
   existing_kms_key_arn  = "arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab"
 }
+
+# SSM-only resource group — EC2 hosts get no SSH key pair (AWS only). New AWS
+# resource groups default to SSM-only; set ssh_enabled = true to allow SSH.
+# Existing hosts keep their authorized_keys when this changes.
+resource "duploai_resource_group" "ssm_only" {
+  workspace_id   = "<workspace-id>"
+  name           = "<resource-group-name>"
+  environment_id = "<environment-id>"
+  region         = ""
+  network_id     = "<network-id>"
+
+  ssh_enabled = false
+}
