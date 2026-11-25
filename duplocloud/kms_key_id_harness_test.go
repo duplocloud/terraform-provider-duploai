@@ -33,6 +33,7 @@ type kmsBackend struct {
 	requests []string
 	posted   []map[string]any
 	fail     int // status to return on POST (0 = ok)
+	failGet  int // status to return on GET (0 = ok); the readiness wait runs after a successful POST
 }
 
 func (b *kmsBackend) handler(t *testing.T) http.HandlerFunc {
@@ -73,6 +74,10 @@ func (b *kmsBackend) handler(t *testing.T) http.HandlerFunc {
 			b.objs["rds1"] = o
 			write(o)
 		case http.MethodGet:
+			if b.failGet != 0 {
+				http.Error(w, `{"message":"upstream boom"}`, b.failGet)
+				return
+			}
 			if o, ok := b.objs[last]; ok {
 				write(o)
 				return
@@ -372,24 +377,35 @@ func TestKmsHarness_ImportOmittedNoDiff(t *testing.T) {
 	}
 }
 
-// Upstream 500 on create: error surfaced, no state carrying an empty key.
-func TestKmsHarness_Create500NoPartialEmptyKey(t *testing.T) {
+// Create fails AFTER the POST succeeded (the readiness wait gets a 500): the
+// error is surfaced and the state Create saves for the already-created object
+// must not carry an empty kms_key_id. A 500 on the POST itself would return
+// before any state is written, so it cannot exercise this.
+func TestKmsHarness_CreateWaitFailureNoPartialEmptyKey(t *testing.T) {
 	for _, n := range kmsSpecs {
 		t.Run(n, func(t *testing.T) {
 			h := newKmsHarness(t, n)
-			h.backend.fail = http.StatusInternalServerError
+			h.backend.failGet = http.StatusInternalServerError
 			st, diags := h.create(h.config(nil))
 			if qaAdvErr(diags) == "" {
-				t.Fatal("create against a 500 reported no error")
+				t.Fatal("create whose readiness wait fails reported no error")
 			}
-			if !st.IsNull() {
-				if k := attrVal(t, st, "kms_key_id"); k.IsKnown() && !k.IsNull() {
-					var s string
-					_ = k.As(&s)
-					if strings.TrimSpace(s) == "" {
-						t.Errorf("partial state has empty kms_key_id")
-					}
-				}
+			if len(h.backend.posted) != 1 {
+				t.Fatalf("expected the POST to have succeeded once, got %d", len(h.backend.posted))
+			}
+			if st.IsNull() {
+				t.Fatal("no state saved for the object created before the wait failed")
+			}
+			k := attrVal(t, st, "kms_key_id")
+			if !k.IsKnown() || k.IsNull() {
+				return
+			}
+			var s string
+			if err := k.As(&s); err != nil {
+				t.Fatal(err)
+			}
+			if strings.TrimSpace(s) == "" {
+				t.Errorf("partial state has empty kms_key_id")
 			}
 		})
 	}
