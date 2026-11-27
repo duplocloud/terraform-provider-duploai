@@ -1349,6 +1349,9 @@ func (v conflictsWithValidator) ValidateResource(ctx context.Context, req resour
 		for _, name := range group {
 			a := v.spec.attr(name)
 			if a != nil && !configAttrNull(req.Config.Raw, a.Name) {
+				if v.spec.ConflictsWithDeferUnknown && configAttrWhollyUnknown(req.Config.Raw, a.Name) {
+					continue
+				}
 				set = append(set, name)
 			}
 		}
@@ -1975,6 +1978,21 @@ func readPathNumber(ctx context.Context, cfg attrReader, a AttributeSpec, p path
 // the same distinction configAttrNull makes for ConflictsWith.
 func readConfigUnknown(ctx context.Context, cfg attrReader, a AttributeSpec) bool {
 	return readPathUnknown(ctx, cfg, a, path.Root(a.Name))
+}
+
+// configAttrWhollyUnknown reports whether a top-level attribute's entire value
+// is unknown in the raw config. A known container with unknown leaves is not
+// wholly unknown: it is certainly set.
+func configAttrWhollyUnknown(raw tftypes.Value, name string) bool {
+	if !raw.IsKnown() || raw.IsNull() {
+		return false
+	}
+	obj := map[string]tftypes.Value{}
+	if err := raw.As(&obj); err != nil {
+		return false
+	}
+	v, ok := obj[name]
+	return ok && !v.IsKnown()
 }
 
 // configAttrNull reports whether a top-level attribute is genuinely unset (null)

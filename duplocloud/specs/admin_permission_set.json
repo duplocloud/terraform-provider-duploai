@@ -6,6 +6,7 @@
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/admin/data/PermissionSet"
   },
+  "conflictsWithDeferUnknown": true,
   "conflictsWith": [
     [
       "resource_grants",
@@ -129,6 +130,7 @@
               "optional": true,
               "computed": true,
               "apiPath": "allowAllChildren",
+              "preserveOnEmptyResponse": true,
               "description": "Whether the verbs and actions inherit to the target's entire subtree, including objects created after the grant. Leave it off to grant the target node alone. Creating inside a container needs it: the container is a proper prefix of the new object's path, so `POST` on the container only reaches that path when the subtree is covered — grant `POST` on `<Type>` / `*` directly instead to permit creates without opening the rest of the subtree."
             }
           ]
@@ -210,6 +212,7 @@
               "optional": true,
               "computed": true,
               "apiPath": "allowAllChildren",
+              "preserveOnEmptyResponse": true,
               "description": "Ignored on a deny rule — a deny always covers its target's entire subtree. Present only so a rule reads the same on either side."
             }
           ]

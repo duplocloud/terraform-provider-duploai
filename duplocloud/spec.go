@@ -81,6 +81,15 @@ type ResourceSpec struct {
 	// [["snapshot_name", "snapshot_arns"]].
 	ConflictsWith [][]string `json:"conflictsWith,omitempty"`
 
+	// ConflictsWithDeferUnknown makes conflictsWith skip an attribute whose
+	// whole value is unknown at validation time (e.g. a conditional expression
+	// that may resolve to null) instead of counting it as set. Terraform
+	// validates again once the value is known, so a real conflict is still
+	// reported then; the cost is that a value unknown through the whole plan
+	// (resolved only at apply) is not checked. Default false keeps the
+	// conservative "unknown counts as set" behaviour.
+	ConflictsWithDeferUnknown bool `json:"conflictsWithDeferUnknown,omitempty"`
+
 	// InvalidWhen declares combinations the API rejects, so the config fails at
 	// plan time with an explanation instead of at apply time with a cloud error.
 	// Each rule fires when ALL of its conditions hold.
