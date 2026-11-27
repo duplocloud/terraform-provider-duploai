@@ -1142,6 +1142,12 @@ attribute.
 ]
 ```
 
+By default an attribute whose value is unknown at plan time counts as set. Set
+`"conflictsWithDeferUnknown": true` to skip an attribute whose whole value is
+unknown (for example `local.maybe` that may resolve to null): Terraform
+validates again once it is known, and only a value that stays unknown until
+apply goes unchecked. A known object with unknown leaves still counts as set.
+
 Multiple groups are independent:
 ```json
 "conflictsWith": [
