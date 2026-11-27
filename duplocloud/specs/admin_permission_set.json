@@ -1,11 +1,17 @@
 {
   "name": "admin_permission_set",
-  "description": "Manages a DuploCloud AI Helpdesk permission set — a named grant of workspace-scoped access (scopes and agents) that can be assigned to users via permission set groups.",
+  "description": "Manages a DuploCloud AI Helpdesk permission set — a named grant of access that can be assigned to users via permission set groups. Access is expressed as hierarchical resource grants: allow and deny rules, each naming one node by its root-to-leaf path and the verbs, actions and cloud scopes granted or blocked there.",
   "idPath": "id",
   "dataSource": true,
   "endpoint": {
     "uriBase": "/v1/aiservicedesk/admin/data/PermissionSet"
   },
+  "conflictsWith": [
+    [
+      "resource_grants",
+      "allowed_workspaces"
+    ]
+  ],
   "attributes": [
     {
       "name": "name",
@@ -39,12 +45,185 @@
       "description": "Free-form key/value metadata."
     },
     {
+      "name": "resource_grants",
+      "type": "object",
+      "optional": true,
+      "computed": true,
+      "apiPath": "resourceGrants",
+      "description": "Hierarchical resource grants — the only thing consulted when deciding what this permission set can reach. Two flat rule lists, `allow` and `deny`, each rule naming one node by its root-to-leaf path. A request for verb v on path P is resolved in this order: a deny rule on P or on any ancestor of P listing v blocks it, and blocks the whole subtree beneath it; otherwise an allow rule on P itself listing v permits it; otherwise an allow rule on an ancestor of P listing v with `allow_all_children` permits it; otherwise a `GET` is permitted when P is an ancestor of some allow rule's path, so the path down to a grant stays readable; otherwise the request is denied. A user's permission sets are pooled, so a deny in any one of them applies everywhere. Supersedes `allowed_workspaces`, and conflicts with it — a config may set one or the other, not both.",
+      "attributes": [
+        {
+          "name": "allow",
+          "type": "list(object)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "allow",
+          "description": "Rules granting access. Each names one node and the verbs, actions and scopes allowed there.",
+          "attributes": [
+            {
+              "name": "path",
+              "type": "list(object)",
+              "required": true,
+              "minItems": 1,
+              "apiPath": "path",
+              "description": "Full root-to-leaf path of the node this rule grants access to. The FIRST segment is always a workspace and the LAST segment is the target; the segments between them are the containment chain down to it (environment, resource group, and the category segment a cloud resource sits under). Order matters — rules are matched by path prefix.",
+              "attributes": [
+                {
+                  "name": "node_type",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "nodeType",
+                  "description": "Access-node type of this segment: `Workspace`, `Environment`, `ResourceGroup`, a category (`AWS`, `Kubernetes`, `Terraform`) or a concrete resource type (`AwsSqsQueue`, `AWSRdsInstance`, `AppService`, …). The set is not fixed — it is built from the node types the platform registers, so a deployment's own list is what `GET /v1/aiservicedesk/admin/data/accessnodes/types` returns."
+                },
+                {
+                  "name": "node_id",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "nodeId",
+                  "description": "ID of the object this segment names. Category segments have no object of their own and take their fixed id instead (`aws`, `k8s`, `terraform`). `*` may appear only in the LAST segment, where it means the node type as a whole rather than one object — a first segment of `*` covers every workspace, and a trailing `<Type>` / `*` pair is the path a create of that type is checked against."
+                },
+                {
+                  "name": "name",
+                  "type": "string",
+                  "optional": true,
+                  "computed": true,
+                  "apiPath": "name",
+                  "description": "Display name of the node, cached on the rule for the console's benefit. Never used to decide access — `node_id` alone is authoritative — so it may safely be left out."
+                }
+              ]
+            },
+            {
+              "name": "verbs",
+              "type": "set(string)",
+              "optional": true,
+              "computed": true,
+              "oneOf": [
+                "ALL",
+                "GET",
+                "PUT",
+                "POST",
+                "DELETE"
+              ],
+              "apiPath": "verbs",
+              "description": "HTTP verbs this rule covers: `GET` (read and list), `PUT` (update), `POST` (create), `DELETE`, or `ALL` for the four together. Prefer `ALL` on its own — combining it with a single verb is accepted but redundant. `ALL` covers those four verbs and NO named action: actions are never implied by verbs and have to be listed in `actions` explicitly."
+            },
+            {
+              "name": "actions",
+              "type": "set(string)",
+              "optional": true,
+              "computed": true,
+              "apiPath": "actions",
+              "description": "Named actions granted at this path — the operations that are gated separately from plain CRUD, such as `aws.jit`, `aws.ssm`, `kubernetes.jit`, `kubernetes.reboot`, `secret.read`, `secret.write`, `terraform.execute` or `workspace.setting`. `*` matches every action registered for the node type; the actions a given type registers are listed by `GET /v1/aiservicedesk/admin/data/accessnodes/types`. Actions are NEVER implied by `verbs`: a rule with `verbs = [\"ALL\"]` and no `actions` grants the four CRUD verbs and not one action. `allow_all_children` cascades actions exactly as it cascades verbs."
+            },
+            {
+              "name": "scopes",
+              "type": "set(string)",
+              "optional": true,
+              "computed": true,
+              "apiPath": "scopes",
+              "description": "IDs of the cloud scopes granted at this path, or `*` for every scope in the workspace — resolved when access is evaluated, so `*` also covers scopes added later. Read only from rules whose path ends at a workspace and ignored on any other rule, since a scope belongs to a workspace. This is what replaces the deprecated `allowed_workspaces[].allowed_scopes` / `denied_scopes`, which held regular expressions matched against scope NAMES: storing IDs keeps a grant intact across a rename, at the cost of no longer picking up new scopes automatically unless `*` is used."
+            },
+            {
+              "name": "allow_all_children",
+              "type": "bool",
+              "optional": true,
+              "computed": true,
+              "apiPath": "allowAllChildren",
+              "description": "Whether the verbs and actions inherit to the target's entire subtree, including objects created after the grant. Leave it off to grant the target node alone. Creating inside a container needs it: the container is a proper prefix of the new object's path, so `POST` on the container only reaches that path when the subtree is covered — grant `POST` on `<Type>` / `*` directly instead to permit creates without opening the rest of the subtree."
+            }
+          ]
+        },
+        {
+          "name": "deny",
+          "type": "list(object)",
+          "optional": true,
+          "computed": true,
+          "apiPath": "deny",
+          "description": "Rules blocking access. A deny beats every allow, including allows in the user's other permission sets, and always covers the target's whole subtree — verb-scoped denies remove just the listed verbs from it.",
+          "attributes": [
+            {
+              "name": "path",
+              "type": "list(object)",
+              "required": true,
+              "minItems": 1,
+              "apiPath": "path",
+              "description": "Full root-to-leaf path of the node this rule blocks access to. The FIRST segment is always a workspace and the LAST segment is the target; the segments between them are the containment chain down to it (environment, resource group, and the category segment a cloud resource sits under). Order matters — rules are matched by path prefix.",
+              "attributes": [
+                {
+                  "name": "node_type",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "nodeType",
+                  "description": "Access-node type of this segment: `Workspace`, `Environment`, `ResourceGroup`, a category (`AWS`, `Kubernetes`, `Terraform`) or a concrete resource type (`AwsSqsQueue`, `AWSRdsInstance`, `AppService`, …). The set is not fixed — it is built from the node types the platform registers, so a deployment's own list is what `GET /v1/aiservicedesk/admin/data/accessnodes/types` returns."
+                },
+                {
+                  "name": "node_id",
+                  "type": "string",
+                  "required": true,
+                  "apiPath": "nodeId",
+                  "description": "ID of the object this segment names. Category segments have no object of their own and take their fixed id instead (`aws`, `k8s`, `terraform`). `*` may appear only in the LAST segment, where it means the node type as a whole rather than one object — a first segment of `*` covers every workspace, and a trailing `<Type>` / `*` pair is the path a create of that type is checked against."
+                },
+                {
+                  "name": "name",
+                  "type": "string",
+                  "optional": true,
+                  "computed": true,
+                  "apiPath": "name",
+                  "description": "Display name of the node, cached on the rule for the console's benefit. Never used to decide access — `node_id` alone is authoritative — so it may safely be left out."
+                }
+              ]
+            },
+            {
+              "name": "verbs",
+              "type": "set(string)",
+              "optional": true,
+              "computed": true,
+              "oneOf": [
+                "ALL",
+                "GET",
+                "PUT",
+                "POST",
+                "DELETE"
+              ],
+              "apiPath": "verbs",
+              "description": "HTTP verbs this rule covers: `GET` (read and list), `PUT` (update), `POST` (create), `DELETE`, or `ALL` for the four together. Prefer `ALL` on its own — combining it with a single verb is accepted but redundant. `ALL` covers those four verbs and NO named action: actions are never implied by verbs and have to be listed in `actions` explicitly."
+            },
+            {
+              "name": "actions",
+              "type": "set(string)",
+              "optional": true,
+              "computed": true,
+              "apiPath": "actions",
+              "description": "Named actions blocked at this path — the operations that are gated separately from plain CRUD, such as `aws.jit`, `aws.ssm`, `kubernetes.jit`, `kubernetes.reboot`, `secret.read`, `secret.write`, `terraform.execute` or `workspace.setting`. `*` matches every action registered for the node type; the actions a given type registers are listed by `GET /v1/aiservicedesk/admin/data/accessnodes/types`. Actions are NEVER implied by `verbs`, so leaving this empty does not mean \"no actions\": empty together with `verbs = [\"ALL\"]` it blocks EVERY action in the subtree, while a non-empty set blocks only the actions named."
+            },
+            {
+              "name": "scopes",
+              "type": "set(string)",
+              "optional": true,
+              "computed": true,
+              "apiPath": "scopes",
+              "description": "IDs of the cloud scopes blocked at this path, or `*` for every scope in the workspace — resolved when access is evaluated, so `*` also covers scopes added later. Read only from rules whose path ends at a workspace and ignored on any other rule, since a scope belongs to a workspace. This is what replaces the deprecated `allowed_workspaces[].allowed_scopes` / `denied_scopes`, which held regular expressions matched against scope NAMES: storing IDs keeps a grant intact across a rename, at the cost of no longer picking up new scopes automatically unless `*` is used."
+            },
+            {
+              "name": "allow_all_children",
+              "type": "bool",
+              "optional": true,
+              "computed": true,
+              "apiPath": "allowAllChildren",
+              "description": "Ignored on a deny rule — a deny always covers its target's entire subtree. Present only so a rule reads the same on either side."
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "allowed_workspaces",
       "type": "list(object)",
-      "required": true,
-      "minItems": 1,
+      "optional": true,
+      "computed": true,
       "apiPath": "allowedWorkspaces",
-      "description": "Workspaces this permission set grants access to. Must contain at least one entry.",
+      "description": "Deprecated legacy workspace list — use `resource_grants` instead. Kept so configurations written before resource grants existed keep applying: the entries still round-trip and the backend still converts them once, but nothing reads them when deciding access. Being computed, dropping the block from a configuration leaves the stored list alone rather than clearing it; set it to `[]` in its own apply to empty it, since it cannot be set alongside `resource_grants`.",
+      "deprecated": "Deprecated — migrate to resource_grants. Access is decided from resource_grants alone, so entries here grant nothing on their own; a one-time backend migration converts an existing list into the equivalent allow rules, after which it is inert. Express new intent as resource_grants — the two attributes conflict, so remove this one when adopting it.",
       "attributes": [
         {
           "name": "workspace_id",
@@ -59,7 +238,8 @@
           "optional": true,
           "computed": true,
           "apiPath": "allowedScopes",
-          "description": "Scopes within the workspace this permission grants access to. Each entry may be a regex."
+          "description": "Deprecated — use the `scopes` set on a `resource_grants` allow rule instead. Scopes within the workspace this permission grants access to. Each entry may be a regex matched against scope names.",
+          "deprecated": "Deprecated — migrate to the scopes set on a resource_grants allow rule whose path ends at the workspace. These are regular expressions matched against scope NAMES; grants hold scope ids, which survive a rename."
         },
         {
           "name": "denied_scopes",
@@ -67,7 +247,8 @@
           "optional": true,
           "computed": true,
           "apiPath": "deniedScopes",
-          "description": "Scopes within the workspace this permission blocks access to. Each entry may be a regex."
+          "description": "Deprecated — use the `scopes` set on a `resource_grants` deny rule instead. Scopes within the workspace this permission blocks access to. Each entry may be a regex matched against scope names.",
+          "deprecated": "Deprecated — migrate to the scopes set on a resource_grants deny rule whose path ends at the workspace. These are regular expressions matched against scope NAMES; grants hold scope ids, which survive a rename."
         },
         {
           "name": "allowed_agents",

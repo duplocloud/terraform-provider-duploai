@@ -3,43 +3,137 @@
 page_title: "duploai_admin_permission_set Resource - duploai"
 subcategory: ""
 description: |-
-  Manages a DuploCloud AI Helpdesk permission set — a named grant of workspace-scoped access (scopes and agents) that can be assigned to users via permission set groups.
+  Manages a DuploCloud AI Helpdesk permission set — a named grant of access that can be assigned to users via permission set groups. Access is expressed as hierarchical resource grants: allow and deny rules, each naming one node by its root-to-leaf path and the verbs, actions and cloud scopes granted or blocked there.
 ---
 
 # duploai_admin_permission_set (Resource)
 
-Manages a DuploCloud AI Helpdesk permission set — a named grant of workspace-scoped access (scopes and agents) that can be assigned to users via permission set groups.
+Manages a DuploCloud AI Helpdesk permission set — a named grant of access that can be assigned to users via permission set groups. Access is expressed as hierarchical resource grants: allow and deny rules, each naming one node by its root-to-leaf path and the verbs, actions and cloud scopes granted or blocked there.
 
 ## Example Usage
 
 ```terraform
-# Permission set granting scoped access to a single workspace.
-resource "duploai_admin_permission_set" "basic" {
-  name = "read-only"
+# Read-only access to one workspace, plus the scopes inside it.
+#
+# Every rule path starts at a Workspace segment. allow_all_children makes the
+# grant cover the whole subtree beneath the workspace, including resources
+# created after the grant is written.
+resource "duploai_admin_permission_set" "read_only" {
+  name        = "read-only"
+  description = "GET on everything in one workspace"
+
+  resource_grants = {
+    allow = [
+      {
+        path = [
+          { node_type = "Workspace", node_id = "<workspace-id>" }
+        ]
+        verbs              = ["GET"]
+        scopes             = ["*"]
+        allow_all_children = true
+      }
+    ]
+  }
+}
+
+# Full access to a workspace, with two exceptions.
+#
+# ALL grants the four CRUD verbs and NOTHING else: named actions are never
+# implied by a verb, so every action the holder should keep has to be listed --
+# "*" for all of them, or the individual action ids.
+resource "duploai_admin_permission_set" "devops" {
+  name        = "devops-access"
+  description = "Workspace owner, minus production databases and secret writes"
+
+  resource_grants = {
+    allow = [
+      {
+        path = [
+          { node_type = "Workspace", node_id = "<workspace-id>" }
+        ]
+        verbs              = ["ALL"]
+        actions            = ["*"]
+        scopes             = ["*"]
+        allow_all_children = true
+      }
+    ]
+
+    deny = [
+      # A deny always covers its target's whole subtree, so this cuts the
+      # production resource group entirely -- allow_all_children is not needed
+      # (and is ignored) on a deny rule.
+      {
+        path = [
+          { node_type = "Workspace", node_id = "<workspace-id>" },
+          { node_type = "Environment", node_id = "<environment-id>" },
+          { node_type = "ResourceGroup", node_id = "<prod-resource-group-id>" },
+        ]
+        verbs = ["ALL"]
+      },
+
+      # Verb-scoped: reading secrets stays allowed, writing them does not. A
+      # non-empty actions list blocks only the actions named.
+      {
+        path = [
+          { node_type = "Workspace", node_id = "<workspace-id>" }
+        ]
+        actions = ["secret.write"]
+      },
+    ]
+  }
+}
+
+# Narrow grants that name individual resources and a create-only path.
+#
+# The path is the containment chain root to leaf: workspace, environment,
+# resource group, then the category segment a cloud resource sits under ("aws",
+# "k8s", "terraform"), then the resource itself.
+resource "duploai_admin_permission_set" "sqs_operator" {
+  name        = "sqs-operator"
+  description = "Manage SQS queues in one resource group, nothing else"
+
+  resource_grants = {
+    allow = [
+      # A wildcard node_id is only ever the LAST segment, and names the type as
+      # a whole rather than one object. POST here is what permits creating new
+      # queues in this resource group.
+      {
+        path = [
+          { node_type = "Workspace", node_id = "<workspace-id>" },
+          { node_type = "Environment", node_id = "<environment-id>" },
+          { node_type = "ResourceGroup", node_id = "<resource-group-id>" },
+          { node_type = "AWS", node_id = "aws" },
+          { node_type = "AwsSqsQueue", node_id = "*" },
+        ]
+        verbs              = ["GET", "POST", "PUT", "DELETE"]
+        allow_all_children = true
+      },
+
+      # Scopes are read only from a rule whose path ends at the Workspace, so
+      # the scope grant is its own rule.
+      {
+        path = [
+          { node_type = "Workspace", node_id = "<workspace-id>" }
+        ]
+        verbs  = ["GET"]
+        scopes = ["<scope-id>"]
+      },
+    ]
+  }
+}
+
+# Deprecated shape, kept working for configurations written before resource
+# grants existed. The backend converts these entries into equivalent allow
+# rules once and then ignores the list; allowed_workspaces cannot be combined
+# with resource_grants in the same configuration.
+resource "duploai_admin_permission_set" "legacy" {
+  name = "legacy-read-only"
 
   allowed_workspaces = [
     {
       workspace_id   = "<workspace-id>"
-      allowed_scopes = ["read:.*"]
-    }
-  ]
-}
-
-# Permission set spanning multiple workspaces, with allow/deny on scopes and agents.
-resource "duploai_admin_permission_set" "full" {
-  name        = "devops-access"
-  description = "DevOps access across two workspaces"
-
-  allowed_workspaces = [
-    {
-      workspace_id   = "<workspace-id-1>"
-      allowed_scopes = ["aws:.*", "k8s:.*"]
-      denied_scopes  = ["aws:iam:.*"]
-      allowed_agents = ["<agent-id>"]
-    },
-    {
-      workspace_id  = "<workspace-id-2>"
-      denied_agents = ["<restricted-agent-id>"]
+      allowed_scopes = ["prod-.*"]
+      denied_scopes  = ["prod-payments"]
     }
   ]
 }
@@ -50,14 +144,15 @@ resource "duploai_admin_permission_set" "full" {
 
 ### Required
 
-- `allowed_workspaces` (Attributes List) Workspaces this permission set grants access to. Must contain at least one entry. (see [below for nested schema](#nestedatt--allowed_workspaces))
 - `name` (String) Name of the permission set.
 
 ### Optional
 
+- `allowed_workspaces` (Attributes List, Deprecated) Deprecated legacy workspace list — use `resource_grants` instead. Kept so configurations written before resource grants existed keep applying: the entries still round-trip and the backend still converts them once, but nothing reads them when deciding access. Being computed, dropping the block from a configuration leaves the stored list alone rather than clearing it; set it to `[]` in its own apply to empty it, since it cannot be set alongside `resource_grants`. (see [below for nested schema](#nestedatt--allowed_workspaces))
 - `description` (String) Human-readable description of the permission set.
 - `is_active` (Boolean) Whether the permission set is active. Defaults to active when omitted.
 - `metadata` (Map of String) Free-form key/value metadata.
+- `resource_grants` (Attributes) Hierarchical resource grants — the only thing consulted when deciding what this permission set can reach. Two flat rule lists, `allow` and `deny`, each rule naming one node by its root-to-leaf path. A request for verb v on path P is resolved in this order: a deny rule on P or on any ancestor of P listing v blocks it, and blocks the whole subtree beneath it; otherwise an allow rule on P itself listing v permits it; otherwise an allow rule on an ancestor of P listing v with `allow_all_children` permits it; otherwise a `GET` is permitted when P is an ancestor of some allow rule's path, so the path down to a grant stays readable; otherwise the request is denied. A user's permission sets are pooled, so a deny in any one of them applies everywhere. Supersedes `allowed_workspaces`, and conflicts with it — a config may set one or the other, not both. (see [below for nested schema](#nestedatt--resource_grants))
 
 ### Read-Only
 
@@ -76,9 +171,72 @@ Required:
 Optional:
 
 - `allowed_agents` (List of String) Agents within the workspace this permission grants access to. Each entry may be a regex.
-- `allowed_scopes` (List of String) Scopes within the workspace this permission grants access to. Each entry may be a regex.
+- `allowed_scopes` (List of String, Deprecated) Deprecated — use the `scopes` set on a `resource_grants` allow rule instead. Scopes within the workspace this permission grants access to. Each entry may be a regex matched against scope names.
 - `denied_agents` (List of String) Agents within the workspace this permission blocks access to. Each entry may be a regex.
-- `denied_scopes` (List of String) Scopes within the workspace this permission blocks access to. Each entry may be a regex.
+- `denied_scopes` (List of String, Deprecated) Deprecated — use the `scopes` set on a `resource_grants` deny rule instead. Scopes within the workspace this permission blocks access to. Each entry may be a regex matched against scope names.
+
+
+<a id="nestedatt--resource_grants"></a>
+### Nested Schema for `resource_grants`
+
+Optional:
+
+- `allow` (Attributes List) Rules granting access. Each names one node and the verbs, actions and scopes allowed there. (see [below for nested schema](#nestedatt--resource_grants--allow))
+- `deny` (Attributes List) Rules blocking access. A deny beats every allow, including allows in the user's other permission sets, and always covers the target's whole subtree — verb-scoped denies remove just the listed verbs from it. (see [below for nested schema](#nestedatt--resource_grants--deny))
+
+<a id="nestedatt--resource_grants--allow"></a>
+### Nested Schema for `resource_grants.allow`
+
+Required:
+
+- `path` (Attributes List) Full root-to-leaf path of the node this rule grants access to. The FIRST segment is always a workspace and the LAST segment is the target; the segments between them are the containment chain down to it (environment, resource group, and the category segment a cloud resource sits under). Order matters — rules are matched by path prefix. (see [below for nested schema](#nestedatt--resource_grants--allow--path))
+
+Optional:
+
+- `actions` (Set of String) Named actions granted at this path — the operations that are gated separately from plain CRUD, such as `aws.jit`, `aws.ssm`, `kubernetes.jit`, `kubernetes.reboot`, `secret.read`, `secret.write`, `terraform.execute` or `workspace.setting`. `*` matches every action registered for the node type; the actions a given type registers are listed by `GET /v1/aiservicedesk/admin/data/accessnodes/types`. Actions are NEVER implied by `verbs`: a rule with `verbs = ["ALL"]` and no `actions` grants the four CRUD verbs and not one action. `allow_all_children` cascades actions exactly as it cascades verbs.
+- `allow_all_children` (Boolean) Whether the verbs and actions inherit to the target's entire subtree, including objects created after the grant. Leave it off to grant the target node alone. Creating inside a container needs it: the container is a proper prefix of the new object's path, so `POST` on the container only reaches that path when the subtree is covered — grant `POST` on `<Type>` / `*` directly instead to permit creates without opening the rest of the subtree.
+- `scopes` (Set of String) IDs of the cloud scopes granted at this path, or `*` for every scope in the workspace — resolved when access is evaluated, so `*` also covers scopes added later. Read only from rules whose path ends at a workspace and ignored on any other rule, since a scope belongs to a workspace. This is what replaces the deprecated `allowed_workspaces[].allowed_scopes` / `denied_scopes`, which held regular expressions matched against scope NAMES: storing IDs keeps a grant intact across a rename, at the cost of no longer picking up new scopes automatically unless `*` is used.
+- `verbs` (Set of String) HTTP verbs this rule covers: `GET` (read and list), `PUT` (update), `POST` (create), `DELETE`, or `ALL` for the four together. Prefer `ALL` on its own — combining it with a single verb is accepted but redundant. `ALL` covers those four verbs and NO named action: actions are never implied by verbs and have to be listed in `actions` explicitly.
+
+<a id="nestedatt--resource_grants--allow--path"></a>
+### Nested Schema for `resource_grants.allow.path`
+
+Required:
+
+- `node_id` (String) ID of the object this segment names. Category segments have no object of their own and take their fixed id instead (`aws`, `k8s`, `terraform`). `*` may appear only in the LAST segment, where it means the node type as a whole rather than one object — a first segment of `*` covers every workspace, and a trailing `<Type>` / `*` pair is the path a create of that type is checked against.
+- `node_type` (String) Access-node type of this segment: `Workspace`, `Environment`, `ResourceGroup`, a category (`AWS`, `Kubernetes`, `Terraform`) or a concrete resource type (`AwsSqsQueue`, `AWSRdsInstance`, `AppService`, …). The set is not fixed — it is built from the node types the platform registers, so a deployment's own list is what `GET /v1/aiservicedesk/admin/data/accessnodes/types` returns.
+
+Optional:
+
+- `name` (String) Display name of the node, cached on the rule for the console's benefit. Never used to decide access — `node_id` alone is authoritative — so it may safely be left out.
+
+
+
+<a id="nestedatt--resource_grants--deny"></a>
+### Nested Schema for `resource_grants.deny`
+
+Required:
+
+- `path` (Attributes List) Full root-to-leaf path of the node this rule blocks access to. The FIRST segment is always a workspace and the LAST segment is the target; the segments between them are the containment chain down to it (environment, resource group, and the category segment a cloud resource sits under). Order matters — rules are matched by path prefix. (see [below for nested schema](#nestedatt--resource_grants--deny--path))
+
+Optional:
+
+- `actions` (Set of String) Named actions blocked at this path — the operations that are gated separately from plain CRUD, such as `aws.jit`, `aws.ssm`, `kubernetes.jit`, `kubernetes.reboot`, `secret.read`, `secret.write`, `terraform.execute` or `workspace.setting`. `*` matches every action registered for the node type; the actions a given type registers are listed by `GET /v1/aiservicedesk/admin/data/accessnodes/types`. Actions are NEVER implied by `verbs`, so leaving this empty does not mean "no actions": empty together with `verbs = ["ALL"]` it blocks EVERY action in the subtree, while a non-empty set blocks only the actions named.
+- `allow_all_children` (Boolean) Ignored on a deny rule — a deny always covers its target's entire subtree. Present only so a rule reads the same on either side.
+- `scopes` (Set of String) IDs of the cloud scopes blocked at this path, or `*` for every scope in the workspace — resolved when access is evaluated, so `*` also covers scopes added later. Read only from rules whose path ends at a workspace and ignored on any other rule, since a scope belongs to a workspace. This is what replaces the deprecated `allowed_workspaces[].allowed_scopes` / `denied_scopes`, which held regular expressions matched against scope NAMES: storing IDs keeps a grant intact across a rename, at the cost of no longer picking up new scopes automatically unless `*` is used.
+- `verbs` (Set of String) HTTP verbs this rule covers: `GET` (read and list), `PUT` (update), `POST` (create), `DELETE`, or `ALL` for the four together. Prefer `ALL` on its own — combining it with a single verb is accepted but redundant. `ALL` covers those four verbs and NO named action: actions are never implied by verbs and have to be listed in `actions` explicitly.
+
+<a id="nestedatt--resource_grants--deny--path"></a>
+### Nested Schema for `resource_grants.deny.path`
+
+Required:
+
+- `node_id` (String) ID of the object this segment names. Category segments have no object of their own and take their fixed id instead (`aws`, `k8s`, `terraform`). `*` may appear only in the LAST segment, where it means the node type as a whole rather than one object — a first segment of `*` covers every workspace, and a trailing `<Type>` / `*` pair is the path a create of that type is checked against.
+- `node_type` (String) Access-node type of this segment: `Workspace`, `Environment`, `ResourceGroup`, a category (`AWS`, `Kubernetes`, `Terraform`) or a concrete resource type (`AwsSqsQueue`, `AWSRdsInstance`, `AppService`, …). The set is not fixed — it is built from the node types the platform registers, so a deployment's own list is what `GET /v1/aiservicedesk/admin/data/accessnodes/types` returns.
+
+Optional:
+
+- `name` (String) Display name of the node, cached on the rule for the console's benefit. Never used to decide access — `node_id` alone is authoritative — so it may safely be left out.
 
 ## Import
 
