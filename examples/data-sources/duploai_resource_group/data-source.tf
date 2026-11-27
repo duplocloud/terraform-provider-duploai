@@ -15,3 +15,7 @@ output "security_group_id" {
 output "iam_role_arn" {
   value = data.duploai_resource_group.example.iam_role_arn
 }
+
+output "ssh_enabled" {
+  value = data.duploai_resource_group.example.ssh_enabled
+}

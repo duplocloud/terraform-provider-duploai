@@ -19,7 +19,6 @@ resource "duploai_resource_group" "basic" {
   workspace_id   = "<workspace-id>"
   name           = "<resource-group-name>"
   environment_id = "<environment-id>"
-  region         = ""
   network_id     = "<network-id>"
 }
 
@@ -29,7 +28,6 @@ resource "duploai_resource_group" "from_vpc" {
   workspace_id   = "<workspace-id>"
   name           = "<resource-group-name>"
   environment_id = "<environment-id>"
-  region         = ""
   vpc_id         = "<vpc-id>"
 }
 
@@ -39,7 +37,6 @@ resource "duploai_resource_group" "custom" {
   name              = "<resource-group-name>"
   environment_id    = "<environment-id>"
   description       = "Production resource group with IaC-native provisioner"
-  region            = ""
   network_id        = "<network-id>"
   provisioner_type  = "IacNativeTf"
   aws_resource_name = "prod-rg"
@@ -86,7 +83,6 @@ resource "duploai_resource_group" "disposable" {
   workspace_id   = "<workspace-id>"
   name           = "ci-ephemeral-rg"
   environment_id = "<environment-id>"
-  region         = ""
   network_id     = "<network-id>"
 
   delete_protection = false
@@ -104,11 +100,22 @@ resource "duploai_resource_group" "customer_managed_iam" {
   workspace_id   = "<workspace-id>"
   name           = "<resource-group-name>"
   environment_id = "<environment-id>"
-  region         = ""
   network_id     = "<network-id>"
 
   existing_iam_role_arn = "arn:aws:iam::123456789012:role/platform-shared"
   existing_kms_key_arn  = "arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab"
+}
+
+# SSM-only resource group — EC2 hosts get no SSH key pair (AWS only). New AWS
+# resource groups default to SSM-only; set ssh_enabled = true to allow SSH.
+# Existing hosts keep their authorized_keys when this changes.
+resource "duploai_resource_group" "ssm_only" {
+  workspace_id   = "<workspace-id>"
+  name           = "<resource-group-name>"
+  environment_id = "<environment-id>"
+  network_id     = "<network-id>"
+
+  ssh_enabled = false
 }
 ```
 
@@ -135,7 +142,8 @@ resource "duploai_resource_group" "customer_managed_iam" {
 - `network_id` (String) ID of the network baseline this resource group is linked to. At least one of network_id or vpc_id is required.
 - `provisioner_type` (String) Provisioner type: Cli, IacNativeTf, IacDuploTf, or DirectApiCall.
 - `provisioner_version` (String) Optional provisioner version.
-- `region` (String) Cloud region (e.g. us-east-1).
+- `region` (String) Cloud region (e.g. us-east-1). Leave unset to use the region the platform assigns, which is derived from the linked network; the assigned value is then reported here.
+- `ssh_enabled` (Boolean) Whether EC2 hosts in this resource group are given an SSH key pair. AWS only. When false, hosts are reachable through SSM only. The platform defaults new AWS resource groups to false, and resource groups that existed before the setting keep allowing SSH. Leave unset to inherit the platform default. Changing it affects hosts created afterwards; existing hosts keep their authorized_keys.
 - `tags` (Map of String) User-defined tags inherited by every resource provisioned under this resource group — applied to AWS resources as tags and to Kubernetes objects as labels. Because one map feeds both projections, each entry must be legal as an AWS tag and as a Kubernetes label: keys may carry an optional `prefix/` (a lowercase DNS-1123 subdomain up to 253 characters) followed by a name segment of up to 63 characters, values follow the Kubernetes label grammar, and AWS limits still apply (key up to 128 characters, value up to 256). The reserved `duplocloud.ai/` prefix and the `aws:` prefix are rejected. Removing a key from this map removes the tag from every resource in the group; propagation is asynchronous, so a removed tag can linger on cloud resources briefly after apply. Omit the argument entirely to leave the stored tags untouched; set it to an empty map to remove them all.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `vpc_id` (String) VPC ID to associate with this resource group. At least one of vpc_id or network_id is required. The API derives this automatically when network_id is set.

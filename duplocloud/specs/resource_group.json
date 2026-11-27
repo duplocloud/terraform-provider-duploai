@@ -45,9 +45,10 @@
       "name": "region",
       "type": "string",
       "optional": true,
+      "computed": true,
       "forceNew": true,
       "apiPath": "spec.region",
-      "description": "Cloud region (e.g. us-east-1)."
+      "description": "Cloud region (e.g. us-east-1). Leave unset to use the region the platform assigns, which is derived from the linked network; the assigned value is then reported here."
     },
     {
       "name": "cloud",
@@ -182,6 +183,14 @@
       "stringBool": true,
       "apiPath": "metaData.delete_protection",
       "description": "Guards the resource group against teardown. The platform enables this on every new resource group unless the request says otherwise, and while it is enabled the API refuses both deprovision and delete \u2014 so `terraform destroy` fails by design. To tear the group down, set this to false and `terraform apply` first, then destroy. Leave it unset to inherit the platform default (enabled). Stored as the `delete_protection` metadata key."
+    },
+    {
+      "name": "ssh_enabled",
+      "type": "bool",
+      "optional": true,
+      "computed": true,
+      "apiPath": "spec.sshEnabled",
+      "description": "Whether EC2 hosts in this resource group are given an SSH key pair. AWS only. When false, hosts are reachable through SSM only. The platform defaults new AWS resource groups to false, and resource groups that existed before the setting keep allowing SSH. Leave unset to inherit the platform default. Changing it affects hosts created afterwards; existing hosts keep their authorized_keys."
     },
     {
       "name": "status",

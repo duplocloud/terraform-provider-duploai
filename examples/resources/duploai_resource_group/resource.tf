@@ -4,7 +4,6 @@ resource "duploai_resource_group" "basic" {
   workspace_id   = "<workspace-id>"
   name           = "<resource-group-name>"
   environment_id = "<environment-id>"
-  region         = ""
   network_id     = "<network-id>"
 }
 
@@ -14,7 +13,6 @@ resource "duploai_resource_group" "from_vpc" {
   workspace_id   = "<workspace-id>"
   name           = "<resource-group-name>"
   environment_id = "<environment-id>"
-  region         = ""
   vpc_id         = "<vpc-id>"
 }
 
@@ -24,7 +22,6 @@ resource "duploai_resource_group" "custom" {
   name              = "<resource-group-name>"
   environment_id    = "<environment-id>"
   description       = "Production resource group with IaC-native provisioner"
-  region            = ""
   network_id        = "<network-id>"
   provisioner_type  = "IacNativeTf"
   aws_resource_name = "prod-rg"
@@ -71,7 +68,6 @@ resource "duploai_resource_group" "disposable" {
   workspace_id   = "<workspace-id>"
   name           = "ci-ephemeral-rg"
   environment_id = "<environment-id>"
-  region         = ""
   network_id     = "<network-id>"
 
   delete_protection = false
@@ -89,9 +85,20 @@ resource "duploai_resource_group" "customer_managed_iam" {
   workspace_id   = "<workspace-id>"
   name           = "<resource-group-name>"
   environment_id = "<environment-id>"
-  region         = ""
   network_id     = "<network-id>"
 
   existing_iam_role_arn = "arn:aws:iam::123456789012:role/platform-shared"
   existing_kms_key_arn  = "arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab"
+}
+
+# SSM-only resource group — EC2 hosts get no SSH key pair (AWS only). New AWS
+# resource groups default to SSM-only; set ssh_enabled = true to allow SSH.
+# Existing hosts keep their authorized_keys when this changes.
+resource "duploai_resource_group" "ssm_only" {
+  workspace_id   = "<workspace-id>"
+  name           = "<resource-group-name>"
+  environment_id = "<environment-id>"
+  network_id     = "<network-id>"
+
+  ssh_enabled = false
 }
