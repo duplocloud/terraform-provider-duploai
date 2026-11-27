@@ -225,8 +225,8 @@
       "optional": true,
       "computed": true,
       "apiPath": "allowedWorkspaces",
-      "description": "Deprecated legacy workspace list — use `resource_grants` instead. Kept so configurations written before resource grants existed keep applying: the entries still round-trip and the backend still converts them once, but nothing reads them when deciding access. Being computed, dropping the block from a configuration leaves the stored list alone rather than clearing it; set it to `[]` in its own apply to empty it, since it cannot be set alongside `resource_grants`.",
-      "deprecated": "Deprecated — migrate to resource_grants. Access is decided from resource_grants alone, so entries here grant nothing on their own; a one-time backend migration converts an existing list into the equivalent allow rules, after which it is inert. Express new intent as resource_grants — the two attributes conflict, so remove this one when adopting it.",
+      "description": "Deprecated legacy workspace list — use `resource_grants` instead. Existing configurations keep applying, but entries here no longer grant access on their own. It cannot be set alongside `resource_grants`; to empty it, set it to `[]` in its own apply.",
+      "deprecated": "Deprecated: use `resource_grants` instead. This list no longer grants access on its own and cannot be combined with `resource_grants`.",
       "attributes": [
         {
           "name": "workspace_id",
@@ -242,7 +242,7 @@
           "computed": true,
           "apiPath": "allowedScopes",
           "description": "Deprecated — use the `scopes` set on a `resource_grants` allow rule instead. Scopes within the workspace this permission grants access to. Each entry may be a regex matched against scope names.",
-          "deprecated": "Deprecated — migrate to the scopes set on a resource_grants allow rule whose path ends at the workspace. These are regular expressions matched against scope NAMES; grants hold scope ids, which survive a rename."
+          "deprecated": "Deprecated: use `scopes` on a `resource_grants` allow rule instead."
         },
         {
           "name": "denied_scopes",
@@ -251,7 +251,7 @@
           "computed": true,
           "apiPath": "deniedScopes",
           "description": "Deprecated — use the `scopes` set on a `resource_grants` deny rule instead. Scopes within the workspace this permission blocks access to. Each entry may be a regex matched against scope names.",
-          "deprecated": "Deprecated — migrate to the scopes set on a resource_grants deny rule whose path ends at the workspace. These are regular expressions matched against scope NAMES; grants hold scope ids, which survive a rename."
+          "deprecated": "Deprecated: use `scopes` on a `resource_grants` deny rule instead."
         },
         {
           "name": "allowed_agents",

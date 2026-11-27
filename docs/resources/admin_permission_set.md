@@ -122,10 +122,9 @@ resource "duploai_admin_permission_set" "sqs_operator" {
   }
 }
 
-# Deprecated shape, kept working for configurations written before resource
-# grants existed. The backend converts these entries into equivalent allow
-# rules once and then ignores the list; allowed_workspaces cannot be combined
-# with resource_grants in the same configuration.
+# Deprecated shape, kept for configurations written before resource grants
+# existed. It no longer grants access on its own and cannot be combined with
+# resource_grants in the same configuration.
 resource "duploai_admin_permission_set" "legacy" {
   name = "legacy-read-only"
 
@@ -148,7 +147,7 @@ resource "duploai_admin_permission_set" "legacy" {
 
 ### Optional
 
-- `allowed_workspaces` (Attributes List, Deprecated) Deprecated legacy workspace list — use `resource_grants` instead. Kept so configurations written before resource grants existed keep applying: the entries still round-trip and the backend still converts them once, but nothing reads them when deciding access. Being computed, dropping the block from a configuration leaves the stored list alone rather than clearing it; set it to `[]` in its own apply to empty it, since it cannot be set alongside `resource_grants`. (see [below for nested schema](#nestedatt--allowed_workspaces))
+- `allowed_workspaces` (Attributes List, Deprecated) Deprecated legacy workspace list — use `resource_grants` instead. Existing configurations keep applying, but entries here no longer grant access on their own. It cannot be set alongside `resource_grants`; to empty it, set it to `[]` in its own apply. (see [below for nested schema](#nestedatt--allowed_workspaces))
 - `description` (String) Human-readable description of the permission set.
 - `is_active` (Boolean) Whether the permission set is active. Defaults to active when omitted.
 - `metadata` (Map of String) Free-form key/value metadata.

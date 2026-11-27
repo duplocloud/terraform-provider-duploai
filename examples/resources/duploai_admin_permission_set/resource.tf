@@ -107,10 +107,9 @@ resource "duploai_admin_permission_set" "sqs_operator" {
   }
 }
 
-# Deprecated shape, kept working for configurations written before resource
-# grants existed. The backend converts these entries into equivalent allow
-# rules once and then ignores the list; allowed_workspaces cannot be combined
-# with resource_grants in the same configuration.
+# Deprecated shape, kept for configurations written before resource grants
+# existed. It no longer grants access on its own and cannot be combined with
+# resource_grants in the same configuration.
 resource "duploai_admin_permission_set" "legacy" {
   name = "legacy-read-only"
 
